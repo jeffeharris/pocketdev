@@ -234,7 +234,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/  # Commented out - we have lib directories with source code
 lib64/
 parts/
 sdist/
