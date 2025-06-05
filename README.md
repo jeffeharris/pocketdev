@@ -2,6 +2,8 @@
 
 Manage your AI development team from your phone. See real-time status updates as AI engineers work on your tasks.
 
+**Note**: The web interface is designed to be mobile-first, allowing you to manage your AI dev team from any device. A responsive web app approach was chosen to enable rapid iteration and user feedback before committing to native mobile apps.
+
 ## What We Built
 
 A working prototype that demonstrates:
