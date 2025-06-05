@@ -381,3 +381,34 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
+# PocketDev specific
+workspaces/
+local-backend/.env
+web/.env
+*.log
+.DS_Store
+node_modules/
+build/
+dist/
+*.swp
+*.swo
+*~
+.vscode/
+*.sublime-*
+
+# Test artifacts
+coverage/
+*.test.js.snap
+
+# Temporary files
+*.tmp
+*.temp
+*-backup.*
+*-old.*
+
+# Docker volumes
+docker/volumes/
+
+# Zone identifiers (Windows)
+*:Zone.Identifier
+
