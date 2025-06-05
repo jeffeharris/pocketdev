@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build: 
+      context: ./local-backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL:-your_supabase_url}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-your_service_key}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Allow backend to manage Claude containers
+    networks:
+      - pocketdev
+
+  # Claude Frontend Engineer
+  claude-frontend:
+    build:
+      context: ./docker/claude-base
+      dockerfile: Dockerfile
+    container_name: claude-frontend
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENGINEER_ID=1
+      - ENGINEER_NAME=Claude Frontend
+      - ENGINEER_ROLE=frontend
+    volumes:
+      - ./workspaces/frontend:/workspace
+      - claude-frontend-home:/home/claude
+    networks:
+      - pocketdev
+    stdin_open: true
+    tty: true
+
+  # Claude Backend Engineer
+  claude-backend:
+    build:
+      context: ./docker/claude-base
+      dockerfile: Dockerfile
+    container_name: claude-backend
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENGINEER_ID=2
+      - ENGINEER_NAME=Claude Backend
+      - ENGINEER_ROLE=backend
+    volumes:
+      - ./workspaces/backend:/workspace
+      - claude-backend-home:/home/claude
+    networks:
+      - pocketdev
+    stdin_open: true
+    tty: true
+
+  # Claude DevOps Engineer
+  claude-devops:
+    build:
+      context: ./docker/claude-base
+      dockerfile: Dockerfile
+    container_name: claude-devops
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ENGINEER_ID=3
+      - ENGINEER_NAME=Claude DevOps
+      - ENGINEER_ROLE=devops
+    volumes:
+      - ./workspaces/devops:/workspace
+      - claude-devops-home:/home/claude
+    networks:
+      - pocketdev
+    stdin_open: true
+    tty: true
+
+networks:
+  pocketdev:
+    driver: bridge
+
+volumes:
+  claude-frontend-home:
+  claude-backend-home:
+  claude-devops-home:
