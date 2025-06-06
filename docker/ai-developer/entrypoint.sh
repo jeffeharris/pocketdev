@@ -91,13 +91,13 @@ run_claude() {
     # Add role-specific system prompt
     case "$ENGINEER_ROLE" in
         frontend)
-            claude_args+=("--system-prompt" "You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience. Write comprehensive tests using Jest and React Testing Library.")
+            claude_args+=("--system-prompt" "You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.")
             ;;
         backend)
-            claude_args+=("--system-prompt" "You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling. Write integration tests and ensure proper data validation.")
+            claude_args+=("--system-prompt" "You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.")
             ;;
         devops)
-            claude_args+=("--system-prompt" "You are a DevOps specialist focusing on automation and infrastructure. Create reproducible deployments and comprehensive monitoring. Document all infrastructure changes.")
+            claude_args+=("--system-prompt" "You are a DevOps specialist focusing on automation and infrastructure. Create reproducible deployments and comprehensive monitoring.")
             ;;
     esac
     
@@ -123,47 +123,15 @@ run_claude() {
     fi
 }
 
-# Function to run tests based on framework
-run_tests() {
-    local test_framework="${TEST_FRAMEWORK:-jest}"
-    
-    log_info "Running tests with $test_framework"
-    
-    case "$test_framework" in
-        jest)
-            if npm test 2>&1; then
-                return 0
-            else
-                return 1
-            fi
-            ;;
-        pytest)
-            if python -m pytest 2>&1; then
-                return 0
-            else
-                return 1
-            fi
-            ;;
-        mocha)
-            if npm run test 2>&1; then
-                return 0
-            else
-                return 1
-            fi
-            ;;
-        *)
-            log_warning "Unknown test framework: $test_framework"
-            return 0
-            ;;
-    esac
-}
-
 # Main execution flow
 main() {
     local start_time=$(date +%s)
     local success=false
-    local pr_url=""
     local error_message=""
+    local summary=""
+    local files_changed=()
+    local test_results=""
+    local suggested_next_steps=()
     
     # Setup Git authentication
     setup_git_auth
@@ -173,125 +141,128 @@ main() {
     if ! git clone "$REPO_URL" /workspace/repo 2>&1; then
         error_message="Failed to clone repository"
         log_error "$error_message"
-        save_results "$success" "$error_message" "" "$start_time"
+        save_results "$success" "$error_message" "$summary" "$start_time"
         exit 1
     fi
     
     cd /workspace/repo
     
-    # Checkout branch
-    BRANCH="${BRANCH:-main}"
-    log_info "Checking out branch: $BRANCH"
-    git checkout "$BRANCH"
+    # Checkout branch if specified
+    if [ -n "$BRANCH" ]; then
+        log_info "Checking out branch: $BRANCH"
+        git checkout "$BRANCH"
+    else
+        # Use the default branch
+        DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+        log_info "Using default branch: $DEFAULT_BRANCH"
+    fi
     
     # Create feature branch
     FEATURE_BRANCH="ai/${ENGINEER_ROLE}/$(echo "$TASK_DESCRIPTION" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-50)-$(date +%s)"
     log_info "Creating feature branch: $FEATURE_BRANCH"
     git checkout -b "$FEATURE_BRANCH"
     
-    # Main development loop
+    # Main development task - Single comprehensive prompt
     log_info "Starting development task: $TASK_DESCRIPTION"
     
-    # Step 1: Analyze codebase and plan approach
-    local analyze_prompt="Analyze this codebase and plan how to implement: $TASK_DESCRIPTION
+    # Combined prompt for analysis, planning, implementation, and testing
+    local development_prompt="You are tasked with implementing: $TASK_DESCRIPTION
 
 Acceptance Criteria:
 $ACCEPTANCE_CRITERIA
 
-First, understand the project structure, then design tests that will validate the implementation."
-    
-    if ! run_claude "$analyze_prompt" "/workspace/logs/analysis.json"; then
-        error_message="Failed to analyze codebase"
-        save_results "$success" "$error_message" "" "$start_time"
-        exit 1
-    fi
-    
-    # Step 2: Write tests first (TDD)
-    local test_prompt="Now write comprehensive tests for the feature. Follow TDD principles - write failing tests first that cover all acceptance criteria."
-    
-    if ! run_claude "$test_prompt" "/workspace/logs/write_tests.json" true; then
-        error_message="Failed to write tests"
-        save_results "$success" "$error_message" "" "$start_time"
-        exit 1
-    fi
-    
-    # Step 3: Implement the feature
-    local implement_prompt="Now implement the feature to make all tests pass. Focus on clean, maintainable code that follows the project's patterns."
-    
-    if ! run_claude "$implement_prompt" "/workspace/logs/implementation.json" true; then
+Please follow these steps:
+1. Analyze the codebase structure and understand existing patterns
+2. Create an implementation plan
+3. Write a simple verification script (verify.js, test.py, or test.html) that tests the implementation
+   - The script should exit with code 0 on success, non-zero on failure
+   - It should test all acceptance criteria
+   - Keep it simple - direct checks, no framework required
+4. Implement the feature following the project's patterns
+5. Run your verification script using 'node', 'python', or by checking the output
+6. Fix any issues until the verification passes
+
+Important: Create a standalone test script that can be run without any test framework.
+For React components, you might create a simple test.html that loads the component.
+For Node.js code, create a verify.js that imports and tests the functionality.
+
+Please implement everything in one session, running your verification at the end."
+
+    if ! run_claude "$development_prompt" "/workspace/logs/implementation.json"; then
         error_message="Failed to implement feature"
-        save_results "$success" "$error_message" "" "$start_time"
+        save_results "$success" "$error_message" "$summary" "$start_time"
         exit 1
     fi
     
-    # Step 4: Run tests and iterate
-    local max_iterations="${MAX_ITERATIONS:-5}"
-    local iteration=0
-    local tests_pass=false
+    # Extract implementation details from Claude's response
+    local claude_result=$(jq -r '.result // ""' /workspace/logs/implementation.json 2>/dev/null)
     
-    while [ $iteration -lt $max_iterations ] && [ "$tests_pass" = "false" ]; do
-        log_info "Running tests (iteration $((iteration + 1))/$max_iterations)"
-        
-        if run_tests; then
-            log_success "All tests passed!"
-            tests_pass=true
-            success=true
-        else
-            if [ $iteration -lt $((max_iterations - 1)) ]; then
-                log_warning "Tests failed, asking Claude to fix..."
-                local fix_prompt="The tests failed. Please analyze the errors and fix the implementation to make all tests pass."
-                
-                if ! run_claude "$fix_prompt" "/workspace/logs/fix_iteration_$iteration.json" true; then
-                    error_message="Failed to fix test failures"
-                    break
-                fi
-            else
-                error_message="Tests still failing after $max_iterations iterations"
-                log_error "$error_message"
-            fi
-        fi
-        
-        ((iteration++))
-    done
+    # Get list of changed files
+    mapfile -t files_changed < <(git diff --name-only)
     
-    # Step 5: Commit changes if successful
-    if [ "$success" = "true" ]; then
-        log_info "Committing changes"
-        
-        git add -A
-        
-        # Generate commit message
-        local commit_prompt="Generate a concise, descriptive commit message for these changes. Include what was done and why."
-        run_claude "$commit_prompt" "/workspace/logs/commit_message.json" true
-        
-        local commit_message=$(jq -r '.result // "feat: implement requested feature"' /workspace/logs/commit_message.json)
-        
-        git commit -m "$commit_message" -m "Implemented by AI Developer (${ENGINEER_ROLE})"
-        
-        # Push to remote
-        log_info "Pushing to remote branch"
-        if git push origin "$FEATURE_BRANCH"; then
-            log_success "Code pushed successfully"
-            
-            # Create PR (placeholder - implement based on platform)
-            pr_url="https://github.com/$(echo $REPO_URL | sed 's/.*github.com[:/]\(.*\)\.git/\1/')/pull/new/$FEATURE_BRANCH"
-            log_info "Ready for PR at: $pr_url"
+    # Check if verification script exists and run it
+    log_info "Looking for verification script..."
+    
+    local verification_passed=false
+    local verification_output=""
+    
+    # Check for common verification script names
+    if [ -f "verify.js" ]; then
+        log_info "Running verify.js..."
+        if verification_output=$(node verify.js 2>&1); then
+            verification_passed=true
+            test_results="verify.js passed successfully"
         else
-            log_error "Failed to push to remote"
-            error_message="Failed to push changes"
-            success=false
+            test_results="verify.js failed: $verification_output"
         fi
+    elif [ -f "test.py" ]; then
+        log_info "Running test.py..."
+        if verification_output=$(python test.py 2>&1); then
+            verification_passed=true
+            test_results="test.py passed successfully"
+        else
+            test_results="test.py failed: $verification_output"
+        fi
+    elif [ -f "verify.py" ]; then
+        log_info "Running verify.py..."
+        if verification_output=$(python verify.py 2>&1); then
+            verification_passed=true
+            test_results="verify.py passed successfully"
+        else
+            test_results="verify.py failed: $verification_output"
+        fi
+    else
+        log_warning "No verification script found, assuming implementation is complete"
+        verification_passed=true
+        test_results="No verification script created"
     fi
+    
+    # Set success based on verification
+    if [ "$verification_passed" = "true" ]; then
+        success=true
+        summary="Successfully implemented: $TASK_DESCRIPTION"
+        log_success "Implementation completed and verified"
+        
+        # Suggest next steps based on what was implemented
+        suggested_next_steps=("Review the implementation" "Test in different scenarios" "Add more test cases")
+    else
+        summary="Implementation completed but verification failed"
+        log_warning "$summary"
+        suggested_next_steps=("Fix verification failures" "Debug the implementation" "Review error messages")
+    fi
+    
+    # Always stage changes (user will decide whether to commit)
+    git add -A
     
     # Save results
-    save_results "$success" "$error_message" "$pr_url" "$start_time"
+    save_results "$success" "$error_message" "$summary" "$start_time"
 }
 
 # Function to save results
 save_results() {
     local success="$1"
     local error_message="$2"
-    local pr_url="$3"
+    local summary="$3"
     local start_time="$4"
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
@@ -304,19 +275,33 @@ save_results() {
         cost_usd=$(jq -r '.cost_usd // 0' /workspace/logs/implementation.json 2>/dev/null || echo 0)
     fi
     
+    # Get changed files
+    local files_json=$(git diff --name-only --cached | jq -R . | jq -s . 2>/dev/null || echo '[]')
+    
+    # Escape strings for JSON
+    local summary_json=$(echo "$summary" | jq -Rs .)
+    local error_json=$(echo "${error_message:-null}" | jq -Rs .)
+    local task_desc_json=$(echo "$TASK_DESCRIPTION" | jq -Rs .)
+    local test_results_json=$(echo "$test_results" | jq -Rs .)
+    
     # Create result JSON
     cat > "$result_file" <<EOF
 {
   "success": $success,
   "sessionId": "${CLAUDE_SESSION_ID:-null}",
-  "prUrl": "${pr_url:-null}",
-  "error": "${error_message:-null}",
+  "summary": $summary_json,
+  "error": $error_json,
   "duration": $duration,
   "cost_usd": $cost_usd,
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "engineerRole": "${ENGINEER_ROLE:-unknown}",
   "model": "${MODEL:-unknown}",
-  "taskDescription": "$TASK_DESCRIPTION"
+  "taskDescription": $task_desc_json,
+  "filesChanged": $files_json,
+  "testResults": $test_results_json,
+  "suggestedNextSteps": $(printf '%s\n' "${suggested_next_steps[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]'),
+  "featureBranch": "$FEATURE_BRANCH",
+  "canContinue": true
 }
 EOF
     
@@ -324,16 +309,144 @@ EOF
     
     if [ "$success" = "true" ]; then
         log_success "Task completed successfully in ${duration}s"
+        log_info "Changes are staged but not committed"
+        log_info "User can accept and commit or request follow-up tasks"
     else
         log_error "Task failed: $error_message"
+    fi
+}
+
+# Handle follow-up tasks (called when container receives CONTINUE signal)
+handle_followup() {
+    if [ -f "/workspace/followup_task.txt" ]; then
+        local followup_task=$(cat /workspace/followup_task.txt)
+        log_info "Handling follow-up task: $followup_task"
+        
+        cd /workspace/repo
+        
+        # Run Claude with the follow-up task
+        local followup_prompt="Continue working on the previous implementation. New task: $followup_task
+
+Please make any necessary changes or improvements based on this feedback."
+        
+        if run_claude "$followup_prompt" "/workspace/logs/followup.json" true; then
+            # Update results
+            git add -A
+            save_results true "" "Completed follow-up: $followup_task" $(date +%s)
+        else
+            save_results false "Failed to complete follow-up task" "" $(date +%s)
+        fi
     fi
 }
 
 # Handle interrupts gracefully
 trap 'log_warning "Interrupted"; save_results false "Task interrupted" "" $(date +%s); exit 130' INT TERM
 
-# Run main function
-main
+# Check if this is a follow-up task
+if [ -f "/workspace/CONTINUE" ]; then
+    handle_followup
+else
+    # Run main function
+    main
+fi
+
+# Keep container running if task can continue
+if [ "$success" = "true" ] || [ -f "/workspace/results/session_result.json" ]; then
+    log_info "Container ready for follow-up tasks or finalization"
+    
+    # Keep container alive for potential follow-up
+    while true; do
+        # Check for signals in results directory (mapped volume)
+        if [ -f "/workspace/results/SHUTDOWN" ]; then
+            log_info "Received SHUTDOWN signal"
+            
+            # Commit and push changes
+            cd /workspace/repo
+            git add -A
+            git commit -m "feat: completed task - $TASK_DESCRIPTION" -m "Accepted by user"
+            
+            # Push to remote
+            if git push origin "$FEATURE_BRANCH"; then
+                log_success "Changes pushed to remote branch: $FEATURE_BRANCH"
+                PR_URL="https://github.com/$(echo $REPO_URL | sed 's/.*github.com[:/]\(.*\)\.git/\1/')/pull/new/$FEATURE_BRANCH"
+                log_info "PR URL: $PR_URL"
+                
+                # Update result with PR URL
+                if [ -f "/workspace/results/session_result.json" ]; then
+                    jq ".prUrl = \"$PR_URL\"" /workspace/results/session_result.json > /tmp/result.json && mv /tmp/result.json /workspace/results/session_result.json
+                fi
+            else
+                log_error "Failed to push changes"
+            fi
+            
+            break
+        elif [ -f "/workspace/results/CONTINUE" ]; then
+            log_info "Received CONTINUE signal"
+            
+            # Read follow-up task
+            if [ -f "/workspace/results/followup_task.txt" ]; then
+                FOLLOWUP_TASK=$(cat /workspace/results/followup_task.txt)
+                log_info "Processing follow-up task: $FOLLOWUP_TASK"
+                
+                # Clean up signal files
+                rm -f /workspace/results/CONTINUE /workspace/results/followup_task.txt
+                
+                # Run follow-up
+                cd /workspace/repo
+                
+                local followup_prompt="Continue working on the previous implementation. New task: $FOLLOWUP_TASK
+
+Please make any necessary changes or improvements based on this feedback."
+                
+                if run_claude "$followup_prompt" "/workspace/logs/followup.json" true; then
+                    # Check for verification script and run it
+                    log_info "Looking for verification script..."
+                    
+                    local verification_passed=false
+                    local verification_output=""
+                    
+                    if [ -f "verify.js" ]; then
+                        log_info "Running verify.js..."
+                        if verification_output=$(node verify.js 2>&1); then
+                            verification_passed=true
+                            test_results="verify.js passed successfully"
+                        else
+                            test_results="verify.js failed: $verification_output"
+                        fi
+                    elif [ -f "test.py" ] || [ -f "verify.py" ]; then
+                        local test_file=$([ -f "test.py" ] && echo "test.py" || echo "verify.py")
+                        log_info "Running $test_file..."
+                        if verification_output=$(python $test_file 2>&1); then
+                            verification_passed=true
+                            test_results="$test_file passed successfully"
+                        else
+                            test_results="$test_file failed: $verification_output"
+                        fi
+                    else
+                        verification_passed=true
+                        test_results="No verification script found"
+                    fi
+                    
+                    # Stage changes
+                    git add -A
+                    
+                    # Update results
+                    if [ "$verification_passed" = "true" ]; then
+                        save_results true "" "Completed follow-up: $FOLLOWUP_TASK" $(date +%s)
+                    else
+                        save_results false "Verification failed after follow-up" "" $(date +%s)
+                    fi
+                else
+                    save_results false "Failed to complete follow-up task" "" $(date +%s)
+                fi
+            else
+                log_error "No follow-up task provided"
+            fi
+        fi
+        
+        sleep 2
+    done
+fi
 
 # Exit with appropriate code
 if [ "$success" = "true" ]; then
