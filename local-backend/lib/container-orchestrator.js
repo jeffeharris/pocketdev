@@ -30,6 +30,9 @@ class ContainerOrchestrator {
     const taskId = task.id || uuidv4();
     const workspacePath = path.join(this.workspaceBase, taskId);
     
+    console.log('ContainerOrchestrator: Starting task execution for', taskId);
+    console.log('Task details:', JSON.stringify(task, null, 2));
+    
     try {
       // Create workspace directories
       await fs.mkdir(workspacePath, { recursive: true });
@@ -73,6 +76,7 @@ class ContainerOrchestrator {
       Object.entries(env).forEach(([key, value]) => {
         if (value !== undefined) {
           dockerArgs.push('-e', `${key}=${value}`);
+          console.log(`Adding env var: ${key}=${value.substring(0, 50)}...`);
         }
       });
 
@@ -81,7 +85,14 @@ class ContainerOrchestrator {
       // Start container
       console.log(`Starting container for task ${taskId}...`);
       console.log('Docker command:', 'docker', dockerArgs.join(' '));
+      console.log('Full docker command would be:', `docker ${dockerArgs.join(' ')}`);
+      
       const container = spawn('docker', dockerArgs);
+      
+      // Handle spawn errors
+      container.on('error', (err) => {
+        console.error(`Failed to start container: ${err.message}`);
+      });
       
       this.activeContainers.set(taskId, {
         process: container,

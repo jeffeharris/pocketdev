@@ -2,9 +2,11 @@ import express from 'express';
 import ContainerTaskManager from './lib/container-task-manager.js';
 
 const router = express.Router();
+console.log('Container routes: Creating ContainerTaskManager...');
 const containerManager = new ContainerTaskManager();
 
 // Initialize container manager on startup
+console.log('Container routes: Initializing container manager...');
 containerManager.init().catch(console.error);
 
 // Build Docker image if needed
@@ -56,6 +58,7 @@ router.post('/api/container/assign-task', async (req, res) => {
       });
     }
 
+    console.log('Container route: Assigning task to', engineerId);
     const task = await containerManager.assignTask(engineerId, {
       repository,
       description,
