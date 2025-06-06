@@ -80,6 +80,7 @@ class ContainerOrchestrator {
 
       // Start container
       console.log(`Starting container for task ${taskId}...`);
+      console.log('Docker command:', 'docker', dockerArgs.join(' '));
       const container = spawn('docker', dockerArgs);
       
       this.activeContainers.set(taskId, {
