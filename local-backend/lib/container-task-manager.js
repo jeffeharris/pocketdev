@@ -1,9 +1,13 @@
 import ContainerOrchestrator from './container-orchestrator.js';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 
 class ContainerTaskManager {
   constructor() {
+    console.error('[CTM] Creating ContainerOrchestrator instance');
     this.orchestrator = new ContainerOrchestrator();
+    console.error('[CTM] ContainerOrchestrator created:', !!this.orchestrator);
+    console.error('[CTM] executeTask method exists:', typeof this.orchestrator.executeTask);
     this.tasks = new Map();
     this.engineers = new Map();
   }
@@ -80,6 +84,10 @@ class ContainerTaskManager {
     try {
       task.status = 'running';
       
+      process.stderr.write(`[CTM] About to call orchestrator.executeTask for task ${task.id}\n`);
+      console.error('[CTM] About to call orchestrator.executeTask');
+      console.error('[CTM] Task config:', JSON.stringify(taskConfig, null, 2));
+      
       const result = await this.orchestrator.executeTask({
         ...task,
         repository: taskConfig.repository,
@@ -127,56 +135,39 @@ class ContainerTaskManager {
    */
   async continueTask(taskId, additionalInstructions) {
     const originalTask = this.tasks.get(taskId);
-    if (!originalTask || !originalTask.sessionId) {
-      throw new Error(`Cannot continue task ${taskId} - no session found`);
+    if (!originalTask) {
+      throw new Error(`Cannot continue task ${taskId} - task not found`);
     }
 
+    // Write follow-up task and signal
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    const workspacePath = originalTask.result?.workspacePath;
+    if (!workspacePath) {
+      throw new Error('No workspace path found for task');
+    }
+    
+    // Write the follow-up task
+    const followupPath = path.join(workspacePath, 'results', 'followup_task.txt');
+    await fs.writeFile(followupPath, additionalInstructions);
+    
+    // Signal the container to continue
+    await this.orchestrator.signalContainer(taskId, 'CONTINUE');
+    
+    // Update engineer status
     const engineer = this.engineers.get(originalTask.engineerId);
-    if (!engineer) {
-      throw new Error(`Engineer ${originalTask.engineerId} not found`);
+    if (engineer) {
+      engineer.status = 'busy';
+      engineer.currentTask = taskId;
     }
-
-    if (engineer.status !== 'idle') {
-      throw new Error(`Engineer ${engineer.id} is ${engineer.status}`);
-    }
-
-    // Create continuation task
-    const continuationTask = {
-      id: uuidv4(),
-      parentTaskId: taskId,
-      engineerId: engineer.id,
-      description: additionalInstructions,
-      sessionId: originalTask.sessionId,
-      status: 'running',
-      startTime: new Date()
+    
+    // Return immediately - the container will handle the rest
+    return {
+      success: true,
+      message: 'Follow-up task sent to container',
+      taskId: taskId
     };
-
-    engineer.status = 'busy';
-    engineer.currentTask = continuationTask.id;
-    this.tasks.set(continuationTask.id, continuationTask);
-
-    try {
-      const result = await this.orchestrator.continueSession(
-        originalTask.sessionId,
-        additionalInstructions
-      );
-
-      continuationTask.status = result.success ? 'completed' : 'failed';
-      continuationTask.endTime = new Date();
-      continuationTask.result = result;
-
-      engineer.status = 'idle';
-      engineer.currentTask = null;
-
-      return continuationTask;
-
-    } catch (error) {
-      continuationTask.status = 'error';
-      continuationTask.error = error.message;
-      engineer.status = 'error';
-      engineer.currentTask = null;
-      throw error;
-    }
   }
 
   /**
@@ -207,8 +198,37 @@ class ContainerTaskManager {
   /**
    * Get task details
    */
-  getTask(taskId) {
-    return this.tasks.get(taskId);
+  async getTask(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    
+    // If task is running, check if results are ready
+    if (task.status === 'running') {
+      const results = await this.orchestrator.checkTaskResults(taskId);
+      if (results) {
+        // Update task with results
+        task.status = results.success ? 'completed' : 'failed';
+        task.result = {
+          ...results,
+          workspacePath: path.join(this.orchestrator.workspaceBase, taskId)
+        };
+        task.endTime = new Date();
+        
+        // Update engineer status
+        const engineer = this.engineers.get(task.engineerId);
+        if (engineer && engineer.currentTask === taskId) {
+          engineer.status = 'idle';
+          engineer.currentTask = null;
+        }
+      } else {
+        // Still running, get live logs
+        const logs = this.orchestrator.getTaskLogs(taskId);
+        if (!task.result) task.result = {};
+        task.result.logs = logs;
+      }
+    }
+    
+    return task;
   }
 
   /**
@@ -270,6 +290,32 @@ class ContainerTaskManager {
    */
   async buildImage() {
     await this.orchestrator.buildImage();
+  }
+
+  /**
+   * Accept task and signal container to commit
+   */
+  async acceptTask(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.result || !task.result.workspacePath) {
+      throw new Error('Task not found or not completed');
+    }
+
+    // Signal container to commit and shutdown
+    await this.orchestrator.signalContainer(taskId, 'SHUTDOWN');
+    
+    // Update task status
+    task.accepted = true;
+    task.acceptedAt = new Date();
+    
+    // Update engineer status
+    const engineer = this.engineers.get(task.engineerId);
+    if (engineer) {
+      engineer.status = 'idle';
+      engineer.currentTask = null;
+    }
+    
+    return true;
   }
 }
 

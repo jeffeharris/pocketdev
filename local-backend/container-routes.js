@@ -113,12 +113,47 @@ router.post('/api/container/continue-task', async (req, res) => {
 });
 
 // Get task details
-router.get('/api/container/tasks/:id', (req, res) => {
-  const task = containerManager.getTask(req.params.id);
+router.get('/api/container/tasks/:id', async (req, res) => {
+  const task = await containerManager.getTask(req.params.id);
   if (task) {
     res.json(task);
   } else {
     res.status(404).json({ error: 'Task not found' });
+  }
+});
+
+// Get task result JSON
+router.get('/api/container/tasks/:id/result', async (req, res) => {
+  const task = await containerManager.getTask(req.params.id);
+  if (!task || !task.result || !task.result.workspacePath) {
+    return res.status(404).json({ error: 'Task result not found' });
+  }
+  
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const resultPath = path.join(task.result.workspacePath, 'results', 'session_result.json');
+    const resultData = await fs.readFile(resultPath, 'utf8');
+    const result = JSON.parse(resultData);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to read task result' });
+  }
+});
+
+// Accept task and commit changes
+router.post('/api/container/tasks/:id/accept', async (req, res) => {
+  const task = await containerManager.getTask(req.params.id);
+  if (!task || !task.result) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  
+  try {
+    // Signal container to commit and shutdown
+    await containerManager.acceptTask(req.params.id);
+    res.json({ success: true, message: 'Task accepted and committed' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to accept task' });
   }
 });
 
@@ -177,6 +212,29 @@ router.post('/api/container/cleanup', async (req, res) => {
 router.get('/api/container/active', (req, res) => {
   const activeContainers = containerManager.orchestrator.getActiveContainers();
   res.json(activeContainers);
+});
+
+// Debug endpoint to test orchestrator directly
+router.get('/api/container/test-direct', async (req, res) => {
+  try {
+    console.error('TEST: Direct orchestrator test');
+    process.stderr.write('[TEST] Direct orchestrator test endpoint called\n');
+    
+    const testTask = {
+      id: 'test-' + Date.now(),
+      repository: 'https://github.com/octocat/Hello-World.git',
+      description: 'Test task',
+      engineerRole: 'frontend'
+    };
+    
+    process.stderr.write('[TEST] Calling orchestrator.executeTask\n');
+    const result = await containerManager.orchestrator.executeTask(testTask);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('TEST: Orchestrator error:', error);
+    process.stderr.write(`[TEST] Error: ${error.message}\n`);
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
+  }
 });
 
 export default router;
