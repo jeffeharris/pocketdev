@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Engineer } from '../types';
-import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container } from 'lucide-react';
+import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText } from 'lucide-react';
+import { TaskLogViewer } from './TaskLogViewer';
 
 interface Props {
   engineer: Engineer & { containerized?: boolean };
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function ContainerEngineerCard({ engineer, onAssignTask }: Props) {
+  const [showLogs, setShowLogs] = useState(false);
   const handleReset = async () => {
     try {
       const response = await fetch(`http://localhost:3001/api/container/engineers/${engineer.id}/reset`, {
@@ -109,6 +111,16 @@ export function ContainerEngineerCard({ engineer, onAssignTask }: Props) {
               <RotateCcw className="h-5 w-5" />
             </button>
           )}
+          
+          {(engineer.status === 'busy' || engineer.status === 'running') && engineer.currentTaskDetails?.id && (
+            <button
+              onClick={() => setShowLogs(true)}
+              className="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
+              title="View Logs"
+            >
+              <FileText className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
@@ -121,6 +133,14 @@ export function ContainerEngineerCard({ engineer, onAssignTask }: Props) {
           )}
         </div>
       </div>
+      
+      {showLogs && engineer.currentTaskDetails?.id && (
+        <TaskLogViewer
+          taskId={engineer.currentTaskDetails.id}
+          engineerId={engineer.id}
+          onClose={() => setShowLogs(false)}
+        />
+      )}
     </div>
   );
 }

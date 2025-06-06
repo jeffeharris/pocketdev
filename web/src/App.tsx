@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { EngineerCard } from './components/EngineerCard';
-import { ContainerEngineerCard } from './components/ContainerEngineerCard';
+import { ContainerEngineerCardEnhanced } from './components/ContainerEngineerCardEnhanced';
 import { TaskModal } from './components/TaskModal';
 import { ContainerTaskModal } from './components/ContainerTaskModal';
 import { TaskHistory } from './components/TaskHistory';
@@ -42,7 +42,6 @@ export default function App() {
   const [containerEngineers, setContainerEngineers] = useState<any[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedEngineer, setSelectedEngineer] = useState<Engineer | null>(null);
-  const [selectedContainerEngineer, setSelectedContainerEngineer] = useState<any | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'host' | 'container'>('all');
@@ -263,10 +262,9 @@ export default function App() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {containerEngineers.map((engineer) => (
-                <ContainerEngineerCard
+                <ContainerEngineerCardEnhanced
                   key={engineer.id}
                   engineer={engineer}
-                  onAssignTask={() => handleAssignContainerTask(engineer)}
                 />
               ))}
             </div>
@@ -293,15 +291,6 @@ export default function App() {
         />
       )}
 
-      {selectedContainerEngineer && (
-        <ContainerTaskModal
-          engineer={selectedContainerEngineer}
-          onClose={() => setSelectedContainerEngineer(null)}
-          onTaskAssigned={() => {
-            checkContainerEngineers();
-          }}
-        />
-      )}
 
       {showHistory && (
         <TaskHistory onClose={() => setShowHistory(false)} />
