@@ -19,7 +19,7 @@ A working prototype that demonstrates:
    - All heavy lifting done by OpenAI's infrastructure
 
 3. **OpenAI Integration**
-   - Each engineer is an OpenAI Assistant
+   - Engineers can run using Claude Code or OpenAI Codex
    - Tasks run on OpenAI's compute
    - Status updates stream back to mobile
 

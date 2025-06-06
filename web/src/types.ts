@@ -5,6 +5,7 @@ export interface Engineer {
   id: string;
   name: string;
   role: EngineerRole;
+  engineType?: 'claude' | 'codex';
   status: EngineerStatus;
   current_task?: string;
   progress?: number;

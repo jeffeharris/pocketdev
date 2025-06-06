@@ -26,6 +26,19 @@ router.get('/api/container/engineers', (req, res) => {
   res.json(engineers);
 });
 
+// Create a new container-based engineer
+router.post('/api/container/engineers', (req, res) => {
+  const { name, role, engineType = 'claude', systemPrompt } = req.body;
+  if (!name || !role) {
+    return res.status(400).json({ error: 'Missing required fields: name, role' });
+  }
+
+  const id = `${role}-${Date.now()}`;
+  containerManager.registerEngineer(id, { name, role, engineType, systemPrompt });
+  const engineer = containerManager.getEngineerStatus(id);
+  res.json({ success: true, engineer });
+});
+
 // Get specific engineer status
 router.get('/api/container/engineers/:id', (req, res) => {
   const engineer = containerManager.getEngineerStatus(req.params.id);

@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { DockerClaudeManager } from './docker-claude.js';
 import { HostClaudeManager } from './host-claude.js';
+import { HostCodexManager } from './host-codex.js';
 import { CodeExtractor } from './lib/code-extractor.js';
 import containerRoutes from './container-routes.js';
 
@@ -34,6 +35,7 @@ const activeProcesses = new Map();
 // Claude managers
 const dockerManager = new DockerClaudeManager();
 const hostManager = new HostClaudeManager();
+const hostCodexManager = new HostCodexManager();
 const codeExtractor = new CodeExtractor();
 
 // In-memory mock data for local development
@@ -42,6 +44,7 @@ const mockEngineers = [
     id: '1',
     name: 'Claude Frontend',
     role: 'frontend',
+    engineType: 'claude',
     status: 'idle',
     last_update: new Date().toISOString(),
     created_at: new Date().toISOString()
@@ -50,6 +53,7 @@ const mockEngineers = [
     id: '2',
     name: 'Claude Backend',
     role: 'backend',
+    engineType: 'claude',
     status: 'idle',
     last_update: new Date().toISOString(),
     created_at: new Date().toISOString()
@@ -58,6 +62,16 @@ const mockEngineers = [
     id: '3',
     name: 'Claude DevOps',
     role: 'devops',
+    engineType: 'claude',
+    status: 'idle',
+    last_update: new Date().toISOString(),
+    created_at: new Date().toISOString()
+  },
+  {
+    id: '4',
+    name: 'Codex Engineer',
+    role: 'fullstack',
+    engineType: 'codex',
     status: 'idle',
     last_update: new Date().toISOString(),
     created_at: new Date().toISOString()
@@ -180,7 +194,11 @@ app.post('/api/assign-task', async (req, res) => {
     if (executionMode === 'docker') {
       result = await dockerManager.executeTask(engineerId, task, engineer.role, model);
     } else if (executionMode === 'host') {
-      result = await hostManager.executeTask(engineerId, task, engineer.role, model);
+      if (engineer.engineType === 'codex') {
+        result = await hostCodexManager.executeTask(engineerId, task, engineer.role, model);
+      } else {
+        result = await hostManager.executeTask(engineerId, task, engineer.role, model);
+      }
     } else {
       // Local execution (original method)
       result = await executeClaudeTask(engineerId, task, engineer.role, model);

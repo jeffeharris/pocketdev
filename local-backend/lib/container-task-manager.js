@@ -10,27 +10,39 @@ class ContainerTaskManager {
 
   async init() {
     await this.orchestrator.init();
-    
+
     // Initialize default engineers
     this.registerEngineer('frontend-1', {
       name: 'Frontend Engineer',
       role: 'frontend',
+      engineType: 'claude',
       specialties: ['React', 'TypeScript', 'UI/UX'],
       systemPrompt: 'You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.'
     });
 
     this.registerEngineer('backend-1', {
-      name: 'Backend Engineer', 
+      name: 'Backend Engineer',
       role: 'backend',
+      engineType: 'claude',
       specialties: ['Node.js', 'Python', 'API Design'],
       systemPrompt: 'You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.'
     });
 
     this.registerEngineer('devops-1', {
       name: 'DevOps Engineer',
-      role: 'devops', 
+      role: 'devops',
+      engineType: 'claude',
       specialties: ['Docker', 'Kubernetes', 'CI/CD'],
       systemPrompt: 'You are a DevOps specialist. Focus on automation, monitoring, and infrastructure as code.'
+    });
+
+    // Example Codex engineer
+    this.registerEngineer('codex-1', {
+      name: 'Codex Engineer',
+      role: 'fullstack',
+      engineType: 'codex',
+      specialties: ['General'],
+      systemPrompt: 'You are an AI engineer powered by OpenAI Codex.'
     });
   }
 
@@ -40,6 +52,7 @@ class ContainerTaskManager {
   registerEngineer(id, config) {
     this.engineers.set(id, {
       id,
+      engineType: config.engineType || 'claude',
       ...config,
       status: 'idle',
       currentTask: null,
@@ -86,7 +99,8 @@ class ContainerTaskManager {
         description: taskConfig.description,
         acceptanceCriteria: taskConfig.acceptanceCriteria,
         testFramework: taskConfig.testFramework,
-        model: taskConfig.model
+        model: taskConfig.model,
+        engineType: engineer.engineType
       });
 
       // Update task with results

@@ -1,5 +1,8 @@
 # PocketDev Containerized AI Developer Integration Guide
 
+PocketDev supports both **Claude Code** and **OpenAI Codex** agents. See
+[`docs/codex-integration.md`](docs/codex-integration.md) for details on using Codex.
+
 ## Quick Start
 
 ### 1. Install Dependencies

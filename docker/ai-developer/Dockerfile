@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y \
 # Install Claude CLI
 RUN npm install -g @anthropic-ai/claude-code
 
+# Install Codex CLI
+RUN npm install -g @openai/codex
+
 # Install common development tools
 RUN npm install -g \
     typescript \

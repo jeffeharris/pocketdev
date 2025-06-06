@@ -44,11 +44,19 @@ class ContainerOrchestrator {
         TASK_DESCRIPTION: task.description,
         ACCEPTANCE_CRITERIA: JSON.stringify(task.acceptanceCriteria || []),
         TEST_FRAMEWORK: task.testFramework || 'jest',
-        CLAUDE_API_KEY: process.env.ANTHROPIC_API_KEY,
         ENGINEER_ROLE: task.engineerRole || 'fullstack',
         MODEL: task.model || 'claude-3-5-sonnet-latest',
-        MAX_ITERATIONS: task.maxIterations || '5'
+        MAX_ITERATIONS: task.maxIterations || '5',
+        ENGINE_TYPE: task.engineType || 'claude'
       };
+
+      if (env.ENGINE_TYPE === 'codex') {
+        if (process.env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+        }
+      } else {
+        env.CLAUDE_API_KEY = process.env.ANTHROPIC_API_KEY;
+      }
 
       // Add Git credentials if provided
       if (task.repository.credentials) {

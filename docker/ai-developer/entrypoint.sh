@@ -38,6 +38,8 @@ log_info "Starting AI Developer Container"
 log_info "Task ID: ${TASK_ID:-unknown}"
 log_info "Engineer Role: ${ENGINEER_ROLE:-fullstack}"
 log_info "Model: ${MODEL:-claude-3-5-sonnet-latest}"
+ENGINE_TYPE="${ENGINE_TYPE:-claude}"
+log_info "Engine type: $ENGINE_TYPE"
 
 # Validate required environment variables
 if [ -z "$REPO_URL" ]; then
@@ -50,13 +52,18 @@ if [ -z "$TASK_DESCRIPTION" ]; then
     exit 1
 fi
 
-if [ -z "$CLAUDE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
-    log_error "CLAUDE_API_KEY or ANTHROPIC_API_KEY environment variable is required"
-    exit 1
+if [ "$ENGINE_TYPE" = "codex" ]; then
+    if [ -z "$OPENAI_API_KEY" ]; then
+        log_error "OPENAI_API_KEY environment variable is required"
+        exit 1
+    fi
+else
+    if [ -z "$CLAUDE_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+        log_error "CLAUDE_API_KEY or ANTHROPIC_API_KEY environment variable is required"
+        exit 1
+    fi
+    export ANTHROPIC_API_KEY="${CLAUDE_API_KEY:-$ANTHROPIC_API_KEY}"
 fi
-
-# Set API key for Claude
-export ANTHROPIC_API_KEY="${CLAUDE_API_KEY:-$ANTHROPIC_API_KEY}"
 
 # Function to handle Git authentication
 setup_git_auth() {
@@ -120,6 +127,30 @@ run_claude() {
         log_error "Claude execution failed"
         cat "$output_file"
         return 1
+    fi
+}
+
+# Function to run Codex
+run_codex() {
+    local prompt="$1"
+    local output_file="$2"
+
+    local codex_args=("--model" "${MODEL:-codex-mini-latest}" -q "$prompt")
+    if codex "${codex_args[@]}" > "$output_file" 2>&1; then
+        return 0
+    else
+        log_error "Codex execution failed"
+        cat "$output_file"
+        return 1
+    fi
+}
+
+# Wrapper to run the selected engine
+run_agent() {
+    if [ "$ENGINE_TYPE" = "codex" ]; then
+        run_codex "$1" "$2" "$3"
+    else
+        run_claude "$1" "$2" "$3"
     fi
 }
 
@@ -200,7 +231,7 @@ $ACCEPTANCE_CRITERIA
 
 First, understand the project structure, then design tests that will validate the implementation."
     
-    if ! run_claude "$analyze_prompt" "/workspace/logs/analysis.json"; then
+    if ! run_agent "$analyze_prompt" "/workspace/logs/analysis.json"; then
         error_message="Failed to analyze codebase"
         save_results "$success" "$error_message" "" "$start_time"
         exit 1
@@ -209,7 +240,7 @@ First, understand the project structure, then design tests that will validate th
     # Step 2: Write tests first (TDD)
     local test_prompt="Now write comprehensive tests for the feature. Follow TDD principles - write failing tests first that cover all acceptance criteria."
     
-    if ! run_claude "$test_prompt" "/workspace/logs/write_tests.json" true; then
+    if ! run_agent "$test_prompt" "/workspace/logs/write_tests.json" true; then
         error_message="Failed to write tests"
         save_results "$success" "$error_message" "" "$start_time"
         exit 1
@@ -218,7 +249,7 @@ First, understand the project structure, then design tests that will validate th
     # Step 3: Implement the feature
     local implement_prompt="Now implement the feature to make all tests pass. Focus on clean, maintainable code that follows the project's patterns."
     
-    if ! run_claude "$implement_prompt" "/workspace/logs/implementation.json" true; then
+    if ! run_agent "$implement_prompt" "/workspace/logs/implementation.json" true; then
         error_message="Failed to implement feature"
         save_results "$success" "$error_message" "" "$start_time"
         exit 1
@@ -241,7 +272,7 @@ First, understand the project structure, then design tests that will validate th
                 log_warning "Tests failed, asking Claude to fix..."
                 local fix_prompt="The tests failed. Please analyze the errors and fix the implementation to make all tests pass."
                 
-                if ! run_claude "$fix_prompt" "/workspace/logs/fix_iteration_$iteration.json" true; then
+                if ! run_agent "$fix_prompt" "/workspace/logs/fix_iteration_$iteration.json" true; then
                     error_message="Failed to fix test failures"
                     break
                 fi
@@ -262,7 +293,7 @@ First, understand the project structure, then design tests that will validate th
         
         # Generate commit message
         local commit_prompt="Generate a concise, descriptive commit message for these changes. Include what was done and why."
-        run_claude "$commit_prompt" "/workspace/logs/commit_message.json" true
+        run_agent "$commit_prompt" "/workspace/logs/commit_message.json" true
         
         local commit_message=$(jq -r '.result // "feat: implement requested feature"' /workspace/logs/commit_message.json)
         
