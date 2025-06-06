@@ -5,13 +5,16 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y \
     curl \
     git \
-    nodejs \
-    npm \
     python3 \
     python3-pip \
     build-essential \
     jq \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 18 (Claude CLI requires newer Node.js)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Claude CLI
 RUN npm install -g @anthropic-ai/claude-code
