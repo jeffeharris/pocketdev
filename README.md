@@ -1,58 +1,136 @@
 # PocketDev - AI Engineering Management Platform
 
-Manage your AI development team from your phone. See real-time status updates as AI engineers work on your tasks.
+PocketDev enables users to manage AI developers like a team from their mobile devices. The vision is to transform from individual AI assistance to team orchestration.
 
-**Note**: The web interface is designed to be mobile-first, allowing you to manage your AI dev team from any device. A responsive web app approach was chosen to enable rapid iteration and user feedback before committing to native mobile apps.
+## Overview
 
-## What We Built
-
-A working prototype that demonstrates:
-
-1. **Mobile App (React Native)** 
-   - Real-time status dashboard showing all AI engineers
-   - Task assignment interface 
-   - Live progress updates (😴 → 🤔 → 💻 → ✅)
-
-2. **Lightweight Backend (Vercel + Supabase)**
-   - Minimal compute costs - just status tracking
-   - Real-time subscriptions for instant updates
-   - All heavy lifting done by OpenAI's infrastructure
-
-3. **OpenAI Integration**
-   - Each engineer is an OpenAI Assistant
-   - Tasks run on OpenAI's compute
-   - Status updates stream back to mobile
+PocketDev allows you to:
+- Manage specialized AI developers (frontend, backend, DevOps) working autonomously on tasks
+- Maintain persistent context across sessions with workspace isolation
+- Monitor real-time progress with live logs and status updates
+- Review, accept, or request changes to AI-generated code
+- Create GitHub branches and PRs automatically
 
 ## Architecture
 
+The platform consists of:
+- **Web Frontend**: React/TypeScript dashboard with real-time task monitoring
+- **Local Backend**: Node.js server orchestrating Docker containers
+- **Containerized AI Developers**: Isolated Docker environments running Claude
+- **Workspace Management**: Persistent workspaces for each task with Git integration
+
+## Key Features
+
+### 🚀 One-Shot Task Execution
+- AI developers work autonomously to complete tasks in a single session
+- Automatic test creation and verification
+- No rigid TDD framework - flexible implementation approach
+
+### 📊 Real-Time Monitoring
+- Live log streaming from containers
+- Task progress visualization
+- Cost and duration tracking
+
+### ✅ Review & Accept Workflow
+- Review implemented changes before committing
+- Accept and push to GitHub with one click
+- Request follow-up changes if needed
+
+### 🔄 Git Integration
+- Automatic feature branch creation
+- Commits with descriptive messages
+- Direct GitHub PR creation
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- Docker and Docker Compose
+- Anthropic API key (Claude)
+- GitHub account and personal access token (for pushing changes)
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/pocketdev.git
+   cd pocketdev
+   ```
+
+2. Create `.env` file in the root directory:
+   ```env
+   ANTHROPIC_API_KEY=your-anthropic-api-key
+   GITHUB_TOKEN=your-github-pat
+   GITHUB_USERNAME=your-github-username
+   ```
+
+3. Build the Docker images:
+   ```bash
+   ./scripts/build-docker.sh
+   ```
+
+### Running the Application
+
+#### Development Mode (Recommended)
+```bash
+# Start all services with hot reload
+./scripts/dev-docker.sh
+
+# Access the web interface at http://localhost:5173
 ```
-iPhone App → Supabase (real-time) → Vercel API → OpenAI Assistants
+
+#### Production Mode
+```bash
+# Start with Docker Compose
+docker-compose up
+
+# Access at http://localhost:3001
 ```
 
-The key insight: We only pay for lightweight coordination. OpenAI handles all the expensive compute.
+## Usage Example
 
-## Quick Start
+1. **Assign a Task**:
+   - Select an engineer (frontend, backend, or DevOps)
+   - Enter repository URL and task description
+   - Click "Assign Task"
 
-See [SETUP.md](./SETUP.md) for detailed setup instructions.
+2. **Monitor Progress**:
+   - View real-time logs as the AI works
+   - See which files are being modified
+   - Track time and cost
 
-## Project Structure
+3. **Review Results**:
+   - Examine the changes made
+   - Check test results
+   - View suggested next steps
 
-```
-pocketdev/
-├── pocketdev-mobile/     # React Native app
-│   ├── screens/          # Status & task assignment screens  
-│   ├── types/            # TypeScript definitions
-│   └── lib/              # Supabase client
-├── api/                  # Vercel serverless functions
-│   ├── assign-task.ts    # Task assignment endpoint
-│   └── openai-assistant.ts # OpenAI integration
-└── docs/                 # Project documentation
-```
+4. **Accept or Iterate**:
+   - Click "Accept & Commit" to push changes
+   - Or "Request Changes" for follow-up work
 
-## Next Steps
+## Documentation
 
-- Add voice input for task assignment
-- Implement task history view
-- Add multi-project support
-- Create specialized engineer roles
-- Build team coordination features
+- [Container Architecture](./docs/containerized-ai-developer-plan.md) - Technical design details
+- [AI Developer Usage](./docs/containerized-ai-developer-usage.md) - How AI developers work
+- [Integration Guide](./docs/containerized-claude-integration.md) - Claude integration specifics
+- [Development Workflow](./CHANGELOG.md) - Recent changes and updates
+
+## Project Status
+
+✅ **Implemented**:
+- Containerized AI developer execution
+- Real-time log streaming
+- Task result visualization
+- Accept/follow-up workflow
+- Git branch creation and pushing
+- Multiple engineer roles (frontend, backend, DevOps)
+
+🚧 **Coming Soon**:
+- Mobile app interface
+- Multi-agent orchestration
+- Advanced context persistence
+- Team collaboration features
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.

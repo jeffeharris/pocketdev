@@ -1,101 +1,90 @@
 # Containerized AI Developer Usage Guide
 
+This guide explains how to use the containerized AI developers in PocketDev, including task assignment, monitoring, and result management.
+
 ## Overview
 
-The containerized AI developer system allows PocketDev to run AI engineers in isolated Docker containers with full development capabilities including Git integration, test-driven development, and automated PR creation.
+PocketDev's containerized AI developers work autonomously in isolated Docker environments to complete programming tasks. Each AI developer:
+
+- Runs in its own Docker container with a complete development environment
+- Has access to Claude for code generation and problem-solving
+- Creates feature branches automatically
+- Writes verification scripts to test their implementations
+- Can be monitored in real-time through log streaming
 
 ## Quick Start
 
-### 1. Build the Docker Image
-
-First, build the AI developer Docker image:
+### 1. Start the System
 
 ```bash
-# From the backend directory
-curl -X POST http://localhost:3001/api/container/build-image
+# Development mode (recommended)
+./scripts/dev-docker.sh
+
+# Production mode
+docker-compose up
 ```
 
-### 2. View Available Engineers
+Access the web interface at http://localhost:5173 (dev) or http://localhost:3001 (prod).
 
-Get list of containerized AI engineers:
+### 2. Assign a Task
 
-```bash
-curl http://localhost:3001/api/container/engineers
-```
+1. Click on an available engineer card (Frontend, Backend, or DevOps)
+2. Fill in the task form:
+   - **Repository URL**: GitHub repository (e.g., `https://github.com/user/repo.git`)
+   - **Task Description**: Clear description of what needs to be done
+   - **Git Username**: Your GitHub username
+   - **Git Token**: GitHub personal access token with repo permissions
+3. Click "Assign Task"
 
-Response:
-```json
-[
-  {
-    "id": "frontend-1",
-    "name": "Frontend Engineer",
-    "role": "frontend",
-    "specialties": ["React", "TypeScript", "UI/UX"],
-    "status": "idle"
-  },
-  {
-    "id": "backend-1",
-    "name": "Backend Engineer",
-    "role": "backend",
-    "specialties": ["Node.js", "Python", "API Design"],
-    "status": "idle"
-  }
-]
-```
+### 3. Monitor Progress
 
-### 3. Assign a Containerized Task
+Once assigned, you'll see:
+- **Real-time logs**: Live output from the AI developer
+- **Status indicators**: 
+  - 😴 Idle
+  - 🤔 Thinking
+  - 💻 Working
+  - ✅ Completed
+  - ❌ Failed
+- **Progress updates**: Files being modified, tests being run
 
-```bash
-curl -X POST http://localhost:3001/api/container/assign-task \
-  -H "Content-Type: application/json" \
-  -d '{
-    "engineerId": "frontend-1",
-    "repository": {
-      "url": "https://github.com/your-org/your-repo.git",
-      "branch": "main",
-      "credentials": {
-        "username": "your-github-username",
-        "token": "your-github-token"
-      }
-    },
-    "description": "Add a dark mode toggle to the settings page",
-    "acceptanceCriteria": [
-      "Toggle switch in settings UI",
-      "Theme persists across sessions",
-      "All components support dark theme",
-      "Tests cover theme switching"
-    ],
-    "testFramework": "jest",
-    "model": "claude-3-5-sonnet-latest"
-  }'
-```
+### 4. Review Results
 
-### 4. Monitor Task Progress
+When the task completes, you'll see:
+- **Summary**: What was accomplished
+- **Files Changed**: List of modified files
+- **Test Results**: Output from verification scripts
+- **Cost & Duration**: API usage and time taken
+- **Suggested Next Steps**: AI's recommendations
 
-Check engineer status:
+### 5. Accept or Iterate
 
-```bash
-curl http://localhost:3001/api/container/engineers/frontend-1
-```
+Two options are available:
+- **Accept & Commit**: Commits changes and pushes to GitHub
+- **Request Changes**: Provide feedback for the AI to make adjustments
 
-Get task details:
+## Task Execution Flow
 
-```bash
-curl http://localhost:3001/api/container/tasks/{taskId}
-```
+### Phase 1: Setup
+1. Container launches with task parameters
+2. Repository is cloned
+3. Feature branch is created (e.g., `ai/frontend/add-dark-mode-1234567890`)
 
-### 5. Continue a Task
+### Phase 2: Implementation
+1. AI analyzes the codebase
+2. Creates a verification script (verify.js, test.py, etc.)
+3. Implements the requested feature
+4. Runs the verification script
+5. Fixes any issues until tests pass
 
-If you need to provide additional instructions:
+### Phase 3: Results
+1. Changes are staged (not committed)
+2. Results JSON is generated with all details
+3. Container waits for user decision
 
-```bash
-curl -X POST http://localhost:3001/api/container/continue-task \
-  -H "Content-Type: application/json" \
-  -d '{
-    "taskId": "previous-task-id",
-    "additionalInstructions": "Also add theme preference to user profile API"
-  }'
-```
+### Phase 4: Finalization
+- **If Accepted**: Changes are committed and pushed to the feature branch
+- **If Changes Requested**: AI makes adjustments based on feedback
 
 ## API Reference
 
@@ -141,18 +130,11 @@ POST /api/container/engineers/:id/reset
 POST /api/container/assign-task
 Body: {
   "engineerId": "string",
-  "repository": {
-    "url": "string",
-    "branch": "string",
-    "credentials": {
-      "username": "string",
-      "token": "string"
-    }
-  },
+  "repository": "https://github.com/user/repo.git",
   "description": "string",
   "acceptanceCriteria": ["string"],
   "testFramework": "jest|pytest|mocha",
-  "model": "claude-3-5-sonnet-latest|opus|sonnet",
+  "model": "claude-3-5-sonnet-latest",
   "maxIterations": 5
 }
 ```
@@ -160,6 +142,16 @@ Body: {
 #### Get Task Details
 ```
 GET /api/container/tasks/:id
+```
+
+#### Get Task Result
+```
+GET /api/container/tasks/:id/result
+```
+
+#### Accept Task and Commit
+```
+POST /api/container/tasks/:id/accept
 ```
 
 #### Continue Task
@@ -176,46 +168,54 @@ Body: {
 POST /api/container/tasks/:id/stop
 ```
 
-#### Get Active Containers
+## Best Practices
+
+### Writing Good Task Descriptions
+
+**Do:**
 ```
-GET /api/container/active
+Add a dark mode toggle to the settings page that:
+- Persists user preference in localStorage
+- Applies theme immediately without page reload
+- Uses CSS variables for easy theming
 ```
 
-## Task Workflow
-
-1. **Repository Setup**
-   - Container clones the repository
-   - Creates a feature branch
-   - Analyzes codebase structure
-
-2. **Test-Driven Development**
-   - Claude writes tests first
-   - Implements code to pass tests
-   - Iterates until all tests pass
-   - Runs linting and formatting
-
-3. **Code Commit**
-   - Stages all changes
-   - Creates descriptive commit message
-   - Pushes to remote branch
-
-4. **Pull Request Creation**
-   - Generates PR description
-   - Includes test results
-   - Links to related issues
-
-## Environment Variables
-
-Set these in your `.env` file:
-
-```bash
-# Required
-ANTHROPIC_API_KEY=your-api-key
-
-# Optional
-DOCKER_IMAGE=pocketdev/ai-developer:latest
-WORKSPACE_BASE=/tmp/pocketdev-workspaces
+**Don't:**
 ```
+Add dark mode
+```
+
+### Providing Context
+
+Include relevant details:
+- Specific files or components to modify
+- Existing patterns to follow
+- Dependencies or constraints
+- Expected behavior
+
+### Git Authentication
+
+For private repositories:
+1. Create a GitHub Personal Access Token with `repo` scope
+2. Enter your GitHub username and token in the task form
+3. The AI will use these credentials to push changes
+
+## Engineer Specializations
+
+### Frontend Engineer
+- Specializes in React, TypeScript, and UI/UX
+- Focuses on components, accessibility, and user experience
+- Best for: UI features, component creation, styling
+
+### Backend Engineer
+- Specializes in APIs, databases, and server architecture
+- Focuses on security, performance, and error handling
+- Best for: API endpoints, data models, business logic
+
+### DevOps Engineer
+- Specializes in automation, CI/CD, and infrastructure
+- Focuses on deployment, monitoring, and configuration
+- Best for: Docker configs, GitHub Actions, deployment scripts
 
 ## Examples
 
@@ -223,11 +223,8 @@ WORKSPACE_BASE=/tmp/pocketdev-workspaces
 
 ```javascript
 const task = {
-  engineerId: "frontend-1",
-  repository: {
-    url: "https://github.com/acme/web-app.git",
-    branch: "main"
-  },
+  engineerId: "container-frontend",
+  repository: "https://github.com/acme/web-app.git",
   description: "Add user profile page with edit functionality",
   acceptanceCriteria: [
     "Profile displays user information",
@@ -235,9 +232,7 @@ const task = {
     "Form validation for required fields",
     "Success/error notifications",
     "Mobile responsive design"
-  ],
-  testFramework: "jest",
-  model: "claude-3-5-sonnet-latest"
+  ]
 };
 ```
 
@@ -245,11 +240,8 @@ const task = {
 
 ```javascript
 const task = {
-  engineerId: "backend-1",
-  repository: {
-    url: "https://github.com/acme/api-server.git",
-    branch: "develop"
-  },
+  engineerId: "container-backend",
+  repository: "https://github.com/acme/api-server.git",
   description: "Create REST API endpoints for user preferences",
   acceptanceCriteria: [
     "GET /api/users/:id/preferences",
@@ -257,9 +249,7 @@ const task = {
     "Proper authentication checks",
     "Input validation",
     "Unit and integration tests"
-  ],
-  testFramework: "pytest",
-  model: "claude-3-5-sonnet-latest"
+  ]
 };
 ```
 
@@ -267,87 +257,132 @@ const task = {
 
 ```javascript
 const task = {
-  engineerId: "devops-1",
-  repository: {
-    url: "https://github.com/acme/infrastructure.git",
-    branch: "main"
-  },
+  engineerId: "container-devops",
+  repository: "https://github.com/acme/infrastructure.git",
   description: "Set up GitHub Actions for automated testing",
   acceptanceCriteria: [
     "Run tests on pull requests",
     "Generate coverage reports",
     "Fail if coverage drops below 80%",
     "Cache dependencies for speed"
-  ],
-  model: "claude-3-5-sonnet-latest"
+  ]
 };
 ```
 
-## Best Practices
+## Monitoring and Debugging
 
-1. **Clear Task Descriptions**
-   - Be specific about what needs to be built
-   - Include technical requirements
-   - Mention any constraints or preferences
+### View Logs
+Real-time logs show:
+- Claude's thought process
+- Commands being executed
+- File modifications
+- Test results
 
-2. **Comprehensive Acceptance Criteria**
-   - Define testable requirements
-   - Include edge cases
-   - Specify performance requirements
+### Check Workspaces
+Workspaces are preserved at:
+```
+workspaces/<task-id>/
+├── repo/          # Cloned repository
+├── logs/          # Session logs
+└── results/       # Task results
+```
 
-3. **Repository Preparation**
-   - Ensure CI/CD is configured
-   - Have clear contributing guidelines
-   - Include example code patterns
+### Common Issues
 
-4. **Session Management**
-   - Use task continuation for complex features
-   - Keep sessions focused on single features
-   - Review work before creating PRs
+**Task Fails to Start:**
+- Check Docker is running
+- Verify API key is set in .env
+- Ensure repository URL is accessible
 
-## Troubleshooting
+**Tests Don't Pass:**
+- Review the AI's verification script
+- Check if acceptance criteria were clear
+- Use "Request Changes" to provide clarification
 
-### Container Fails to Start
-- Check Docker is running: `docker ps`
-- Verify image exists: `docker images | grep pocketdev`
-- Check logs in workspace directory
+**Can't Push to GitHub:**
+- Verify Git credentials are correct
+- Check token has necessary permissions
+- Ensure branch protection rules allow pushes
 
-### Git Authentication Issues
-- Ensure credentials have repository access
-- Use personal access tokens, not passwords
-- Check token has necessary scopes
+## Advanced Usage
 
-### Task Timeouts
-- Increase `maxIterations` for complex tasks
+### Continuing Tasks
+
+To build upon previous work:
+1. Use "Request Changes" on a completed task
+2. Provide additional instructions
+3. AI will continue in the same context
+
+### Parallel Tasks
+
+You can assign tasks to multiple engineers simultaneously:
+- Each runs in its own container
+- No interference between tasks
+- Monitor all progress in real-time
+
+### Custom Models
+
+Specify different Claude models:
+- `claude-3-5-sonnet-latest` (default)
+- `claude-3-opus-latest` (more capable)
+- `claude-3-haiku-latest` (faster, cheaper)
+
+## Cost Management
+
+Each task shows:
+- Token usage
+- Estimated cost in USD
+- Duration
+
+Tips to reduce costs:
+- Be specific in task descriptions
 - Break large tasks into smaller ones
-- Use task continuation feature
-
-### Engineer Stuck in Error State
-- Use reset endpoint: `POST /api/container/engineers/:id/reset`
-- Check task logs for error details
-- Clean up workspace if needed
+- Use appropriate models for task complexity
 
 ## Security Considerations
 
-1. **Container Isolation**
-   - Each task runs in isolated container
-   - No internet access except Git operations
-   - Read-only access to main branch
+- Containers are isolated from each other
+- No access to host filesystem outside workspaces
+- Git credentials are passed securely via environment variables
+- API keys are never logged or exposed
+- Each container has resource limits:
+  - CPU: 2 cores
+  - Memory: 4GB
+  - Timeout: 30 minutes
 
-2. **Credentials Management**
-   - Never commit credentials
-   - Use environment variables
-   - Rotate tokens regularly
+## Troubleshooting
 
-3. **Resource Limits**
-   - CPU: 2 cores per container
-   - Memory: 4GB per container
-   - Timeout: 30 minutes per task
+### Container Won't Start
+```bash
+# Check Docker status
+docker ps -a
 
-## Future Enhancements
+# View container logs
+docker logs <container-id>
 
-- Multi-agent collaboration
-- Deployment automation
-- Performance profiling
-- Security scanning
-- Custom tool integration via MCP
+# Rebuild images
+./scripts/build-docker.sh
+```
+
+### Task Stuck
+```bash
+# Stop the task via API
+curl -X POST http://localhost:5001/api/container/tasks/<task-id>/stop
+
+# Or reset the engineer
+curl -X POST http://localhost:5001/api/container/engineers/<engineer-id>/reset
+```
+
+### Cleanup Old Workspaces
+```bash
+# Remove workspaces older than 24 hours
+curl -X POST http://localhost:5001/api/container/cleanup \
+  -H "Content-Type: application/json" \
+  -d '{"olderThanHours": 24}'
+```
+
+## Next Steps
+
+- Review the [Architecture Documentation](./containerized-ai-developer-plan.md)
+- Check the [Integration Guide](./containerized-claude-integration.md)
+- Explore example projects in the `/examples` directory

@@ -1,6 +1,56 @@
 # Changelog
 
-## [Containerized AI Developers] - 2024-01-06
+All notable changes to the PocketDev project will be documented in this file.
+
+## [0.2.0] - 2025-01-06
+
+### Added
+- Complete containerized AI developer system with Docker isolation
+- Real-time log streaming from containers (2-second polling intervals)
+- Task result visualization with success/failure, files changed, cost, and duration
+- Accept & Commit workflow for reviewing and pushing changes to GitHub
+- Request Changes functionality for iterative development
+- Automatic feature branch creation and GitHub PR generation
+- Multiple engineer roles: Frontend, Backend, and DevOps specialists
+- One-shot task execution approach (moved away from rigid TDD)
+- Simple verification scripts without framework dependencies
+- JSON result files for inter-process communication
+- Signal-based container lifecycle management (SHUTDOWN/CONTINUE)
+- Workspace persistence across task sessions
+- Automatic Git authentication with personal access tokens
+- Enhanced UI components:
+  - `TaskResultView` for rich result display
+  - `ContainerEngineerCardEnhanced` with polling support
+  - Real-time status updates with visual indicators
+
+### Changed
+- Simplified from rigid TDD approach to flexible one-shot implementation
+- Moved from waiting for container exit to polling for results
+- Enhanced error handling with proper JSON escaping for task descriptions
+- Improved UI with rich task result displays
+- Updated Docker configuration to use Node.js 18 for Claude compatibility
+- Refactored entrypoint.sh for simpler, more reliable execution flow
+- Updated container orchestration to support async result checking
+
+### Fixed
+- Environment variable passing between host → backend → AI containers
+- PostCSS ES module compatibility issues
+- Docker compose version warnings
+- JSON escaping bug for task descriptions containing quotes (`jq -Rs` escaping)
+- Container detection of task completion (polling vs waiting)
+- Git push authentication with proper token usage
+- Claude CLI installation in Docker (Node.js 18 requirement)
+
+### Technical Details
+- Implemented polling-based result checking instead of blocking waits
+- Added `checkTaskResults()` method to ContainerOrchestrator
+- Created `TaskResultView` component for rich result display
+- Enhanced `ContainerEngineerCard` with automatic polling
+- Implemented `acceptTask()` and `continueTask()` in ContainerTaskManager
+- Added signal file monitoring in entrypoint.sh
+- Result JSON structure includes: success, sessionId, summary, error, duration, cost, files changed, test results, and PR URL
+
+## [0.1.0] - 2024-01-06 - Initial Containerized System
 
 ### Added
 
@@ -64,19 +114,10 @@
 - **Infrastructure**: Docker containers with isolated workspaces
 - **Testing**: Jest with ES modules support
 
-### Usage
+## [0.0.1] - Initial Concept
 
-1. Build Docker image: `./scripts/build-docker.sh`
-2. Start backend: `cd local-backend && npm run dev`
-3. Start frontend: `cd web && npm run dev`
-4. Assign containerized tasks through the web UI
-
-### What's Next
-
-The AI engineers can now work on their own codebase! Potential improvements:
-- Multi-agent collaboration
-- Automated code reviews
-- PR creation with GitHub/GitLab APIs
-- Performance profiling
-- Security scanning
-- Custom MCP tool integration
+### Added
+- Initial project structure and planning documents
+- Basic web interface mockup
+- Architecture design for mobile-first AI team management
+- Integration research for multi-agent frameworks
