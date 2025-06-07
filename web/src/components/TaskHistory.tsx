@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, XCircle, Clock, FileText, DollarSign, Cpu, ExternalLink, GitBranch } from 'lucide-react';
+import { X, CheckCircle, XCircle, Clock, FileText, DollarSign, Cpu, ExternalLink, GitBranch, Search, Filter } from 'lucide-react';
 
 interface TaskHistoryItem {
   id: string;
@@ -34,6 +34,9 @@ interface Props {
 export function TaskHistory({ onClose, onTaskClick }: Props) {
   const [tasks, setTasks] = useState<TaskHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'complete' | 'error' | 'running'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'frontend' | 'backend' | 'devops'>('all');
 
   useEffect(() => {
     fetchTaskHistory();
@@ -44,11 +47,35 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
 
   const fetchTaskHistory = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/task-history');
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data);
+      // Fetch from both endpoints and combine
+      const [containerResponse, regularResponse] = await Promise.all([
+        fetch('http://localhost:3001/api/container/completed-tasks'),
+        fetch('http://localhost:3001/api/task-history')
+      ]);
+      
+      let allTasks: TaskHistoryItem[] = [];
+      
+      if (containerResponse.ok) {
+        const containerTasks = await containerResponse.json();
+        allTasks = [...containerTasks];
       }
+      
+      if (regularResponse.ok) {
+        const regularTasks = await regularResponse.json();
+        // Filter out duplicates by ID
+        const existingIds = new Set(allTasks.map(t => t.id));
+        const uniqueRegularTasks = regularTasks.filter((t: TaskHistoryItem) => !existingIds.has(t.id));
+        allTasks = [...allTasks, ...uniqueRegularTasks];
+      }
+      
+      // Sort by date (newest first)
+      allTasks.sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.startTime || 0).getTime();
+        const dateB = new Date(b.completedAt || b.startTime || 0).getTime();
+        return dateB - dateA;
+      });
+      
+      setTasks(allTasks);
     } catch (error) {
       console.error('Failed to fetch task history:', error);
     } finally {
@@ -89,10 +116,35 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
     }
   };
 
+  // Filter tasks based on search and filters
+  const filteredTasks = tasks.filter(task => {
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        task.task.toLowerCase().includes(query) ||
+        task.engineerName.toLowerCase().includes(query) ||
+        task.filesCreated.some(f => f.filename.toLowerCase().includes(query));
+      if (!matchesSearch) return false;
+    }
+
+    // Status filter
+    if (statusFilter !== 'all' && task.status !== statusFilter) {
+      return false;
+    }
+
+    // Role filter
+    if (roleFilter !== 'all' && task.engineerRole !== roleFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
   return (
     <div className="fixed inset-y-0 right-0 w-96 bg-white shadow-xl z-40 flex flex-col">
       <div className="p-6 border-b">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Task History</h2>
           <button
             onClick={onClose}
@@ -100,6 +152,42 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
           >
             <X className="h-5 w-5" />
           </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tasks, engineers, or files..."
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Status</option>
+            <option value="complete">Completed</option>
+            <option value="error">Failed</option>
+            <option value="running">Running</option>
+          </select>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as any)}
+            className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Engineers</option>
+            <option value="frontend">Frontend</option>
+            <option value="backend">Backend</option>
+            <option value="devops">DevOps</option>
+          </select>
         </div>
       </div>
 
@@ -109,8 +197,17 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
         ) : tasks.length === 0 ? (
           <p className="text-gray-500 text-center">No completed tasks yet</p>
         ) : (
-          <div className="space-y-4">
-            {tasks.map((task) => (
+          <>
+            {/* Results count */}
+            <div className="mb-4 text-sm text-gray-600">
+              Showing {filteredTasks.length} of {tasks.length} tasks
+            </div>
+            
+            {filteredTasks.length === 0 ? (
+              <p className="text-gray-500 text-center">No tasks match your filters</p>
+            ) : (
+              <div className="space-y-4">
+                {filteredTasks.map((task) => (
               <div 
                 key={task.id} 
                 className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -207,6 +304,8 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
               </div>
             ))}
           </div>
+            )}
+          </>
         )}
       </div>
     </div>

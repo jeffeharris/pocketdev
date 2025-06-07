@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, DollarSign, FileCode, GitBranch, ExternalLink, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Clock, DollarSign, FileCode, GitBranch, ExternalLink, AlertCircle, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
 
 interface TaskData {
@@ -9,7 +9,7 @@ interface TaskData {
   engineerName: string;
   engineerRole: string;
   task: string;
-  status: 'running' | 'complete' | 'error';
+  status: 'running' | 'complete' | 'error' | 'awaiting_review' | 'accepted' | 'rejected';
   result: string;
   cost: number;
   duration: number;
@@ -25,6 +25,11 @@ interface TaskData {
   testResults?: any;
   suggestedNextSteps?: string[];
   startTime?: string;
+  reviewStatus?: string;
+  acceptanceCriteria?: string[];
+  tokensInput?: number;
+  tokensOutput?: number;
+  numTurns?: number;
 }
 
 export function TaskView() {
@@ -34,6 +39,9 @@ export function TaskView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
+  const [showFollowUpInput, setShowFollowUpInput] = useState(false);
+  const [followUpTask, setFollowUpTask] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchTaskDetails();
@@ -54,6 +62,12 @@ export function TaskView() {
         const containerTasks = await containerResponse.json();
         const containerTask = containerTasks.find((t: TaskData) => t.id === taskId);
         if (containerTask) {
+          // Map database status to UI status
+          if (containerTask.status === 'complete' && !containerTask.reviewStatus) {
+            containerTask.status = 'awaiting_review';
+          } else if (containerTask.reviewStatus === 'approved') {
+            containerTask.status = 'accepted';
+          }
           setTask(containerTask);
           setLoading(false);
           return;
@@ -99,6 +113,68 @@ export function TaskView() {
   const formatCost = (cost: number) => {
     if (!cost || cost === 0) return '$0.00';
     return `$${cost.toFixed(2)}`;
+  };
+
+  const handleAccept = async () => {
+    if (!task || !task.id) return;
+    
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/container/tasks/${task.id}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        // Update task status locally
+        setTask(prev => prev ? { ...prev, status: 'accepted', reviewStatus: 'approved' } : null);
+        // Show success message
+        alert('Task accepted and changes committed!');
+      } else {
+        throw new Error('Failed to accept task');
+      }
+    } catch (err) {
+      console.error('Error accepting task:', err);
+      alert('Failed to accept task. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFollowUp = async () => {
+    if (!task || !followUpTask.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/container/continue-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          additionalInstructions: followUpTask
+        })
+      });
+
+      if (response.ok) {
+        // Clear the form
+        setFollowUpTask('');
+        setShowFollowUpInput(false);
+        // Refresh task details
+        fetchTaskDetails();
+        alert('Follow-up task sent to engineer!');
+      } else {
+        throw new Error('Failed to send follow-up');
+      }
+    } catch (err) {
+      console.error('Error sending follow-up:', err);
+      alert('Failed to send follow-up. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -170,11 +246,15 @@ export function TaskView() {
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  task.status === 'complete' ? 'bg-green-100 text-green-800' :
-                  task.status === 'error' ? 'bg-red-100 text-red-800' :
+                  task.status === 'complete' || task.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                  task.status === 'error' || task.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                  task.status === 'awaiting_review' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-blue-100 text-blue-800'
                 }`}>
                   {task.status === 'complete' ? 'Completed' :
+                   task.status === 'accepted' ? 'Accepted' :
+                   task.status === 'rejected' ? 'Rejected' :
+                   task.status === 'awaiting_review' ? 'Awaiting Review' :
                    task.status === 'error' ? 'Failed' :
                    'Running'}
                 </span>
@@ -196,6 +276,30 @@ export function TaskView() {
                   </div>
                 </div>
               </div>
+
+              {/* Additional Metrics */}
+              {(task.tokensInput || task.tokensOutput || task.numTurns) && (
+                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
+                  {task.tokensInput && (
+                    <div>
+                      <p className="text-sm text-gray-600">Input Tokens</p>
+                      <p className="font-medium">{task.tokensInput.toLocaleString()}</p>
+                    </div>
+                  )}
+                  {task.tokensOutput && (
+                    <div>
+                      <p className="text-sm text-gray-600">Output Tokens</p>
+                      <p className="font-medium">{task.tokensOutput.toLocaleString()}</p>
+                    </div>
+                  )}
+                  {task.numTurns && (
+                    <div>
+                      <p className="text-sm text-gray-600">Turns</p>
+                      <p className="font-medium">{task.numTurns}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {task.featureBranch && (
                 <div className="mt-4 flex items-center gap-3">
@@ -251,6 +355,74 @@ export function TaskView() {
                 )}
               </div>
             </div>
+
+            {/* Review Actions - Only show for completed tasks awaiting review */}
+            {(task.status === 'awaiting_review' || task.status === 'complete') && !task.reviewStatus && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Task Review</h3>
+                
+                {/* Follow-up Input */}
+                {showFollowUpInput ? (
+                  <div className="space-y-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Describe what changes or improvements you'd like:
+                    </label>
+                    <textarea
+                      value={followUpTask}
+                      onChange={(e) => setFollowUpTask(e.target.value)}
+                      placeholder="Be specific about what needs to be changed..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={4}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleFollowUp}
+                        disabled={!followUpTask.trim() || isSubmitting}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Send Follow-up
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowFollowUpInput(false);
+                          setFollowUpTask('');
+                        }}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Review the task results and decide whether to accept the changes or request modifications.
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleAccept}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        <CheckCircle className="h-4 w-4" />
+                        Accept & Commit
+                      </button>
+                      <button
+                        onClick={() => setShowFollowUpInput(true)}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 text-blue-600 bg-white border border-blue-600 rounded-md hover:bg-blue-50 flex items-center gap-2"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Request Changes
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Column - Details */}
@@ -288,6 +460,27 @@ export function TaskView() {
                     <span className="font-medium text-red-600">{task.testResults.failed || 0}</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Acceptance Criteria */}
+            {task.acceptanceCriteria && task.acceptanceCriteria.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Acceptance Criteria</h3>
+                <ul className="space-y-2">
+                  {task.acceptanceCriteria.map((criteria, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <div className={`h-4 w-4 rounded border-2 mt-0.5 ${
+                        task.status === 'accepted' ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                      }`}>
+                        {task.status === 'accepted' && (
+                          <CheckCircle className="h-3 w-3 text-white" />
+                        )}
+                      </div>
+                      <span className="text-sm text-gray-700">{criteria}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

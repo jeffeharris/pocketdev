@@ -2,6 +2,51 @@
 
 All notable changes to the PocketDev project will be documented in this file.
 
+## [0.3.0] - 2025-06-07 - Phase 1: Database Foundation & Task Persistence
+
+### Added
+- **SQLite Database Integration**
+  - Complete database schema with Drizzle ORM
+  - Tables for projects, tasks, engineer profiles, and task events
+  - Automatic project creation based on repository URLs
+  - Database management scripts (db:push, db:seed, db:verify)
+
+- **Task Persistence System**
+  - All tasks now persist across server restarts
+  - Complete task lifecycle tracking with metadata
+  - Task events for full audit trail
+  - Engineer performance metrics (success rate, cost, task counts)
+
+- **Task Review Workflow**
+  - Accept/Reject/Request Changes UI in TaskView
+  - Task states: queued → in_progress → awaiting_review → accepted/rejected
+  - Review actions update database and trigger appropriate workflows
+  - Acceptance criteria display with completion checkmarks
+
+- **Enhanced Task Metrics**
+  - Token usage display (input/output tokens)
+  - Number of turns/iterations tracking
+  - Detailed cost and duration metrics
+  - Performance data stored per engineer
+
+- **Search & Filter Functionality**
+  - Search tasks by description, engineer, or files
+  - Filter by status (Complete, Failed, Running)
+  - Filter by engineer role (Frontend, Backend, DevOps)
+  - Results count showing filtered vs total tasks
+
+### Changed
+- Engineers now loaded from database instead of hardcoded
+- Task history fetches from database with full state information
+- ContainerTaskManager integrated with database operations
+- TaskView enhanced with review UI and better metrics display
+
+### Database Schema
+- `projects` - Repository and project settings
+- `engineer_profiles` - AI engineer configurations and performance metrics
+- `tasks` - Complete task details with status, results, and metrics
+- `task_events` - Event log for task state transitions
+
 ## [0.2.1] - 2025-06-07
 
 ### Added
