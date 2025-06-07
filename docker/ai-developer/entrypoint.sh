@@ -513,9 +513,9 @@ WRAPPER
             log_debug "Prompt (first 200 chars): '${prompt:0:200}...'"
             log_debug "Prompt length: ${#prompt} characters"
             
-            # Use echo to pipe prompt to stdin (BYPASSING WRAPPER FOR TEST)
-            # FIXED: Claude expects prompt as argument, not stdin
-            if timeout 600 claude "${claude_args[@]}" "$prompt" >"$temp_output" 2>"$error_output"; then
+            # Use echo to pipe prompt to stdin
+            # When using -p flag, Claude expects input via stdin OR as argument
+            if echo "$prompt" | timeout 600 claude "${claude_args[@]}" >"$temp_output" 2>"$error_output"; then
                 success=true
                 log_success "Claude execution succeeded"
             else
@@ -837,7 +837,7 @@ Please implement everything in one session, running your verification at the end
         fi
     elif [ -f "test.py" ]; then
         log_info "Running test.py..."
-        if verification_output=$(python test.py 2>&1); then
+        if verification_output=$(python3 test.py 2>&1); then
             verification_passed=true
             test_results="test.py passed successfully"
         else
@@ -845,7 +845,7 @@ Please implement everything in one session, running your verification at the end
         fi
     elif [ -f "verify.py" ]; then
         log_info "Running verify.py..."
-        if verification_output=$(python verify.py 2>&1); then
+        if verification_output=$(python3 verify.py 2>&1); then
             verification_passed=true
             test_results="verify.py passed successfully"
         else
@@ -1136,7 +1136,7 @@ Please make any necessary changes or improvements based on this feedback."
                     elif [ -f "test.py" ] || [ -f "verify.py" ]; then
                         local test_file=$([ -f "test.py" ] && echo "test.py" || echo "verify.py")
                         log_info "Running $test_file..."
-                        if verification_output=$(python $test_file 2>&1); then
+                        if verification_output=$(python3 $test_file 2>&1); then
                             verification_passed=true
                             test_results="$test_file passed successfully"
                         else
