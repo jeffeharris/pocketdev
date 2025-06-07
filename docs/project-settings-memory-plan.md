@@ -51,21 +51,32 @@ This document outlines the implementation plan for:
 
 ### Directory Structure
 
+**Initial structure created by `pocketdev init`:**
 ```
-project-root/                      # Your repository root (e.g., /home/user/projects/myapp)
+project-root/                      # Your repository root
 ├── .pocketdev/                    # PocketDev data directory (like .git or .github)
 │   ├── config.json               # Project settings
-│   ├── team-memory.md            # Shared team knowledge
+│   ├── team-memory.md            # Shared team knowledge (initialized with template)
+│   ├── engineers/                # Directory for engineer memories (initially empty)
+│   └── workspaces/               # Host agent workspaces
+│       ├── frontend/             # Frontend workspace (initially empty)
+│       ├── backend/              # Backend workspace (initially empty)
+│       └── devops/               # DevOps workspace (initially empty)
+└── [your existing project files]
+```
+
+**After engineers start working:**
+```
+project-root/
+├── .pocketdev/
+│   ├── config.json               # Project settings
+│   ├── team-memory.md            # Shared knowledge (updated by engineers)
 │   ├── engineers/
-│   │   ├── frontend-1.md         # Individual engineer memories
-│   │   ├── backend-1.md
-│   │   └── devops-1.md
-│   └── workspaces/               # Host agent workspaces (no worktree mode)
-│       ├── frontend/             # Frontend agent playground
-│       ├── backend/              # Backend agent playground
-│       └── devops/               # DevOps agent playground
-├── .git/                         # Git repository data
-├── .github/                      # GitHub specific files
+│   │   ├── frontend-1.md         # Created when frontend engineer first runs
+│   │   ├── backend-1.md          # Created when backend engineer first runs
+│   │   └── devops-1.md           # Created when devops engineer first runs
+│   └── workspaces/               # Contains temporary work files
+├── .git/
 ├── src/                          # Your source code
 └── .gitignore                    # Optionally exclude .pocketdev/
 
@@ -100,6 +111,27 @@ adjacent-directory/               # Only created if worktree permissions exist
 ```
 
 #### Team Memory (.pocketdev/team-memory.md)
+
+**Initial template created during initialization:**
+```markdown
+# Team Memory - [Project Name]
+
+Last updated: [Date]
+
+## Project Overview
+This is the shared knowledge base for all AI engineers working on this project.
+
+## Architecture
+<!-- Add architecture details as discovered -->
+
+## Conventions
+<!-- Add coding conventions as discovered -->
+
+## Recent Discoveries
+<!-- AI engineers will add learnings here -->
+```
+
+**Example after engineers have been working:**
 ```markdown
 # Team Memory - PocketDev
 
@@ -131,6 +163,10 @@ Last updated: 2024-01-07
 ```
 
 #### Engineer Memory (.pocketdev/engineers/frontend-1.md)
+
+**Note:** Engineer memory files are NOT created during initialization. They are created by each engineer when they first start working on a task.
+
+**Example of what an engineer memory file looks like after several tasks:**
 ```markdown
 # Frontend Engineer #1
 
