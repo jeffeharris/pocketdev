@@ -6,6 +6,7 @@ import { TaskModal } from './components/TaskModal';
 import { ContainerTaskModal } from './components/ContainerTaskModal';
 import { TaskHistory } from './components/TaskHistory';
 import { TaskDetailModal } from './components/TaskDetailModal';
+import { TaskView } from './components/TaskView';
 import Settings from './components/Settings';
 import Layout from './components/Layout';
 import { supabase, useMockData } from './lib/supabase';
@@ -294,7 +295,7 @@ function Dashboard() {
         <TaskHistory 
           onClose={() => setShowHistory(false)} 
           onTaskClick={(task) => {
-            setSelectedTask(task);
+            navigate(`/task/${task.id}`);
             setShowHistory(false);
           }}
         />
@@ -317,6 +318,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/task/:taskId" element={<TaskView />} />
         </Routes>
       </Layout>
     </Router>
