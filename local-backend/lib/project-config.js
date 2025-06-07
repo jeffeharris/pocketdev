@@ -20,9 +20,7 @@ class ProjectConfig {
     
     // Create directory structure
     await fs.mkdir(path.join(pocketdevPath, 'engineers'), { recursive: true });
-    await fs.mkdir(path.join(pocketdevPath, 'workspaces', 'frontend'), { recursive: true });
-    await fs.mkdir(path.join(pocketdevPath, 'workspaces', 'backend'), { recursive: true });
-    await fs.mkdir(path.join(pocketdevPath, 'workspaces', 'devops'), { recursive: true });
+    await fs.mkdir(path.join(pocketdevPath, 'workspaces'), { recursive: true });
     
     // Check for existing CLAUDE.md
     let teamMemoryContent = `# Team Memory - ${path.basename(projectPath)}

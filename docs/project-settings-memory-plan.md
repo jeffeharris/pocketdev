@@ -58,10 +58,7 @@ project-root/                      # Your repository root
 │   ├── config.json               # Project settings
 │   ├── team-memory.md            # Shared team knowledge (initialized with template)
 │   ├── engineers/                # Directory for engineer memories (initially empty)
-│   └── workspaces/               # Host agent workspaces
-│       ├── frontend/             # Frontend workspace (initially empty)
-│       ├── backend/              # Backend workspace (initially empty)
-│       └── devops/               # DevOps workspace (initially empty)
+│   └── workspaces/               # Directory for engineer workspaces (initially empty)
 └── [your existing project files]
 ```
 
@@ -75,7 +72,10 @@ project-root/
 │   │   ├── frontend-1.md         # Created when frontend engineer first runs
 │   │   ├── backend-1.md          # Created when backend engineer first runs
 │   │   └── devops-1.md           # Created when devops engineer first runs
-│   └── workspaces/               # Contains temporary work files
+│   └── workspaces/
+│       ├── frontend-1/           # Created when frontend engineer needs workspace
+│       ├── backend-1/            # Created when backend engineer needs workspace
+│       └── devops-1/             # Created when devops engineer needs workspace
 ├── .git/
 ├── src/                          # Your source code
 └── .gitignore                    # Optionally exclude .pocketdev/
@@ -251,8 +251,8 @@ GET  /api/project/config    # Get current config
 await fs.mkdir('.pocketdev/engineers', { recursive: true });
 await fs.mkdir('.pocketdev/workspaces', { recursive: true });
 
-// Create initial config.yml
-await fs.writeFile('.pocketdev/config.yml', initialConfig);
+// Create initial config.json
+await fs.writeFile('.pocketdev/config.json', initialConfig);
 
 // Import from CLAUDE.md if exists
 if (await fs.exists('CLAUDE.md')) {

@@ -88,16 +88,27 @@ run_claude() {
         claude_args+=("--resume" "$CLAUDE_SESSION_ID")
     fi
     
-    # Add role-specific system prompt
+    # Add role-specific system prompt with memory context
+    local memory_context="
+
+You are working in a containerized environment with access to project memory:
+- Team memory: /workspace/repo/.pocketdev/team-memory.md (read this for project context)
+- Your personal memory: /workspace/repo/.pocketdev/engineers/${ENGINEER_ROLE}-${ENGINEER_ID:-1}.md
+  
+At the start of your task, read the team memory to understand the project.
+If your personal memory file doesn't exist, create it with your first learnings.
+Update your memory file with important discoveries as you work.
+Add significant findings to the team memory for other engineers."
+
     case "$ENGINEER_ROLE" in
         frontend)
-            claude_args+=("--system-prompt" "You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.")
+            claude_args+=("--system-prompt" "You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.$memory_context")
             ;;
         backend)
-            claude_args+=("--system-prompt" "You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.")
+            claude_args+=("--system-prompt" "You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.$memory_context")
             ;;
         devops)
-            claude_args+=("--system-prompt" "You are a DevOps specialist focusing on automation and infrastructure. Create reproducible deployments and comprehensive monitoring.")
+            claude_args+=("--system-prompt" "You are a DevOps specialist focusing on automation and infrastructure. Create reproducible deployments and comprehensive monitoring.$memory_context")
             ;;
     esac
     

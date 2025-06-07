@@ -22,12 +22,35 @@ export class HostClaudeManager {
     const workspacePath = path.join(this.workspacesPath, role);
     console.error(`[HostClaudeManager] Workspace path: ${workspacePath}`);
     
-    // Add context to help Claude understand file creation is authorized
-    const enhancedTask = `CONTEXT: You are an AI developer on the PocketDev platform. The user is explicitly requesting code/file content.
+    // Add context including memory system
+    const projectRoot = path.resolve(process.cwd(), '..');
+    const memoryContext = `
+MEMORY SYSTEM:
+You have access to project memory files in ${projectRoot}/.pocketdev/:
+- Team memory: .pocketdev/team-memory.md (read this for project context)
+- Your personal memory: .pocketdev/engineers/${role}-${engineerId}.md
+
+At the start of your task, read the team memory to understand the project.
+If your personal memory file doesn't exist, create it with your first learnings.
+Update your memory file with important discoveries as you work.
+Add significant findings to the team memory for other engineers.
+
+WORKSPACE:
+You are working in a LIMITED HOST MODE in the workspace: ${workspacePath}
+This means you can read the main repository but can only write files in your workspace.
+You cannot directly modify the main codebase - instead create examples and prototypes in your workspace.`;
+
+    const enhancedTask = `CONTEXT: You are a ${role} AI developer on the PocketDev platform working in host mode.
+${memoryContext}
     
 USER REQUEST: ${task}
 
-INSTRUCTIONS: Provide the complete code/content requested. If asked for a file like README.md, provide the full markdown content in a code block.`;
+INSTRUCTIONS: 
+1. First, read the team memory to understand the project context
+2. Check if you have a personal memory file and read it
+3. Complete the requested task
+4. Update your memory files with any important learnings
+5. If asked for files, provide complete code/content in code blocks`;
     
     // Ensure workspace exists
     await fs.mkdir(workspacePath, { recursive: true });
