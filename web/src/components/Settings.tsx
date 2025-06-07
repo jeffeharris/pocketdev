@@ -166,6 +166,10 @@ export default function Settings() {
       return;
     }
     
+    // Get the full repository URL
+    const selectedRepoData = repos.find(r => r.full_name === selectedRepo);
+    const repositoryUrl = selectedRepoData?.html_url || `https://github.com/${selectedRepo}`;
+    
     // Store credentials in environment variable format
     const credentialProfile = 'github-personal';
     localStorage.setItem('GITHUB_PERSONAL_TOKEN', githubToken);
@@ -177,7 +181,7 @@ export default function Settings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repository: selectedRepo,
+          repository: repositoryUrl,
           defaultBranch: selectedBranch,
           credentialProfile,
           gitUsername: githubUser?.login,
@@ -220,7 +224,12 @@ export default function Settings() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Configuration</h2>
           {activeProject?.active ? (
             <div className="space-y-2">
-              <p className="text-sm"><span className="font-medium text-gray-600">Repository:</span> <span className="text-gray-900">{activeProject.config?.project.repository}</span></p>
+              <p className="text-sm">
+                <span className="font-medium text-gray-600">Repository:</span>{' '}
+                <span className="text-gray-900">
+                  {activeProject.config?.project.repository?.replace(/^https:\/\/github\.com\//, '')}
+                </span>
+              </p>
               <p className="text-sm"><span className="font-medium text-gray-600">Default Branch:</span> <span className="text-gray-900">{activeProject.config?.project.default_branch}</span></p>
             </div>
           ) : (

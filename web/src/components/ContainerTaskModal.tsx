@@ -195,7 +195,7 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
               </label>
               {repository ? (
                 <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-700">
-                  {repository}
+                  {repository.replace(/^https:\/\/github\.com\//, '')}
                 </div>
               ) : (
                 <div className="px-3 py-2 bg-yellow-50 border border-yellow-300 rounded-md">
