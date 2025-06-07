@@ -1,19 +1,13 @@
 {
-  "version": 1,
+  "version": "1.0.0",
   "project": {
-    "name": "pocketdev",
-    "repository": "https://github.com/jeffeharris/pocketdev",
-    "default_branch": "phase2-engineer-knowledge"
-  },
-  "credentials": {
-    "profile": "github-personal"
-  },
-  "settings": {
-    "workspace_root": "/home/jeffh/projects/pocketdev",
-    "host_agent_mode": "auto"
+    "name": "PocketDev",
+    "repository": "https://github.com/jeffeharris/pocketdev.git",
+    "default_branch": "phase2-engineer-knowledge",
+    "created": "2025-06-07",
+    "last_updated": "2025-06-07"
   },
   "memory_settings": {
-    "enabled": true,
     "max_memories_per_type": 50,
     "auto_cleanup_days": 90,
     "performance_threshold_ms": 1000,
@@ -33,7 +27,6 @@
       "id": "1cec3fd2-8fbe-43af-9546-0ffcacca3774",
       "memory_enabled": true
     }
-  },
-  "initialized": "2025-06-07T03:00:00.000Z",
-  "last_updated": "2025-06-07T15:30:00.000Z"
+  }
 }
+EOF < /dev/null

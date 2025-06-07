@@ -59,6 +59,58 @@ PocketDev creates a `.pocketdev/` directory in your repository root (similar to 
 
 This directory should be committed to your repository so the AI team's knowledge persists and grows over time.
 
+### Memory System: How .pocketdev/ Enhances Claude Code
+
+PocketDev's memory system is designed to complement Claude Code's built-in memory capabilities by adding persistent, task-specific learning that improves over time.
+
+#### Claude Code's Built-in Memory:
+- **CLAUDE.md**: Static project configuration read at session start
+- **Conversation Memory**: Resume previous sessions with `--continue`
+- **Custom Commands**: Reusable prompts in `.claude/commands/`
+
+#### What PocketDev Adds (.pocketdev/):
+Our memory system captures what Claude Code doesn't persist:
+
+1. **Performance Discoveries**
+   ```yaml
+   # .pocketdev/engineers/backend/performance.yml
+   - learned: "2025-06-07"
+     finding: "db.query with relations is 10x faster than separate queries"
+     applied_to: "task-history endpoint"
+   ```
+
+2. **Failed Approaches**
+   ```yaml
+   # .pocketdev/engineers/frontend/failures.yml
+   - attempted: "Store all logs in React state"
+     result: "Memory leak, browser crash"
+     solution: "Stream from backend, cache last 100 lines"
+   ```
+
+3. **Environment Quirks**
+   ```yaml
+   # .pocketdev/engineers/devops/environment.yml
+   - issue: "Docker permission denied"
+     cause: "WSL2 requires --privileged flag"
+     fixed_in: "docker-compose.yml"
+   ```
+
+#### Key Differences:
+| CLAUDE.md (Static) | .pocketdev/ (Dynamic) |
+|-------------------|---------------------|
+| Project overview | Task-specific learnings |
+| Coding conventions | Performance optimizations |
+| Build commands | Failed approach warnings |
+| Architecture patterns | Environment-specific fixes |
+
+#### Benefits:
+- **Reduces repeated mistakes**: Engineers remember what didn't work
+- **Applies optimizations**: Past performance discoveries are reused
+- **Shortens task completion**: Fewer exploration cycles needed
+- **Maintains consistency**: Learned patterns are preserved
+
+The `.pocketdev/` directory acts as your AI team's collective memory, growing smarter with each completed task.
+
 ### Installation
 
 1. Clone the repository:

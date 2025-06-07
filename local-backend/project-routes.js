@@ -2,6 +2,8 @@ import express from 'express';
 import ProjectConfig from './lib/project-config.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { promises as fs } from 'fs';
+import yaml from 'js-yaml';
 
 const router = express.Router();
 const projectConfig = new ProjectConfig();
@@ -271,6 +273,45 @@ router.post('/api/project/credentials', (req, res) => {
   } catch (error) {
     console.error('Credentials store error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get engineer memories
+router.get('/api/projects/:projectId/engineers/:role/memories', async (req, res) => {
+  try {
+    const { role } = req.params;
+    
+    if (!activeProject.path) {
+      return res.status(404).json({ error: 'No active project' });
+    }
+    
+    // Read memories from the project's .pocketdev directory
+    const memoriesPath = path.join(activeProject.path, '.pocketdev', 'engineers', role);
+    const memories = {
+      performance: [],
+      failures: [],
+      patterns: []
+    };
+    
+    // Read each memory type
+    for (const type of ['performance', 'failures', 'patterns']) {
+      try {
+        const filePath = path.join(memoriesPath, `${type}.yml`);
+        const content = await fs.readFile(filePath, 'utf8');
+        const data = yaml.load(content);
+        if (data && data.memories) {
+          memories[type] = data.memories;
+        }
+      } catch (err) {
+        // File doesn't exist or is invalid, continue
+        console.log(`No ${type} memories found for ${role}`);
+      }
+    }
+    
+    res.json(memories);
+  } catch (error) {
+    console.error('Failed to get memories:', error);
+    res.status(500).json({ error: 'Failed to get memories' });
   }
 });
 

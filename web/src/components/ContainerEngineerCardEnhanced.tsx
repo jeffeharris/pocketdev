@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Engineer } from '../types';
-import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText } from 'lucide-react';
+import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText, Brain } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
 import { TaskResultView } from './TaskResultView';
 import { ContainerTaskModal } from './ContainerTaskModal';
+import { EngineerMemories } from './EngineerMemories';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -15,6 +16,7 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [showMemories, setShowMemories] = useState(false);
   const [taskResult, setTaskResult] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
 
@@ -275,6 +277,14 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
               <Container className="h-3 w-3 mr-1" />
               Isolated Environment
             </span>
+            <button
+              onClick={() => setShowMemories(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              title="View Engineer Memories"
+            >
+              <Brain className="h-3 w-3" />
+              <span>Memories</span>
+            </button>
             {engineer.taskHistory && engineer.taskHistory.length > 0 && (
               <span>{engineer.taskHistory.length} tasks completed</span>
             )}
@@ -308,6 +318,30 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
             setTaskResult(null);
           }}
         />
+      )}
+      
+      {showMemories && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Engineer Memories</h2>
+              <button
+                onClick={() => setShowMemories(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-8rem)]">
+              <EngineerMemories 
+                engineerRole={engineer.role} 
+                projectId="current" 
+              />
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

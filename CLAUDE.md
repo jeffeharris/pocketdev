@@ -88,6 +88,29 @@ class AIDeveloper {
 - Firebase Cloud Messaging for background notifications
 - Server-Sent Events (SSE) for unidirectional status streaming
 
+## Test Organization Standards
+
+### Test File Location and Naming
+- **Unit Tests**: `/tests/[module-name].test.js`
+  - Example: `memory-enhanced-prompts.test.js` tests `lib/memory-enhanced-prompts.js`
+  - Example: `repo-initializer.test.js` tests `lib/repo-initializer.js`
+
+- **Integration Tests**: `/tests/[feature-name]-integration.test.js`
+  - Example: `memory-system-integration.test.js` tests multiple modules working together
+  - Example: `engineer-task-flow-integration.test.js` tests complete task workflow
+
+- **E2E Tests** (future): `/tests/e2e/[workflow-name].e2e.test.js`
+  - Example: `e2e/task-assignment.e2e.test.js`
+  - Example: `e2e/memory-learning.e2e.test.js`
+
+### Test Writing Guidelines
+- Use descriptive test names that explain what is being tested
+- Group related tests using `describe` blocks
+- Include both positive and negative test cases
+- Test edge cases and error conditions
+- Mock external dependencies appropriately
+- Keep tests focused and independent
+
 ## Project Milestones
 
 1. **Milestone 1 (Weeks 1-4)**: Single AI developer management from mobile

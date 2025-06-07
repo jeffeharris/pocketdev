@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { getActiveProject } from '../project-routes.js';
 import { performance } from 'perf_hooks';
+import { MemoryEnhancedPrompts } from './memory-enhanced-prompts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,6 +47,7 @@ class ContainerOrchestrator {
     this.debugMode = process.env.DEBUG === 'true';
     this.healthCheckIntervals = new Map();
     this.containerStats = new Map();
+    this.memoryEnhancer = new MemoryEnhancedPrompts();
     
     debugLog('info', 'constructor', 'ContainerOrchestrator initialized', {
       dockerImage: this.dockerImage,
@@ -128,6 +130,25 @@ class ContainerOrchestrator {
   getDefaultBranch() {
     const activeProject = getActiveProject();
     return activeProject?.config?.project?.default_branch || 'main';
+  }
+
+  /**
+   * Get the base system prompt for a given engineer role
+   * @param {string} role - Engineer role
+   * @returns {string} Base system prompt
+   */
+  async getBasePromptForRole(role) {
+    // In the future, this could load from database
+    // For now, match the prompts in entrypoint.sh
+    const prompts = {
+      frontend: "You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.",
+      backend: "You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.",
+      devops: "You are a DevOps specialist focusing on automation and infrastructure. Create reproducible deployments and comprehensive monitoring.",
+      fullstack: "You are a fullstack engineer capable of building complete features. Balance frontend usability with backend reliability.",
+      qa_manual: "You are an expert QA engineer. Focus on comprehensive testing, edge cases, and user experience validation. Create detailed bug reports and test plans."
+    };
+    
+    return prompts[role] || prompts.fullstack;
   }
 
   /**
@@ -277,6 +298,11 @@ class ContainerOrchestrator {
       env.MODEL = task.model || 'claude-3-5-sonnet-latest';
       env.MAX_ITERATIONS = String(task.maxIterations || '5');
       env.DEBUG = this.debugMode ? 'true' : 'false';
+      
+      // We'll let the container handle memory loading since it needs to clone the repo first
+      // Just provide the base prompt
+      const basePrompt = await this.getBasePromptForRole(task.engineerRole || 'fullstack');
+      env.BASE_SYSTEM_PROMPT = basePrompt;
       
       // Validate all environment variables
       const requiredEnvVars = ['REPO_URL', 'TASK_DESCRIPTION', 'ANTHROPIC_API_KEY'];
@@ -726,6 +752,30 @@ class ContainerOrchestrator {
         duration: executionTime,
         hasError: !!result.error
       });
+      
+      // Extract and save memories from this task
+      if (result.success || result.logs?.length > 0) {
+        try {
+          debugLog('info', taskId, 'Extracting memories from task');
+          const memories = await this.memoryEnhancer.extractMemoriesFromTask(
+            result, 
+            task.engineerRole || 'fullstack',
+            workspacePath
+          );
+          
+          // Add memory extraction summary to result
+          result.memoriesExtracted = {
+            performance: memories.performance.length,
+            failures: memories.failures.length,
+            patterns: memories.patterns.length
+          };
+          
+          debugLog('info', taskId, 'Memories extracted', result.memoriesExtracted);
+        } catch (err) {
+          debugLog('warning', taskId, 'Failed to extract memories', err);
+          // Don't fail the task if memory extraction fails
+        }
+      }
       
       // Save final debug info
       await fs.writeFile(
