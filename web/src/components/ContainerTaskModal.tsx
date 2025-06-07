@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, GitBranch, CheckCircle, Container } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, GitBranch, CheckCircle, Container, AlertCircle } from 'lucide-react';
 import { Engineer } from '../types';
 import toast from 'react-hot-toast';
 
@@ -9,16 +9,90 @@ interface Props {
   onTaskAssigned: () => void;
 }
 
+interface ProjectConfig {
+  active: boolean;
+  config?: {
+    project: {
+      repository: string;
+      default_branch: string;
+    };
+  };
+}
+
+interface GitHubBranch {
+  name: string;
+  protected: boolean;
+}
+
 export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props) {
   const [repository, setRepository] = useState('');
   const [branch, setBranch] = useState('main');
   const [description, setDescription] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(['']);
-  const [testFramework, setTestFramework] = useState('jest');
   const [model, setModel] = useState('claude-3-5-sonnet-latest');
-  const [gitUsername, setGitUsername] = useState('');
-  const [gitToken, setGitToken] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [hasCredentials, setHasCredentials] = useState(false);
+
+  // Fetch active project configuration on mount
+  useEffect(() => {
+    fetchProjectConfig();
+  }, []);
+
+  const fetchProjectConfig = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/project/config');
+      const data: ProjectConfig = await response.json();
+      
+      if (data.active && data.config) {
+        setRepository(data.config.project.repository);
+        setBranch(data.config.project.default_branch);
+        
+        // Check if credentials are available
+        const credResponse = await fetch('http://localhost:3001/api/project/credentials');
+        const credData = await credResponse.json();
+        setHasCredentials(credData.available);
+        
+        // Fetch branches if we have a repository
+        if (data.config.project.repository && credData.available) {
+          fetchBranches(data.config.project.repository);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch project config:', error);
+    }
+  };
+
+  const fetchBranches = async (repoUrl: string) => {
+    setLoadingBranches(true);
+    try {
+      // Extract owner/repo from URL
+      const match = repoUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+)(\.git)?$/);
+      if (!match) return;
+      
+      const repoFullName = `${match[1]}/${match[2]}`;
+      
+      // Get token from localStorage (set by Settings page)
+      const token = localStorage.getItem('GITHUB_PERSONAL_TOKEN');
+      if (!token) return;
+      
+      const response = await fetch('http://localhost:3001/api/github/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, repoFullName })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setBranches(data.branches);
+      }
+    } catch (error) {
+      console.error('Failed to fetch branches:', error);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
 
   const handleAddCriteria = () => {
     setAcceptanceCriteria([...acceptanceCriteria, '']);
@@ -36,33 +110,29 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!repository || !description) {
-      toast.error('Please fill in all required fields');
+    
+    if (!repository) {
+      toast.error('Please configure a repository in Settings first');
+      return;
+    }
+    
+    if (!description) {
+      toast.error('Please provide a task description');
       return;
     }
 
     setLoading(true);
     
     try {
-      const payload: any = {
+      const payload = {
         engineerId: engineer.id,
-        repository: {
-          url: repository,
-          branch: branch || 'main'
-        },
+        repository,
         description,
         acceptanceCriteria: acceptanceCriteria.filter(c => c.trim()),
-        testFramework,
-        model
+        model,
+        // Pass branch only if different from default
+        ...(branch && { branch })
       };
-
-      // Add credentials if provided
-      if (gitUsername && gitToken) {
-        payload.repository.credentials = {
-          username: gitUsername,
-          token: gitToken
-        };
-      }
 
       const response = await fetch('http://localhost:3001/api/container/assign-task', {
         method: 'POST',
@@ -111,47 +181,54 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Repository URL <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={repository}
-              onChange={(e) => setRepository(e.target.value)}
-              placeholder="https://github.com/organization/repository.git"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {/* Repository and Branch */}
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Branch
+                Repository
               </label>
-              <input
-                type="text"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                placeholder="main"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {repository ? (
+                <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-700">
+                  {repository}
+                </div>
+              ) : (
+                <div className="px-3 py-2 bg-yellow-50 border border-yellow-300 rounded-md">
+                  <div className="flex items-center gap-2 text-yellow-800">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="text-sm">No repository configured. Please configure in Settings.</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Test Framework
+                Start from Branch
               </label>
-              <select
-                value={testFramework}
-                onChange={(e) => setTestFramework(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="jest">Jest</option>
-                <option value="pytest">Pytest</option>
-                <option value="mocha">Mocha</option>
-              </select>
+              {branches.length > 0 ? (
+                <select
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loadingBranches}
+                >
+                  {branches.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  placeholder="main"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loadingBranches}
+                />
+              )}
+              {loadingBranches && (
+                <p className="text-sm text-gray-500 mt-1">Loading branches...</p>
+              )}
             </div>
           </div>
 
@@ -200,35 +277,6 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
             </button>
           </div>
 
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Git Authentication (Optional)</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={gitUsername}
-                  onChange={(e) => setGitUsername(e.target.value)}
-                  placeholder="github-username"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">
-                  Personal Access Token
-                </label>
-                <input
-                  type="password"
-                  value={gitToken}
-                  onChange={(e) => setGitToken(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -245,22 +293,35 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
             </select>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <div className="flex items-start">
-              <GitBranch className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-800">
-                <p className="font-medium">Workflow Preview:</p>
-                <ol className="mt-1 space-y-1 list-decimal list-inside">
-                  <li>Clone repository and create feature branch</li>
-                  <li>Write tests following TDD principles</li>
-                  <li>Implement code to pass tests</li>
-                  <li>Run tests and iterate until passing</li>
-                  <li>Commit and push changes</li>
-                  <li>Generate PR link for review</li>
-                </ol>
+          {hasCredentials && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <div className="flex items-start">
+                <GitBranch className="h-5 w-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium">Workflow:</p>
+                  <ol className="mt-1 space-y-1 list-decimal list-inside">
+                    <li>Clone repository from branch: <span className="font-mono">{branch}</span></li>
+                    <li>Create feature branch for the task</li>
+                    <li>Implement the requested functionality</li>
+                    <li>Create verification tests</li>
+                    <li>Stage changes for your review</li>
+                    <li>You can accept and push to GitHub</li>
+                  </ol>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {!hasCredentials && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <AlertCircle className="h-5 w-5" />
+                <p className="text-sm">
+                  No GitHub credentials configured. Configure in Settings to enable push to repository.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3">
             <button
