@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 
 interface ProjectConfig {
   active: boolean;
@@ -171,119 +171,124 @@ export default function Settings() {
 
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={() => navigate('/')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-3xl font-bold">Project Settings</h1>
-      </div>
-      
-      {/* Active Project Status */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Active Configuration</h2>
-        {activeProject?.active ? (
-          <div className="space-y-2">
-            <p><span className="text-gray-400">Repository:</span> {activeProject.config?.project.repository}</p>
-            <p><span className="text-gray-400">Default Branch:</span> {activeProject.config?.project.default_branch}</p>
+    <div className="min-h-screen bg-gray-50">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/')}
+              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </button>
+            <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
           </div>
-        ) : (
-          <p className="text-gray-400">No repository configured</p>
-        )}
-      </div>
-
-      {/* GitHub Configuration */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">GitHub Configuration</h2>
+        </div>
         
-        <div className="space-y-4">
-          {/* Token Input */}
-          <div>
-            <label className="block text-sm font-medium mb-2">GitHub Personal Access Token</label>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={githubToken}
-                onChange={(e) => setGithubToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxx"
-                className="flex-1 px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={validateGitHubToken}
-                disabled={loading || !githubToken}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                Validate
-              </button>
+        {/* Active Configuration */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Configuration</h2>
+          {activeProject?.active ? (
+            <div className="space-y-2">
+              <p className="text-sm"><span className="font-medium text-gray-600">Repository:</span> <span className="text-gray-900">{activeProject.config?.project.repository}</span></p>
+              <p className="text-sm"><span className="font-medium text-gray-600">Default Branch:</span> <span className="text-gray-900">{activeProject.config?.project.default_branch}</span></p>
             </div>
-            {githubUser && (
-              <p className="mt-2 text-sm text-green-400">
-                ✓ Authenticated as {githubUser.name || githubUser.login}
-              </p>
+          ) : (
+            <p className="text-sm text-gray-500">No repository configured</p>
+          )}
+        </div>
+
+        {/* GitHub Configuration */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">GitHub Configuration</h2>
+          
+          <div className="space-y-4">
+            {/* Token Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">GitHub Personal Access Token</label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={githubToken}
+                  onChange={(e) => setGithubToken(e.target.value)}
+                  placeholder="ghp_xxxxxxxxxxxx"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  onClick={validateGitHubToken}
+                  disabled={loading || !githubToken}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Validate
+                </button>
+              </div>
+              {githubUser && (
+                <p className="mt-2 text-sm text-green-600 flex items-center gap-1">
+                  <CheckCircle className="h-4 w-4" />
+                  Authenticated as {githubUser.name || githubUser.login}
+                </p>
+              )}
+            </div>
+
+            {/* Repository Selection */}
+            {repos.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Repository</label>
+                <select
+                  value={selectedRepo}
+                  onChange={(e) => handleRepoSelect(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a repository...</option>
+                  {repos.map(repo => (
+                    <option key={repo.full_name} value={repo.full_name}>
+                      {repo.full_name} {repo.private && '🔒'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Branch Selection */}
+            {branches.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Default Branch</label>
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {branches.map(branch => (
+                    <option key={branch} value={branch}>{branch}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Save button */}
+            {selectedRepo && (
+              <div className="pt-4">
+                <button
+                  onClick={saveProjectConfig}
+                  disabled={loading || !selectedRepo}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save Configuration
+                </button>
+              </div>
             )}
           </div>
-
-          {/* Repository Selection */}
-          {repos.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Select Repository</label>
-              <select
-                value={selectedRepo}
-                onChange={(e) => handleRepoSelect(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select a repository...</option>
-                {repos.map(repo => (
-                  <option key={repo.full_name} value={repo.full_name}>
-                    {repo.full_name} {repo.private && '🔒'}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Branch Selection */}
-          {branches.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Default Branch</label>
-              <select
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {branches.map(branch => (
-                  <option key={branch} value={branch}>{branch}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Save button */}
-          {selectedRepo && (
-            <div className="mt-4">
-              <button
-                onClick={saveProjectConfig}
-                disabled={loading || !selectedRepo}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                Save Configuration
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Status Messages */}
-      {message && (
-        <div className={`p-4 rounded-lg ${
-          message.includes('success') ? 'bg-green-800' : 'bg-red-800'
-        }`}>
-          {message}
-        </div>
-      )}
+        {/* Status Messages */}
+        {message && (
+          <div className={`mt-6 p-4 rounded-md ${
+            message.includes('success') ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'
+          }`}>
+            {message}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

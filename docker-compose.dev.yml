@@ -38,6 +38,7 @@ services:
       - /app/node_modules
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/pocketdev-workspaces:/tmp/pocketdev-workspaces
+      - ./.pocketdev:/home/jeffh/projects/pocketdev/.pocketdev
     networks:
       - pocketdev
     command: npm run dev
