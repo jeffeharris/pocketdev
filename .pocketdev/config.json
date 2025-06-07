@@ -2,8 +2,8 @@
   "version": 1,
   "project": {
     "name": "pocketdev",
-    "repository": "https://github.com/jeffeharris/pocketdev.git",
-    "default_branch": "main"
+    "repository": "https://github.com/jeffeharris/my-poker-face",
+    "default_branch": "dev"
   },
   "credentials": {
     "profile": "github-personal"
@@ -13,5 +13,5 @@
     "host_agent_mode": "auto"
   },
   "initialized": "2025-06-07T03:00:00.000Z",
-  "last_updated": "2025-06-07T03:00:00.000Z"
+  "last_updated": "2025-06-07T11:07:11.477Z"
 }

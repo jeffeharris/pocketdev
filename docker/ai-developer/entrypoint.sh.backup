@@ -1,8 +1,6 @@
 #!/bin/bash
 # Remove 'set -e' to handle errors ourselves
 
-echo "GATE CHECK: Entrypoint script started at $(date)"
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -224,7 +222,7 @@ for cmd in git jq node python; do
     if command -v $cmd &> /dev/null; then
         log_debug "$cmd found at: $(which $cmd)"
     else
-        log_warning "$cmd not found in PATH" || true
+        log_warning "$cmd not found in PATH"
     fi
 done
 
@@ -288,7 +286,6 @@ setup_git_auth() {
 
 # Function to run Claude with extreme error handling
 run_claude() {
-    log_info "GATE CHECK: Entering run_claude() function"
     local prompt="$1"
     local output_file="$2"
     local continue_session="${3:-false}"
@@ -299,7 +296,6 @@ run_claude() {
     log_info "run_claude called with output_file: $output_file"
     log_debug "Prompt length: ${#prompt} characters"
     log_debug "Continue session: $continue_session"
-    log_info "GATE CHECK: run_claude() parameters validated"
     
     # Validate inputs
     if [ -z "$prompt" ]; then
@@ -334,8 +330,9 @@ run_claude() {
     
     # Build args without the prompt (will use stdin instead)
     local claude_args=(
-        "-p"  # Required for non-interactive mode with stdin
+        "-p"
         "--output-format" "json"
+        "--model" "${MODEL:-claude-3-5-sonnet-latest}"
     )
     
     # CRITICAL: DO NOT USE --verbose FLAG
@@ -368,7 +365,7 @@ run_claude() {
     local validation_errors=0
     
     # Check prompt
-    if [[ -z "$prompt" ]]; then
+    if [[ "$prompt" =~ [[:space:]] ]] && [[ -z "$prompt" ]]; then
         log_error "CRITICAL: Empty prompt provided!"
         ((validation_errors++))
     fi
@@ -406,7 +403,7 @@ run_claude() {
         return 1
     fi
     
-    claude_args+=("--append-system-prompt" "$system_prompt")
+    claude_args+=("--system-prompt" "$system_prompt")
     
     # Add allowed tools - NO MCP tools (not set up)
     claude_args+=("--allowedTools" "View,Edit,Write,Bash")
@@ -415,12 +412,12 @@ run_claude() {
     log_info "Claude args prepared: ${#claude_args[@]} arguments"
     
     # CRITICAL: Use printf %q to show exactly how args will be passed
-    # DO NOT use ${claude_args[*]} as it loses quoting!
+    log_trace "Full command (raw): claude ${claude_args[*]}"
     local safe_command="claude"
     for arg in "${claude_args[@]}"; do
         safe_command+=" $(printf %q "$arg")"
     done
-    log_trace "Full command: $safe_command"
+    log_trace "Full command (quoted): $safe_command"
     
     # VALIDATION: Check if command looks broken
     if [[ "$safe_command" =~ --system-prompt[[:space:]]You[[:space:]]are ]]; then
@@ -430,15 +427,13 @@ run_claude() {
         return 1
     fi
     
-    # Write command to debug file - use printf %q for accurate representation
-    echo "$safe_command" > "$DEBUG_DIR/claude_command.txt"
+    # Write command to debug file
+    echo "claude ${claude_args[*]}" > "$DEBUG_DIR/claude_command.txt"
     
     # Retry loop with exponential backoff
-    log_info "GATE CHECK: Entering Claude retry loop"
     while [ $attempt -le $max_attempts ] && [ "$success" = "false" ]; do
         log_info "Claude execution attempt $attempt of $max_attempts"
         update_state "claude_execution" "Running Claude (attempt $attempt)"
-        log_info "GATE CHECK: Starting attempt $attempt"
         
         local start_time=$(date +%s)
         local temp_output="$output_file.tmp"
@@ -453,8 +448,7 @@ run_claude() {
             log_debug "Running Claude in debug mode with visible output"
             
             # Use timeout to prevent hanging
-            # FIXED: Claude expects prompt as argument, not stdin
-            if timeout 600 claude "${claude_args[@]}" "$prompt" 2>"$error_output" | tee "$temp_output"; then
+            if timeout 600 claude "${claude_args[@]}" 2>"$error_output" | tee "$temp_output"; then
                 local exit_code=$?
                 log_success "Claude command completed with exit code: $exit_code"
                 success=true
@@ -483,14 +477,8 @@ for arg in "$@"; do
     echo "[WRAPPER]   '$arg'" >&2
 done
 
-# CRITICAL: Log the ACTUAL command being executed
-echo "[WRAPPER] Executing: claude" >&2
-for i in $(seq 1 $#); do
-    echo "[WRAPPER]   Arg $i: '${!i}'" >&2
-done
-
 # Run claude and capture everything - PRESERVE QUOTES
-# Note: The prompt is passed as the last argument
+# Note: The prompt comes via stdin now
 claude "$@" >"$output_file" 2>"$error_file"
 exit_code=$?
 
@@ -501,21 +489,8 @@ exit $exit_code
 WRAPPER
             chmod +x "$DEBUG_DIR/claude_wrapper.sh"
             
-            # Debug: Print exactly what we're passing
-            log_debug "Passing ${#claude_args[@]} arguments to wrapper"
-            local i=0
-            for arg in "${claude_args[@]}"; do
-                log_debug "Arg[$i]: '$arg'"
-                ((i++))
-            done
-            
-            # Log the prompt being passed
-            log_debug "Prompt (first 200 chars): '${prompt:0:200}...'"
-            log_debug "Prompt length: ${#prompt} characters"
-            
-            # Use echo to pipe prompt to stdin (BYPASSING WRAPPER FOR TEST)
-            # FIXED: Claude expects prompt as argument, not stdin
-            if timeout 600 claude "${claude_args[@]}" "$prompt" >"$temp_output" 2>"$error_output"; then
+            # Use echo to pipe prompt to stdin
+            if echo "$prompt" | timeout 600 "$DEBUG_DIR/claude_wrapper.sh" "$temp_output" "$error_output" "${claude_args[@]}"; then
                 success=true
                 log_success "Claude execution succeeded"
             else
@@ -663,7 +638,6 @@ start_health_monitor() {
 
 # Main execution flow with comprehensive error handling
 main() {
-    log_info "GATE CHECK: Entering main() function"
     local start_time=$(date +%s)
     local success=false
     local error_message=""
@@ -673,7 +647,6 @@ main() {
     local suggested_next_steps=()
     
     update_state "main_started" "Beginning main execution"
-    log_info "GATE CHECK: main() initialized, start_time=$start_time"
     
     # Start health monitoring
     start_health_monitor
@@ -772,7 +745,6 @@ main() {
     git checkout -b "$FEATURE_BRANCH"
     
     # Main development task - Single comprehensive prompt
-    log_info "GATE CHECK: About to start development task"
     log_info "Starting development task: $TASK_DESCRIPTION"
     
     # Combined prompt for analysis, planning, implementation, and testing
@@ -1048,30 +1020,26 @@ trap 'log_warning "Received TERM signal"; exit 143' TERM
 trap 'log_error "Received HUP signal"; exit 129' HUP
 
 # Check if this is a follow-up task
-log_info "GATE CHECK: About to check for follow-up task"
 if [ -f "/workspace/CONTINUE" ]; then
-    log_info "GATE CHECK: Found CONTINUE file, running handle_followup"
     handle_followup
 else
     # Run main function
-    log_info "GATE CHECK: No CONTINUE file, running main function"
     main
 fi
-log_info "GATE CHECK: Main execution completed"
 
 # Keep container running if task can continue with health checks
 if [ "$success" = "true" ] || [ -f "/workspace/results/session_result.json" ]; then
     log_info "Container ready for follow-up tasks or finalization"
     update_state "waiting" "Waiting for user action"
     
-    wait_start=$(date +%s)
-    check_interval=2
-    max_wait_time=3600  # 1 hour max wait
+    local wait_start=$(date +%s)
+    local check_interval=2
+    local max_wait_time=3600  # 1 hour max wait
     
     # Keep container alive for potential follow-up
     while true; do
         # Check if we've been waiting too long
-        wait_duration=$(($(date +%s) - wait_start))
+        local wait_duration=$(($(date +%s) - wait_start))
         if [ $wait_duration -gt $max_wait_time ]; then
             log_warning "Exceeded maximum wait time of ${max_wait_time}s - shutting down"
             break
