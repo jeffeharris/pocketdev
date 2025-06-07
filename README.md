@@ -49,13 +49,15 @@ The platform consists of:
 - Anthropic API key (Claude)
 - GitHub account and personal access token (for pushing changes)
 
-### Project Configuration
+### Project Structure
 
-PocketDev uses a `.pocketdev/` directory in your repository root (similar to `.git/` or `.github/`) to store:
-- Project configuration (repository, default branch)
+PocketDev creates a `.pocketdev/` directory in your repository root (similar to `.git/` or `.github/`) to store:
+- Project configuration (repository URL, default branch)
 - Team memory (shared knowledge across AI engineers)
 - Individual engineer memories (learnings from past tasks)
 - Workspace directories for isolated development
+
+This directory should be committed to your repository so the AI team's knowledge persists and grows over time.
 
 ### Installation
 

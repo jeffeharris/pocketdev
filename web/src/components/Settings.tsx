@@ -34,7 +34,6 @@ export default function Settings() {
   const [selectedRepo, setSelectedRepo] = useState('');
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('main');
-  const [projectPath, setProjectPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -50,7 +49,6 @@ export default function Settings() {
       if (data.active && data.config) {
         setSelectedRepo(data.config.project.repository);
         setSelectedBranch(data.config.project.default_branch);
-        setProjectPath(data.path || '');
       }
     } catch (error) {
       console.error('Failed to fetch project config:', error);
@@ -135,8 +133,8 @@ export default function Settings() {
   };
 
   const saveProjectConfig = async () => {
-    if (!projectPath || !selectedRepo) {
-      setMessage('Please provide project path and select a repository');
+    if (!selectedRepo) {
+      setMessage('Please select a repository');
       return;
     }
     
@@ -151,7 +149,6 @@ export default function Settings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectPath,
           repository: selectedRepo,
           defaultBranch: selectedBranch,
           credentialProfile
@@ -159,46 +156,19 @@ export default function Settings() {
       });
       
       if (response.ok) {
-        setMessage('Project configuration saved successfully!');
+        setMessage('GitHub configuration saved successfully!');
         await fetchProjectConfig();
       } else {
         const error = await response.json();
         setMessage(`Failed to save: ${error.error}`);
       }
     } catch (error) {
-      setMessage('Failed to save project configuration');
+      setMessage('Failed to save configuration');
     } finally {
       setLoading(false);
     }
   };
 
-  const initializeProject = async () => {
-    if (!projectPath) {
-      setMessage('Please provide project path');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const response = await fetch('http://localhost:3001/api/project/initialize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectPath })
-      });
-      
-      if (response.ok) {
-        setMessage('Project initialized successfully!');
-        await fetchProjectConfig();
-      } else {
-        const error = await response.json();
-        setMessage(`Failed to initialize: ${error.error}`);
-      }
-    } catch (error) {
-      setMessage('Failed to initialize project');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -214,15 +184,14 @@ export default function Settings() {
       
       {/* Active Project Status */}
       <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Active Project</h2>
+        <h2 className="text-xl font-semibold mb-4">Active Configuration</h2>
         {activeProject?.active ? (
           <div className="space-y-2">
-            <p><span className="text-gray-400">Path:</span> {activeProject.path}</p>
             <p><span className="text-gray-400">Repository:</span> {activeProject.config?.project.repository}</p>
             <p><span className="text-gray-400">Default Branch:</span> {activeProject.config?.project.default_branch}</p>
           </div>
         ) : (
-          <p className="text-gray-400">No active project configured</p>
+          <p className="text-gray-400">No repository configured</p>
         )}
       </div>
 
@@ -291,41 +260,19 @@ export default function Settings() {
               </select>
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Project Configuration */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Project Configuration</h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Project Path</label>
-            <input
-              type="text"
-              value={projectPath}
-              onChange={(e) => setProjectPath(e.target.value)}
-              placeholder="/home/user/projects/myproject"
-              className="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={initializeProject}
-              disabled={loading || !projectPath}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              Initialize Project
-            </button>
-            <button
-              onClick={saveProjectConfig}
-              disabled={loading || !projectPath || !selectedRepo}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              Save Configuration
-            </button>
-          </div>
+          {/* Save button */}
+          {selectedRepo && (
+            <div className="mt-4">
+              <button
+                onClick={saveProjectConfig}
+                disabled={loading || !selectedRepo}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Save Configuration
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import ProjectConfig from './lib/project-config.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
 const projectConfig = new ProjectConfig();
@@ -95,13 +96,16 @@ router.post('/api/project/config', async (req, res) => {
 // Set active project
 router.post('/api/project/set-active', async (req, res) => {
   try {
-    const { projectPath, repository, defaultBranch, credentialProfile } = req.body;
+    const { repository, defaultBranch, credentialProfile } = req.body;
     
-    if (!projectPath || !repository) {
+    if (!repository) {
       return res.status(400).json({ 
-        error: 'Project path and repository required' 
+        error: 'Repository required' 
       });
     }
+    
+    // Use the current repository as the project path
+    const projectPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     
     // Check if project exists, initialize if not
     let config = await projectConfig.getConfig(projectPath);
