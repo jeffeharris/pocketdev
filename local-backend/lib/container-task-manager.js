@@ -1,6 +1,9 @@
 import ContainerOrchestrator from './container-orchestrator.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { db } from '../db/index.js';
+import { tasks, taskEvents, engineerProfiles, projects } from '../db/schema.js';
+import { eq } from 'drizzle-orm';
 
 class ContainerTaskManager {
   constructor() {
@@ -15,27 +18,24 @@ class ContainerTaskManager {
   async init() {
     await this.orchestrator.init();
     
-    // Initialize default engineers
-    this.registerEngineer('frontend-1', {
-      name: 'Frontend Engineer',
-      role: 'frontend',
-      specialties: ['React', 'TypeScript', 'UI/UX'],
-      systemPrompt: 'You are a senior frontend engineer specializing in React and TypeScript. Focus on component architecture, accessibility, and user experience.'
-    });
-
-    this.registerEngineer('backend-1', {
-      name: 'Backend Engineer', 
-      role: 'backend',
-      specialties: ['Node.js', 'Python', 'API Design'],
-      systemPrompt: 'You are a backend architect specializing in scalable APIs. Focus on security, performance, and proper error handling.'
-    });
-
-    this.registerEngineer('devops-1', {
-      name: 'DevOps Engineer',
-      role: 'devops', 
-      specialties: ['Docker', 'Kubernetes', 'CI/CD'],
-      systemPrompt: 'You are a DevOps specialist. Focus on automation, monitoring, and infrastructure as code.'
-    });
+    // Load engineers from database
+    const dbEngineers = await db.select().from(engineerProfiles);
+    
+    for (const engineer of dbEngineers) {
+      this.registerEngineer(engineer.id, {
+        name: engineer.name,
+        role: engineer.role,
+        systemPrompt: engineer.baseSystemPrompt || engineer.customInstructions,
+        // Database stats
+        totalTasks: engineer.totalTasks,
+        successfulTasks: engineer.successfulTasks,
+        averageDurationMs: engineer.averageDurationMs,
+        averageTurns: engineer.averageTurns,
+        totalCostUsd: engineer.totalCostUsd
+      });
+    }
+    
+    console.error(`[CTM] Loaded ${dbEngineers.length} engineers from database`);
   }
 
   /**
@@ -64,9 +64,62 @@ class ContainerTaskManager {
       throw new Error(`Engineer ${engineerId} is ${engineer.status}`);
     }
 
-    // Create task
+    // Get or create project based on repository
+    let projectId = null;
+    if (taskConfig.repository) {
+      const repoUrl = typeof taskConfig.repository === 'string' 
+        ? taskConfig.repository 
+        : taskConfig.repository.url;
+      
+      // Check if project exists
+      const [existingProject] = await db.select()
+        .from(projects)
+        .where(eq(projects.repositoryUrl, repoUrl))
+        .limit(1);
+      
+      if (existingProject) {
+        projectId = existingProject.id;
+        // Update last activity
+        await db.update(projects)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(projects.id, projectId));
+      } else {
+        // Create new project
+        const [newProject] = await db.insert(projects).values({
+          name: repoUrl.split('/').pop().replace('.git', ''),
+          repositoryUrl: repoUrl,
+          defaultBranch: taskConfig.repository.branch || 'main'
+        }).returning();
+        projectId = newProject.id;
+      }
+    }
+
+    // Create task in database
+    const taskId = uuidv4();
+    const [dbTask] = await db.insert(tasks).values({
+      id: taskId,
+      projectId,
+      engineerProfileId: engineerId,
+      title: taskConfig.description.substring(0, 100),
+      description: taskConfig.description,
+      acceptanceCriteria: taskConfig.acceptanceCriteria || [],
+      status: 'queued',
+      priority: 0,
+      baseBranch: taskConfig.repository?.branch || 'main',
+      createdAt: new Date()
+    }).returning();
+
+    // Create task event
+    await db.insert(taskEvents).values({
+      taskId: taskId,
+      eventType: 'created',
+      eventData: { engineerId, repository: taskConfig.repository },
+      createdAt: new Date()
+    });
+
+    // Create in-memory task
     const task = {
-      id: uuidv4(),
+      id: taskId,
       engineerId,
       engineerRole: engineer.role,
       systemPrompt: engineer.systemPrompt,
@@ -92,6 +145,24 @@ class ContainerTaskManager {
     try {
       task.status = 'running';
       
+      // Update database status to in_progress
+      await db.update(tasks)
+        .set({ 
+          status: 'in_progress',
+          startedAt: new Date(),
+          containerId: `container-${task.id}`, // Will be updated with real container ID
+          sessionId: task.id
+        })
+        .where(eq(tasks.id, task.id));
+      
+      // Create started event
+      await db.insert(taskEvents).values({
+        taskId: task.id,
+        eventType: 'started',
+        eventData: {},
+        createdAt: new Date()
+      });
+      
       process.stderr.write(`[CTM] About to call orchestrator.executeTask for task ${task.id}\n`);
       console.error('[CTM] About to call orchestrator.executeTask');
       console.error('[CTM] Task config:', JSON.stringify(taskConfig, null, 2));
@@ -112,6 +183,38 @@ class ContainerTaskManager {
       task.sessionId = result.sessionId;
       task.prUrl = result.prUrl;
       task.cost = result.cost_usd;
+      
+      // Update database with results
+      await db.update(tasks)
+        .set({
+          status: result.success ? 'awaiting_review' : 'failed',
+          completedAt: new Date(),
+          durationMs: new Date().getTime() - task.startTime.getTime(),
+          costUsd: result.cost_usd,
+          tokensInput: result.total_tokens_in,
+          tokensOutput: result.total_tokens_out,
+          numTurns: result.iterations || 0,
+          resultSummary: result.summary,
+          filesChanged: result.filesChanged || [],
+          testResults: result.testResults || {},
+          errorMessage: result.error,
+          prUrl: result.prUrl,
+          featureBranch: result.featureBranch,
+          commitHash: result.commitHash
+        })
+        .where(eq(tasks.id, task.id));
+      
+      // Create completed event
+      await db.insert(taskEvents).values({
+        taskId: task.id,
+        eventType: result.success ? 'completed' : 'failed',
+        eventData: {
+          success: result.success,
+          summary: result.summary,
+          cost: result.cost_usd
+        },
+        createdAt: new Date()
+      });
 
       // Update engineer
       engineer.status = 'idle';
@@ -143,6 +246,27 @@ class ContainerTaskManager {
       task.status = 'error';
       task.error = error.message;
       task.endTime = new Date();
+      
+      // Update database with error
+      await db.update(tasks)
+        .set({
+          status: 'failed',
+          completedAt: new Date(),
+          durationMs: new Date().getTime() - task.startTime.getTime(),
+          errorMessage: error.message
+        })
+        .where(eq(tasks.id, task.id));
+      
+      // Create error event
+      await db.insert(taskEvents).values({
+        taskId: task.id,
+        eventType: 'failed',
+        eventData: {
+          error: error.message,
+          stack: error.stack
+        },
+        createdAt: new Date()
+      });
       
       engineer.status = 'error';
       engineer.currentTask = null;
@@ -338,11 +462,37 @@ class ContainerTaskManager {
     task.accepted = true;
     task.acceptedAt = new Date();
     
-    // Update engineer status
+    // Update database
+    await db.update(tasks)
+      .set({
+        status: 'accepted',
+        reviewStatus: 'approved',
+        reviewedAt: new Date()
+      })
+      .where(eq(tasks.id, taskId));
+    
+    // Create accepted event
+    await db.insert(taskEvents).values({
+      taskId: taskId,
+      eventType: 'accepted',
+      eventData: {},
+      createdAt: new Date()
+    });
+    
+    // Update engineer metrics
     const engineer = this.engineers.get(task.engineerId);
     if (engineer) {
       engineer.status = 'idle';
       engineer.currentTask = null;
+      
+      // Update engineer stats in database
+      await db.update(engineerProfiles)
+        .set({
+          totalTasks: engineer.totalTasks + 1,
+          successfulTasks: engineer.successfulTasks + 1,
+          totalCostUsd: engineer.totalCostUsd + (task.cost || 0)
+        })
+        .where(eq(engineerProfiles.id, task.engineerId));
     }
     
     return true;

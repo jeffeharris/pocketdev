@@ -1,6 +1,9 @@
 import express from 'express';
 import ContainerTaskManager from './lib/container-task-manager.js';
 import { getActiveProject, getProjectConfig } from './project-routes.js';
+import { db } from './db/index.js';
+import { tasks, taskEvents, engineerProfiles, projects } from './db/schema.js';
+import { eq, desc } from 'drizzle-orm';
 
 const router = express.Router();
 console.log('Container routes: Creating ContainerTaskManager...');
@@ -256,50 +259,93 @@ router.get('/api/container/active', (req, res) => {
 });
 
 // Get all tasks (running and completed) for task history
-router.get('/api/container/completed-tasks', (req, res) => {
-  const allTasks = [];
-  const engineers = containerManager.getAllEngineers();
-  
-  for (const engineer of engineers) {
-    const history = containerManager.getTaskHistory(engineer.id);
-    for (const item of history) {
-      if (item.task) {
-        // Include both running and completed tasks
-        const isRunning = item.task.status === 'running' || item.task.status === 'initializing';
-        const taskData = {
-          id: item.taskId,
-          engineerId: engineer.id,
-          engineerName: engineer.name,
-          engineerRole: engineer.role,
-          task: item.task.description || item.task.taskDescription,
-          status: isRunning ? 'running' : (item.task.status === 'completed' ? 'complete' : 'error'),
-          result: item.task.result?.summary || (isRunning ? 'Task in progress...' : ''),
-          cost: item.task.result?.cost_usd || item.cost || 0,
-          duration: item.task.result?.duration ? item.task.result.duration * 1000 : 
-                   (isRunning && item.startTime ? Date.now() - new Date(item.startTime).getTime() : 0),
-          sessionId: item.task.result?.sessionId || item.task.sessionId,
-          filesCreated: (item.task.result?.filesChanged || []).map(f => ({ 
-            filename: f, 
-            size: 0 
-          })),
-          completedAt: item.endTime || item.task.result?.timestamp || 
-                      (isRunning ? null : new Date().toISOString()),
-          model: item.task.result?.model || item.task.model || 'claude-3-5-sonnet-latest',
-          isContainer: true,
-          isRunning: isRunning,
-          prUrl: item.task.result?.prUrl,
-          featureBranch: item.task.result?.featureBranch || item.task.featureBranch,
-          repository: item.task.repository,
-          testResults: item.task.result?.testResults,
-          suggestedNextSteps: item.task.result?.suggestedNextSteps || [],
-          startTime: item.startTime
-        };
-        allTasks.push(taskData);
+router.get('/api/container/completed-tasks', async (req, res) => {
+  try {
+    // Get tasks from database with related data
+    const dbTasks = await db.query.tasks.findMany({
+      with: {
+        engineerProfile: true,
+        project: true,
+        events: {
+          orderBy: (events, { asc }) => [asc(events.createdAt)]
+        }
+      },
+      orderBy: (tasks, { desc }) => [desc(tasks.createdAt)],
+      limit: 100
+    });
+    
+    // Also get in-memory running tasks
+    const engineers = containerManager.getAllEngineers();
+    const runningTasks = [];
+    
+    for (const engineer of engineers) {
+      if (engineer.currentTask) {
+        const task = containerManager.tasks.get(engineer.currentTask);
+        if (task && (task.status === 'running' || task.status === 'initializing')) {
+          runningTasks.push({
+            id: task.id,
+            engineerId: engineer.id,
+            engineerName: engineer.name,
+            engineerRole: engineer.role,
+            task: task.description,
+            status: 'running',
+            result: 'Task in progress...',
+            cost: 0,
+            duration: Date.now() - new Date(task.startTime).getTime(),
+            sessionId: task.sessionId,
+            filesCreated: [],
+            completedAt: null,
+            model: task.model || 'claude-3-5-sonnet-latest',
+            isContainer: true,
+            isRunning: true,
+            repository: task.repository,
+            startTime: task.startTime
+          });
+        }
       }
     }
+    
+    // Transform database tasks to API format
+    const dbTasksFormatted = dbTasks.map(task => ({
+      id: task.id,
+      engineerId: task.engineerProfileId,
+      engineerName: task.engineerProfile?.name || 'Unknown',
+      engineerRole: task.engineerProfile?.role || 'unknown',
+      task: task.description,
+      status: task.status === 'accepted' ? 'complete' : 
+              task.status === 'failed' ? 'error' : 
+              task.status === 'in_progress' ? 'running' : 
+              task.status,
+      result: task.resultSummary || '',
+      cost: task.costUsd || 0,
+      duration: task.durationMs || 0,
+      sessionId: task.sessionId,
+      filesCreated: (task.filesChanged || []).map(f => ({ 
+        filename: f, 
+        size: 0 
+      })),
+      completedAt: task.completedAt ? task.completedAt.toISOString() : null,
+      model: 'claude-3-5-sonnet-latest',
+      isContainer: true,
+      isRunning: task.status === 'in_progress',
+      prUrl: task.prUrl,
+      featureBranch: task.featureBranch,
+      repository: task.project?.repositoryUrl,
+      testResults: task.testResults,
+      suggestedNextSteps: [],
+      startTime: task.startedAt || task.createdAt,
+      reviewStatus: task.reviewStatus,
+      acceptanceCriteria: task.acceptanceCriteria
+    }));
+    
+    // Combine and return all tasks
+    const allTasks = [...runningTasks, ...dbTasksFormatted];
+    res.json(allTasks);
+    
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    res.status(500).json({ error: 'Failed to fetch tasks' });
   }
-  
-  res.json(allTasks);
 });
 
 // Debug endpoint to test orchestrator directly

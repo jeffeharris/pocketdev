@@ -396,6 +396,11 @@ dist/
 .vscode/
 *.sublime-*
 
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Test artifacts
 coverage/
 *.test.js.snap

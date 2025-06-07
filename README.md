@@ -120,6 +120,13 @@ docker-compose up
 
 ## Documentation
 
+### 🚀 June 2025 Architecture Update
+- [**Architecture Update Overview**](./docs/ARCHITECTURE-UPDATE-JUNE-2025.md) - Major platform evolution (START HERE)
+- [Implementation Roadmap](./docs/implementation-roadmap.md) - Phased delivery plan
+- [Architecture Summary](./docs/architecture-summary.md) - Visual system overview
+- [Phase 1 Database Schema](./docs/phase-1-database-schema.md) - Getting started guide
+
+### Original Documentation
 - [Container Architecture](./docs/containerized-ai-developer-plan.md) - Technical design details
 - [AI Developer Usage](./docs/containerized-ai-developer-usage.md) - How AI developers work
 - [Integration Guide](./docs/containerized-claude-integration.md) - Claude integration specifics
