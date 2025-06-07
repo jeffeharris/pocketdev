@@ -52,18 +52,21 @@ This document outlines the implementation plan for:
 ### Directory Structure
 
 ```
-project-root/
-├── .pocketdev/                    # All PocketDev data (can be .gitignored)
-│   ├── config.yml                # Project settings
-│   ├── team-memory.yml           # Shared team knowledge
+project-root/                      # Your repository root (e.g., /home/user/projects/myapp)
+├── .pocketdev/                    # PocketDev data directory (like .git or .github)
+│   ├── config.json               # Project settings
+│   ├── team-memory.md            # Shared team knowledge
 │   ├── engineers/
-│   │   ├── frontend-1.yml        # Individual engineer memories
-│   │   ├── backend-1.yml
-│   │   └── devops-1.yml
+│   │   ├── frontend-1.md         # Individual engineer memories
+│   │   ├── backend-1.md
+│   │   └── devops-1.md
 │   └── workspaces/               # Host agent workspaces (no worktree mode)
 │       ├── frontend/             # Frontend agent playground
 │       ├── backend/              # Backend agent playground
 │       └── devops/               # DevOps agent playground
+├── .git/                         # Git repository data
+├── .github/                      # GitHub specific files
+├── src/                          # Your source code
 └── .gitignore                    # Optionally exclude .pocketdev/
 
 adjacent-directory/               # Only created if worktree permissions exist
@@ -75,24 +78,25 @@ adjacent-directory/               # Only created if worktree permissions exist
 
 ### File Formats
 
-#### Project Config (.pocketdev/config.yml)
-```yaml
-# The ONLY YAML file - just for configuration
-version: 1
-project:
-  name: pocketdev
-  repository: https://github.com/jeffeharris/pocketdev.git
-  default_branch: main
-  
-credentials:
-  profile: github-personal  # References env vars
-  
-settings:
-  workspace_root: /home/jeffh/projects
-  host_agent_mode: auto  # auto-detect, worktree, or workspace
-  
-initialized: 2024-01-07T10:30:00Z
-last_updated: 2024-01-07T10:30:00Z
+#### Project Config (.pocketdev/config.json)
+```json
+{
+  "version": 1,
+  "project": {
+    "name": "pocketdev",
+    "repository": "https://github.com/jeffeharris/pocketdev.git",
+    "default_branch": "main"
+  },
+  "credentials": {
+    "profile": "github-personal"
+  },
+  "settings": {
+    "workspace_root": "/home/jeffh/projects",
+    "host_agent_mode": "auto"
+  },
+  "initialized": "2024-01-07T10:30:00Z",
+  "last_updated": "2024-01-07T10:30:00Z"
+}
 ```
 
 #### Team Memory (.pocketdev/team-memory.md)
@@ -188,7 +192,7 @@ const dockerArgs = [
 
 2. **Config Loading**
 ```javascript
-// Load .pocketdev/config.yml
+// Load .pocketdev/config.json from repository root
 const config = await loadProjectConfig();
 const profile = config.credentials.profile;
 

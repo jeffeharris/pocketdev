@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 class ProjectConfig {
   constructor() {
@@ -10,6 +11,11 @@ class ProjectConfig {
    * Initialize a new project with .pocketdev structure
    */
   async initializeProject(projectPath) {
+    // If no project path provided, use the current repository root
+    if (!projectPath) {
+      // Go up from local-backend/lib to find the repo root
+      projectPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    }
     const pocketdevPath = path.join(projectPath, '.pocketdev');
     
     // Create directory structure

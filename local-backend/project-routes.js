@@ -16,15 +16,14 @@ router.post('/api/project/initialize', async (req, res) => {
   try {
     const { projectPath } = req.body;
     
-    if (!projectPath) {
-      return res.status(400).json({ error: 'Project path required' });
-    }
+    // If no projectPath provided, initialize in current repository
+    const targetPath = projectPath || null;
     
-    const config = await projectConfig.initializeProject(projectPath);
+    const config = await projectConfig.initializeProject(targetPath);
     
     // Set as active project
     activeProject = {
-      path: projectPath,
+      path: targetPath || config.settings.workspace_root,
       config
     };
     
