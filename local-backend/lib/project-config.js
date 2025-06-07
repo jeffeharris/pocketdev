@@ -154,8 +154,18 @@ ${this.extractKeyPoints(claudeMd)}
     const usernameKey = `${profile.toUpperCase()}_USERNAME`;
     const tokenKey = `${profile.toUpperCase()}_TOKEN`;
 
-    const username = process.env[usernameKey];
-    const token = process.env[tokenKey];
+    // First check environment variables
+    let username = process.env[usernameKey];
+    let token = process.env[tokenKey];
+
+    // If not in env, check stored credentials
+    if (!username || !token) {
+      const stored = this.credentials?.[profile];
+      if (stored) {
+        username = stored.username;
+        token = stored.token;
+      }
+    }
 
     if (!username || !token) {
       return null;
@@ -163,6 +173,7 @@ ${this.extractKeyPoints(claudeMd)}
 
     return { username, token };
   }
+
 
   /**
    * Validate GitHub token and fetch user info
@@ -294,6 +305,27 @@ ${this.extractKeyPoints(claudeMd)}
     }
     
     return output;
+  }
+
+  /**
+   * Store credentials in memory (temporary solution)
+   * In production, use a secure credential store
+   */
+  storeCredentials(profile, username, token) {
+    if (!this.credentials) {
+      this.credentials = {};
+    }
+    this.credentials[profile] = { username, token };
+  }
+
+  /**
+   * Get credentials for a specific profile
+   */
+  getCredentials(config) {
+    if (!config?.credentials?.profile || !this.credentials) {
+      return null;
+    }
+    return this.credentials[config.credentials.profile];
   }
 }
 

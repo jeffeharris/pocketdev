@@ -96,7 +96,7 @@ router.post('/api/project/config', async (req, res) => {
 // Set active project
 router.post('/api/project/set-active', async (req, res) => {
   try {
-    const { repository, defaultBranch, credentialProfile } = req.body;
+    const { repository, defaultBranch, credentialProfile, gitUsername, gitToken } = req.body;
     
     if (!repository) {
       return res.status(400).json({ 
@@ -126,6 +126,11 @@ router.post('/api/project/set-active', async (req, res) => {
     };
     
     config = await projectConfig.updateConfig(projectPath, updates);
+    
+    // Store credentials if provided
+    if (credentialProfile && gitUsername && gitToken) {
+      projectConfig.storeCredentials(credentialProfile, gitUsername, gitToken);
+    }
     
     // Set as active
     activeProject = {
@@ -242,6 +247,29 @@ router.get('/api/project/credentials', (req, res) => {
     });
   } catch (error) {
     console.error('Credentials fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Store credentials for a profile
+router.post('/api/project/credentials', (req, res) => {
+  try {
+    const { profile, username, token } = req.body;
+    
+    if (!profile || !username || !token) {
+      return res.status(400).json({ 
+        error: 'Profile, username, and token are required' 
+      });
+    }
+    
+    projectConfig.storeCredentials(profile, username, token);
+    
+    res.json({
+      success: true,
+      message: 'Credentials stored successfully'
+    });
+  } catch (error) {
+    console.error('Credentials store error:', error);
     res.status(500).json({ error: error.message });
   }
 });

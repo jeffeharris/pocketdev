@@ -39,6 +39,14 @@ export default function Settings() {
 
   useEffect(() => {
     fetchProjectConfig();
+    
+    // Load stored credentials from localStorage
+    const storedToken = localStorage.getItem('GITHUB_PERSONAL_TOKEN');
+    if (storedToken) {
+      setGithubToken(storedToken);
+      // Auto-validate if token exists
+      validateStoredToken(storedToken);
+    }
   }, []);
 
   const fetchProjectConfig = async () => {
@@ -52,6 +60,26 @@ export default function Settings() {
       }
     } catch (error) {
       console.error('Failed to fetch project config:', error);
+    }
+  };
+
+  const validateStoredToken = async (token: string) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/github/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setGithubUser(data.user);
+        // Fetch repos silently
+        await fetchRepos(token);
+      }
+    } catch (error) {
+      // Silently fail for stored token validation
+      console.error('Failed to validate stored token:', error);
     }
   };
 
@@ -84,12 +112,12 @@ export default function Settings() {
     }
   };
 
-  const fetchRepos = async () => {
+  const fetchRepos = async (token?: string) => {
     try {
       const response = await fetch('http://localhost:3001/api/github/repos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: githubToken })
+        body: JSON.stringify({ token: token || githubToken })
       });
       
       if (response.ok) {
@@ -151,7 +179,9 @@ export default function Settings() {
         body: JSON.stringify({
           repository: selectedRepo,
           defaultBranch: selectedBranch,
-          credentialProfile
+          credentialProfile,
+          gitUsername: githubUser?.login,
+          gitToken: githubToken
         })
       });
       
@@ -211,7 +241,7 @@ export default function Settings() {
                   type="password"
                   value={githubToken}
                   onChange={(e) => setGithubToken(e.target.value)}
-                  placeholder="ghp_xxxxxxxxxxxx"
+                  placeholder={githubToken ? "Token loaded from previous session" : "ghp_xxxxxxxxxxxx"}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <button

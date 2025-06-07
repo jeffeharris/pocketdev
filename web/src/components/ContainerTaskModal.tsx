@@ -124,6 +124,10 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
     setLoading(true);
     
     try {
+      // Get credentials from localStorage
+      const gitToken = localStorage.getItem('GITHUB_PERSONAL_TOKEN');
+      const gitUsername = localStorage.getItem('GITHUB_PERSONAL_USERNAME');
+      
       const payload = {
         engineerId: engineer.id,
         repository,
@@ -131,7 +135,9 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
         acceptanceCriteria: acceptanceCriteria.filter(c => c.trim()),
         model,
         // Pass branch only if different from default
-        ...(branch && { branch })
+        ...(branch && { branch }),
+        // Include credentials if available
+        ...(gitToken && gitUsername && { gitToken, gitUsername })
       };
 
       const response = await fetch('http://localhost:3001/api/container/assign-task', {

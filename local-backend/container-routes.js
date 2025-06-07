@@ -44,6 +44,7 @@ router.post('/api/container/assign-task', async (req, res) => {
   const { 
     engineerId, 
     repository,
+    branch,
     description,
     acceptanceCriteria = [],
     testFramework = 'jest',
@@ -89,7 +90,9 @@ router.post('/api/container/assign-task', async (req, res) => {
     if (finalCredentials.username && finalCredentials.token) {
       repoConfig = {
         url: repoConfig,
-        credentials: finalCredentials
+        credentials: finalCredentials,
+        // Use provided branch or fall back to active project default
+        branch: branch || (activeProject.config?.project?.default_branch || 'main')
       };
     } else {
       return res.status(400).json({
