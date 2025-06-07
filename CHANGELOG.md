@@ -2,6 +2,50 @@
 
 All notable changes to the PocketDev project will be documented in this file.
 
+## [0.2.1] - 2025-06-07
+
+### Added
+- Automatic verification retry logic for failed test scripts
+  - AI engineers get a second chance to fix verification failures
+  - Intelligent error analysis provides specific feedback
+  - Detects file not found, module errors, and syntax issues
+  - Creates verification scripts if missing
+- Branch name sanitization logging
+  - Logs warnings when branch names need sanitization
+  - Shows what was changed (quotes, colons, special chars)
+  - Displays original vs sanitized versions
+- Dedicated task view page with routing
+  - Comprehensive task details display
+  - Auto-refresh every 5 seconds for running tasks
+  - Shows files created, test results, and suggested next steps
+  - Toggle between task results and logs
+
+### Changed
+- Updated to latest Claude 4 model family
+  - Claude Opus 4 (Most Capable)
+  - Claude Sonnet 4 (Balanced)
+  - Claude 3.7 Sonnet (Extended Thinking)
+  - Previous models still available as fallbacks
+- Improved branch name sanitization
+  - Removes quotes (single, double, backticks)
+  - Replaces colons with hyphens
+  - Limits to 50 characters
+  - Validates final branch name before creation
+
+### Fixed
+- Bash syntax error with quote regex in entrypoint.sh
+- Python vs python3 compatibility in verification scripts
+- Verbose mode breaking JSON output from Claude CLI
+- Prompt delivery using stdin instead of arguments
+- Multi-line prompt and system prompt handling
+- Branch names with special characters breaking git checkout
+
+### Technical Details
+- Verification retry uses `run_claude()` with session continuation
+- Branch sanitization uses comprehensive sed/tr pipeline
+- Task view integrated with React Router for SPA navigation
+- Model updates reflect Anthropic's latest API identifiers
+
 ## [0.2.0] - 2025-01-06
 
 ### Added
