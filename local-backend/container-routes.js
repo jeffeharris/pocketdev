@@ -4,10 +4,12 @@ import { getActiveProject, getProjectConfig } from './project-routes.js';
 import { db } from './db/index.js';
 import { tasks, taskEvents, engineerProfiles, projects } from './db/schema.js';
 import { eq, desc } from 'drizzle-orm';
+import SmartTaskRouter from './lib/smart-task-router.js';
 
 const router = express.Router();
 console.log('Container routes: Creating ContainerTaskManager...');
 const containerManager = new ContainerTaskManager();
+const smartRouter = new SmartTaskRouter();
 
 // Initialize container manager on startup
 console.log('Container routes: Initializing container manager...');
@@ -368,6 +370,124 @@ router.get('/api/container/test-direct', async (req, res) => {
     console.error('TEST: Orchestrator error:', error);
     process.stderr.write(`[TEST] Error: ${error.message}\n`);
     res.status(500).json({ success: false, error: error.message, stack: error.stack });
+  }
+});
+
+// Quick task assignment - The Magic Experience ✨
+router.post('/api/container/quick-task', async (req, res) => {
+  try {
+    const { description, type = 'feature', urgency = 'normal' } = req.body;
+    
+    if (!description) {
+      return res.status(400).json({ error: 'Task description required' });
+    }
+    
+    // Get active project
+    const activeProject = getActiveProject();
+    if (!activeProject?.config) {
+      return res.status(400).json({ 
+        error: 'No active project. Please configure a project first.' 
+      });
+    }
+    
+    // Smart routing - pick the best engineer automatically
+    const engineerRole = smartRouter.routeTask(description);
+    
+    // Find an available engineer of that role
+    const engineers = containerManager.getAllEngineers();
+    const availableEngineer = engineers.find(e => 
+      e.role === engineerRole && e.status === 'idle'
+    ) || engineers.find(e => e.status === 'idle'); // Fallback to any available
+    
+    if (!availableEngineer) {
+      return res.status(503).json({ 
+        error: 'No available engineers. All are currently busy.',
+        suggestedRole: engineerRole
+      });
+    }
+    
+    // Generate smart acceptance criteria
+    const acceptanceCriteria = smartRouter.generateAcceptanceCriteria(description, type);
+    
+    // Enhance the description with inferred details
+    const enhancedDescription = smartRouter.enhanceDescription(description, {
+      framework: activeProject.config.project.framework || 'unknown'
+    });
+    
+    // Estimate complexity
+    const { complexity, estimatedMinutes } = smartRouter.estimateComplexity(description, type);
+    
+    // Get project credentials
+    const projectConfig = getProjectConfig();
+    const credentials = projectConfig.getCredentials(activeProject.config);
+    
+    // Assign the task
+    const taskResult = await containerManager.assignTask(availableEngineer.id, {
+      repository: activeProject.config.project.repository,
+      branch: activeProject.config.project.default_branch || 'main',
+      description: enhancedDescription,
+      acceptanceCriteria,
+      model: availableEngineer.role === 'qa_manual' ? 'claude-sonnet-4-0' : 'claude-sonnet-4-0',
+      credentials: credentials ? {
+        username: credentials.username,
+        token: credentials.token
+      } : undefined
+    });
+    
+    // Return simplified response focused on the experience
+    res.json({
+      success: true,
+      task: {
+        id: taskResult.taskId,
+        description: description, // Original, not enhanced
+        assignedTo: {
+          name: availableEngineer.name,
+          role: availableEngineer.role
+        },
+        estimatedMinutes,
+        complexity,
+        status: 'started'
+      },
+      message: `${availableEngineer.name} is working on your ${type}. Estimated time: ${estimatedMinutes} minutes.`
+    });
+    
+  } catch (error) {
+    console.error('Quick task assignment error:', error);
+    res.status(500).json({ 
+      error: 'Failed to assign task',
+      details: error.message 
+    });
+  }
+});
+
+// Get simplified task status for mobile UI
+router.get('/api/container/quick-status/:taskId', async (req, res) => {
+  try {
+    const task = await containerManager.getTaskStatus(req.params.taskId);
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Simplify the response for mobile consumption
+    const engineer = containerManager.getEngineerByTaskId(req.params.taskId);
+    
+    res.json({
+      id: task.id,
+      status: task.status,
+      description: task.description,
+      engineer: engineer ? {
+        name: engineer.name,
+        role: engineer.role
+      } : null,
+      progress: task.progress || 0,
+      currentStep: task.currentStep || 'Analyzing requirements...',
+      result: task.result || null,
+      canReview: task.status === 'completed' && task.result?.success
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get task status' });
   }
 });
 
