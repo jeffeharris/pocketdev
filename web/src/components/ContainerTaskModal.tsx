@@ -29,7 +29,7 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
   const [branch, setBranch] = useState('main');
   const [description, setDescription] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState(['']);
-  const [model, setModel] = useState('claude-3-5-sonnet-latest');
+  const [model, setModel] = useState('claude-sonnet-4-0');
   const [loading, setLoading] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
@@ -293,9 +293,11 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
               onChange={(e) => setModel(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Latest)</option>
-              <option value="claude-3-opus-latest">Claude 3 Opus</option>
-              <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+              <option value="claude-opus-4-0">Claude Opus 4 (Most Capable)</option>
+              <option value="claude-sonnet-4-0">Claude Sonnet 4 (Balanced)</option>
+              <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet (Extended Thinking)</option>
+              <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Previous Gen)</option>
+              <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Fast)</option>
             </select>
           </div>
 

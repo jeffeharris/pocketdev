@@ -12,7 +12,7 @@ interface Props {
 export function TaskModal({ engineer, onClose, onTaskAssigned }: Props) {
   const [task, setTask] = useState('');
   const [mode, setMode] = useState<'quick' | 'guided' | 'simulated'>('quick');
-  const [model, setModel] = useState<'sonnet' | 'opus' | 'claude-3-5-sonnet-latest'>('sonnet');
+  const [model, setModel] = useState<'claude-opus-4-0' | 'claude-sonnet-4-0' | 'claude-3-5-sonnet-latest'>('claude-sonnet-4-0');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,28 +155,28 @@ export function TaskModal({ engineer, onClose, onTaskAssigned }: Props) {
             <div className="grid grid-cols-3 gap-3 mb-4">
               <button
                 type="button"
-                onClick={() => setModel('sonnet')}
+                onClick={() => setModel('claude-opus-4-0')}
                 className={`p-3 rounded-lg border-2 transition-all ${
-                  model === 'sonnet'
+                  model === 'claude-opus-4-0'
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <div className="text-sm font-medium">Sonnet</div>
-                <div className="text-xs text-gray-500">Fast & Smart</div>
+                <div className="text-sm font-medium">Opus 4</div>
+                <div className="text-xs text-gray-500">Most Capable</div>
               </button>
               
               <button
                 type="button"
-                onClick={() => setModel('opus')}
+                onClick={() => setModel('claude-sonnet-4-0')}
                 className={`p-3 rounded-lg border-2 transition-all ${
-                  model === 'opus'
+                  model === 'claude-sonnet-4-0'
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <div className="text-sm font-medium">Opus</div>
-                <div className="text-xs text-gray-500">Most Capable</div>
+                <div className="text-sm font-medium">Sonnet 4</div>
+                <div className="text-xs text-gray-500">Balanced</div>
               </button>
 
               <button
@@ -189,7 +189,7 @@ export function TaskModal({ engineer, onClose, onTaskAssigned }: Props) {
                 }`}
               >
                 <div className="text-sm font-medium">3.5 Sonnet</div>
-                <div className="text-xs text-gray-500">Latest</div>
+                <div className="text-xs text-gray-500">Previous Gen</div>
               </button>
             </div>
           </div>

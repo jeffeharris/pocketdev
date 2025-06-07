@@ -766,9 +766,58 @@ main() {
         log_info "Using default branch: $DEFAULT_BRANCH"
     fi
     
-    # Create feature branch
-    FEATURE_BRANCH="ai/${ENGINEER_ROLE}/$(echo "$TASK_DESCRIPTION" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-50)-$(date +%s)"
+    # Create feature branch - sanitize special characters
+    # Remove quotes, colons, newlines, and other problematic characters
+    ORIGINAL_DESC="$TASK_DESCRIPTION"
+    SANITIZED_DESC=$(echo "$TASK_DESCRIPTION" | \
+        sed 's/["\047\`]//g' | \
+        sed 's/[:]/-/g' | \
+        sed 's/[^a-zA-Z0-9 _-]//g' | \
+        tr ' ' '-' | \
+        tr '[:upper:]' '[:lower:]' | \
+        sed 's/--*/-/g' | \
+        sed 's/^-//' | \
+        sed 's/-$//' | \
+        cut -c1-50)
+    
+    # Check if sanitization was needed
+    if [ "$ORIGINAL_DESC" != "$SANITIZED_DESC" ]; then
+        log_warning "Branch name sanitization was required"
+        log_warning "Original: $ORIGINAL_DESC"
+        log_warning "Sanitized: $SANITIZED_DESC"
+        
+        # Log specific issues found
+        if [[ "$ORIGINAL_DESC" =~ [\"\'\`] ]]; then
+            log_warning "  - Removed quotes from task description"
+        fi
+        if [[ "$ORIGINAL_DESC" =~ [:] ]]; then
+            log_warning "  - Replaced colons with hyphens"
+        fi
+        if [[ "$ORIGINAL_DESC" =~ [^a-zA-Z0-9\ _-] ]]; then
+            log_warning "  - Removed special characters"
+        fi
+        if [[ "$ORIGINAL_DESC" =~ [A-Z] ]]; then
+            log_warning "  - Converted to lowercase"
+        fi
+        if [ ${#ORIGINAL_DESC} -gt 50 ]; then
+            log_warning "  - Truncated to 50 characters (was ${#ORIGINAL_DESC})"
+        fi
+    else
+        log_debug "Task description required no sanitization"
+    fi
+    
+    FEATURE_BRANCH="ai/${ENGINEER_ROLE}/${SANITIZED_DESC}-$(date +%s)"
     log_info "Creating feature branch: $FEATURE_BRANCH"
+    
+    # Validate branch name before creating
+    if [[ ! "$FEATURE_BRANCH" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
+        log_error "CRITICAL: Branch name still contains invalid characters after sanitization!"
+        log_error "Branch name: $FEATURE_BRANCH"
+        error_message="Failed to create valid branch name"
+        save_results "$success" "$error_message" "$summary" "$start_time"
+        exit 1
+    fi
+    
     git checkout -b "$FEATURE_BRANCH"
     
     # Main development task - Single comprehensive prompt
@@ -825,37 +874,130 @@ Please implement everything in one session, running your verification at the end
     
     local verification_passed=false
     local verification_output=""
+    local verification_attempt=1
+    local max_verification_attempts=2
     
-    # Check for common verification script names
-    if [ -f "verify.js" ]; then
-        log_info "Running verify.js..."
-        if verification_output=$(node verify.js 2>&1); then
-            verification_passed=true
-            test_results="verify.js passed successfully"
-        else
-            test_results="verify.js failed: $verification_output"
+    while [ $verification_attempt -le $max_verification_attempts ] && [ "$verification_passed" = "false" ]; do
+        log_info "Verification attempt $verification_attempt of $max_verification_attempts"
+        
+        # Check for common verification script names
+        local found_script=""
+        local script_type=""
+        
+        if [ -f "verify.js" ]; then
+            found_script="verify.js"
+            script_type="node"
+        elif [ -f "test.py" ]; then
+            found_script="test.py"
+            script_type="python"
+        elif [ -f "verify.py" ]; then
+            found_script="verify.py"
+            script_type="python"
         fi
-    elif [ -f "test.py" ]; then
-        log_info "Running test.py..."
-        if verification_output=$(python3 test.py 2>&1); then
-            verification_passed=true
-            test_results="test.py passed successfully"
+        
+        if [ -n "$found_script" ]; then
+            log_info "Found verification script: $found_script"
+            
+            # Run the verification script
+            if [ "$script_type" = "node" ]; then
+                log_info "Running $found_script with Node.js..."
+                if verification_output=$(node "$found_script" 2>&1); then
+                    verification_passed=true
+                    test_results="$found_script passed successfully"
+                else
+                    log_warning "Verification failed with exit code: $?"
+                    test_results="$found_script failed: $verification_output"
+                fi
+            else
+                log_info "Running $found_script with Python..."
+                if verification_output=$(python3 "$found_script" 2>&1); then
+                    verification_passed=true
+                    test_results="$found_script passed successfully"
+                else
+                    log_warning "Verification failed with exit code: $?"
+                    test_results="$found_script failed: $verification_output"
+                fi
+            fi
+            
+            # If verification failed and we have attempts left, ask Claude to fix it
+            if [ "$verification_passed" = "false" ] && [ $verification_attempt -lt $max_verification_attempts ]; then
+                log_info "Verification failed, asking Claude to fix the issues..."
+                
+                # Analyze the failure and build helpful feedback
+                local fix_prompt="The verification script failed with the following error:
+
+$verification_output
+
+Please analyze and fix the issue. Common problems include:
+- Syntax errors in the verification script
+- Import/require statements for modules that don't exist
+- Incorrect file paths being tested
+- The verification script testing features that weren't implemented
+- Missing dependencies
+
+Fix the verification script and/or the implementation so that the tests pass."
+                
+                # Check for specific common issues and add targeted advice
+                if [[ "$verification_output" =~ "No such file or directory" ]]; then
+                    fix_prompt="$fix_prompt
+
+The error indicates a file or directory doesn't exist. Make sure all file paths in your verification script match the actual files you created."
+                elif [[ "$verification_output" =~ "ModuleNotFoundError" ]] || [[ "$verification_output" =~ "Cannot find module" ]]; then
+                    fix_prompt="$fix_prompt
+
+The error indicates a missing module. Either install the required dependencies or use only built-in modules for verification."
+                elif [[ "$verification_output" =~ "SyntaxError" ]]; then
+                    fix_prompt="$fix_prompt
+
+There's a syntax error in your code. Check the line number mentioned in the error and fix the syntax."
+                fi
+                
+                # Run Claude to fix the issue
+                if run_claude "$fix_prompt" "/workspace/logs/verification_fix_$verification_attempt.json" true; then
+                    log_success "Claude attempted to fix the verification issues"
+                    # Give Claude's changes a moment to take effect
+                    sleep 2
+                else
+                    log_error "Failed to get Claude to fix verification issues"
+                    break
+                fi
+            fi
         else
-            test_results="test.py failed: $verification_output"
+            # No verification script found
+            if [ $verification_attempt -eq 1 ]; then
+                log_warning "No verification script found (verify.js, test.py, or verify.py)"
+                
+                # Ask Claude to create a verification script
+                local create_verify_prompt="No verification script was found. Please create a verification script (verify.js for Node.js projects, or verify.py/test.py for Python projects) that tests your implementation.
+
+The verification script should:
+1. Test that all requested features work correctly
+2. Exit with code 0 if all tests pass
+3. Exit with a non-zero code if any test fails
+4. Print clear messages about what is being tested
+
+Create the appropriate verification script based on the project type and run it."
+                
+                if run_claude "$create_verify_prompt" "/workspace/logs/create_verification.json" true; then
+                    log_success "Asked Claude to create verification script"
+                    sleep 2
+                else
+                    log_error "Failed to get Claude to create verification script"
+                    # If we can't create a verification script, assume the implementation is complete
+                    verification_passed=true
+                    test_results="No verification script created (assumed complete)"
+                    break
+                fi
+            else
+                log_warning "Still no verification script after asking Claude to create one"
+                verification_passed=true
+                test_results="No verification script created (assumed complete)"
+                break
+            fi
         fi
-    elif [ -f "verify.py" ]; then
-        log_info "Running verify.py..."
-        if verification_output=$(python3 verify.py 2>&1); then
-            verification_passed=true
-            test_results="verify.py passed successfully"
-        else
-            test_results="verify.py failed: $verification_output"
-        fi
-    else
-        log_warning "No verification script found, assuming implementation is complete"
-        verification_passed=true
-        test_results="No verification script created"
-    fi
+        
+        ((verification_attempt++))
+    done
     
     # Set success based on verification
     if [ "$verification_passed" = "true" ]; then
@@ -1119,33 +1261,103 @@ if [ "$success" = "true" ] || [ -f "/workspace/results/session_result.json" ]; t
 Please make any necessary changes or improvements based on this feedback."
                 
                 if run_claude "$followup_prompt" "/workspace/logs/followup.json" true; then
-                    # Check for verification script and run it
+                    # Check for verification script and run it with retry logic
                     log_info "Looking for verification script..."
                     
                     local verification_passed=false
                     local verification_output=""
+                    local verification_attempt=1
+                    local max_verification_attempts=2
                     
-                    if [ -f "verify.js" ]; then
-                        log_info "Running verify.js..."
-                        if verification_output=$(node verify.js 2>&1); then
-                            verification_passed=true
-                            test_results="verify.js passed successfully"
-                        else
-                            test_results="verify.js failed: $verification_output"
+                    while [ $verification_attempt -le $max_verification_attempts ] && [ "$verification_passed" = "false" ]; do
+                        log_info "Follow-up verification attempt $verification_attempt of $max_verification_attempts"
+                        
+                        # Check for common verification script names
+                        local found_script=""
+                        local script_type=""
+                        
+                        if [ -f "verify.js" ]; then
+                            found_script="verify.js"
+                            script_type="node"
+                        elif [ -f "test.py" ]; then
+                            found_script="test.py"
+                            script_type="python"
+                        elif [ -f "verify.py" ]; then
+                            found_script="verify.py"
+                            script_type="python"
                         fi
-                    elif [ -f "test.py" ] || [ -f "verify.py" ]; then
-                        local test_file=$([ -f "test.py" ] && echo "test.py" || echo "verify.py")
-                        log_info "Running $test_file..."
-                        if verification_output=$(python3 $test_file 2>&1); then
-                            verification_passed=true
-                            test_results="$test_file passed successfully"
+                        
+                        if [ -n "$found_script" ]; then
+                            log_info "Found verification script: $found_script"
+                            
+                            # Run the verification script
+                            if [ "$script_type" = "node" ]; then
+                                log_info "Running $found_script with Node.js..."
+                                if verification_output=$(node "$found_script" 2>&1); then
+                                    verification_passed=true
+                                    test_results="$found_script passed successfully"
+                                else
+                                    log_warning "Follow-up verification failed with exit code: $?"
+                                    test_results="$found_script failed: $verification_output"
+                                fi
+                            else
+                                log_info "Running $found_script with Python..."
+                                if verification_output=$(python3 "$found_script" 2>&1); then
+                                    verification_passed=true
+                                    test_results="$found_script passed successfully"
+                                else
+                                    log_warning "Follow-up verification failed with exit code: $?"
+                                    test_results="$found_script failed: $verification_output"
+                                fi
+                            fi
+                            
+                            # If verification failed and we have attempts left, ask Claude to fix it
+                            if [ "$verification_passed" = "false" ] && [ $verification_attempt -lt $max_verification_attempts ]; then
+                                log_info "Follow-up verification failed, asking Claude to fix the issues..."
+                                
+                                # Analyze the failure and build helpful feedback
+                                local fix_prompt="During the follow-up task, the verification script failed with the following error:
+
+$verification_output
+
+Please analyze and fix the issue. The follow-up task was: $FOLLOWUP_TASK
+
+Fix the verification script and/or the implementation so that the tests pass."
+                                
+                                # Check for specific common issues and add targeted advice
+                                if [[ "$verification_output" =~ "No such file or directory" ]]; then
+                                    fix_prompt="$fix_prompt
+
+The error indicates a file or directory doesn't exist. Make sure all file paths in your verification script match the actual files you created."
+                                elif [[ "$verification_output" =~ "ModuleNotFoundError" ]] || [[ "$verification_output" =~ "Cannot find module" ]]; then
+                                    fix_prompt="$fix_prompt
+
+The error indicates a missing module. Either install the required dependencies or use only built-in modules for verification."
+                                elif [[ "$verification_output" =~ "SyntaxError" ]]; then
+                                    fix_prompt="$fix_prompt
+
+There's a syntax error in your code. Check the line number mentioned in the error and fix the syntax."
+                                fi
+                                
+                                # Run Claude to fix the issue
+                                if run_claude "$fix_prompt" "/workspace/logs/followup_verification_fix_$verification_attempt.json" true; then
+                                    log_success "Claude attempted to fix the follow-up verification issues"
+                                    sleep 2
+                                else
+                                    log_error "Failed to get Claude to fix follow-up verification issues"
+                                    break
+                                fi
+                            fi
                         else
-                            test_results="$test_file failed: $verification_output"
+                            # For follow-up tasks, if no verification script exists, that's okay
+                            log_info "No verification script found for follow-up task"
+                            verification_passed=true
+                            test_results="No verification script found"
+                            break
                         fi
-                    else
-                        verification_passed=true
-                        test_results="No verification script found"
-                    fi
+                        
+                        ((verification_attempt++))
+                    done
                     
                     # Stage changes
                     git add -A
