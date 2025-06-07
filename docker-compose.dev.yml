@@ -33,6 +33,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - CLAUDE_MODE=container
       - NODE_ENV=development
+      - PROJECT_PATH=/home/jeffh/projects/pocketdev
+      - CLAUDE_DEBUG=${CLAUDE_DEBUG:-false}
     volumes:
       - ./local-backend:/app
       - /app/node_modules

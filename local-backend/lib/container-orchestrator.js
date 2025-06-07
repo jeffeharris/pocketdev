@@ -81,7 +81,8 @@ class ContainerOrchestrator {
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, // Add both for compatibility
         ENGINEER_ROLE: task.engineerRole || 'fullstack',
         MODEL: task.model || 'claude-3-5-sonnet-latest',
-        MAX_ITERATIONS: task.maxIterations || '5'
+        MAX_ITERATIONS: task.maxIterations || '5',
+        DEBUG: process.env.CLAUDE_DEBUG || 'false'
       };
 
       // Add Git credentials if provided

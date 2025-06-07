@@ -80,6 +80,12 @@ run_claude() {
         "--model" "${MODEL:-claude-3-5-sonnet-latest}"
     )
     
+    # Add debug flag if DEBUG environment variable is set
+    if [ "${DEBUG:-false}" = "true" ]; then
+        claude_args+=("--debug")
+        log_info "Debug mode enabled for Claude"
+    fi
+    
     # Add session continuation if available
     if [ "$continue_session" = "true" ] && [ -n "$CLAUDE_SESSION_ID" ]; then
         claude_args+=("--resume" "$CLAUDE_SESSION_ID")

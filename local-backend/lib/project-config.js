@@ -78,7 +78,7 @@ ${this.extractKeyPoints(claudeMd)}
         profile: ''
       },
       settings: {
-        workspace_root: path.dirname(projectPath),
+        workspace_root: projectPath,
         host_agent_mode: 'auto'
       },
       initialized: new Date().toISOString(),

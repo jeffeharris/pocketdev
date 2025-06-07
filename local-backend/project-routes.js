@@ -104,8 +104,8 @@ router.post('/api/project/set-active', async (req, res) => {
       });
     }
     
-    // Use the current repository as the project path
-    const projectPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    // Use the mounted project path in container or local path
+    const projectPath = process.env.PROJECT_PATH || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     
     // Check if project exists, initialize if not
     let config = await projectConfig.getConfig(projectPath);
