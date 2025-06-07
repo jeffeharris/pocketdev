@@ -8,6 +8,7 @@ import { DockerClaudeManager } from './docker-claude.js';
 import { HostClaudeManager } from './host-claude.js';
 import { CodeExtractor } from './lib/code-extractor.js';
 import containerRoutes from './container-routes.js';
+import projectRoutes from './project-routes.js';
 
 dotenv.config();
 
@@ -15,8 +16,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Add container routes
+// Add routes
 app.use(containerRoutes);
+app.use(projectRoutes);
 
 // Initialize Supabase (only if configured)
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -77,10 +79,33 @@ app.get('/api/tasks', (req, res) => {
   res.json(mockTasks);
 });
 
-// Get task history
-app.get('/api/task-history', (req, res) => {
-  // Return last 50 tasks, most recent first
-  res.json(taskHistory.slice(-50).reverse());
+// Get task history (combined from all sources)
+app.get('/api/task-history', async (req, res) => {
+  try {
+    // Get host tasks
+    const hostTasks = taskHistory.slice(-50).reverse();
+    
+    // Get container tasks
+    let containerTasks = [];
+    try {
+      const response = await fetch('http://localhost:3001/api/container/completed-tasks');
+      if (response.ok) {
+        containerTasks = await response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch container tasks:', error);
+    }
+    
+    // Combine and sort by date
+    const allTasks = [...hostTasks, ...containerTasks]
+      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+      .slice(0, 50);
+    
+    res.json(allTasks);
+  } catch (error) {
+    console.error('Error fetching task history:', error);
+    res.json(taskHistory.slice(-50).reverse()); // Fallback to host tasks only
+  }
 });
 
 // Reset engineer endpoint

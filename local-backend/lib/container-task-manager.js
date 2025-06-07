@@ -78,7 +78,15 @@ class ContainerTaskManager {
     // Update engineer status
     engineer.status = 'busy';
     engineer.currentTask = task.id;
+    engineer.currentTaskDetails = task;
     this.tasks.set(task.id, task);
+    
+    // Add to engineer's task history immediately
+    engineer.taskHistory.push({
+      taskId: task.id,
+      startTime: task.startTime,
+      status: 'running'
+    });
 
     // Execute in container
     try {
@@ -108,13 +116,26 @@ class ContainerTaskManager {
       // Update engineer
       engineer.status = 'idle';
       engineer.currentTask = null;
-      engineer.taskHistory.push({
-        taskId: task.id,
-        startTime: task.startTime,
-        endTime: task.endTime,
-        success: result.success,
-        cost: result.cost_usd
-      });
+      engineer.currentTaskDetails = null;
+      
+      // Update existing task history entry
+      const historyEntry = engineer.taskHistory.find(h => h.taskId === task.id);
+      if (historyEntry) {
+        historyEntry.endTime = task.endTime;
+        historyEntry.status = task.status;
+        historyEntry.success = result.success;
+        historyEntry.cost = result.cost_usd;
+      } else {
+        // Fallback: create new entry if not found
+        engineer.taskHistory.push({
+          taskId: task.id,
+          startTime: task.startTime,
+          endTime: task.endTime,
+          status: task.status,
+          success: result.success,
+          cost: result.cost_usd
+        });
+      }
 
       return task;
 
@@ -125,6 +146,15 @@ class ContainerTaskManager {
       
       engineer.status = 'error';
       engineer.currentTask = null;
+      engineer.currentTaskDetails = null;
+      
+      // Update existing task history entry
+      const historyEntry = engineer.taskHistory.find(h => h.taskId === task.id);
+      if (historyEntry) {
+        historyEntry.endTime = task.endTime;
+        historyEntry.status = 'error';
+        historyEntry.error = error.message;
+      }
       
       throw error;
     }

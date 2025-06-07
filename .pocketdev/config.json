@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "project": {
+    "name": "pocketdev",
+    "repository": "https://github.com/jeffeharris/pocketdev.git",
+    "default_branch": "main"
+  },
+  "credentials": {
+    "profile": "github-personal"
+  },
+  "settings": {
+    "workspace_root": "/home/jeffh/projects",
+    "host_agent_mode": "auto"
+  },
+  "initialized": "2025-06-07T03:00:00.000Z",
+  "last_updated": "2025-06-07T03:00:00.000Z"
+}

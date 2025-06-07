@@ -1,5 +1,6 @@
 import express from 'express';
 import ContainerTaskManager from './lib/container-task-manager.js';
+import { getActiveProject, getProjectConfig } from './project-routes.js';
 
 const router = express.Router();
 console.log('Container routes: Creating ContainerTaskManager...');
@@ -47,7 +48,9 @@ router.post('/api/container/assign-task', async (req, res) => {
     acceptanceCriteria = [],
     testFramework = 'jest',
     model = 'claude-3-5-sonnet-latest',
-    maxIterations = 5
+    maxIterations = 5,
+    gitUsername,
+    gitToken
   } = req.body;
 
   try {
@@ -59,8 +62,43 @@ router.post('/api/container/assign-task', async (req, res) => {
     }
 
     console.log('Container route: Assigning task to', engineerId);
+    
+    // Get active project config
+    const activeProject = getActiveProject();
+    const projectConfigService = getProjectConfig();
+    
+    // Format repository with credentials
+    let repoConfig = repository;
+    let finalCredentials = { username: gitUsername, token: gitToken };
+    
+    // If no credentials provided, try to use active project
+    if (!gitUsername || !gitToken) {
+      if (activeProject.config) {
+        const projectCreds = projectConfigService.getCredentials(activeProject.config);
+        if (projectCreds) {
+          finalCredentials = projectCreds;
+          // Use repository from active project if not provided
+          if (!repository && activeProject.config.project.repository) {
+            repoConfig = activeProject.config.project.repository;
+          }
+        }
+      }
+    }
+    
+    // Format for container orchestrator
+    if (finalCredentials.username && finalCredentials.token) {
+      repoConfig = {
+        url: repoConfig,
+        credentials: finalCredentials
+      };
+    } else {
+      return res.status(400).json({
+        error: 'No credentials available. Configure project settings or provide credentials.'
+      });
+    }
+    
     const task = await containerManager.assignTask(engineerId, {
-      repository,
+      repository: repoConfig,
       description,
       acceptanceCriteria,
       testFramework,
@@ -212,6 +250,53 @@ router.post('/api/container/cleanup', async (req, res) => {
 router.get('/api/container/active', (req, res) => {
   const activeContainers = containerManager.orchestrator.getActiveContainers();
   res.json(activeContainers);
+});
+
+// Get all tasks (running and completed) for task history
+router.get('/api/container/completed-tasks', (req, res) => {
+  const allTasks = [];
+  const engineers = containerManager.getAllEngineers();
+  
+  for (const engineer of engineers) {
+    const history = containerManager.getTaskHistory(engineer.id);
+    for (const item of history) {
+      if (item.task) {
+        // Include both running and completed tasks
+        const isRunning = item.task.status === 'running' || item.task.status === 'initializing';
+        const taskData = {
+          id: item.taskId,
+          engineerId: engineer.id,
+          engineerName: engineer.name,
+          engineerRole: engineer.role,
+          task: item.task.description || item.task.taskDescription,
+          status: isRunning ? 'running' : (item.task.status === 'completed' ? 'complete' : 'error'),
+          result: item.task.result?.summary || (isRunning ? 'Task in progress...' : ''),
+          cost: item.task.result?.cost_usd || item.cost || 0,
+          duration: item.task.result?.duration ? item.task.result.duration * 1000 : 
+                   (isRunning && item.startTime ? Date.now() - new Date(item.startTime).getTime() : 0),
+          sessionId: item.task.result?.sessionId || item.task.sessionId,
+          filesCreated: (item.task.result?.filesChanged || []).map(f => ({ 
+            filename: f, 
+            size: 0 
+          })),
+          completedAt: item.endTime || item.task.result?.timestamp || 
+                      (isRunning ? null : new Date().toISOString()),
+          model: item.task.result?.model || item.task.model || 'claude-3-5-sonnet-latest',
+          isContainer: true,
+          isRunning: isRunning,
+          prUrl: item.task.result?.prUrl,
+          featureBranch: item.task.result?.featureBranch || item.task.featureBranch,
+          repository: item.task.repository,
+          testResults: item.task.result?.testResults,
+          suggestedNextSteps: item.task.result?.suggestedNextSteps || [],
+          startTime: item.startTime
+        };
+        allTasks.push(taskData);
+      }
+    }
+  }
+  
+  res.json(allTasks);
 });
 
 // Debug endpoint to test orchestrator directly

@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { EngineerCard } from './components/EngineerCard';
 import { ContainerEngineerCardEnhanced } from './components/ContainerEngineerCardEnhanced';
 import { TaskModal } from './components/TaskModal';
 import { ContainerTaskModal } from './components/ContainerTaskModal';
 import { TaskHistory } from './components/TaskHistory';
+import { TaskDetailModal } from './components/TaskDetailModal';
+import Settings from './components/Settings';
+import Layout from './components/Layout';
 import { supabase, useMockData } from './lib/supabase';
 import { Engineer, Task } from './types';
 import { Toaster, toast } from 'react-hot-toast';
-import { Users, History, Container, Zap, CheckCircle } from 'lucide-react';
+import { Users, History, Container, Zap, CheckCircle, Settings as SettingsIcon } from 'lucide-react';
 
 // Mock data for local development
 const mockEngineers: Engineer[] = [
@@ -37,7 +41,7 @@ const mockEngineers: Engineer[] = [
   }
 ];
 
-export default function App() {
+function Dashboard() {
   const [engineers, setEngineers] = useState<Engineer[]>(mockEngineers);
   const [containerEngineers, setContainerEngineers] = useState<any[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -45,6 +49,8 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'host' | 'container'>('all');
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Initial load
@@ -119,57 +125,49 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
       <Toaster position="top-right" />
       
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      {/* Dashboard Controls */}
+      <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Users className="h-8 w-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">PocketDev</h1>
-                <p className="text-sm text-gray-500">AI Engineering Team</p>
-              </div>
+          <div className="flex justify-between items-center h-14">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('all')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  viewMode === 'all' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setViewMode('host')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
+                  viewMode === 'host' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Zap className="h-3 w-3" />
+                Host
+              </button>
+              <button
+                onClick={() => setViewMode('container')}
+                className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
+                  viewMode === 'container' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Container className="h-3 w-3" />
+                Container
+              </button>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="flex bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode('all')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                    viewMode === 'all' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setViewMode('host')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
-                    viewMode === 'host' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Zap className="h-3 w-3" />
-                  Host
-                </button>
-                <button
-                  onClick={() => setViewMode('container')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors flex items-center gap-1 ${
-                    viewMode === 'container' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Container className="h-3 w-3" />
-                  Container
-                </button>
-              </div>
 
+            <div className="flex items-center gap-2">
               <button
                 onClick={buildDockerImage}
                 className="px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700"
@@ -188,7 +186,7 @@ export default function App() {
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -293,8 +291,34 @@ export default function App() {
 
 
       {showHistory && (
-        <TaskHistory onClose={() => setShowHistory(false)} />
+        <TaskHistory 
+          onClose={() => setShowHistory(false)} 
+          onTaskClick={(task) => {
+            setSelectedTask(task);
+            setShowHistory(false);
+          }}
+        />
       )}
-    </div>
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+        />
+      )}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </Layout>
+    </Router>
   );
 }

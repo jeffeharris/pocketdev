@@ -4,6 +4,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { getActiveProject } from '../project-routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,6 +20,15 @@ class ContainerOrchestrator {
   async init() {
     // Ensure workspace directory exists
     await fs.mkdir(this.workspaceBase, { recursive: true });
+  }
+
+  /**
+   * Get the default branch from active project config
+   * @returns {string} Default branch name or 'main'
+   */
+  getDefaultBranch() {
+    const activeProject = getActiveProject();
+    return activeProject?.config?.project?.default_branch || 'main';
   }
 
   /**
@@ -63,7 +73,7 @@ class ContainerOrchestrator {
       
       const env = {
         REPO_URL: typeof task.repository === 'string' ? task.repository : task.repository.url,
-        BRANCH: typeof task.repository === 'string' ? '' : (task.repository.branch || ''),  // Let git determine default branch
+        BRANCH: typeof task.repository === 'string' ? this.getDefaultBranch() : (task.repository.branch || this.getDefaultBranch()),
         TASK_DESCRIPTION: task.description,
         ACCEPTANCE_CRITERIA: JSON.stringify(task.acceptanceCriteria || []),
         TEST_FRAMEWORK: task.testFramework || 'jest',
@@ -179,6 +189,7 @@ class ContainerOrchestrator {
       let result = null;
       let attempts = 0;
       const maxAttempts = 300; // 5 minutes with 1 second intervals
+      const resultsPath = path.join(workspacePath, 'results', 'session_result.json');
       
       while (attempts < maxAttempts) {
         // Check if results file exists
