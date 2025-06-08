@@ -42,6 +42,87 @@ router.get('/api/container/tasks/:id/recovery', async (req, res) => {
   }
 });
 
+// Ask a follow-up question about a completed task
+router.post('/api/container/tasks/:id/ask-question', async (req, res) => {
+  try {
+    const { question } = req.body;
+    const taskId = req.params.id;
+    
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+    
+    // Get the original task
+    const originalTask = await containerManager.getTask(taskId);
+    if (!originalTask) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Check if we have a session ID to resume
+    if (!originalTask.sessionId || originalTask.sessionId === 'null') {
+      return res.status(400).json({ 
+        error: 'Cannot ask questions about this task - no conversation session available' 
+      });
+    }
+    
+    // Find an available engineer (prefer the original one)
+    const engineers = containerManager.getAllEngineers();
+    let engineer = engineers.find(e => e.id === originalTask.engineerId && e.status === 'idle');
+    
+    if (!engineer) {
+      // Fallback to any available engineer of the same role
+      engineer = engineers.find(e => 
+        e.role === originalTask.engineerRole && e.status === 'idle'
+      );
+    }
+    
+    if (!engineer) {
+      return res.status(503).json({ 
+        error: 'No available engineers to answer your question. Please try again later.' 
+      });
+    }
+    
+    // Create a Q&A task that will resume the conversation
+    const qaTask = await containerManager.assignTask(engineer.id, {
+      repository: originalTask.repository,
+      branch: originalTask.branch || originalTask.repository?.branch,
+      description: `Answer this question about the previous task: ${question}`,
+      acceptanceCriteria: ['Provide a clear and helpful answer', 'Do not make any code changes'],
+      model: originalTask.model || 'claude-sonnet-4-0',
+      
+      // Critical: Pass session info for conversation continuation
+      sessionId: originalTask.sessionId,
+      isQuestion: true,
+      parentTaskId: taskId,
+      questionOnly: true,
+      
+      // Include context
+      originalContext: {
+        taskDescription: originalTask.description || originalTask.task,
+        filesChanged: originalTask.filesChanged || [],
+        summary: originalTask.result?.summary
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Your question has been sent to the engineer',
+      questionTaskId: qaTask.id,
+      engineer: {
+        name: engineer.name,
+        role: engineer.role
+      }
+    });
+    
+  } catch (error) {
+    console.error('Question handling error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process question',
+      details: error.message 
+    });
+  }
+});
+
 // Retry a failed task with recovery
 router.post('/api/container/tasks/:id/retry', async (req, res) => {
   try {

@@ -45,6 +45,8 @@ export function TaskView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recovery, setRecovery] = useState<any>(null);
+  const [showQuestionInput, setShowQuestionInput] = useState(false);
+  const [question, setQuestion] = useState('');
 
   useEffect(() => {
     fetchTaskDetails();
@@ -231,6 +233,40 @@ export function TaskView() {
     }
   };
 
+  const handleAskQuestion = async () => {
+    if (!task || !question.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/container/tasks/${task.id}/ask-question`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          question: question.trim()
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Clear the form
+        setQuestion('');
+        setShowQuestionInput(false);
+        // Navigate to the Q&A task
+        navigate(`/task/${result.questionTaskId}`);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to send question');
+      }
+    } catch (err) {
+      console.error('Question error:', err);
+      alert('Failed to send question');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -410,13 +446,108 @@ export function TaskView() {
               </div>
             </div>
 
+            {/* Actions for Accepted Tasks */}
+            {(task.status === 'accepted' || task.reviewStatus === 'approved') && task.sessionId && task.sessionId !== 'null' && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Follow-up</h3>
+                
+                {showQuestionInput ? (
+                  <div className="space-y-4">
+                    <div className="bg-purple-50 border border-purple-200 rounded-md p-3 mb-4">
+                      <p className="text-sm text-purple-800">
+                        Ask any question about the completed work. The engineer will use the original conversation context.
+                      </p>
+                    </div>
+                    <textarea
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      placeholder="e.g., How can I extend this feature? What are the performance implications?"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAskQuestion}
+                        disabled={!question.trim() || isSubmitting}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Ask Engineer
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowQuestionInput(false);
+                          setQuestion('');
+                        }}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                      Have questions about the completed work? Ask the engineer for clarification or guidance.
+                    </p>
+                    <button
+                      onClick={() => setShowQuestionInput(true)}
+                      className="px-4 py-2 text-purple-600 bg-white border border-purple-600 rounded-md hover:bg-purple-50 flex items-center gap-2"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Ask a Question
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Review Actions - Only show for completed tasks awaiting review */}
             {(task.status === 'awaiting_review' || task.status === 'complete') && !task.reviewStatus && (
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Task Review</h3>
                 
-                {/* Follow-up Input */}
-                {showFollowUpInput ? (
+                {/* Question Input */}
+                {showQuestionInput ? (
+                  <div className="space-y-4">
+                    <div className="bg-purple-50 border border-purple-200 rounded-md p-3 mb-4">
+                      <p className="text-sm text-purple-800">
+                        Ask any question about the work that was done. The engineer will use the same conversation context to provide answers.
+                      </p>
+                    </div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      What would you like to know?
+                    </label>
+                    <textarea
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      placeholder="e.g., Why did you choose this approach? Can you explain how this component works?"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAskQuestion}
+                        disabled={!question.trim() || isSubmitting}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Ask Engineer
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowQuestionInput(false);
+                          setQuestion('');
+                        }}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : showFollowUpInput ? (
                   <div className="space-y-4">
                     <label className="block text-sm font-medium text-gray-700">
                       Describe what changes or improvements you'd like:
@@ -471,6 +602,15 @@ export function TaskView() {
                       >
                         <MessageSquare className="h-4 w-4" />
                         Request Changes
+                      </button>
+                      <button
+                        onClick={() => setShowQuestionInput(true)}
+                        disabled={isSubmitting || !task.sessionId || task.sessionId === 'null'}
+                        className="px-4 py-2 text-purple-600 bg-white border border-purple-600 rounded-md hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        title={!task.sessionId ? 'No conversation session available' : 'Ask a question about this task'}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Ask Question
                       </button>
                     </div>
                   </div>

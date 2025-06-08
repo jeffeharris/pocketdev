@@ -495,6 +495,19 @@ run_claude() {
         claude_args+=("--resume" "$CLAUDE_SESSION_ID")
     fi
     
+    # Handle question mode - restrict tools
+    if [ "$QUESTION_MODE" = "true" ] || [ "$DISABLE_TOOLS" = "true" ]; then
+        log_info "Question mode enabled - restricting tool usage"
+        # Claude Code doesn't have a direct --no-tools flag, but we can use --no-write
+        # This prevents file modifications while still allowing read operations
+        claude_args+=("--no-write")
+        
+        # Alternatively, we could modify the prompt to instruct Claude not to use tools
+        prompt="IMPORTANT: This is a question-only session. Do not modify any files or run any commands. Only provide explanations and answers.
+
+$prompt"
+    fi
+    
     # CRITICAL: Check for newlines in prompts
     if [[ "$prompt" =~ $'\n' ]]; then
         log_warning "Prompt contains newlines - will use stdin"

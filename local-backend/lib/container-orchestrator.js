@@ -301,6 +301,20 @@ class ContainerOrchestrator {
       env.TASK_ID = taskId;
       env.TASK_DESCRIPTION = task.description;
       env.ACCEPTANCE_CRITERIA = JSON.stringify(task.acceptanceCriteria || []);
+      
+      // Handle session continuation for Q&A
+      if (task.sessionId && task.sessionId !== 'null') {
+        env.CLAUDE_SESSION_ID = task.sessionId;
+        env.CONTINUE_SESSION = 'true';
+      }
+      
+      // Restrict tools in question-only mode
+      if (task.questionOnly || task.isQuestion) {
+        env.QUESTION_MODE = 'true';
+        env.DISABLE_TOOLS = 'true';
+        // Optionally, we could specify allowed tools
+        // env.ALLOWED_TOOLS = 'Read,Grep,LS' // Only read operations
+      }
       env.TEST_FRAMEWORK = task.testFramework || 'jest';
       env.CLAUDE_API_KEY = process.env.ANTHROPIC_API_KEY;
       env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
