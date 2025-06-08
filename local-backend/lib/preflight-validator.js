@@ -305,6 +305,31 @@ export default class PreflightValidator {
       };
     }
 
+    // Validate URL format
+    try {
+      const url = new URL(repoUrl);
+      // Check if it's a valid git repository URL
+      if (!url.protocol || !['http:', 'https:', 'git:'].includes(url.protocol)) {
+        return {
+          valid: false,
+          errors: [{
+            check: 'repository',
+            message: 'Invalid repository URL protocol',
+            fix: 'Use http://, https://, or git:// protocol'
+          }]
+        };
+      }
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [{
+          check: 'repository',
+          message: 'Invalid repository URL format',
+          fix: 'Provide a valid URL (e.g., https://github.com/owner/repo)'
+        }]
+      };
+    }
+
     // Check if it's a GitHub URL and if it's public
     if (repoUrl.includes('github.com')) {
       try {

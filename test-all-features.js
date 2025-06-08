@@ -5,7 +5,6 @@
  * Tests: Pre-flight validation, Progress monitoring, Task execution
  */
 
-import fetch from 'node-fetch';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
@@ -43,7 +42,7 @@ async function testPreflightMissingApiKey() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'frontend',
+        engineerId: '9b9f6ea3-d5f0-4343-9cb9-696774284cf3',
         repository: 'https://github.com/test/repo',
         description: 'Test task',
         acceptanceCriteria: ['Should work']
@@ -76,7 +75,7 @@ async function testPreflightInvalidRepo() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'frontend',
+        engineerId: '9b9f6ea3-d5f0-4343-9cb9-696774284cf3',
         repository: 'not-a-valid-url',
         description: 'Test invalid repo',
         acceptanceCriteria: ['Should fail validation']
@@ -104,7 +103,7 @@ async function testPreflightMissingDescription() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'frontend',
+        engineerId: '9b9f6ea3-d5f0-4343-9cb9-696774284cf3',
         repository: 'https://github.com/test/repo',
         description: '',
         acceptanceCriteria: []
@@ -133,7 +132,7 @@ async function testProgressMonitoring() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'frontend',
+        engineerId: '9b9f6ea3-d5f0-4343-9cb9-696774284cf3',
         repository: 'https://github.com/octocat/Hello-World',
         description: 'Add a simple test file that prints hello',
         acceptanceCriteria: ['Create hello.js that logs "Hello, World!"'],
@@ -205,7 +204,7 @@ async function testErrorRecovery() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'backend',
+        engineerId: 'b6306935-33c3-4253-b429-029220acda34',
         repository: 'https://github.com/octocat/Hello-World',
         description: 'Create a function that adds two numbers and a test file named test.js',
         acceptanceCriteria: [
@@ -276,7 +275,7 @@ async function testUIErrorDisplay() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        engineerId: 'frontend',
+        engineerId: '9b9f6ea3-d5f0-4343-9cb9-696774284cf3',
         repository: 'https://github.com/private/repo',
         description: 'Test private repo without credentials',
         acceptanceCriteria: ['Should show warning about credentials']
