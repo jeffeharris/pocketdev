@@ -1,4 +1,5 @@
 import ContainerOrchestrator from './container-orchestrator.js';
+import TaskRecoveryManager from './task-recovery-manager.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { db } from '../db/index.js';
@@ -13,6 +14,7 @@ class ContainerTaskManager {
     console.error('[CTM] executeTask method exists:', typeof this.orchestrator.executeTask);
     this.tasks = new Map();
     this.engineers = new Map();
+    this.recoveryManager = new TaskRecoveryManager();
   }
 
   async init() {
@@ -215,6 +217,28 @@ class ContainerTaskManager {
         },
         createdAt: new Date()
       });
+
+      // Check if task failed and can be recovered
+      if (!result.success && result.logs) {
+        const failureAnalysis = this.recoveryManager.analyzeFailure(task, result.logs);
+        
+        if (failureAnalysis.recoverable) {
+          // Store recovery information
+          task.recoveryPlan = this.recoveryManager.generateRecoveryPlan(task, failureAnalysis);
+          
+          // Create recovery event
+          await db.insert(taskEvents).values({
+            taskId: task.id,
+            eventType: 'recovery_available',
+            eventData: {
+              failureType: failureAnalysis.failureType,
+              suggestions: failureAnalysis.suggestions,
+              autoRecoveryAvailable: failureAnalysis.hasAutoRecovery
+            },
+            createdAt: new Date()
+          });
+        }
+      }
 
       // Update engineer
       engineer.status = 'idle';
@@ -496,6 +520,94 @@ class ContainerTaskManager {
     }
     
     return true;
+  }
+
+  /**
+   * Retry a failed task with recovery options
+   */
+  async retryTaskWithRecovery(taskId, recoveryContext = {}) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.result || task.result.success) {
+      throw new Error('Task not found or not in failed state');
+    }
+
+    // Analyze the failure
+    const failureAnalysis = this.recoveryManager.analyzeFailure(task, task.result.logs || []);
+    if (!failureAnalysis.recoverable) {
+      throw new Error('Task failure is not recoverable');
+    }
+
+    // Attempt automatic recovery
+    const recovery = await this.recoveryManager.attemptAutoRecovery(task, failureAnalysis, recoveryContext);
+    if (!recovery || !recovery.success) {
+      throw new Error('Automatic recovery not available for this failure type');
+    }
+
+    // Create retry event
+    await db.insert(taskEvents).values({
+      taskId: taskId,
+      eventType: 'retry_started',
+      eventData: {
+        failureType: failureAnalysis.failureType,
+        recoveryApplied: recovery.config
+      },
+      createdAt: new Date()
+    });
+
+    // Create a new task with recovery configuration
+    const retryTask = {
+      ...task,
+      id: uuidv4(),
+      parentTaskId: taskId,
+      retryAttempt: (task.retryAttempt || 0) + 1,
+      recoveryConfig: recovery.config,
+      startTime: new Date(),
+      status: 'pending',
+      result: null
+    };
+
+    // Apply recovery configuration to environment
+    const enhancedEnv = {
+      ...task.environment,
+      ...recovery.config
+    };
+
+    // Execute the retry
+    return this.assignTask(task.engineerId, {
+      description: task.description,
+      repository: enhancedEnv.REPO_URL || task.repository,
+      branch: task.branch,
+      acceptanceCriteria: task.acceptanceCriteria,
+      gitUsername: recoveryContext.gitUsername,
+      gitToken: recoveryContext.gitToken,
+      isRetry: true,
+      parentTaskId: taskId,
+      recoveryConfig: recovery.config
+    });
+  }
+
+  /**
+   * Check if a task can be recovered
+   */
+  isTaskRecoverable(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.result) {
+      return false;
+    }
+    return this.recoveryManager.isRecoverable(task);
+  }
+
+  /**
+   * Get recovery suggestions for a failed task
+   */
+  getRecoverySuggestions(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.result || task.result.success) {
+      return null;
+    }
+
+    const failureAnalysis = this.recoveryManager.analyzeFailure(task, task.result.logs || []);
+    return this.recoveryManager.generateRecoveryPlan(task, failureAnalysis);
   }
 }
 

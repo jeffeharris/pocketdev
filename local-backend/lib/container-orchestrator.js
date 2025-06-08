@@ -279,6 +279,16 @@ class ContainerOrchestrator {
       } else if (task.repository && typeof task.repository === 'object') {
         env.REPO_URL = task.repository.url;
         env.BRANCH = task.repository.branch || this.getDefaultBranch();
+        
+        // Add git credentials if provided
+        if (task.repository.credentials) {
+          if (task.repository.credentials.username) {
+            env.GIT_USERNAME = task.repository.credentials.username;
+          }
+          if (task.repository.credentials.token) {
+            env.GIT_TOKEN = task.repository.credentials.token;
+          }
+        }
       } else {
         throw new Error('Invalid repository configuration');
       }

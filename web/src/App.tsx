@@ -9,6 +9,7 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskView } from './components/TaskView';
 import Settings from './components/Settings';
 import Layout from './components/Layout';
+import { QuickTaskTest } from './components/QuickTaskTest';
 import { supabase, useMockData } from './lib/supabase';
 import { Engineer, Task } from './types';
 import { Toaster, toast } from 'react-hot-toast';
@@ -319,6 +320,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/task/:taskId" element={<TaskView />} />
+          <Route path="/quick" element={<QuickTaskTest />} />
         </Routes>
       </Layout>
     </Router>

@@ -3,11 +3,9 @@
   "project": {
     "name": "pocketdev",
     "repository": "https://github.com/jeffeharris/pocketdev",
-    "default_branch": "phase2-engineer-knowledge"
+    "default_branch": "main"
   },
-  "credentials": {
-    "profile": "github-personal"
-  },
+  "credentials": {},
   "settings": {
     "workspace_root": "/home/jeffh/projects/pocketdev",
     "host_agent_mode": "auto"
@@ -35,5 +33,5 @@
     }
   },
   "initialized": "2025-06-07T03:00:00.000Z",
-  "last_updated": "2025-06-07T15:30:00.000Z"
+  "last_updated": "2025-06-08T00:08:07.507Z"
 }

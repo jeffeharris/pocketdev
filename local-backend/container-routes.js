@@ -5,6 +5,7 @@ import { db } from './db/index.js';
 import { tasks, taskEvents, engineerProfiles, projects } from './db/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import SmartTaskRouter from './lib/smart-task-router.js';
+import { prepareTaskAssignment } from './lib/task-assignment-handler.js';
 
 const router = express.Router();
 console.log('Container routes: Creating ContainerTaskManager...');
@@ -23,6 +24,43 @@ router.post('/api/container/build-image', async (req, res) => {
   } catch (error) {
     res.status(500).json({ 
       success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// Get recovery suggestions for a failed task
+router.get('/api/container/tasks/:id/recovery', async (req, res) => {
+  try {
+    const suggestions = containerManager.getRecoverySuggestions(req.params.id);
+    if (!suggestions) {
+      return res.status(404).json({ error: 'No recovery suggestions available' });
+    }
+    res.json(suggestions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Retry a failed task with recovery
+router.post('/api/container/tasks/:id/retry', async (req, res) => {
+  try {
+    const { gitUsername, gitToken, ...otherContext } = req.body;
+    
+    const newTask = await containerManager.retryTaskWithRecovery(req.params.id, {
+      gitUsername,
+      gitToken,
+      ...otherContext
+    });
+    
+    res.json({
+      success: true,
+      newTaskId: newTask.id,
+      message: 'Task retry started with recovery configuration'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
       error: error.message 
     });
   }
@@ -73,51 +111,36 @@ router.post('/api/container/assign-task', async (req, res) => {
     const activeProject = getActiveProject();
     const projectConfigService = getProjectConfig();
     
-    // Format repository with credentials
-    let repoConfig = repository;
-    let finalCredentials = { username: gitUsername, token: gitToken };
-    
-    // If no credentials provided, try to use active project
-    if (!gitUsername || !gitToken) {
-      if (activeProject.config) {
-        const projectCreds = projectConfigService.getCredentials(activeProject.config);
-        if (projectCreds) {
-          finalCredentials = projectCreds;
-          // Use repository from active project if not provided
-          if (!repository && activeProject.config.project.repository) {
-            repoConfig = activeProject.config.project.repository;
-          }
+    try {
+      // Use shared function for credential handling
+      const preparedTask = prepareTaskAssignment(
+        activeProject, 
+        projectConfigService,
+        {
+          repository,
+          branch,
+          gitUsername,
+          gitToken,
+          description,
+          acceptanceCriteria,
+          testFramework,
+          model,
+          maxIterations
         }
-      }
-    }
-    
-    // Format for container orchestrator
-    if (finalCredentials.username && finalCredentials.token) {
-      repoConfig = {
-        url: repoConfig,
-        credentials: finalCredentials,
-        // Use provided branch or fall back to active project default
-        branch: branch || (activeProject.config?.project?.default_branch || 'main')
-      };
-    } else {
-      return res.status(400).json({
-        error: 'No credentials available. Configure project settings or provide credentials.'
+      );
+      
+      const task = await containerManager.assignTask(engineerId, preparedTask);
+      
+      res.json({
+        success: true,
+        task
       });
+    } catch (error) {
+      if (error.message.includes('credentials')) {
+        return res.status(400).json({ error: error.message });
+      }
+      throw error;
     }
-    
-    const task = await containerManager.assignTask(engineerId, {
-      repository: repoConfig,
-      description,
-      acceptanceCriteria,
-      testFramework,
-      model,
-      maxIterations
-    });
-
-    res.json({
-      success: true,
-      task
-    });
 
   } catch (error) {
     console.error('Container task assignment error:', error);
@@ -417,39 +440,49 @@ router.post('/api/container/quick-task', async (req, res) => {
     // Estimate complexity
     const { complexity, estimatedMinutes } = smartRouter.estimateComplexity(description, type);
     
-    // Get project credentials
+    // Use shared function for credential handling
     const projectConfig = getProjectConfig();
-    const credentials = projectConfig.getCredentials(activeProject.config);
     
-    // Assign the task
-    const taskResult = await containerManager.assignTask(availableEngineer.id, {
-      repository: activeProject.config.project.repository,
-      branch: activeProject.config.project.default_branch || 'main',
-      description: enhancedDescription,
-      acceptanceCriteria,
-      model: availableEngineer.role === 'qa_manual' ? 'claude-sonnet-4-0' : 'claude-sonnet-4-0',
-      credentials: credentials ? {
-        username: credentials.username,
-        token: credentials.token
-      } : undefined
-    });
-    
-    // Return simplified response focused on the experience
-    res.json({
-      success: true,
-      task: {
-        id: taskResult.taskId,
-        description: description, // Original, not enhanced
-        assignedTo: {
-          name: availableEngineer.name,
-          role: availableEngineer.role
+    try {
+      const preparedTask = prepareTaskAssignment(
+        activeProject,
+        projectConfig,
+        {
+          repository: activeProject.config.project.repository,
+          branch: activeProject.config.project.default_branch || 'main',
+          description: enhancedDescription,
+          acceptanceCriteria,
+          model: availableEngineer.role === 'qa_manual' ? 'claude-sonnet-4-0' : 'claude-sonnet-4-0'
+        }
+      );
+      
+      const taskResult = await containerManager.assignTask(availableEngineer.id, preparedTask);
+      
+      // Return simplified response focused on the experience
+      res.json({
+        success: true,
+        task: {
+          id: taskResult.id,
+          description: description, // Original, not enhanced
+          assignedTo: {
+            name: availableEngineer.name,
+            role: availableEngineer.role
+          },
+          estimatedMinutes,
+          complexity,
+          status: 'started'
         },
-        estimatedMinutes,
-        complexity,
-        status: 'started'
-      },
-      message: `${availableEngineer.name} is working on your ${type}. Estimated time: ${estimatedMinutes} minutes.`
-    });
+        message: `${availableEngineer.name} is working on your ${type}. Estimated time: ${estimatedMinutes} minutes.`
+      });
+    } catch (error) {
+      if (error.message.includes('credentials')) {
+        return res.status(400).json({ 
+          error: error.message,
+          hint: 'Please configure project credentials in settings'
+        });
+      }
+      throw error;
+    }
     
   } catch (error) {
     console.error('Quick task assignment error:', error);

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, DollarSign, FileCode, GitBranch, ExternalLink, AlertCircle, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
+import { TaskRecoveryModal } from './TaskRecoveryModal';
 
 interface TaskData {
   id: string;
@@ -42,6 +43,8 @@ export function TaskView() {
   const [showFollowUpInput, setShowFollowUpInput] = useState(false);
   const [followUpTask, setFollowUpTask] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recovery, setRecovery] = useState<any>(null);
 
   useEffect(() => {
     fetchTaskDetails();
@@ -70,6 +73,11 @@ export function TaskView() {
           }
           setTask(containerTask);
           setLoading(false);
+          
+          // Check for recovery options if task failed
+          if (containerTask.status === 'error' || containerTask.status === 'failed') {
+            checkRecoveryOptions(containerTask.id);
+          }
           return;
         }
       }
@@ -113,6 +121,52 @@ export function TaskView() {
   const formatCost = (cost: number) => {
     if (!cost || cost === 0) return '$0.00';
     return `$${cost.toFixed(2)}`;
+  };
+
+  const checkRecoveryOptions = async (taskId: string) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/container/tasks/${taskId}/recovery`);
+      if (response.ok) {
+        const recoveryData = await response.json();
+        setRecovery(recoveryData);
+        // Auto-show recovery modal if recovery is available
+        if (recoveryData.recoverable && recoveryData.autoRecoveryAvailable) {
+          setShowRecovery(true);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check recovery options:', err);
+    }
+  };
+
+  const handleRetry = async (options: any) => {
+    if (!task) return;
+    
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(`http://localhost:3001/api/container/tasks/${task.id}/retry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(options)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Navigate to new task
+        navigate(`/task/${result.newTaskId}`);
+      } else {
+        const error = await response.json();
+        alert(`Retry failed: ${error.error}`);
+      }
+    } catch (err) {
+      console.error('Retry error:', err);
+      alert('Failed to retry task');
+    } finally {
+      setIsSubmitting(false);
+      setShowRecovery(false);
+    }
   };
 
   const handleAccept = async () => {
@@ -528,6 +582,28 @@ export function TaskView() {
           </div>
         </div>
       </div>
+
+      {/* Recovery Modal */}
+      {showRecovery && recovery && (
+        <TaskRecoveryModal
+          task={{ ...task, recoveryPlan: recovery }}
+          onClose={() => setShowRecovery(false)}
+          onRetry={handleRetry}
+        />
+      )}
+
+      {/* Show recovery button for failed tasks */}
+      {task && (task.status === 'error' || task.status === 'failed') && recovery?.recoverable && (
+        <div className="fixed bottom-4 right-4">
+          <button
+            onClick={() => setShowRecovery(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg shadow-lg hover:bg-amber-700"
+          >
+            <AlertCircle className="h-5 w-5" />
+            Recovery Available
+          </button>
+        </div>
+      )}
     </div>
   );
 }
