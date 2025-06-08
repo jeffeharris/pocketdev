@@ -876,6 +876,7 @@ main() {
     # Clone repository with comprehensive error handling
     log_info "Cloning repository: $REPO_URL"
     update_state "cloning" "Cloning repository"
+    echo '{"checkpoint": "clone_start", "status": "in_progress"}' > /workspace/results/progress.json
     
     local clone_output="$DEBUG_DIR/git_clone_output.txt"
     local clone_start=$(date +%s)
@@ -884,6 +885,7 @@ main() {
     if [[ ! "$REPO_URL" =~ ^(https?://|git@|ssh://) ]]; then
         log_error "Invalid repository URL format: $REPO_URL"
         error_message="Invalid repository URL format"
+        echo '{"checkpoint": "clone_start", "status": "failed"}' > /workspace/results/progress.json
         save_results "$success" "$error_message" "$summary" "$start_time"
         exit 1
     fi
@@ -892,6 +894,7 @@ main() {
     if timeout 300 git clone "$REPO_URL" /workspace/repo > "$clone_output" 2>&1; then
         local clone_duration=$(($(date +%s) - clone_start))
         log_success "Repository cloned successfully in $clone_duration seconds"
+        echo '{"checkpoint": "clone_start", "status": "completed"}' > /workspace/results/progress.json
         
         # Verify clone
         if [ ! -d "/workspace/repo/.git" ]; then
@@ -1010,6 +1013,7 @@ main() {
     # Main development task - Single comprehensive prompt
     log_info "GATE CHECK: About to start development task"
     log_info "Starting development task: $TASK_DESCRIPTION"
+    echo '{"checkpoint": "implementation_start", "status": "in_progress"}' > /workspace/results/progress.json
     
     # Combined prompt for analysis, planning, implementation, and testing
     local development_prompt="You are tasked with implementing: $TASK_DESCRIPTION

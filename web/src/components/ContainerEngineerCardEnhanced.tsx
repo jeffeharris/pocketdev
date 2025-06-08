@@ -5,6 +5,7 @@ import { TaskLogViewer } from './TaskLogViewer';
 import { TaskResultView } from './TaskResultView';
 import { ContainerTaskModal } from './ContainerTaskModal';
 import { EngineerMemories } from './EngineerMemories';
+import { TaskProgress } from './TaskProgress';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -233,6 +234,12 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
                     ? engineer.currentTaskDetails.repository.split('/').slice(-2).join('/')
                     : engineer.currentTaskDetails.repository.url.split('/').slice(-2).join('/')}
                 </p>
+              )}
+              {/* Show progress for running tasks */}
+              {engineer.status === 'busy' && engineer.currentTaskDetails.id && (
+                <div className="mt-3">
+                  <TaskProgress taskId={engineer.currentTaskDetails.id} />
+                </div>
               )}
             </div>
           )}

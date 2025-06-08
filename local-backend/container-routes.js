@@ -6,6 +6,9 @@ import { tasks, taskEvents, engineerProfiles, projects } from './db/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import SmartTaskRouter from './lib/smart-task-router.js';
 import { prepareTaskAssignment } from './lib/task-assignment-handler.js';
+import { progressMonitor } from './lib/progress-monitor.js';
+import path from 'path';
+import { promises as fs } from 'fs';
 
 const router = express.Router();
 console.log('Container routes: Creating ContainerTaskManager...');
@@ -603,6 +606,77 @@ router.get('/api/container/quick-status/:taskId', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to get task status' });
   }
+});
+
+// Get task progress
+router.get('/api/container/tasks/:id/progress', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // Get progress from in-memory monitor
+    const checkpoints = progressMonitor.getCheckpoints(id);
+    const summary = progressMonitor.getStatusSummary(id);
+    
+    // Also check for progress file from container
+    const task = await containerManager.getTask(id);
+    if (task && task.result && task.result.workspacePath) {
+      const progressFile = path.join(task.result.workspacePath, 'results', 'progress.json');
+      try {
+        const containerProgress = await fs.readFile(progressFile, 'utf8');
+        const parsed = JSON.parse(containerProgress);
+        
+        // Add container progress if not already in checkpoints
+        if (parsed.checkpoint && !checkpoints.find(cp => cp.name === parsed.checkpoint)) {
+          progressMonitor.checkpoint(id, parsed.checkpoint, parsed.status);
+        }
+      } catch (err) {
+        // Ignore if file doesn't exist
+      }
+    }
+    
+    res.json({
+      taskId: id,
+      summary,
+      checkpoints,
+      isRunning: containerManager.isTaskRunning(id)
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to get progress',
+      message: error.message 
+    });
+  }
+});
+
+// Monitor progress updates via SSE (Server-Sent Events)
+router.get('/api/container/tasks/:id/progress/stream', (req, res) => {
+  const { id } = req.params;
+  
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  
+  // Send initial state
+  const summary = progressMonitor.getStatusSummary(id);
+  res.write(`data: ${JSON.stringify(summary)}\n\n`);
+  
+  // Register listener
+  const listener = (checkpoint) => {
+    res.write(`data: ${JSON.stringify({
+      ...checkpoint,
+      summary: progressMonitor.getStatusSummary(id)
+    })}\n\n`);
+  };
+  
+  progressMonitor.addListener(id, listener);
+  
+  // Clean up on disconnect
+  req.on('close', () => {
+    progressMonitor.removeListeners(id);
+  });
 });
 
 export default router;

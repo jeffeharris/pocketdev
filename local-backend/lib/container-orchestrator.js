@@ -8,6 +8,7 @@ import { getActiveProject } from '../project-routes.js';
 import { performance } from 'perf_hooks';
 import { MemoryEnhancedPrompts } from './memory-enhanced-prompts.js';
 import { PreflightValidator } from './preflight-validator.js';
+import { progressMonitor } from './progress-monitor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -193,6 +194,7 @@ class ContainerOrchestrator {
     // Run pre-flight validation
     debugLog('info', taskId, 'Running pre-flight validation');
     addCheckpoint('preflight_start');
+    progressMonitor.checkpoint(taskId, 'preflight_start', 'in_progress');
     
     try {
       const validationResults = await this.preflightValidator.validateTask(task);
@@ -208,6 +210,7 @@ class ContainerOrchestrator {
         const errorMessage = this.preflightValidator.formatResults(validationResults);
         
         debugLog('error', taskId, 'Pre-flight validation failed', validationResults);
+        progressMonitor.checkpoint(taskId, 'preflight_start', 'failed');
         
         // Return early with validation failure
         return {
@@ -232,11 +235,13 @@ class ContainerOrchestrator {
       addCheckpoint('preflight_passed', {
         warnings: validationResults.warnings?.length || 0
       });
+      progressMonitor.checkpoint(taskId, 'preflight_start', 'completed');
       
     } catch (error) {
       debugLog('error', taskId, 'Pre-flight validation error', error);
       // Non-fatal - log and continue
       addCheckpoint('preflight_error', { error: error.message });
+      progressMonitor.checkpoint(taskId, 'preflight_start', 'failed');
     }
     
     // Write comprehensive debug file
