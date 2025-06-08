@@ -7,6 +7,7 @@ import { dirname } from 'path';
 import { getActiveProject } from '../project-routes.js';
 import { performance } from 'perf_hooks';
 import { MemoryEnhancedPrompts } from './memory-enhanced-prompts.js';
+import { PreflightValidator } from './preflight-validator.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,6 +49,7 @@ class ContainerOrchestrator {
     this.healthCheckIntervals = new Map();
     this.containerStats = new Map();
     this.memoryEnhancer = new MemoryEnhancedPrompts();
+    this.preflightValidator = new PreflightValidator();
     
     debugLog('info', 'constructor', 'ContainerOrchestrator initialized', {
       dockerImage: this.dockerImage,
@@ -187,6 +189,55 @@ class ContainerOrchestrator {
       workspacePath,
       timestamp: new Date().toISOString()
     });
+    
+    // Run pre-flight validation
+    debugLog('info', taskId, 'Running pre-flight validation');
+    addCheckpoint('preflight_start');
+    
+    try {
+      const validationResults = await this.preflightValidator.validateTask(task);
+      
+      debugLog('info', taskId, 'Pre-flight validation completed', {
+        valid: validationResults.valid,
+        errorCount: validationResults.errors.length,
+        warningCount: (validationResults.warnings || []).length
+      });
+      
+      if (!validationResults.valid) {
+        // Format error message
+        const errorMessage = this.preflightValidator.formatResults(validationResults);
+        
+        debugLog('error', taskId, 'Pre-flight validation failed', validationResults);
+        
+        // Return early with validation failure
+        return {
+          success: false,
+          error: 'Pre-flight validation failed',
+          validationErrors: validationResults.errors,
+          validationWarnings: validationResults.warnings,
+          errorDetails: errorMessage,
+          duration: performance.now() - executionStart,
+          taskId,
+          preflightFailed: true
+        };
+      }
+      
+      // Log warnings but continue
+      if (validationResults.warnings && validationResults.warnings.length > 0) {
+        validationResults.warnings.forEach(warning => {
+          debugLog('warning', taskId, `Pre-flight warning: ${warning.message}`);
+        });
+      }
+      
+      addCheckpoint('preflight_passed', {
+        warnings: validationResults.warnings?.length || 0
+      });
+      
+    } catch (error) {
+      debugLog('error', taskId, 'Pre-flight validation error', error);
+      // Non-fatal - log and continue
+      addCheckpoint('preflight_error', { error: error.message });
+    }
     
     // Write comprehensive debug file
     try {

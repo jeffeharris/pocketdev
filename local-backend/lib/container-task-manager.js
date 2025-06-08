@@ -178,6 +178,43 @@ class ContainerTaskManager {
         model: taskConfig.model
       });
 
+      // If pre-flight validation failed, return the error immediately
+      if (result.preflightFailed) {
+        // Update task status in database
+        await db.update(tasks)
+          .set({
+            status: 'failed',
+            completedAt: new Date(),
+            durationMs: result.duration,
+            errorMessage: result.error,
+            resultSummary: 'Pre-flight validation failed'
+          })
+          .where(eq(tasks.id, task.id));
+        
+        // Create failure event
+        await db.insert(taskEvents).values({
+          taskId: task.id,
+          eventType: 'preflight_failed',
+          eventData: {
+            validationErrors: result.validationErrors,
+            validationWarnings: result.validationWarnings
+          },
+          createdAt: new Date()
+        });
+        
+        // Update engineer status
+        engineer.status = 'idle';
+        engineer.currentTask = null;
+        engineer.currentTaskDetails = null;
+        
+        // Return the validation error
+        task.status = 'failed';
+        task.endTime = new Date();
+        task.result = result;
+        
+        return task;
+      }
+
       // Update task with results
       task.status = result.success ? 'completed' : 'failed';
       task.endTime = new Date();

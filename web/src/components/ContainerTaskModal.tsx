@@ -155,7 +155,23 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
         onTaskAssigned();
         onClose();
       } else {
-        throw new Error(data.error || 'Failed to assign task');
+        // Check if it's a pre-flight validation error
+        if (data.preflightFailed && data.validationErrors) {
+          // Build detailed error message
+          const errorMessages = data.validationErrors.map(err => 
+            `❌ ${err.message}${err.fix ? `\n   Fix: ${err.fix}` : ''}`
+          ).join('\n\n');
+          
+          toast.error(
+            <div className="space-y-2">
+              <div className="font-semibold">Pre-flight validation failed:</div>
+              <pre className="text-xs whitespace-pre-wrap">{errorMessages}</pre>
+            </div>,
+            { duration: 10000 } // Show for 10 seconds
+          );
+        } else {
+          throw new Error(data.error || 'Failed to assign task');
+        }
       }
     } catch (error) {
       console.error('Error assigning task:', error);
