@@ -1,5 +1,7 @@
 import ContainerOrchestrator from './container-orchestrator.js';
 import TaskRecoveryManager from './task-recovery-manager.js';
+import { ErrorInterpreter } from './error-interpreter.js';
+import ClaudeStreamExecutor from './claude-stream-executor.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { db } from '../db/index.js';
@@ -15,6 +17,9 @@ class ContainerTaskManager {
     this.tasks = new Map();
     this.engineers = new Map();
     this.recoveryManager = new TaskRecoveryManager();
+    this.errorInterpreter = new ErrorInterpreter();
+    this.streamExecutor = null; // Will be initialized when needed
+    this.eventHandlers = new Map(); // Store WebSocket handlers
   }
 
   async init() {
@@ -180,6 +185,9 @@ class ContainerTaskManager {
 
       // If pre-flight validation failed, return the error immediately
       if (result.preflightFailed) {
+        // Get natural language interpretation
+        const interpretation = this.errorInterpreter.interpretValidationErrors(result);
+        
         // Update task status in database
         await db.update(tasks)
           .set({
@@ -187,17 +195,18 @@ class ContainerTaskManager {
             completedAt: new Date(),
             durationMs: result.duration,
             errorMessage: result.error,
-            resultSummary: 'Pre-flight validation failed'
+            resultSummary: interpretation ? interpretation.summary : 'Pre-flight validation failed'
           })
           .where(eq(tasks.id, task.id));
         
-        // Create failure event
+        // Create failure event with interpretation
         await db.insert(taskEvents).values({
           taskId: task.id,
           eventType: 'preflight_failed',
           eventData: {
             validationErrors: result.validationErrors,
-            validationWarnings: result.validationWarnings
+            validationWarnings: result.validationWarnings,
+            interpretation: interpretation
           },
           createdAt: new Date()
         });
@@ -206,6 +215,12 @@ class ContainerTaskManager {
         engineer.status = 'idle';
         engineer.currentTask = null;
         engineer.currentTaskDetails = null;
+        
+        // Add interpretation to the result
+        if (interpretation) {
+          result.naturalLanguageError = interpretation;
+          result.humanFriendlyMessage = `${interpretation.summary}\n\n${interpretation.explanation}`;
+        }
         
         // Return the validation error
         task.status = 'failed';
@@ -645,6 +660,231 @@ class ContainerTaskManager {
 
     const failureAnalysis = this.recoveryManager.analyzeFailure(task, task.result.logs || []);
     return this.recoveryManager.generateRecoveryPlan(task, failureAnalysis);
+  }
+
+  /**
+   * Assign a task with streaming support
+   * Similar to assignTask but uses ClaudeStreamExecutor for real-time updates
+   */
+  async assignStreamingTask(engineerId, taskConfig, eventCallback) {
+    console.log('[CTM] assignStreamingTask called for engineer:', engineerId);
+    console.log('[CTM] Task config:', taskConfig);
+    
+    const engineer = this.engineers.get(engineerId);
+    if (!engineer) {
+      console.error('[CTM] Engineer not found:', engineerId);
+      console.error('[CTM] Available engineers:', Array.from(this.engineers.keys()));
+      throw new Error(`Engineer ${engineerId} not found`);
+    }
+
+    if (engineer.status !== 'idle') {
+      throw new Error(`Engineer ${engineerId} is ${engineer.status}`);
+    }
+
+    // Get or create project
+    let projectId = null;
+    if (taskConfig.repository) {
+      const repoUrl = typeof taskConfig.repository === 'string' 
+        ? taskConfig.repository 
+        : taskConfig.repository.url;
+      
+      const [existingProject] = await db.select()
+        .from(projects)
+        .where(eq(projects.repositoryUrl, repoUrl))
+        .limit(1);
+      
+      if (existingProject) {
+        projectId = existingProject.id;
+        await db.update(projects)
+          .set({ lastActivityAt: new Date() })
+          .where(eq(projects.id, projectId));
+      } else {
+        const [newProject] = await db.insert(projects).values({
+          name: repoUrl.split('/').pop().replace('.git', ''),
+          repositoryUrl: repoUrl,
+          defaultBranch: taskConfig.repository.branch || 'main'
+        }).returning();
+        projectId = newProject.id;
+      }
+    }
+
+    // Create task in database
+    const taskId = uuidv4();
+    const [dbTask] = await db.insert(tasks).values({
+      id: taskId,
+      projectId,
+      engineerProfileId: engineerId,
+      title: taskConfig.description.substring(0, 100),
+      description: taskConfig.description,
+      acceptanceCriteria: taskConfig.acceptanceCriteria || [],
+      status: 'queued',
+      priority: 0,
+      baseBranch: taskConfig.repository?.branch || 'main',
+      createdAt: new Date()
+    }).returning();
+
+    // Create task event
+    await db.insert(taskEvents).values({
+      taskId: taskId,
+      eventType: 'created',
+      eventData: { engineerId, repository: taskConfig.repository, streaming: true },
+      createdAt: new Date()
+    });
+
+    // Create in-memory task
+    const task = {
+      id: taskId,
+      engineerId,
+      engineerRole: engineer.role,
+      systemPrompt: engineer.systemPrompt,
+      ...taskConfig,
+      status: 'initializing',
+      startTime: new Date(),
+      streaming: true
+    };
+
+    // Update engineer status
+    engineer.status = 'busy';
+    engineer.currentTask = task.id;
+    engineer.currentTaskDetails = task;
+    this.tasks.set(task.id, task);
+
+    // Store event callback
+    if (eventCallback) {
+      this.eventHandlers.set(taskId, eventCallback);
+    }
+
+    // Execute with streaming
+    try {
+      task.status = 'running';
+      
+      // Update database
+      await db.update(tasks)
+        .set({ 
+          status: 'in_progress',
+          startedAt: new Date()
+        })
+        .where(eq(tasks.id, task.id));
+
+      // Initialize stream executor
+      this.streamExecutor = new ClaudeStreamExecutor({
+        maxTurns: taskConfig.maxTurns || 10,
+        allowedTools: taskConfig.allowedTools || ['Read', 'Write', 'Edit', 'Bash', 'LS', 'Grep', 'Glob']
+      });
+
+      // Set up event listeners
+      this.streamExecutor.on('init', (data) => {
+        console.log('[CTM] Stream init:', data);
+        if (eventCallback) {
+          eventCallback({
+            type: 'stream:init',
+            taskId,
+            data
+          });
+        }
+      });
+
+      this.streamExecutor.on('tool_use', (data) => {
+        console.log('[CTM] Tool use:', data.name);
+        if (eventCallback) {
+          eventCallback({
+            type: 'stream:tool_use',
+            taskId,
+            data
+          });
+        }
+      });
+
+      this.streamExecutor.on('assistant_text', (data) => {
+        if (eventCallback) {
+          eventCallback({
+            type: 'stream:text',
+            taskId,
+            data
+          });
+        }
+      });
+
+      this.streamExecutor.on('complete', async (data) => {
+        console.log('[CTM] Stream complete:', data);
+        
+        // Update database with results
+        await db.update(tasks)
+          .set({
+            status: data.success ? 'awaiting_review' : 'failed',
+            completedAt: new Date(),
+            durationMs: data.duration,
+            costUsd: data.cost,
+            numTurns: data.turns,
+            sessionId: data.sessionId
+          })
+          .where(eq(tasks.id, task.id));
+
+        if (eventCallback) {
+          eventCallback({
+            type: 'stream:complete',
+            taskId,
+            data
+          });
+        }
+      });
+
+      // Execute the task
+      console.log('[CTM] Starting streaming execution for task:', taskId);
+      const result = await this.streamExecutor.executeStreamingTask(
+        taskConfig.description,
+        {
+          systemPrompt: engineer.systemPrompt,
+          workingDirectory: taskConfig.workingDirectory || process.cwd(),
+          apiKey: process.env.ANTHROPIC_API_KEY,
+          sessionId: taskConfig.sessionId
+        }
+      );
+
+      // Update task with results
+      task.status = result.success ? 'completed' : 'failed';
+      task.endTime = new Date();
+      task.result = result;
+      task.sessionId = result.sessionId;
+      task.cost = result.cost;
+
+      // Update engineer status
+      engineer.status = 'idle';
+      engineer.currentTask = null;
+      engineer.currentTaskDetails = null;
+
+      // Clean up event handler
+      this.eventHandlers.delete(taskId);
+
+      return task;
+
+    } catch (error) {
+      console.error('[CTM] Streaming execution error:', error);
+      
+      // Update task status
+      task.status = 'failed';
+      task.endTime = new Date();
+      task.error = error.message;
+
+      // Update database
+      await db.update(tasks)
+        .set({
+          status: 'failed',
+          completedAt: new Date(),
+          errorMessage: error.message
+        })
+        .where(eq(tasks.id, task.id));
+
+      // Update engineer status
+      engineer.status = 'idle';
+      engineer.currentTask = null;
+      engineer.currentTaskDetails = null;
+
+      // Clean up
+      this.eventHandlers.delete(taskId);
+
+      throw error;
+    }
   }
 }
 

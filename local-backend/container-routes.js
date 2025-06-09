@@ -9,14 +9,14 @@ import { prepareTaskAssignment } from './lib/task-assignment-handler.js';
 import { progressMonitor } from './lib/progress-monitor.js';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const router = express.Router();
-console.log('Container routes: Creating ContainerTaskManager...');
 const containerManager = new ContainerTaskManager();
 const smartRouter = new SmartTaskRouter();
 
 // Initialize container manager on startup
-console.log('Container routes: Initializing container manager...');
 containerManager.init().catch(console.error);
 
 // Build Docker image if needed
@@ -42,6 +42,58 @@ router.get('/api/container/tasks/:id/recovery', async (req, res) => {
     res.json(suggestions);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a streaming task with Server-Sent Events
+router.post('/api/container/engineers/:id/stream-task', async (req, res) => {
+  console.log('[Streaming] Received request for engineer:', req.params.id);
+  console.log('[Streaming] Task data:', req.body);
+  
+  try {
+    const engineerId = req.params.id;
+    const taskData = req.body;
+    
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no' // Disable nginx buffering
+    });
+    
+    // Send initial connection event
+    res.write('event: connected\n');
+    res.write(`data: ${JSON.stringify({ type: 'connected', engineerId })}\n\n`);
+    res.flushHeaders();
+    
+    // Event callback for streaming updates
+    const eventCallback = (event) => {
+      res.write(`event: ${event.type}\n`);
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    
+    // Prepare task
+    const preparedTask = await prepareTaskAssignment(taskData, engineerId);
+    
+    // Assign streaming task
+    const task = await containerManager.assignStreamingTask(
+      engineerId,
+      preparedTask,
+      eventCallback
+    );
+    
+    // Send final result
+    res.write('event: task-complete\n');
+    res.write(`data: ${JSON.stringify({ type: 'task-complete', task })}\n\n`);
+    res.end();
+    
+  } catch (error) {
+    console.error('Streaming task error:', error);
+    res.write(`event: error\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+    res.end();
   }
 });
 
@@ -294,6 +346,70 @@ router.get('/api/container/tasks/:id/result', async (req, res) => {
   }
 });
 
+// Get git diff for a running task
+router.get('/api/container/tasks/:id/diff', async (req, res) => {
+  const task = await containerManager.getTask(req.params.id);
+  if (!task) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  
+  // Check if task has a workspace
+  if (!task.result?.workspacePath && task.status === 'running') {
+    // Task is still initializing
+    return res.status(404).json({ error: 'Task still initializing' });
+  }
+  
+  if (!task.result?.workspacePath) {
+    return res.status(404).json({ error: 'No workspace for this task' });
+  }
+  
+  try {
+    const execAsync = promisify(exec);
+    
+    // Get git diff from the workspace
+    const workspacePath = task.result.workspacePath;
+    const repoPath = path.join(workspacePath, 'repo');
+    
+    // Check if repo exists
+    try {
+      await fs.access(repoPath);
+    } catch {
+      return res.status(404).json({ error: 'Repository not found in workspace' });
+    }
+    
+    // Get both staged and unstaged changes
+    const { stdout: stagedDiff } = await execAsync('git diff --cached', { 
+      cwd: repoPath,
+      maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+    });
+    
+    const { stdout: unstagedDiff } = await execAsync('git diff', { 
+      cwd: repoPath,
+      maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+    });
+    
+    // Combine diffs
+    let combinedDiff = '';
+    if (stagedDiff) {
+      combinedDiff += '=== STAGED CHANGES ===\n\n' + stagedDiff + '\n';
+    }
+    if (unstagedDiff) {
+      combinedDiff += '=== UNSTAGED CHANGES ===\n\n' + unstagedDiff;
+    }
+    
+    res.json({ 
+      diff: combinedDiff || 'No changes detected',
+      hasStaged: !!stagedDiff,
+      hasUnstaged: !!unstagedDiff,
+      workspacePath: workspacePath
+    });
+    
+  } catch (error) {
+    console.error('Error getting git diff:', error);
+    res.status(500).json({ error: 'Failed to get git diff' });
+  }
+});
+
 // Accept task and commit changes
 router.post('/api/container/tasks/:id/accept', async (req, res) => {
   const task = await containerManager.getTask(req.params.id);
@@ -425,7 +541,7 @@ router.get('/api/container/completed-tasks', async (req, res) => {
               task.status === 'failed' ? 'error' : 
               task.status === 'in_progress' ? 'running' : 
               task.status,
-      result: task.resultSummary || '',
+      result: task.resultSummary || task.errorMessage || '',
       cost: task.costUsd || 0,
       duration: task.durationMs || 0,
       sessionId: task.sessionId,
