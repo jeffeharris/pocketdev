@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, GitBranch, CheckCircle, Container, AlertCircle } from 'lucide-react';
+import { X, GitBranch, CheckCircle, Container, AlertCircle, Zap } from 'lucide-react';
 import { Engineer } from '../types';
 import toast from 'react-hot-toast';
 
@@ -34,6 +34,7 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
+  const [streamingEnabled, setStreamingEnabled] = useState(false);
 
   // Fetch active project configuration on mount
   useEffect(() => {
@@ -134,29 +135,53 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
         description,
         acceptanceCriteria: acceptanceCriteria.filter(c => c.trim()),
         model,
+        streamingEnabled, // Add streaming flag
         // Pass branch only if different from default
         ...(branch && { branch }),
         // Include credentials if available
         ...(gitToken && gitUsername && { gitToken, gitUsername })
       };
 
-      const response = await fetch('http://localhost:3001/api/container/assign-task', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      if (streamingEnabled) {
+        // Handle streaming response
+        const response = await fetch('http://localhost:3001/api/container/assign-task', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
 
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        toast.success('Container task assigned successfully!');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to start streaming task');
+        }
+
+        // Task started in streaming mode
+        toast.success('Streaming task started! Check the engineer card for real-time updates.');
         onTaskAssigned();
         onClose();
+        
+        // The task progress will be handled by TaskProgress component via SSE
       } else {
-        // Check if it's a pre-flight validation error
-        if (data.preflightFailed && data.validationErrors) {
+        // Standard response handling
+        const response = await fetch('http://localhost:3001/api/container/assign-task', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          toast.success('Container task assigned successfully!');
+          onTaskAssigned();
+          onClose();
+        } else {
+          // Check if it's a pre-flight validation error
+          if (data.preflightFailed && data.validationErrors) {
           // Build detailed error message
           const errorMessages = data.validationErrors.map(err => 
             `❌ ${err.message}${err.fix ? `\n   Fix: ${err.fix}` : ''}`
@@ -169,8 +194,9 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
             </div>,
             { duration: 10000 } // Show for 10 seconds
           );
-        } else {
-          throw new Error(data.error || 'Failed to assign task');
+          } else {
+            throw new Error(data.error || 'Failed to assign task');
+          }
         }
       }
     } catch (error) {
@@ -300,21 +326,48 @@ export function ContainerTaskModal({ engineer, onClose, onTaskAssigned }: Props)
           </div>
 
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Model
-            </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="claude-opus-4-0">Claude Opus 4 (Most Capable)</option>
-              <option value="claude-sonnet-4-0">Claude Sonnet 4 (Balanced)</option>
-              <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet (Extended Thinking)</option>
-              <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Previous Gen)</option>
-              <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Fast)</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Model
+              </label>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="claude-opus-4-0">Claude Opus 4 (Most Capable)</option>
+                <option value="claude-sonnet-4-0">Claude Sonnet 4 (Balanced)</option>
+                <option value="claude-3-7-sonnet-latest">Claude 3.7 Sonnet (Extended Thinking)</option>
+                <option value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet (Previous Gen)</option>
+                <option value="claude-3-5-haiku-latest">Claude 3.5 Haiku (Fast)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Execution Mode
+              </label>
+              <button
+                type="button"
+                onClick={() => setStreamingEnabled(!streamingEnabled)}
+                className={`w-full px-3 py-2 rounded-md border transition-all flex items-center justify-center gap-2 ${
+                  streamingEnabled
+                    ? 'bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Zap className={`h-4 w-4 ${streamingEnabled ? 'text-purple-600' : 'text-gray-400'}`} />
+                <span className="font-medium">
+                  {streamingEnabled ? 'Streaming Enabled' : 'Standard Mode'}
+                </span>
+              </button>
+              {streamingEnabled && (
+                <p className="text-xs text-purple-600 mt-1">
+                  Real-time progress updates
+                </p>
+              )}
+            </div>
           </div>
 
           {hasCredentials && (

@@ -10,6 +10,7 @@ import { TaskView } from './components/TaskView';
 import Settings from './components/Settings';
 import Layout from './components/Layout';
 import { QuickTaskTest } from './components/QuickTaskTest';
+import { DemoPanel } from './components/DemoPanel';
 import { supabase, useMockData } from './lib/supabase';
 import { Engineer, Task } from './types';
 import { Toaster, toast } from 'react-hot-toast';
@@ -308,6 +309,40 @@ function Dashboard() {
           onClose={() => setSelectedTask(null)}
         />
       )}
+
+      {/* Demo Panel */}
+      <DemoPanel 
+        onRunScenario={async (scenario) => {
+          // Find first available container engineer
+          const availableEngineer = containerEngineers.find(e => e.status === 'idle');
+          if (!availableEngineer) {
+            toast.error('No available engineers for demo');
+            return;
+          }
+
+          // Assign the demo task
+          try {
+            const response = await fetch('http://localhost:3001/api/container/assign-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                engineerId: availableEngineer.id,
+                ...scenario.data
+              })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+              toast.success('Demo task assigned!');
+              checkContainerEngineers();
+            } else {
+              toast.error(result.error || 'Failed to assign demo task');
+            }
+          } catch (error) {
+            toast.error('Failed to run demo scenario');
+          }
+        }}
+      />
     </>
   );
 }

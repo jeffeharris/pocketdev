@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, DollarSign, FileCode, GitBranch, ExternalLink, AlertCircle, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
 import { TaskRecoveryModal } from './TaskRecoveryModal';
+import { GitDiffViewer } from './GitDiffViewer';
 
 interface TaskData {
   id: string;
@@ -11,7 +12,7 @@ interface TaskData {
   engineerRole: string;
   task: string;
   status: 'running' | 'complete' | 'error' | 'awaiting_review' | 'accepted' | 'rejected';
-  result: string;
+  result: string | any; // Can be string or object
   cost: number;
   duration: number;
   sessionId?: string;
@@ -39,7 +40,7 @@ export function TaskView() {
   const [task, setTask] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showLogs, setShowLogs] = useState(false);
+  const [activeTab, setActiveTab] = useState<'result' | 'diff' | 'logs'>('result');
   const [showFollowUpInput, setShowFollowUpInput] = useState(false);
   const [followUpTask, setFollowUpTask] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +68,19 @@ export function TaskView() {
         const containerTasks = await containerResponse.json();
         const containerTask = containerTasks.find((t: TaskData) => t.id === taskId);
         if (containerTask) {
+          // Fetch full task details for container tasks to get complete result data
+          try {
+            const fullTaskResponse = await fetch(`http://localhost:3001/api/container/tasks/${taskId}`);
+            if (fullTaskResponse.ok) {
+              const fullTask = await fullTaskResponse.json();
+              // Merge the full result data with the task info
+              containerTask.result = fullTask.result;
+              containerTask.status = fullTask.status === 'failed' ? 'error' : fullTask.status;
+            }
+          } catch (err) {
+            console.error('Failed to fetch full task details:', err);
+          }
+          
           // Map database status to UI status
           if (containerTask.status === 'complete' && !containerTask.reviewStatus) {
             containerTask.status = 'awaiting_review';
@@ -416,31 +430,146 @@ export function TaskView() {
               )}
             </div>
 
-            {/* Result/Logs Section */}
+            {/* Result/Diff/Logs Section */}
             <div className="bg-white rounded-lg shadow-sm">
               <div className="border-b px-6 py-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {showLogs ? 'Task Logs' : 'Task Result'}
-                  </h3>
-                  <button
-                    onClick={() => setShowLogs(!showLogs)}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    {showLogs ? 'View Result' : 'View Logs'}
-                  </button>
+                  <h3 className="text-lg font-semibold text-gray-900">Task Details</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setActiveTab('result')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'result' 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Result
+                    </button>
+                    {(task.status === 'running' || task.status === 'complete' || task.status === 'accepted') && (
+                      <button
+                        onClick={() => setActiveTab('diff')}
+                        className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                          activeTab === 'diff' 
+                            ? 'bg-blue-100 text-blue-700' 
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Changes
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setActiveTab('logs')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'logs' 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Logs
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="p-6">
-                {showLogs ? (
+                {activeTab === 'logs' ? (
                   <TaskLogViewer 
                     taskId={task.id} 
                     engineerId={task.engineerId}
-                    onClose={() => setShowLogs(false)}
+                    onClose={() => {}}
+                  />
+                ) : activeTab === 'diff' ? (
+                  <GitDiffViewer 
+                    taskId={task.id} 
+                    engineerId={task.engineerId}
                   />
                 ) : (
-                  <div className="prose prose-sm max-w-none">
-                    <p className="text-gray-700 whitespace-pre-wrap">{task.result || 'No result available'}</p>
+                  <div className="space-y-4">
+                    {/* Check if this is a failed task with supervisor interpretation */}
+                    {task.status === 'error' && task.result ? (
+                      <>
+                        {/* Try to parse result as JSON to get naturalLanguageError */}
+                        {(() => {
+                          try {
+                            // First check if result is already an object
+                            if (typeof task.result === 'object' && task.result !== null) {
+                              // Check for naturalLanguageError in the result object
+                              if (task.result.naturalLanguageError) {
+                                const nlError = task.result.naturalLanguageError;
+                              return (
+                                <>
+                                  {/* Supervisor Analysis Box */}
+                                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                    <div className="flex items-start gap-3">
+                                      <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                      <div className="flex-1">
+                                        <h4 className="font-semibold text-amber-900 mb-2">Supervisor Analysis</h4>
+                                        <p className="text-amber-800 font-medium mb-3">{nlError.summary}</p>
+                                        {nlError.explanation && (
+                                          <p className="text-amber-700 text-sm mb-4">{nlError.explanation}</p>
+                                        )}
+                                        
+                                        {nlError.nextSteps && nlError.nextSteps.length > 0 && (
+                                          <div className="mt-4">
+                                            <h5 className="font-medium text-amber-900 mb-2">Next Steps:</h5>
+                                            <ol className="list-decimal list-inside space-y-1">
+                                              {nlError.nextSteps.map((step: string, idx: number) => (
+                                                <li key={idx} className="text-sm text-amber-700">{step}</li>
+                                              ))}
+                                            </ol>
+                                          </div>
+                                        )}
+                                        
+                                        {nlError.quickFixes && nlError.quickFixes.length > 0 && (
+                                          <div className="mt-4">
+                                            <h5 className="font-medium text-amber-900 mb-2">Quick Fixes:</h5>
+                                            <div className="space-y-2">
+                                              {nlError.quickFixes.map((fix: any, idx: number) => (
+                                                <div key={idx} className="bg-amber-100 rounded p-2">
+                                                  <p className="text-sm font-medium text-amber-900">{fix.issue}</p>
+                                                  <p className="text-sm text-amber-700">{fix.suggestion}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Raw error details if needed */}
+                                  {task.result.errorDetails && (
+                                    <details className="bg-gray-50 rounded-lg p-4">
+                                      <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                                        Technical Details
+                                      </summary>
+                                      <pre className="mt-2 text-xs text-gray-600 whitespace-pre-wrap">
+                                        {task.result.errorDetails}
+                                      </pre>
+                                    </details>
+                                  )}
+                                </>
+                              );
+                              }
+                            }
+                            // If result is a string, just show it
+                            return <p className="text-gray-700 whitespace-pre-wrap">{typeof task.result === 'string' ? task.result : JSON.stringify(task.result, null, 2)}</p>;
+                          } catch (e) {
+                            // If parsing fails, show as plain text
+                            return <p className="text-gray-700 whitespace-pre-wrap">{typeof task.result === 'string' ? (task.result || 'No result available') : JSON.stringify(task.result, null, 2)}</p>;
+                          }
+                        })()}
+                      </>
+                    ) : (
+                      // Non-error tasks or tasks without results
+                      <div className="prose prose-sm max-w-none">
+                        <p className="text-gray-700 whitespace-pre-wrap">
+                          {task.result 
+                            ? (typeof task.result === 'string' ? task.result : JSON.stringify(task.result, null, 2))
+                            : 'No result available'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

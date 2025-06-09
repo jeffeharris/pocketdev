@@ -4,6 +4,7 @@ import { ErrorInterpreter } from './error-interpreter.js';
 import ClaudeStreamExecutor from './claude-stream-executor.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { promises as fs } from 'fs';
 import { db } from '../db/index.js';
 import { tasks, taskEvents, engineerProfiles, projects } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
@@ -62,6 +63,12 @@ class ContainerTaskManager {
    * Assign a containerized task to an engineer
    */
   async assignTask(engineerId, taskConfig) {
+    console.log('[ContainerTaskManager] assignTask called with:', {
+      engineerId,
+      streaming: taskConfig.streaming,
+      taskConfigKeys: Object.keys(taskConfig)
+    });
+    
     const engineer = this.engineers.get(engineerId);
     if (!engineer) {
       throw new Error(`Engineer ${engineerId} not found`);
@@ -180,7 +187,8 @@ class ContainerTaskManager {
         description: taskConfig.description,
         acceptanceCriteria: taskConfig.acceptanceCriteria,
         testFramework: taskConfig.testFramework,
-        model: taskConfig.model
+        model: taskConfig.model,
+        streaming: taskConfig.streaming // Pass streaming flag
       });
 
       // If pre-flight validation failed, return the error immediately
@@ -831,6 +839,36 @@ class ContainerTaskManager {
 
       // Execute the task
       console.log('[CTM] Starting streaming execution for task:', taskId);
+      
+      // For container tasks, we need to handle repository setup
+      if (taskConfig.repository) {
+        // Create a workspace directory for the task
+        const workspacePath = `/tmp/pocketdev-workspaces/${taskId}`;
+        await fs.mkdir(workspacePath, { recursive: true });
+        
+        // Clone repository if provided
+        if (typeof taskConfig.repository === 'string' || taskConfig.repository.url) {
+          const repoUrl = typeof taskConfig.repository === 'string' 
+            ? taskConfig.repository 
+            : taskConfig.repository.url;
+          const branch = taskConfig.repository.branch || 'main';
+          
+          // Use git to clone
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execAsync = promisify(exec);
+          
+          try {
+            await execAsync(`git clone -b ${branch} ${repoUrl} ${workspacePath}/repo`);
+            taskConfig.workingDirectory = `${workspacePath}/repo`;
+          } catch (error) {
+            console.error('[CTM] Failed to clone repository:', error);
+            // Continue without repo
+            taskConfig.workingDirectory = workspacePath;
+          }
+        }
+      }
+      
       const result = await this.streamExecutor.executeStreamingTask(
         taskConfig.description,
         {

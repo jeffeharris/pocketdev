@@ -117,3 +117,7 @@ class AIDeveloper {
 2. **Milestone 2 (Weeks 5-10)**: Production-ready with multiple projects
 3. **Milestone 3 (Weeks 11-18)**: Multi-AI developer orchestration
 4. **Milestone 4 (Weeks 19-26)**: Enterprise features and integrations
+
+## Development Techniques
+
+- Use docker to run dev servers

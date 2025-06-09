@@ -6,6 +6,17 @@ interface TaskResult {
   sessionId: string;
   summary: string;
   error: string | null;
+  errorDetails?: string;
+  humanFriendlyMessage?: string;
+  naturalLanguageError?: {
+    summary: string;
+    explanation: string;
+    nextSteps: string[];
+    quickFixes: Array<{
+      issue: string;
+      suggestion: string;
+    }>;
+  };
   duration: number;
   cost_usd: number;
   timestamp: string;
@@ -71,8 +82,62 @@ export function TaskResultView({ result, onAccept, onFollowUp, onClose }: Props)
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Error Message */}
-          {result.error && (
+          {/* Supervisor Interpretation or Error Message */}
+          {result.naturalLanguageError ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+              <div className="mb-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-lg font-medium text-amber-900">Supervisor Analysis</h3>
+                    <p className="mt-2 text-amber-800">{result.naturalLanguageError.summary}</p>
+                    {result.naturalLanguageError.explanation && (
+                      <p className="mt-2 text-amber-700">{result.naturalLanguageError.explanation}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Next Steps */}
+              {result.naturalLanguageError.nextSteps.length > 0 && (
+                <div className="mt-4 border-t border-amber-200 pt-4">
+                  <h4 className="text-sm font-medium text-amber-900 mb-2">Next Steps:</h4>
+                  <ul className="space-y-1">
+                    {result.naturalLanguageError.nextSteps.map((step, index) => (
+                      <li key={index} className="text-sm text-amber-700">{step}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Quick Fixes */}
+              {result.naturalLanguageError.quickFixes.length > 0 && (
+                <div className="mt-4 border-t border-amber-200 pt-4">
+                  <h4 className="text-sm font-medium text-amber-900 mb-2">Quick Fixes:</h4>
+                  <div className="space-y-2">
+                    {result.naturalLanguageError.quickFixes.map((fix, index) => (
+                      <div key={index} className="text-sm">
+                        <span className="font-medium text-amber-800">{fix.issue}:</span>
+                        <span className="text-amber-700 ml-1">{fix.suggestion}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : result.errorDetails ? (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                <div className="text-red-800">
+                  <p className="font-medium">Error Details</p>
+                  <pre className="mt-2 text-sm whitespace-pre-wrap">{result.errorDetails}</pre>
+                </div>
+              </div>
+            </div>
+          ) : result.error ? (
             <div className="bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
                 <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
@@ -82,7 +147,7 @@ export function TaskResultView({ result, onAccept, onFollowUp, onClose }: Props)
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Metadata */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

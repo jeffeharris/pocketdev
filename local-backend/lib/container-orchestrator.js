@@ -9,6 +9,7 @@ import { performance } from 'perf_hooks';
 import { MemoryEnhancedPrompts } from './memory-enhanced-prompts.js';
 import { PreflightValidator } from './preflight-validator.js';
 import { progressMonitor } from './progress-monitor.js';
+import ClaudeStreamExecutor from './claude-stream-executor.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -379,6 +380,21 @@ class ContainerOrchestrator {
       env.MAX_ITERATIONS = String(task.maxIterations || '5');
       env.DEBUG = this.debugMode ? 'true' : 'false';
       
+      // Pass streaming flag to container
+      debugLog('info', taskId, 'Checking streaming flag', {
+        streaming: task.streaming,
+        streamingType: typeof task.streaming,
+        taskKeys: Object.keys(task)
+      });
+      
+      if (task.streaming) {
+        env.STREAMING_MODE = 'true';
+        env.OUTPUT_FORMAT = 'stream-json';
+        debugLog('info', taskId, 'Streaming mode enabled - set env vars');
+      } else {
+        debugLog('info', taskId, 'Streaming mode not enabled');
+      }
+      
       // We'll let the container handle memory loading since it needs to clone the repo first
       // Just provide the base prompt
       const basePrompt = await this.getBasePromptForRole(task.engineerRole || 'fullstack');
@@ -631,6 +647,34 @@ class ContainerOrchestrator {
               } else if (line.includes('[WARNING]') || line.includes('WARNING:')) {
                 debugLog('warning', taskId, 'Warning detected in output', { line });
               }
+              
+              // Check for streaming JSON from Claude (when STREAMING_MODE is enabled)
+              if (task.streaming && line.trim().startsWith('{') && line.includes('"type"')) {
+                try {
+                  const streamData = JSON.parse(line);
+                  
+                  // Emit different types of streaming events
+                  if (streamData.type === 'tool_use') {
+                    progressMonitor.checkpoint(taskId, 'claude_tool_use', 'in_progress', {
+                      tool: streamData.name,
+                      input: streamData.input ? Object.keys(streamData.input).join(', ') : '',
+                      message: `Using ${streamData.name} tool...`
+                    });
+                  } else if (streamData.type === 'text') {
+                    // Claude is thinking/explaining
+                    progressMonitor.checkpoint(taskId, 'claude_thinking', 'in_progress', {
+                      text: streamData.text?.substring(0, 100) + '...',
+                      message: 'Claude is analyzing...'
+                    });
+                  } else if (streamData.type === 'result') {
+                    progressMonitor.checkpoint(taskId, 'claude_complete', 'completed', {
+                      message: 'Claude finished processing'
+                    });
+                  }
+                } catch (parseError) {
+                  // Not valid JSON, ignore
+                }
+              }
             }
           } catch (error) {
             debugLog('error', taskId, 'Error processing output', {
@@ -678,7 +722,7 @@ class ContainerOrchestrator {
       
       let result = null;
       let attempts = 0;
-      const maxAttempts = 300; // 5 minutes
+      const maxAttempts = 900; // 15 minutes (increased from 5)
       const pollInterval = 1000; // 1 second
       const resultsPath = path.join(workspacePath, 'results', 'session_result.json');
       
@@ -718,6 +762,14 @@ class ContainerOrchestrator {
           if (attempts % 10 === 0) {
             debugLog('debug', taskId, `Still waiting for results (attempt ${attempts})`);
           }
+        }
+        
+        // Emit progress update every 30 seconds for streaming clients
+        if (attempts % 30 === 0 && attempts > 0) {
+          progressMonitor.checkpoint(taskId, 'waiting_for_results', 'in_progress', {
+            waitTime: attempts,
+            message: `Task still running... (${Math.floor(attempts/60)}m ${attempts%60}s elapsed)`
+          });
         }
         
         // Check container health

@@ -3,8 +3,11 @@
  * Tracks and reports task execution progress with human-friendly messages
  */
 
-export class ProgressMonitor {
+import { EventEmitter } from 'events';
+
+export class ProgressMonitor extends EventEmitter {
   constructor() {
+    super();
     this.checkpoints = new Map();
     this.listeners = new Map();
   }
@@ -53,6 +56,12 @@ export class ProgressMonitor {
       } catch (error) {
         console.error('Progress listener error:', error);
       }
+    });
+
+    // Emit event for SSE
+    this.emit(`progress:${taskId}`, {
+      summary: this.getStatusSummary(taskId),
+      checkpoints: this.getCheckpoints(taskId)
     });
 
     return checkpoint;
@@ -138,6 +147,31 @@ export class ProgressMonitor {
       'task_complete': {
         'completed': `🎉 Task completed successfully in ${details?.duration || 'unknown'}!`,
         'failed': '❌ Task failed'
+      },
+      
+      // Claude streaming events
+      'claude_tool_use': {
+        'in_progress': `🔧 ${details?.message || 'Using tool...'}`,
+        'completed': '✅ Tool execution complete',
+        'failed': '❌ Tool execution failed'
+      },
+      
+      'claude_thinking': {
+        'in_progress': '🤔 Claude is analyzing...',
+        'completed': '✅ Analysis complete',
+        'failed': '❌ Analysis failed'
+      },
+      
+      'claude_complete': {
+        'completed': '✅ Claude finished processing',
+        'failed': '❌ Claude processing failed'
+      },
+      
+      // Progress updates
+      'waiting_for_results': {
+        'in_progress': `⏳ ${details?.message || 'Waiting for results...'}`,
+        'completed': '✅ Results received',
+        'failed': '❌ Timeout waiting for results'
       }
     };
 

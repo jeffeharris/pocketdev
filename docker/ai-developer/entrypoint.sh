@@ -472,8 +472,28 @@ run_claude() {
     # Build args without the prompt (will use stdin instead)
     local claude_args=(
         "-p"  # Required for non-interactive mode with stdin
-        "--output-format" "json"
     )
+    
+    # Check if streaming mode is enabled
+    log_info "Checking streaming mode - STREAMING_MODE='$STREAMING_MODE', OUTPUT_FORMAT='$OUTPUT_FORMAT'"
+    
+    if [ "$STREAMING_MODE" = "true" ] || [ "$OUTPUT_FORMAT" = "stream-json" ]; then
+        log_info "Streaming mode enabled - using stream-json output format"
+        claude_args+=("--output-format" "stream-json" "--verbose")
+    else
+        log_info "Standard mode - using json output format"
+        claude_args+=("--output-format" "json")
+    fi
+    
+    # Add model flag - ALWAYS include this
+    if [ -n "$MODEL" ]; then
+        log_info "Using model: $MODEL"
+        claude_args+=("--model" "$MODEL")
+    else
+        log_warning "No MODEL specified, using default"
+        # Add default model to ensure consistency
+        claude_args+=("--model" "claude-3-5-sonnet-latest")
+    fi
     
     # CRITICAL: DO NOT USE --verbose FLAG
     # The --verbose flag breaks JSON output by forcing streaming mode
@@ -554,27 +574,9 @@ $prompt"
     
     # Add memory context if available
     if [ -n "$POCKETDEV_MEMORY_CONTEXT" ]; then
-        local system_prompt="${base_prompt}${POCKETDEV_MEMORY_CONTEXT}
-
-## Memory Updates
-If you discover any of the following during this task, make a note:
-1. Performance optimizations (e.g., 'Using Promise.all() instead of sequential awaits reduced execution time by 80%')
-2. Failed approaches (e.g., 'Tried storing all logs in memory but caused OOM crash')
-3. Successful patterns (e.g., 'This codebase uses custom error classes for all domain errors')
-
-These will be added to the team memory for future tasks."
+        local system_prompt="${base_prompt}${POCKETDEV_MEMORY_CONTEXT} ## Memory Updates: If you discover any of the following during this task, make a note: 1. Performance optimizations (e.g., 'Using Promise.all() instead of sequential awaits reduced execution time by 80%') 2. Failed approaches (e.g., 'Tried storing all logs in memory but caused OOM crash') 3. Successful patterns (e.g., 'This codebase uses custom error classes for all domain errors'). These will be added to the team memory for future tasks."
     else
-        local system_prompt="$base_prompt
-
-## PocketDev Memory System
-This repository uses PocketDev's memory system to help you learn and improve over time.
-
-As you work on tasks:
-1. Note any performance optimizations you discover
-2. Track approaches that don't work and why
-3. Identify successful patterns specific to this codebase
-
-These learnings will be automatically extracted and stored in .pocketdev/ to help you and other engineers work more efficiently in future tasks."
+        local system_prompt="$base_prompt ## PocketDev Memory System: This repository uses PocketDev's memory system to help you learn and improve over time. As you work on tasks: 1. Note any performance optimizations you discover 2. Track approaches that don't work and why 3. Identify successful patterns specific to this codebase. These learnings will be automatically extracted and stored in .pocketdev/ to help you and other engineers work more efficiently in future tasks."
     fi
     
     # CRITICAL VALIDATION: Check system prompt for unquoted spaces
@@ -699,10 +701,32 @@ WRAPPER
             
             # Use echo to pipe prompt to stdin
             # When using -p flag, Claude expects input via stdin OR as argument
-            if echo "$prompt" | timeout 600 claude "${claude_args[@]}" >"$temp_output" 2>"$error_output"; then
-                success=true
-                log_success "Claude execution succeeded"
+            if [ "$STREAMING_MODE" = "true" ] || [ "$OUTPUT_FORMAT" = "stream-json" ]; then
+                # For streaming mode, process output line by line
+                log_info "Running Claude in streaming mode - processing output as it arrives"
+                echo "$prompt" | timeout 600 claude "${claude_args[@]}" 2>"$error_output" | while IFS= read -r line; do
+                    echo "$line" >> "$temp_output"
+                    # Check if this is the final result message
+                    if echo "$line" | grep -q '"type":"result"'; then
+                        log_info "Detected result message - Claude task complete"
+                        # Kill the timeout process to end immediately
+                        pkill -P $$ timeout 2>/dev/null || true
+                        break
+                    fi
+                done
+                # Check if we got a result
+                if grep -q '"type":"result"' "$temp_output" 2>/dev/null; then
+                    success=true
+                    log_success "Claude execution succeeded (streaming mode)"
+                else
+                    log_error "Claude execution failed - no result message found"
+                fi
             else
+                # Non-streaming mode - wait for full output
+                if echo "$prompt" | timeout 600 claude "${claude_args[@]}" >"$temp_output" 2>"$error_output"; then
+                    success=true
+                    log_success "Claude execution succeeded"
+                else
                 local exit_code=$?
                 if [ -f "${temp_output}.exitcode" ]; then
                     exit_code=$(cat "${temp_output}.exitcode")
@@ -731,6 +755,7 @@ WRAPPER
                         log_warning "  $line"
                     done
                 fi
+                fi
             fi
         fi
         
@@ -747,41 +772,71 @@ WRAPPER
                 log_error "Output file is empty: $temp_output"
                 success=false
             else
-                # Try to validate JSON
-                if jq empty "$temp_output" 2>/dev/null; then
-                    log_success "Output is valid JSON"
+                # Check if we're in streaming mode
+                if [ "$STREAMING_MODE" = "true" ] || [ "$OUTPUT_FORMAT" = "stream-json" ]; then
+                    log_info "Processing streaming output"
                     
-                    # Move to final location
-                    if ! mv -f "$temp_output" "$output_file"; then
-                        log_error "Failed to move output file"
-                        success=false
-                    else
-                        # Extract session ID
-                        local session_id=$(jq -r '.session_id // empty' "$output_file" 2>/dev/null)
+                    # For streaming, we need to extract the final result message
+                    # Stream-json format has newline-delimited JSON
+                    local final_result=$(grep '"type":"result"' "$temp_output" | tail -1)
+                    
+                    if [ -n "$final_result" ]; then
+                        # Save the full stream for debugging
+                        cp "$temp_output" "$DEBUG_DIR/stream_output_$(date +%s).jsonl"
+                        
+                        # Extract just the result message for compatibility
+                        echo "$final_result" > "$output_file"
+                        
+                        # Extract session ID from result
+                        local session_id=$(echo "$final_result" | jq -r '.session_id // empty' 2>/dev/null)
                         if [ -n "$session_id" ]; then
                             echo "$session_id" > /workspace/results/last_session_id
                             export CLAUDE_SESSION_ID="$session_id"
-                            log_info "Session ID extracted: $session_id"
-                        else
-                            log_warning "No session ID found in response"
+                            log_info "Session ID extracted from stream: $session_id"
                         fi
                         
-                        # Log response summary
-                        local response_length=$(jq -r '.result // "" | length' "$output_file" 2>/dev/null || echo 0)
-                        log_info "Response length: $response_length characters"
+                        log_success "Streaming output processed successfully"
+                    else
+                        log_error "No result message found in streaming output"
+                        success=false
                     fi
                 else
-                    log_error "Output is not valid JSON"
-                    log_error "First 500 chars: $(head -c 500 "$temp_output")"
-                    
-                    # Check for common issues
-                    if grep -q "streaming" "$temp_output" 2>/dev/null; then
-                        log_error "Detected streaming output - JSON format may be corrupted"
+                    # Try to validate JSON (non-streaming mode)
+                    if jq empty "$temp_output" 2>/dev/null; then
+                        log_success "Output is valid JSON"
+                        
+                        # Move to final location
+                        if ! mv -f "$temp_output" "$output_file"; then
+                            log_error "Failed to move output file"
+                            success=false
+                        else
+                            # Extract session ID
+                            local session_id=$(jq -r '.session_id // empty' "$output_file" 2>/dev/null)
+                            if [ -n "$session_id" ]; then
+                                echo "$session_id" > /workspace/results/last_session_id
+                                export CLAUDE_SESSION_ID="$session_id"
+                                log_info "Session ID extracted: $session_id"
+                            else
+                                log_warning "No session ID found in response"
+                            fi
+                            
+                            # Log response summary
+                            local response_length=$(jq -r '.result // "" | length' "$output_file" 2>/dev/null || echo 0)
+                            log_info "Response length: $response_length characters"
+                        fi
+                    else
+                        log_error "Output is not valid JSON"
+                        log_error "First 500 chars: $(head -c 500 "$temp_output")"
+                        
+                        # Check for common issues
+                        if grep -q "streaming" "$temp_output" 2>/dev/null; then
+                            log_error "Detected streaming output - JSON format may be corrupted"
+                        fi
+                        
+                        # Save invalid output for debugging
+                        cp "$temp_output" "$DEBUG_DIR/invalid_json_$(date +%s).txt"
+                        success=false
                     fi
-                    
-                    # Save invalid output for debugging
-                    cp "$temp_output" "$DEBUG_DIR/invalid_json_$(date +%s).txt"
-                    success=false
                 fi
             fi
         fi

@@ -409,16 +409,33 @@ export default class PreflightValidator {
       };
     }
 
-    // Test credentials with a simple git ls-remote
+    // Test credentials by checking GitHub API
     try {
-      const testUrl = `https://${credentials.username}:${credentials.token}@github.com/${credentials.username}/_`;
       const testResult = await new Promise((resolve) => {
-        const test = spawn('git', ['ls-remote', testUrl], { timeout: 5000 });
-        test.on('close', (code) => {
-          // 128 = repo not found (expected), other codes = auth failure
-          resolve(code === 128 || code === 0);
-        });
-        test.on('error', () => resolve(false));
+        const options = {
+          hostname: 'api.github.com',
+          path: '/user',
+          method: 'GET',
+          headers: {
+            'Authorization': `token ${credentials.token}`,
+            'User-Agent': 'PocketDev',
+            'Accept': 'application/vnd.github.v3+json'
+          }
+        };
+
+        https.get(options, (res) => {
+          if (res.statusCode === 200) {
+            // Token is valid
+            resolve(true);
+          } else if (res.statusCode === 401) {
+            // Invalid token
+            resolve(false);
+          } else {
+            // Other errors - assume token might still work
+            resolve(true);
+          }
+          res.on('data', () => {}); // Drain response
+        }).on('error', () => resolve(true)); // Network errors shouldn't fail validation
       });
 
       if (!testResult) {
@@ -426,8 +443,8 @@ export default class PreflightValidator {
           valid: false,
           errors: [{
             check: 'gitCredentials',
-            message: 'Git credentials validation failed',
-            fix: 'Check your GitHub personal access token has "repo" scope'
+            message: 'GitHub token validation failed',
+            fix: 'Check your GitHub fine-grained personal access token is valid and has these permissions: Contents (Read/Write), Pull requests (Read/Write), and Metadata (Read).'
           }]
         };
       }

@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Engineer } from '../types';
-import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText, Brain, Zap } from 'lucide-react';
+import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText, Brain } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
 import { TaskResultView } from './TaskResultView';
 import { ContainerTaskModal } from './ContainerTaskModal';
 import { EngineerMemories } from './EngineerMemories';
 import { TaskProgress } from './TaskProgress';
-import { StreamingTaskModal } from './StreamingTaskModal';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -19,10 +18,8 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
   const [showLogs, setShowLogs] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [showMemories, setShowMemories] = useState(false);
-  const [showStreamingTask, setShowStreamingTask] = useState(false);
   const [taskResult, setTaskResult] = useState<any>(null);
   const [isPolling, setIsPolling] = useState(false);
-  const [streamingEnabled, setStreamingEnabled] = useState(false);
 
   // Poll for engineer status updates
   useEffect(() => {
@@ -263,19 +260,16 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
 
           <div className="flex gap-2">
             <button
-              onClick={() => streamingEnabled ? setShowStreamingTask(true) : setShowTaskModal(true)}
+              onClick={() => setShowTaskModal(true)}
               disabled={engineer.status !== 'idle'}
               className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
                 engineer.status === 'idle'
-                  ? streamingEnabled 
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {engineer.status === 'idle' 
-                ? streamingEnabled ? 'Stream Container Task' : 'Assign Container Task'
-                : engineer.status === 'error' ? 'Error' : 'Running in Container'}
+              {engineer.status === 'idle' ? 'Assign Container Task' : 
+               engineer.status === 'error' ? 'Error' : 'Running in Container'}
             </button>
             
             {engineer.status === 'error' && (
@@ -304,28 +298,14 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
               <Container className="h-3 w-3 mr-1" />
               Isolated Environment
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setStreamingEnabled(!streamingEnabled)}
-                className={`flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-                  streamingEnabled 
-                    ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                title={streamingEnabled ? 'Disable streaming mode' : 'Enable streaming mode'}
-              >
-                <Zap className="h-3 w-3" />
-                <span>Streaming</span>
-              </button>
-              <button
-                onClick={() => setShowMemories(true)}
-                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                title="View Engineer Memories"
-              >
-                <Brain className="h-3 w-3" />
-                <span>Memories</span>
-              </button>
-            </div>
+            <button
+              onClick={() => setShowMemories(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              title="View Engineer Memories"
+            >
+              <Brain className="h-3 w-3" />
+              <span>Memories</span>
+            </button>
             {engineer.taskHistory && engineer.taskHistory.length > 0 && (
               <span>{engineer.taskHistory.length} tasks completed</span>
             )}
@@ -381,25 +361,6 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
                 projectId="current" 
               />
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Streaming Task Modal */}
-      {showStreamingTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col">
-            <StreamingTaskModal
-              engineerId={engineer.id}
-              onClose={() => setShowStreamingTask(false)}
-              onComplete={(result) => {
-                setShowStreamingTask(false);
-                setTaskResult(result);
-                toast.success('Streaming task completed!');
-                // Refresh engineer status
-                window.location.reload();
-              }}
-            />
           </div>
         </div>
       )}

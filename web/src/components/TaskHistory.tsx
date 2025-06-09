@@ -68,14 +68,22 @@ export function TaskHistory({ onClose, onTaskClick }: Props) {
         allTasks = [...allTasks, ...uniqueRegularTasks];
       }
       
+      // Remove any remaining duplicates by ID
+      const uniqueTasks = allTasks.reduce((acc, task) => {
+        if (!acc.find(t => t.id === task.id)) {
+          acc.push(task);
+        }
+        return acc;
+      }, [] as TaskHistoryItem[]);
+      
       // Sort by date (newest first)
-      allTasks.sort((a, b) => {
+      uniqueTasks.sort((a, b) => {
         const dateA = new Date(a.completedAt || a.startTime || 0).getTime();
         const dateB = new Date(b.completedAt || b.startTime || 0).getTime();
         return dateB - dateA;
       });
       
-      setTasks(allTasks);
+      setTasks(uniqueTasks);
     } catch (error) {
       console.error('Failed to fetch task history:', error);
     } finally {

@@ -74,8 +74,10 @@ router.post('/api/container/engineers/:id/stream-task', async (req, res) => {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
     
-    // Prepare task
-    const preparedTask = await prepareTaskAssignment(taskData, engineerId);
+    // Get active project and prepare task
+    const activeProject = getActiveProject();
+    const projectConfig = getProjectConfig();
+    const preparedTask = prepareTaskAssignment(activeProject, projectConfig, taskData);
     
     // Assign streaming task
     const task = await containerManager.assignStreamingTask(
@@ -230,7 +232,8 @@ router.post('/api/container/assign-task', async (req, res) => {
     model = 'claude-3-5-sonnet-latest',
     maxIterations = 5,
     gitUsername,
-    gitToken
+    gitToken,
+    streamingEnabled = false
   } = req.body;
 
   try {
@@ -242,6 +245,8 @@ router.post('/api/container/assign-task', async (req, res) => {
     }
 
     console.log('Container route: Assigning task to', engineerId);
+    console.log('Container route: Streaming enabled:', streamingEnabled);
+    console.log('Container route: Full request body:', JSON.stringify(req.body, null, 2));
     
     // Get active project config
     const activeProject = getActiveProject();
@@ -261,7 +266,8 @@ router.post('/api/container/assign-task', async (req, res) => {
           acceptanceCriteria,
           testFramework,
           model,
-          maxIterations
+          maxIterations,
+          streaming: streamingEnabled
         }
       );
       
@@ -652,7 +658,8 @@ router.post('/api/container/quick-task', async (req, res) => {
           branch: activeProject.config.project.default_branch || 'main',
           description: enhancedDescription,
           acceptanceCriteria,
-          model: availableEngineer.role === 'qa_manual' ? 'claude-sonnet-4-0' : 'claude-sonnet-4-0'
+          model: availableEngineer.role === 'qa_manual' ? 'claude-sonnet-4-0' : 'claude-sonnet-4-0',
+          streaming: true  // Enable streaming for quick tasks
         }
       );
       
