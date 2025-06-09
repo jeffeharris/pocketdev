@@ -7,6 +7,7 @@ import path from 'path';
 import { DockerClaudeManager } from './docker-claude.js';
 import { HostClaudeManager } from './host-claude.js';
 import { CodeExtractor } from './lib/code-extractor.js';
+import { WorktreeManager } from './lib/worktree-manager.js';
 import containerRoutes from './container-routes.js';
 import projectRoutes from './project-routes.js';
 
@@ -37,6 +38,10 @@ const activeProcesses = new Map();
 const dockerManager = new DockerClaudeManager();
 const hostManager = new HostClaudeManager();
 const codeExtractor = new CodeExtractor();
+const worktreeManager = new WorktreeManager({
+  baseRepo: process.env.GIT_REPO_PATH || '/tmp/test-repo',
+  defaultBranch: process.env.DEFAULT_BRANCH || 'main'
+});
 
 // In-memory mock data for local development
 const mockEngineers = [
@@ -451,6 +456,192 @@ app.get('/api/test-claude', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// ===== WORKTREE ENDPOINTS =====
+
+// Initialize worktree manager
+app.post('/api/worktree/init', async (req, res) => {
+  try {
+    await worktreeManager.init();
+    res.json({ success: true, message: 'Worktree directory initialized' });
+  } catch (error) {
+    console.error('Failed to initialize worktree:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Submit a new task (creates worktree and runs Claude)
+app.post('/api/worktree/submit-task', async (req, res) => {
+  const { task, baseBranch } = req.body;
+  
+  if (!task) {
+    return res.status(400).json({ error: 'Task description required' });
+  }
+  
+  try {
+    // Generate task ID
+    const taskId = Date.now().toString();
+    
+    // Create worktree
+    const worktreeInfo = await worktreeManager.createWorktree({
+      taskId,
+      baseBranch,
+      description: task
+    });
+    
+    console.log('Created worktree:', worktreeInfo);
+    
+    // Execute Claude in the worktree
+    const result = await worktreeManager.executeClaudeInWorktree({
+      worktreePath: worktreeInfo.worktreePath,
+      prompt: task,
+      stream: true
+    });
+    
+    console.log('Claude execution result:', result);
+    
+    // Store task info
+    const taskInfo = {
+      taskId,
+      task,
+      worktreeInfo,
+      sessionId: result.sessionId,
+      result: result.result,
+      status: result.success ? 'needs_review' : 'error',
+      createdAt: new Date().toISOString()
+    };
+    
+    // Add to task history
+    taskHistory.push(taskInfo);
+    
+    res.json(taskInfo);
+  } catch (error) {
+    console.error('Failed to submit task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Follow up on a task
+app.post('/api/worktree/follow-up', async (req, res) => {
+  const { taskId, followUpPrompt } = req.body;
+  
+  if (!taskId || !followUpPrompt) {
+    return res.status(400).json({ error: 'Task ID and follow-up prompt required' });
+  }
+  
+  try {
+    // Find task in history
+    const task = taskHistory.find(t => t.taskId === taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Continue conversation
+    const result = await worktreeManager.continueConversation({
+      worktreePath: task.worktreeInfo.worktreePath,
+      sessionId: task.sessionId,
+      prompt: followUpPrompt
+    });
+    
+    // Update task info
+    task.sessionId = result.sessionId || task.sessionId;
+    task.lastFollowUp = {
+      prompt: followUpPrompt,
+      result: result.result,
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json({
+      taskId,
+      result: result.result,
+      sessionId: task.sessionId
+    });
+  } catch (error) {
+    console.error('Failed to follow up:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Accept changes and create PR
+app.post('/api/worktree/accept', async (req, res) => {
+  const { taskId } = req.body;
+  
+  if (!taskId) {
+    return res.status(400).json({ error: 'Task ID required' });
+  }
+  
+  try {
+    // Find task
+    const task = taskHistory.find(t => t.taskId === taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Accept changes and create PR
+    const result = await worktreeManager.acceptChanges({
+      taskId,
+      worktreePath: task.worktreeInfo.worktreePath,
+      sessionId: task.sessionId
+    });
+    
+    // Update task status
+    task.status = 'accepted';
+    task.prInfo = result;
+    task.acceptedAt = new Date().toISOString();
+    
+    // Clean up worktree
+    await worktreeManager.cleanupWorktree(taskId);
+    
+    res.json({
+      success: true,
+      prInfo: result,
+      taskId
+    });
+  } catch (error) {
+    console.error('Failed to accept changes:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List active worktrees
+app.get('/api/worktree/list', async (req, res) => {
+  try {
+    const worktrees = await worktreeManager.listWorktrees();
+    res.json(worktrees);
+  } catch (error) {
+    console.error('Failed to list worktrees:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get task details
+app.get('/api/worktree/task/:taskId', (req, res) => {
+  const { taskId } = req.params;
+  const task = taskHistory.find(t => t.taskId === taskId);
+  
+  if (!task) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  
+  res.json(task);
+});
+
+// Test endpoint that doesn't require Claude
+app.post('/api/worktree/test', (req, res) => {
+  const { task } = req.body;
+  const taskId = Date.now().toString();
+  
+  res.json({
+    taskId,
+    task,
+    result: `I would execute: ${task}\n\nBut Claude is having issues with the Alpine environment.`,
+    status: 'success',
+    worktreeInfo: {
+      branchName: 'test-branch',
+      worktreePath: '/tmp/test'
+    }
+  });
 });
 
 // Start server

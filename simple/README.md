@@ -44,7 +44,6 @@ git worktree add -b pocketdev/task-name-123 /tmp/worktrees/123 main
 cd simple
 cp .env.example .env
 # Edit .env and add your ANTHROPIC_API_KEY
-./setup.sh
 ```
 
 ### 2. Run
@@ -52,12 +51,19 @@ cp .env.example .env
 docker-compose up
 ```
 
-### 3. Use
-Open http://localhost:2424 and:
+### 3. Configure GitHub (First Time)
+- Open http://localhost:2424
+- Click the ⚙️ Settings button
+- Enter your GitHub username and Personal Access Token
+- Click "Load" to see your repositories
+- Select a repository and default branch
+- Save configuration
+
+### 4. Use
 - Type what you want done
 - Claude executes in an isolated git worktree
 - Follow up or accept changes
-- Accepting commits and creates a branch for PR
+- Accepting commits and creates a branch ready for PR
 
 ## Architecture
 
@@ -84,10 +90,12 @@ Open http://localhost:2424 and:
 ## Core Features
 
 ✅ **Mobile-First UI** - Simple chat interface, touch-friendly  
-✅ **Git Integration** - Each task in isolated worktree  
+✅ **GitHub Integration** - Clone, sync, and push to remote repositories  
+✅ **Git Worktrees** - Each task in isolated worktree  
 ✅ **Real Claude Execution** - Full Claude CLI with tool access  
 ✅ **Session Management** - Follow-up conversations maintain context  
-✅ **Branch Creation** - Ready for PR submission
+✅ **Branch Creation** - Ready for PR submission  
+✅ **Configuration UI** - Easy GitHub token and repository setup
 
 ## What This Replaces
 

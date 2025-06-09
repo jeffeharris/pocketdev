@@ -148,6 +148,104 @@
       margin: 0 auto 16px;
       opacity: 0.3;
     }
+    .settings-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .settings-content {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .settings-header h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #2563eb;
+    }
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .status-message {
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .status-message.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-message.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .settings-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .settings-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
   </style>
 </head>
 <body>
@@ -155,6 +253,7 @@
     <div class="header">
       <h1>PocketDev</h1>
       <p>Manage Claude Code from anywhere</p>
+      <button class="settings-btn" onclick="showSettings()">⚙️ Settings</button>
     </div>
     
     <div class="messages" id="messages">
@@ -185,10 +284,57 @@
     </div>
   </div>
 
+  <!-- Settings Modal -->
+  <div class="settings-modal" id="settingsModal" style="display: none;">
+    <div class="settings-content">
+      <div class="settings-header">
+        <h2>GitHub Configuration</h2>
+        <button class="close-btn" onclick="hideSettings()">×</button>
+      </div>
+      
+      <div id="statusMessage"></div>
+      
+      <form id="settingsForm" onsubmit="saveSettings(event)">
+        <div class="form-group">
+          <label for="githubUsername">GitHub Username</label>
+          <input type="text" id="githubUsername" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="githubToken">GitHub Personal Access Token</label>
+          <input type="password" id="githubToken" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="repoSelect">Repository</label>
+          <div style="display: flex; gap: 10px;">
+            <select id="repoSelect" style="flex: 1;" disabled>
+              <option value="">Enter credentials first</option>
+            </select>
+            <button type="button" class="btn-secondary" onclick="loadRepositories()" id="loadReposBtn" disabled>Load</button>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="branchSelect">Default Branch</label>
+          <select id="branchSelect" disabled>
+            <option value="">Select repository first</option>
+          </select>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Save Configuration</button>
+          <button type="button" class="btn-secondary" onclick="hideSettings()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     const API_URL = 'http://localhost:3001';
     let currentTask = null;
     let loading = false;
+    let config = {};
 
     function addMessage(type, content) {
       const messages = document.getElementById('messages');
@@ -316,6 +462,196 @@
       document.getElementById('actions').style.display = 'none';
       setLoading(false);
     }
+
+    // Settings functions
+    async function loadConfig() {
+      try {
+        const response = await fetch(`${API_URL}/api/config`);
+        config = await response.json();
+        
+        // Populate form if configured
+        if (config.github.username) {
+          document.getElementById('githubUsername').value = config.github.username;
+        }
+        if (config.github.hasToken) {
+          document.getElementById('githubToken').placeholder = 'Token configured (hidden)';
+        }
+        if (config.github.repository) {
+          // Add current repo to select
+          const select = document.getElementById('repoSelect');
+          select.innerHTML = `<option value="${config.github.repository}">${config.github.repository}</option>`;
+          select.value = config.github.repository;
+          
+          // Load branches
+          const [owner, repo] = config.github.repository.replace('https://github.com/', '').replace('.git', '').split('/');
+          await loadBranches(owner, repo);
+          
+          if (config.github.defaultBranch) {
+            document.getElementById('branchSelect').value = config.github.defaultBranch;
+          }
+        }
+        
+        // Enable load button if we have credentials
+        if (config.github.username && config.github.hasToken) {
+          document.getElementById('loadReposBtn').disabled = false;
+          document.getElementById('repoSelect').disabled = false;
+        }
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      }
+    }
+
+    function showSettings() {
+      document.getElementById('settingsModal').style.display = 'flex';
+      loadConfig();
+    }
+
+    function hideSettings() {
+      document.getElementById('settingsModal').style.display = 'none';
+      document.getElementById('statusMessage').innerHTML = '';
+    }
+
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.className = `status-message ${type}`;
+      statusDiv.textContent = message;
+    }
+
+    async function validateCredentials() {
+      const token = document.getElementById('githubToken').value;
+      const username = document.getElementById('githubUsername').value;
+      
+      if (!token || !username) return false;
+      
+      try {
+        const response = await fetch(`${API_URL}/api/github/validate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        
+        const result = await response.json();
+        if (result.valid && result.username === username) {
+          return true;
+        } else {
+          showStatus('Invalid GitHub credentials', 'error');
+          return false;
+        }
+      } catch (error) {
+        showStatus('Failed to validate credentials', 'error');
+        return false;
+      }
+    }
+
+    async function loadRepositories() {
+      const token = document.getElementById('githubToken').value;
+      const username = document.getElementById('githubUsername').value;
+      
+      if (!token || !username) {
+        showStatus('Please enter GitHub credentials', 'error');
+        return;
+      }
+      
+      // First save the credentials
+      await fetch(`${API_URL}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          github: { token, username }
+        })
+      });
+      
+      try {
+        const response = await fetch(`${API_URL}/api/github/repos`);
+        const repos = await response.json();
+        
+        if (response.ok) {
+          const select = document.getElementById('repoSelect');
+          select.disabled = false;
+          select.innerHTML = '<option value="">Select a repository</option>';
+          
+          repos.forEach(repo => {
+            const option = document.createElement('option');
+            option.value = repo.url;
+            option.textContent = repo.fullName;
+            select.appendChild(option);
+          });
+          
+          showStatus('Repositories loaded successfully', 'success');
+        } else {
+          showStatus(repos.error || 'Failed to load repositories', 'error');
+        }
+      } catch (error) {
+        showStatus('Failed to load repositories', 'error');
+      }
+    }
+
+    async function loadBranches(owner, repo) {
+      try {
+        const response = await fetch(`${API_URL}/api/github/branches/${owner}/${repo}`);
+        const branches = await response.json();
+        
+        if (response.ok) {
+          const select = document.getElementById('branchSelect');
+          select.disabled = false;
+          select.innerHTML = '<option value="">Select a branch</option>';
+          
+          branches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.name;
+            option.textContent = branch.name;
+            select.appendChild(option);
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load branches:', error);
+      }
+    }
+
+    document.getElementById('repoSelect').addEventListener('change', async (e) => {
+      const url = e.target.value;
+      if (!url) return;
+      
+      const [owner, repo] = url.replace('https://github.com/', '').replace('.git', '').split('/');
+      await loadBranches(owner, repo);
+    });
+
+    async function saveSettings(event) {
+      event.preventDefault();
+      
+      const username = document.getElementById('githubUsername').value;
+      const token = document.getElementById('githubToken').value;
+      const repository = document.getElementById('repoSelect').value;
+      const defaultBranch = document.getElementById('branchSelect').value;
+      
+      if (!username || !token || !repository || !defaultBranch) {
+        showStatus('Please fill in all fields', 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_URL}/api/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            github: { username, token, repository, defaultBranch }
+          })
+        });
+        
+        if (response.ok) {
+          showStatus('Configuration saved successfully', 'success');
+          config = await response.json();
+          setTimeout(() => hideSettings(), 1500);
+        } else {
+          showStatus('Failed to save configuration', 'error');
+        }
+      } catch (error) {
+        showStatus('Failed to save configuration', 'error');
+      }
+    }
+
+    // Load config on startup
+    loadConfig();
   </script>
 </body>
 </html>

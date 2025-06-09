@@ -11,7 +11,7 @@ RUN mkdir -p /workspace /tmp/pocketdev-worktrees
 WORKDIR /app
 COPY server/package*.json ./
 RUN npm install
-COPY server/server.js ./
+COPY server/*.js ./
 
 # Configure git
 RUN git config --global user.email "claude@pocketdev.ai" && \

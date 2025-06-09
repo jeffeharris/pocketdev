@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import { spawn, exec as execCallback } from 'child_process';
 import { promisify } from 'util';
-import { mkdir } from 'fs/promises';
+import { mkdir, access } from 'fs/promises';
 import path from 'path';
+import config from './config.js';
+import GitHubAPI from './github.js';
 
 const exec = promisify(execCallback);
 const app = express();
@@ -12,17 +14,61 @@ app.use(cors());
 app.use(express.json());
 
 // Configuration
-const GIT_REPO = process.env.GIT_REPO || '/workspace';
 const WORKTREE_DIR = process.env.WORKTREE_DIR || '/tmp/pocketdev-worktrees';
-const DEFAULT_BRANCH = process.env.DEFAULT_BRANCH || 'main';
 
 // In-memory task storage
 const tasks = new Map();
 
-// Initialize worktree directory
+// Initialize
 async function init() {
+  await config.load();
   await mkdir(WORKTREE_DIR, { recursive: true });
   console.log(`Worktree directory ready: ${WORKTREE_DIR}`);
+  
+  // Check if we need to clone the repository
+  const { localPath } = config.getRepository();
+  if (config.isConfigured()) {
+    await ensureRepository();
+  }
+}
+
+// Ensure repository is cloned and up to date
+async function ensureRepository() {
+  const { url, branch, localPath } = config.getRepository();
+  const { token, username } = config.getGitCredentials();
+  
+  try {
+    // Check if repo exists
+    await access(path.join(localPath, '.git'));
+    console.log('Repository exists, updating...');
+    
+    // Configure credentials
+    if (token && username) {
+      const authUrl = url.replace('https://', `https://${username}:${token}@`);
+      await exec(`git remote set-url origin "${authUrl}"`, { cwd: localPath });
+    }
+    
+    // Fetch latest
+    await exec(`git fetch origin ${branch}`, { cwd: localPath });
+    console.log(`Repository updated: ${localPath}`);
+  } catch (error) {
+    // Repository doesn't exist, clone it
+    console.log('Repository not found, cloning...');
+    
+    if (!url) {
+      console.warn('No repository URL configured');
+      return;
+    }
+    
+    // Clone with credentials
+    const authUrl = token && username 
+      ? url.replace('https://', `https://${username}:${token}@`)
+      : url;
+      
+    await mkdir(path.dirname(localPath), { recursive: true });
+    await exec(`git clone "${authUrl}" "${localPath}"`);
+    console.log(`Repository cloned: ${localPath}`);
+  }
 }
 
 // Generate branch name
@@ -39,7 +85,87 @@ function generateBranchName(taskId, description) {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', worktreeDir: WORKTREE_DIR, repo: GIT_REPO });
+  const cfg = config.get();
+  res.json({ 
+    status: 'ok', 
+    worktreeDir: WORKTREE_DIR, 
+    configured: config.isConfigured(),
+    repository: cfg.github.repository || 'Not configured'
+  });
+});
+
+// Get configuration
+app.get('/api/config', (req, res) => {
+  const cfg = config.get();
+  res.json({
+    github: {
+      username: cfg.github.username,
+      repository: cfg.github.repository,
+      defaultBranch: cfg.github.defaultBranch,
+      hasToken: !!cfg.github.token
+    },
+    localRepo: cfg.localRepo
+  });
+});
+
+// Update configuration
+app.post('/api/config', async (req, res) => {
+  try {
+    await config.update(req.body);
+    
+    // If GitHub config changed, ensure repository is cloned/updated
+    if (req.body.github && config.isConfigured()) {
+      await ensureRepository();
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Validate GitHub token
+app.post('/api/github/validate', async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
+  }
+  
+  const api = new GitHubAPI(token);
+  const result = await api.validateToken();
+  res.json(result);
+});
+
+// Get GitHub repositories
+app.get('/api/github/repos', async (req, res) => {
+  const { token } = config.getGitCredentials();
+  if (!token) {
+    return res.status(401).json({ error: 'GitHub token not configured' });
+  }
+  
+  try {
+    const api = new GitHubAPI(token);
+    const repos = await api.getRepositories();
+    res.json(repos);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get repository branches
+app.get('/api/github/branches/:owner/:repo', async (req, res) => {
+  const { token } = config.getGitCredentials();
+  if (!token) {
+    return res.status(401).json({ error: 'GitHub token not configured' });
+  }
+  
+  try {
+    const api = new GitHubAPI(token);
+    const branches = await api.getBranches(req.params.owner, req.params.repo);
+    res.json(branches);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Submit task
@@ -49,20 +175,29 @@ app.post('/api/task', async (req, res) => {
     return res.status(400).json({ error: 'Task required' });
   }
 
+  if (!config.isConfigured()) {
+    return res.status(400).json({ error: 'GitHub not configured. Please set up GitHub credentials first.' });
+  }
+
   const taskId = Date.now().toString();
   const branchName = generateBranchName(taskId, task);
   const worktreePath = path.join(WORKTREE_DIR, taskId);
+  const { branch: defaultBranch, localPath } = config.getRepository();
 
   console.log(`\n=== NEW TASK: ${taskId} ===`);
   console.log(`Task: ${task}`);
   console.log(`Branch: ${branchName}`);
+  console.log(`Base: ${defaultBranch}`);
   console.log(`Worktree: ${worktreePath}`);
 
   try {
-    // Create worktree
+    // Ensure we have latest from remote
+    await exec(`git fetch origin ${defaultBranch}`, { cwd: localPath });
+    
+    // Create worktree from remote tracking branch
     console.log('Creating worktree...');
-    await exec(`git worktree add -b ${branchName} "${worktreePath}" ${DEFAULT_BRANCH}`, {
-      cwd: GIT_REPO
+    await exec(`git worktree add -b ${branchName} "${worktreePath}" origin/${defaultBranch}`, {
+      cwd: localPath
     });
 
     // Execute Claude
@@ -142,7 +277,8 @@ app.post('/api/task/:taskId/accept', async (req, res) => {
     await exec(`git push -u origin ${task.branchName}`, { cwd: task.worktreePath });
     
     // Clean up worktree
-    await exec(`git worktree remove "${task.worktreePath}" --force`, { cwd: GIT_REPO });
+    const { localPath } = config.getRepository();
+    await exec(`git worktree remove "${task.worktreePath}" --force`, { cwd: localPath });
     
     task.status = 'accepted';
     res.json({ success: true, branch: task.branchName });
@@ -232,8 +368,13 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
 const PORT = process.env.PORT || 3001;
 init().then(() => {
   app.listen(PORT, () => {
-    console.log(`PocketDev Minimal Server running on port ${PORT}`);
-    console.log(`Git repo: ${GIT_REPO}`);
+    const cfg = config.get();
+    console.log(`PocketDev Simple Server running on port ${PORT}`);
+    console.log(`Repository: ${cfg.github.repository || 'Not configured'}`);
+    console.log(`Local path: ${cfg.localRepo}`);
     console.log(`Worktree dir: ${WORKTREE_DIR}`);
   });
+}).catch(error => {
+  console.error('Failed to initialize:', error);
+  process.exit(1);
 });

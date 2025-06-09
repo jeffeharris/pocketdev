@@ -1,7 +1,16 @@
-FROM node:18-alpine
+FROM node:20-slim
 
-# Install Docker CLI and build dependencies for native modules
-RUN apk add --no-cache docker-cli python3 make g++
+# Install Docker CLI, git, and build dependencies
+RUN apt-get update && apt-get install -y \
+    docker.io \
+    git \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
 
 WORKDIR /app
 

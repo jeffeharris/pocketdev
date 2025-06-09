@@ -9,7 +9,10 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GIT_REPO=/workspace
       - WORKTREE_DIR=/tmp/pocketdev-worktrees
-      - DEFAULT_BRANCH=main
+      - DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_USERNAME=${GITHUB_USERNAME:-}
+      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}
     volumes:
       - ./test-repo:/workspace
       - ./frontend:/frontend
