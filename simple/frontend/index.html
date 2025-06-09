@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PocketDev</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 600px;
+      overflow: hidden;
+    }
+    .header {
+      background: #2563eb;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    .messages {
+      height: 400px;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .message.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: white;
+    }
+    .message.claude {
+      align-self: flex-start;
+      background: #f3f4f6;
+      color: #1f2937;
+      white-space: pre-wrap;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+    }
+    .input-area {
+      border-top: 1px solid #e5e7eb;
+      padding: 20px;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus {
+      border-color: #2563eb;
+    }
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+    .btn-success:hover:not(:disabled) {
+      background: #059669;
+    }
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: #4b5563;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #2563eb;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .empty-state {
+      text-align: center;
+      color: #6b7280;
+      padding: 40px;
+    }
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      opacity: 0.3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>PocketDev</h1>
+      <p>Manage Claude Code from anywhere</p>
+    </div>
+    
+    <div class="messages" id="messages">
+      <div class="empty-state">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+        </svg>
+        <p>Submit a task to get started</p>
+        <p style="font-size: 12px; margin-top: 8px;">Example: "Fix the typo in README.md"</p>
+      </div>
+    </div>
+    
+    <div class="input-area">
+      <div class="input-row">
+        <input 
+          type="text" 
+          id="taskInput" 
+          placeholder="Describe what you need done..."
+          onkeypress="if(event.key === 'Enter') submitTask()"
+        >
+        <button class="btn-primary" onclick="submitTask()">Send</button>
+      </div>
+      
+      <div class="actions" id="actions" style="display: none;">
+        <button class="btn-success" onclick="acceptChanges()">✓ Accept & Create PR</button>
+        <button class="btn-secondary" onclick="startOver()">✗ Start Over</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3001';
+    let currentTask = null;
+    let loading = false;
+
+    function addMessage(type, content) {
+      const messages = document.getElementById('messages');
+      const emptyState = messages.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
+      
+      const msg = document.createElement('div');
+      msg.className = `message ${type}`;
+      msg.textContent = content;
+      messages.appendChild(msg);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function setLoading(isLoading) {
+      loading = isLoading;
+      const input = document.getElementById('taskInput');
+      const buttons = document.querySelectorAll('button');
+      
+      if (isLoading) {
+        input.disabled = true;
+        buttons.forEach(btn => btn.disabled = true);
+        addMessage('claude', '⏳ Working...');
+      } else {
+        input.disabled = false;
+        buttons.forEach(btn => btn.disabled = false);
+        // Remove loading message
+        const messages = document.getElementById('messages');
+        const lastMsg = messages.lastElementChild;
+        if (lastMsg && lastMsg.textContent === '⏳ Working...') {
+          lastMsg.remove();
+        }
+      }
+    }
+
+    async function submitTask() {
+      const input = document.getElementById('taskInput');
+      const task = input.value.trim();
+      if (!task || loading) return;
+
+      addMessage('user', task);
+      input.value = '';
+      setLoading(true);
+
+      try {
+        const response = await fetch(`${API_URL}/api/task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+
+        currentTask = data;
+        addMessage('claude', data.result || 'Task completed successfully');
+        
+        // Show actions
+        document.getElementById('actions').style.display = 'flex';
+        
+        // Change input to follow-up mode
+        input.placeholder = 'Ask a follow-up question...';
+        input.onkeypress = function(e) { if(e.key === 'Enter') sendFollowUp(); };
+        document.querySelector('.btn-primary').onclick = sendFollowUp;
+        
+      } catch (error) {
+        addMessage('claude', `Error: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function sendFollowUp() {
+      const input = document.getElementById('taskInput');
+      const prompt = input.value.trim();
+      if (!prompt || !currentTask || loading) return;
+
+      addMessage('user', prompt);
+      input.value = '';
+      setLoading(true);
+
+      try {
+        const response = await fetch(`${API_URL}/api/task/${currentTask.taskId}/followup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+
+        addMessage('claude', data.result);
+      } catch (error) {
+        addMessage('claude', `Error: ${error.message}`);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function acceptChanges() {
+      if (!currentTask || loading) return;
+      setLoading(true);
+
+      try {
+        const response = await fetch(`${API_URL}/api/task/${currentTask.taskId}/accept`, {
+          method: 'POST'
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+
+        addMessage('claude', `✅ Changes accepted! Branch: ${data.branch}`);
+        startOver();
+      } catch (error) {
+        addMessage('claude', `Error: ${error.message}`);
+        setLoading(false);
+      }
+    }
+
+    function startOver() {
+      currentTask = null;
+      const input = document.getElementById('taskInput');
+      input.placeholder = 'Describe what you need done...';
+      input.onkeypress = function(e) { if(e.key === 'Enter') submitTask(); };
+      document.querySelector('.btn-primary').onclick = submitTask;
+      document.getElementById('actions').style.display = 'none';
+      setLoading(false);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  server:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GIT_REPO=/workspace
+      - WORKTREE_DIR=/tmp/pocketdev-worktrees
+      - DEFAULT_BRANCH=main
+    volumes:
+      - ./test-repo:/workspace
+      - ./frontend:/frontend
+    
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "2424:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
