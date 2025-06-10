@@ -1,7 +1,17 @@
 FROM node:20-slim
 
-# Install git and Claude
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install git, network tools, and debugging utilities
+RUN apt-get update && apt-get install -y \
+    git \
+    netstat-nat \
+    net-tools \
+    iproute2 \
+    strace \
+    procps \
+    curl \
+    psmisc \
+    lsof \
+    && rm -rf /var/lib/apt/lists/*
 RUN npm install -g @anthropic-ai/claude-code
 
 # Create workspace directory

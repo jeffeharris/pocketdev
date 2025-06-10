@@ -9,10 +9,10 @@ class Config {
   constructor() {
     this.config = {
       github: {
-        token: process.env.GITHUB_TOKEN || '',
-        username: process.env.GITHUB_USERNAME || '',
-        repository: process.env.GITHUB_REPOSITORY || '',
-        defaultBranch: process.env.DEFAULT_BRANCH || 'main'
+        token: '',
+        username: '',
+        repository: '',
+        defaultBranch: 'main'
       },
       localRepo: process.env.GIT_REPO || '/workspace'
     };
@@ -25,15 +25,15 @@ class Config {
       const data = await readFile(CONFIG_FILE, 'utf8');
       const saved = JSON.parse(data);
       
-      // Merge saved config with environment variables (env vars take precedence)
+      // Use saved config
       this.config = {
         github: {
-          token: process.env.GITHUB_TOKEN || saved.github?.token || '',
-          username: process.env.GITHUB_USERNAME || saved.github?.username || '',
-          repository: process.env.GITHUB_REPOSITORY || saved.github?.repository || '',
-          defaultBranch: process.env.DEFAULT_BRANCH || saved.github?.defaultBranch || 'main'
+          token: saved.github?.token || '',
+          username: saved.github?.username || '',
+          repository: saved.github?.repository || '',
+          defaultBranch: saved.github?.defaultBranch || 'main'
         },
-        localRepo: process.env.GIT_REPO || saved.localRepo || '/workspace'
+        localRepo: saved.localRepo || process.env.GIT_REPO || '/workspace'
       };
       
       this.loaded = true;
@@ -57,6 +57,9 @@ class Config {
   }
 
   async update(updates) {
+    // Reload current config first to avoid overwriting
+    await this.load();
+    
     if (updates.github) {
       this.config.github = { ...this.config.github, ...updates.github };
     }

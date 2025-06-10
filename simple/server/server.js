@@ -3,6 +3,7 @@ import cors from 'cors';
 import { spawn, exec as execCallback } from 'child_process';
 import { promisify } from 'util';
 import { mkdir, access } from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
 import config from './config.js';
 import GitHubAPI from './github.js';
@@ -40,24 +41,48 @@ async function ensureRepository() {
   try {
     // Check if repo exists
     await access(path.join(localPath, '.git'));
-    console.log('Repository exists, updating...');
+    console.log('Repository exists, checking remote...');
     
-    // Configure credentials
-    if (token && username) {
+    // Get current remote URL
+    let currentRemote = '';
+    try {
+      const { stdout } = await exec('git remote get-url origin', { cwd: localPath });
+      currentRemote = stdout.trim();
+    } catch (e) {
+      // No remote set
+    }
+    
+    // Configure credentials and update remote if needed
+    if (token && username && url) {
       const authUrl = url.replace('https://', `https://${username}:${token}@`);
-      await exec(`git remote set-url origin "${authUrl}"`, { cwd: localPath });
+      if (currentRemote !== authUrl) {
+        await exec(`git remote set-url origin "${authUrl}"`, { cwd: localPath });
+        console.log('Updated remote URL with credentials');
+      }
     }
     
     // Fetch latest
     await exec(`git fetch origin ${branch}`, { cwd: localPath });
     console.log(`Repository updated: ${localPath}`);
   } catch (error) {
-    // Repository doesn't exist, clone it
-    console.log('Repository not found, cloning...');
+    // Repository doesn't exist, need to handle non-empty directory
+    console.log('Git repository not found in workspace');
     
     if (!url) {
       console.warn('No repository URL configured');
       return;
+    }
+    
+    // Check if directory exists and is non-empty
+    try {
+      await access(localPath);
+      const { stdout } = await exec(`ls -A "${localPath}"`);
+      if (stdout.trim()) {
+        console.warn(`Directory ${localPath} is not empty and not a git repo. Skipping clone.`);
+        return;
+      }
+    } catch (e) {
+      // Directory doesn't exist, we can clone
     }
     
     // Clone with credentials
@@ -111,6 +136,7 @@ app.get('/api/config', (req, res) => {
 // Update configuration
 app.post('/api/config', async (req, res) => {
   try {
+    console.log('Updating config with:', JSON.stringify(req.body, null, 2));
     await config.update(req.body);
     
     // If GitHub config changed, ensure repository is cloned/updated
@@ -118,6 +144,7 @@ app.post('/api/config', async (req, res) => {
       await ensureRepository();
     }
     
+    console.log('Config after update:', JSON.stringify(config.get(), null, 2));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -291,7 +318,12 @@ app.post('/api/task/:taskId/accept', async (req, res) => {
 // Execute Claude
 function executeClaudeTask(worktreePath, prompt, sessionId = null) {
   return new Promise((resolve, reject) => {
-    const args = ['-p', prompt, '--output-format', 'json', '--allowedTools', 'Write,Edit,Read,Bash'];
+    console.log('\n=== CLAUDE EXECUTION ===');
+    console.log('Prompt length:', prompt.length);
+    console.log('Prompt:', prompt);
+    console.log('Session ID:', sessionId || 'none');
+    
+    const args = ['-p', prompt, '--output-format', 'json', '--allowedTools', 'Write,Edit,Read,Bash', '--model', 'claude-3-5-sonnet-20241022'];
     
     if (sessionId) {
       args.push('--resume', sessionId);
@@ -302,38 +334,57 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
     console.log('Spawning claude in:', worktreePath);
     console.log('With environment:', { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET' });
     
-    const claude = spawn('claude', args, {
+    // Go back to simple spawn with stdin redirect
+    const claude = spawn('/bin/sh', ['-c', `claude ${args.map(arg => `'${arg.replace(/'/g, "'\"'\"'")}'`).join(' ')} < /dev/null`], {
       cwd: worktreePath,
       env: { ...process.env },
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['inherit', 'pipe', 'pipe']
     });
     
-    // Close stdin immediately since we're not sending any input
-    claude.stdin.end();
+    console.log('Process spawned with PID:', claude.pid);
 
     let output = '';
     let error = '';
     let hasResponded = false;
+    let dataReceived = 0;
 
-    // Add a timeout
+    // Add a timeout (5 minutes for complex tasks)
     const timeout = setTimeout(() => {
       if (!hasResponded) {
-        console.error('Claude timeout after 60 seconds');
+        console.error('Claude timeout after 5 minutes');
+        console.error(`Total data received: ${dataReceived} bytes`);
+        console.error(`Output so far: ${output}`);
+        console.error(`Error so far: ${error}`);
+        
+        // Try different kill signals
+        console.log('Sending SIGTERM...');
         claude.kill('SIGTERM');
+        
+        setTimeout(() => {
+          if (!claude.killed) {
+            console.log('Process still alive, sending SIGKILL...');
+            claude.kill('SIGKILL');
+          }
+        }, 5000);
+        
         reject(new Error('Claude execution timed out'));
       }
-    }, 60000);
+    }, 300000); // 5 minutes
 
     claude.stdout.on('data', (data) => {
       hasResponded = true;
-      output += data.toString();
-      console.log('Claude stdout chunk:', data.toString());
+      const chunk = data.toString();
+      dataReceived += data.length;
+      output += chunk;
+      console.log(`Claude stdout chunk (${data.length} bytes):`, chunk);
     });
 
     claude.stderr.on('data', (data) => {
       hasResponded = true;
-      error += data.toString();
-      console.error('Claude stderr:', data.toString());
+      const chunk = data.toString();
+      dataReceived += data.length;
+      error += chunk;
+      console.error(`Claude stderr chunk (${data.length} bytes):`, chunk);
     });
 
     claude.on('error', (err) => {
@@ -341,23 +392,109 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
       console.error('Claude spawn error:', err);
       reject(err);
     });
+    
+    // Monitor process state and network activity
+    const stateInterval = setInterval(async () => {
+      try {
+        process.kill(claude.pid, 0); // Check if process exists
+        console.log(`\n[${new Date().toISOString()}] === PROCESS MONITORING ===`);
+        
+        // Get all child processes
+        try {
+          const { stdout: pstree } = await exec(`pstree -p ${claude.pid} || ps --ppid ${claude.pid} -o pid,comm --no-headers`);
+          console.log(`Process tree:\n${pstree.trim()}`);
+        } catch (e) {
+          console.log(`Process tree: Unable to get`);
+        }
+        
+        // Check all processes in the tree for claude
+        try {
+          const { stdout: claudeProcs } = await exec(`ps aux | grep -E "(claude|anthropic)" | grep -v grep | head -5`);
+          if (claudeProcs.trim()) {
+            console.log(`Claude processes:\n${claudeProcs.trim()}`);
+          }
+        } catch (e) {}
+        
+        // Check CPU and memory for all related processes
+        try {
+          const { stdout: psOut } = await exec(`ps -p ${claude.pid} --ppid ${claude.pid} -o pid,%cpu,vsz,rss,state,comm --no-headers`);
+          console.log(`CPU/Memory:\n${psOut.trim()}`);
+        } catch (e) {}
+        
+        // Check all network connections (not just for specific PID)
+        try {
+          const { stdout: netOut } = await exec(`ss -tnp 2>/dev/null | grep -E "(anthropic|claude|443)" | head -5`);
+          if (netOut.trim()) {
+            console.log(`Network connections:\n${netOut.trim()}`);
+          } else {
+            // Try netstat as fallback
+            const { stdout: netstatOut } = await exec(`netstat -tnp 2>/dev/null | grep -E "(anthropic|claude|443)" | head -5`);
+            console.log(`Network (netstat): ${netstatOut.trim() || 'No active connections to Anthropic'}`);
+          }
+        } catch (e) {
+          console.log(`Network: Unable to check connections`);
+        }
+        
+        // Check if any process is making HTTPS connections
+        try {
+          const { stdout: httpsConns } = await exec(`lsof -i :443 2>/dev/null | grep -v LISTEN | head -5`);
+          if (httpsConns.trim()) {
+            console.log(`HTTPS connections:\n${httpsConns.trim()}`);
+          }
+        } catch (e) {}
+        
+        // Sample strace to see what's happening
+        try {
+          const { stdout: straceOut } = await exec(`timeout 1 strace -p ${claude.pid} 2>&1 | head -10`);
+          if (straceOut.trim() && !straceOut.includes('Operation not permitted')) {
+            console.log(`System calls:\n${straceOut.trim()}`);
+          }
+        } catch (e) {}
+        
+        // Check if Claude left any debug logs
+        try {
+          const { stdout: claudeLogs } = await exec(`find /tmp -name "*claude*" -type f -mmin -5 2>/dev/null | head -5`);
+          if (claudeLogs.trim()) {
+            console.log(`Recent Claude files: ${claudeLogs.trim()}`);
+          }
+        } catch (e) {}
+        
+      } catch (e) {
+        console.log(`Process ${claude.pid} no longer exists`);
+        clearInterval(stateInterval);
+      }
+    }, 5000); // Every 5 seconds
 
     claude.on('close', (code) => {
+      clearInterval(stateInterval);
       clearTimeout(timeout);
       console.log(`Claude process exited with code ${code}`);
-      if (code !== 0) {
-        reject(new Error(`Claude exited with code ${code}: ${error}`));
-      } else {
-        try {
-          const result = JSON.parse(output);
+      
+      // Try to parse output even if exit code is non-zero
+      try {
+        const result = JSON.parse(output);
+        
+        // Check if Claude returned an error in the JSON
+        if (result.is_error || result.subtype === 'error') {
+          reject(new Error(result.result || 'Claude encountered an error'));
+        } else if (code !== 0) {
+          reject(new Error(result.result || `Claude exited with code ${code}`));
+        } else {
           resolve({
             sessionId: result.session_id,
             result: result.result,
             cost: result.cost_usd,
             success: result.subtype === 'success'
           });
-        } catch (e) {
-          reject(new Error('Failed to parse Claude output'));
+        }
+      } catch (e) {
+        // If we can't parse output, return stderr or generic error
+        if (error) {
+          reject(new Error(error));
+        } else if (output) {
+          reject(new Error(`Failed to parse Claude output: ${output}`));
+        } else {
+          reject(new Error(`Claude exited with code ${code} with no output`));
         }
       }
     });
