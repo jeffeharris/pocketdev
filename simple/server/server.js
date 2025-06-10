@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { mkdir, access } from 'fs/promises';
 import fs from 'fs';
 import path from 'path';
+import readline from 'readline';
 import config from './config.js';
 import GitHubAPI from './github.js';
 
@@ -323,7 +324,7 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
     console.log('Prompt:', prompt);
     console.log('Session ID:', sessionId || 'none');
     
-    const args = ['-p', prompt, '--output-format', 'json', '--allowedTools', 'Write,Edit,Read,Bash', '--model', 'claude-3-5-sonnet-20241022'];
+    const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'Write,Edit,Read,Bash', '--model', 'claude-3-5-sonnet-20241022'];
     
     if (sessionId) {
       args.push('--resume', sessionId);
@@ -334,26 +335,38 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
     console.log('Spawning claude in:', worktreePath);
     console.log('With environment:', { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT SET' });
     
-    // Go back to simple spawn with stdin redirect
-    const claude = spawn('/bin/sh', ['-c', `claude ${args.map(arg => `'${arg.replace(/'/g, "'\"'\"'")}'`).join(' ')} < /dev/null`], {
+    // Spawn claude directly without shell wrapper for better control
+    const claude = spawn('claude', args, {
       cwd: worktreePath,
       env: { ...process.env },
-      stdio: ['inherit', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']  // pipe stdin so we can close it
     });
     
     console.log('Process spawned with PID:', claude.pid);
+    
+    // Immediately close stdin to prevent hanging
+    claude.stdin.end();
+    console.log('Closed stdin');
 
-    let output = '';
     let error = '';
     let hasResponded = false;
     let dataReceived = 0;
+    let resultMessage = null;
+    let currentSessionId = sessionId;
+    let messageCount = 0;
+    
+    // Create readline interface for parsing JSON lines
+    const rl = readline.createInterface({
+      input: claude.stdout,
+      crlfDelay: Infinity
+    });
 
     // Add a timeout (5 minutes for complex tasks)
     const timeout = setTimeout(() => {
       if (!hasResponded) {
         console.error('Claude timeout after 5 minutes');
         console.error(`Total data received: ${dataReceived} bytes`);
-        console.error(`Output so far: ${output}`);
+        console.error(`Messages received: ${messageCount}`);
         console.error(`Error so far: ${error}`);
         
         // Try different kill signals
@@ -371,12 +384,55 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
       }
     }, 300000); // 5 minutes
 
-    claude.stdout.on('data', (data) => {
+    // Parse each line as streaming JSON
+    rl.on('line', (line) => {
       hasResponded = true;
-      const chunk = data.toString();
-      dataReceived += data.length;
-      output += chunk;
-      console.log(`Claude stdout chunk (${data.length} bytes):`, chunk);
+      dataReceived += line.length;
+      messageCount++;
+      
+      try {
+        const message = JSON.parse(line);
+        
+        console.log(`\n[${new Date().toISOString()}] Stream message #${messageCount}: ${message.type}${message.subtype ? ` (${message.subtype})` : ''}`);
+        
+        switch (message.type) {
+          case 'system':
+            if (message.subtype === 'init') {
+              currentSessionId = message.session_id;
+              console.log(`  Session initialized: ${currentSessionId}`);
+              console.log(`  Available tools: ${message.tools.join(', ')}`);
+            }
+            break;
+            
+          case 'user':
+            console.log(`  User message received (${message.message?.content?.length || 0} chars)`);
+            break;
+            
+          case 'assistant':
+            console.log(`  Assistant response in progress...`);
+            if (message.message?.content) {
+              const content = Array.isArray(message.message.content) 
+                ? message.message.content[0]?.text || ''
+                : message.message.content;
+              console.log(`  Preview: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+            }
+            break;
+            
+          case 'result':
+            resultMessage = message;
+            console.log(`  Result: ${message.subtype}`);
+            console.log(`  Cost: $${message.cost_usd}`);
+            console.log(`  Duration: ${message.duration_ms}ms`);
+            console.log(`  Turns: ${message.num_turns}`);
+            if (message.result) {
+              console.log(`  Output: ${message.result.substring(0, 200)}${message.result.length > 200 ? '...' : ''}`);
+            }
+            break;
+        }
+      } catch (e) {
+        console.error(`Failed to parse streaming JSON: ${e.message}`);
+        console.error(`Raw line: ${line}`);
+      }
     });
 
     claude.stderr.on('data', (data) => {
@@ -468,33 +524,33 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
     claude.on('close', (code) => {
       clearInterval(stateInterval);
       clearTimeout(timeout);
-      console.log(`Claude process exited with code ${code}`);
+      rl.close();
+      console.log(`\nClaude process exited with code ${code}`);
+      console.log(`Total messages received: ${messageCount}`);
       
-      // Try to parse output even if exit code is non-zero
-      try {
-        const result = JSON.parse(output);
-        
-        // Check if Claude returned an error in the JSON
-        if (result.is_error || result.subtype === 'error') {
-          reject(new Error(result.result || 'Claude encountered an error'));
-        } else if (code !== 0) {
-          reject(new Error(result.result || `Claude exited with code ${code}`));
+      // Use the streaming result message
+      if (resultMessage) {
+        if (resultMessage.is_error || resultMessage.subtype === 'error') {
+          reject(new Error(resultMessage.result || 'Claude encountered an error'));
+        } else if (code !== 0 && !resultMessage.result) {
+          reject(new Error(`Claude exited with code ${code}`));
         } else {
           resolve({
-            sessionId: result.session_id,
-            result: result.result,
-            cost: result.cost_usd,
-            success: result.subtype === 'success'
+            sessionId: resultMessage.session_id || currentSessionId,
+            result: resultMessage.result,
+            cost: resultMessage.cost_usd,
+            success: resultMessage.subtype === 'success'
           });
         }
-      } catch (e) {
-        // If we can't parse output, return stderr or generic error
+      } else {
+        // No result message received
         if (error) {
           reject(new Error(error));
-        } else if (output) {
-          reject(new Error(`Failed to parse Claude output: ${output}`));
+        } else if (code === 0) {
+          // Sometimes Claude exits 0 without a result message
+          reject(new Error('Claude completed but did not return a result'));
         } else {
-          reject(new Error(`Claude exited with code ${code} with no output`));
+          reject(new Error(`Claude exited with code ${code} with no result`));
         }
       }
     });

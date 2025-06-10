@@ -417,3 +417,4 @@ docker/volumes/
 # Zone identifiers (Windows)
 *:Zone.Identifier
 
+simple/test-repo/
