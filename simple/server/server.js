@@ -21,6 +21,21 @@ const WORKTREE_DIR = process.env.WORKTREE_DIR || '/tmp/pocketdev-worktrees';
 // In-memory task storage
 const tasks = new Map();
 
+// SSE clients for streaming updates
+const sseClients = new Map();
+
+// Send SSE event to a specific task
+function sendSSE(taskId, data) {
+  console.log(`[SSE] Attempting to send to task ${taskId}:`, data.type);
+  const client = sseClients.get(taskId);
+  if (client) {
+    console.log(`[SSE] Client found, sending event`);
+    client.write(`data: ${JSON.stringify(data)}\n\n`);
+  } else {
+    console.log(`[SSE] No client connected for task ${taskId}`);
+  }
+}
+
 // Initialize
 async function init() {
   await config.load();
@@ -117,6 +132,30 @@ app.get('/health', (req, res) => {
     worktreeDir: WORKTREE_DIR, 
     configured: config.isConfigured(),
     repository: cfg.github.repository || 'Not configured'
+  });
+});
+
+// SSE endpoint for streaming task updates
+app.get('/api/stream/:taskId', (req, res) => {
+  const { taskId } = req.params;
+  
+  // Set headers for SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+  
+  // Store client
+  sseClients.set(taskId, res);
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', taskId })}\n\n`);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    sseClients.delete(taskId);
   });
 });
 
@@ -228,26 +267,36 @@ app.post('/api/task', async (req, res) => {
       cwd: localPath
     });
 
-    // Execute Claude
-    console.log('Executing Claude...');
-    const result = await executeClaudeTask(worktreePath, task);
-    
-    // Store task info
+    // Store task info immediately so client can connect
     const taskInfo = {
       taskId,
       task,
       branchName,
       worktreePath,
-      sessionId: result.sessionId,
-      result: result.result,
-      status: 'review',
+      status: 'starting',
       createdAt: new Date().toISOString()
     };
     
     tasks.set(taskId, taskInfo);
-    console.log(`Task ${taskId} completed successfully`);
     
+    // Return immediately so client can connect to SSE
     res.json(taskInfo);
+    
+    // Execute Claude asynchronously
+    console.log('Executing Claude...');
+    executeClaudeTask(worktreePath, task, null, taskId)
+      .then(result => {
+        // Update task info with result
+        taskInfo.sessionId = result.sessionId;
+        taskInfo.result = result.result;
+        taskInfo.status = 'review';
+        console.log(`Task ${taskId} completed successfully`);
+      })
+      .catch(error => {
+        console.error(`Task ${taskId} failed:`, error);
+        taskInfo.status = 'error';
+        taskInfo.error = error.message;
+      });
   } catch (error) {
     console.error(`Task ${taskId} failed:`, error);
     res.status(500).json({ error: error.message });
@@ -268,7 +317,8 @@ app.post('/api/task/:taskId/followup', async (req, res) => {
   console.log(`Prompt: ${prompt}`);
 
   try {
-    const result = await executeClaudeTask(task.worktreePath, prompt, task.sessionId);
+    // Pass the taskId so streaming works
+    const result = await executeClaudeTask(task.worktreePath, prompt, task.sessionId, taskId);
     task.sessionId = result.sessionId;
     
     res.json({
@@ -294,15 +344,26 @@ app.post('/api/task/:taskId/accept', async (req, res) => {
   console.log(`\n=== ACCEPTING: ${taskId} ===`);
 
   try {
-    // Claude commits and cleans up
-    await executeClaudeTask(
-      task.worktreePath, 
-      'Clean up the code and commit all changes with a clear commit message',
-      task.sessionId
-    );
+    // Check if there are uncommitted changes
+    const { stdout: statusOut } = await exec('git status --porcelain', { cwd: task.worktreePath });
+    
+    if (statusOut.trim()) {
+      // There are uncommitted changes, ask Claude to commit
+      console.log('Uncommitted changes found, asking Claude to commit...');
+      await executeClaudeTask(
+        task.worktreePath, 
+        'Clean up the code and commit all changes with a clear commit message',
+        task.sessionId,
+        taskId  // Pass taskId for streaming
+      );
+    } else {
+      console.log('No uncommitted changes, proceeding to push...');
+    }
 
     // Push branch
-    await exec(`git push -u origin ${task.branchName}`, { cwd: task.worktreePath });
+    console.log(`Pushing branch ${task.branchName}...`);
+    const { stdout: pushOut } = await exec(`git push -u origin ${task.branchName}`, { cwd: task.worktreePath });
+    console.log('Push output:', pushOut);
     
     // Clean up worktree
     const { localPath } = config.getRepository();
@@ -317,12 +378,13 @@ app.post('/api/task/:taskId/accept', async (req, res) => {
 });
 
 // Execute Claude
-function executeClaudeTask(worktreePath, prompt, sessionId = null) {
+function executeClaudeTask(worktreePath, prompt, sessionId = null, taskId = null) {
   return new Promise((resolve, reject) => {
     console.log('\n=== CLAUDE EXECUTION ===');
     console.log('Prompt length:', prompt.length);
     console.log('Prompt:', prompt);
     console.log('Session ID:', sessionId || 'none');
+    console.log('Task ID:', taskId || 'none');
     
     const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--allowedTools', 'Write,Edit,Read,Bash', '--model', 'claude-3-5-sonnet-20241022'];
     
@@ -395,12 +457,25 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
         
         console.log(`\n[${new Date().toISOString()}] Stream message #${messageCount}: ${message.type}${message.subtype ? ` (${message.subtype})` : ''}`);
         
+        // Log the full message for certain types
+        if (messageCount <= 5 || message.type === 'result' || message.type === 'system') {
+          console.log(`  Full message structure:`, JSON.stringify(message, null, 2));
+        }
+        
         switch (message.type) {
           case 'system':
             if (message.subtype === 'init') {
               currentSessionId = message.session_id;
               console.log(`  Session initialized: ${currentSessionId}`);
               console.log(`  Available tools: ${message.tools.join(', ')}`);
+              if (taskId) {
+                sendSSE(taskId, {
+                  type: 'init',
+                  sessionId: currentSessionId,
+                  tools: message.tools,
+                  timestamp: new Date().toISOString()
+                });
+              }
             }
             break;
             
@@ -410,11 +485,118 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
             
           case 'assistant':
             console.log(`  Assistant response in progress...`);
-            if (message.message?.content) {
-              const content = Array.isArray(message.message.content) 
-                ? message.message.content[0]?.text || ''
-                : message.message.content;
-              console.log(`  Preview: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+            
+            // Log full message structure
+            console.log('  Full assistant message:', JSON.stringify(message, null, 2));
+            
+            // Handle preview text
+            if (message.message?.preview) {
+              console.log(`  Preview: ${message.message.preview.substring(0, 100)}${message.message.preview.length > 100 ? '...' : ''}`);
+              
+              if (taskId && message.message.preview) {
+                // Send assistant's thinking/explanation from preview
+                sendSSE(taskId, {
+                  type: 'thinking',
+                  text: message.message.preview.substring(0, 200),
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
+            
+            // Check for tool use in content array
+            if (message.message?.content && Array.isArray(message.message.content)) {
+              console.log(`  Content items: ${message.message.content.length}`);
+              message.message.content.forEach((item, index) => {
+                if (item.type === 'tool_use' && taskId) {
+                  console.log(`  Found tool_use: ${item.name}`);
+                  let activity = '';
+                  let icon = '🔧';
+                  
+                  // Determine activity type based on tool
+                  switch (item.name) {
+                    case 'Read':
+                      icon = '📖';
+                      activity = `Reading ${item.input?.file_path || 'file'}`;
+                      break;
+                    case 'Write':
+                      icon = '📝';
+                      activity = `Writing ${item.input?.file_path || 'file'}`;
+                      break;
+                    case 'Edit':
+                    case 'MultiEdit':
+                      icon = '✏️';
+                      activity = `Editing ${item.input?.file_path || 'file'}`;
+                      break;
+                    case 'Bash':
+                      icon = '🔧';
+                      activity = `Running: ${item.input?.command || 'command'}`;
+                      break;
+                    case 'Grep':
+                    case 'Glob':
+                      icon = '🔍';
+                      activity = `Searching for: ${item.input?.pattern || 'pattern'}`;
+                      break;
+                    default:
+                      activity = `Using ${item.name}`;
+                  }
+                  
+                  sendSSE(taskId, {
+                    type: 'activity',
+                    icon,
+                    activity,
+                    tool: item.name,
+                    timestamp: new Date().toISOString()
+                  });
+                }
+              });
+            }
+            break;
+            
+          case 'tool_use':
+            console.log(`  Tool use: ${message.tool_name}`);
+            if (message.tool_input) {
+              console.log(`  Tool input preview:`, JSON.stringify(message.tool_input).substring(0, 200));
+            }
+            
+            if (taskId) {
+              let activity = '';
+              let icon = '🔧';
+              
+              // Determine activity type based on tool
+              switch (message.tool_name) {
+                case 'Read':
+                  icon = '📖';
+                  activity = `Reading ${message.tool_input?.file_path || 'file'}`;
+                  break;
+                case 'Write':
+                  icon = '📝';
+                  activity = `Writing ${message.tool_input?.file_path || 'file'}`;
+                  break;
+                case 'Edit':
+                case 'MultiEdit':
+                  icon = '✏️';
+                  activity = `Editing ${message.tool_input?.file_path || 'file'}`;
+                  break;
+                case 'Bash':
+                  icon = '🔧';
+                  activity = `Running: ${message.tool_input?.command || 'command'}`;
+                  break;
+                case 'Grep':
+                case 'Glob':
+                  icon = '🔍';
+                  activity = `Searching for: ${message.tool_input?.pattern || 'pattern'}`;
+                  break;
+                default:
+                  activity = `Using ${message.tool_name}`;
+              }
+              
+              sendSSE(taskId, {
+                type: 'activity',
+                icon,
+                activity,
+                tool: message.tool_name,
+                timestamp: new Date().toISOString()
+              });
             }
             break;
             
@@ -426,6 +608,18 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
             console.log(`  Turns: ${message.num_turns}`);
             if (message.result) {
               console.log(`  Output: ${message.result.substring(0, 200)}${message.result.length > 200 ? '...' : ''}`);
+            }
+            
+            if (taskId) {
+              sendSSE(taskId, {
+                type: 'complete',
+                result: message.subtype,
+                cost: message.cost_usd,
+                duration: message.duration_ms,
+                turns: message.num_turns,
+                output: message.result,
+                timestamp: new Date().toISOString()
+              });
             }
             break;
         }
@@ -449,80 +643,8 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
       reject(err);
     });
     
-    // Monitor process state and network activity
-    const stateInterval = setInterval(async () => {
-      try {
-        process.kill(claude.pid, 0); // Check if process exists
-        console.log(`\n[${new Date().toISOString()}] === PROCESS MONITORING ===`);
-        
-        // Get all child processes
-        try {
-          const { stdout: pstree } = await exec(`pstree -p ${claude.pid} || ps --ppid ${claude.pid} -o pid,comm --no-headers`);
-          console.log(`Process tree:\n${pstree.trim()}`);
-        } catch (e) {
-          console.log(`Process tree: Unable to get`);
-        }
-        
-        // Check all processes in the tree for claude
-        try {
-          const { stdout: claudeProcs } = await exec(`ps aux | grep -E "(claude|anthropic)" | grep -v grep | head -5`);
-          if (claudeProcs.trim()) {
-            console.log(`Claude processes:\n${claudeProcs.trim()}`);
-          }
-        } catch (e) {}
-        
-        // Check CPU and memory for all related processes
-        try {
-          const { stdout: psOut } = await exec(`ps -p ${claude.pid} --ppid ${claude.pid} -o pid,%cpu,vsz,rss,state,comm --no-headers`);
-          console.log(`CPU/Memory:\n${psOut.trim()}`);
-        } catch (e) {}
-        
-        // Check all network connections (not just for specific PID)
-        try {
-          const { stdout: netOut } = await exec(`ss -tnp 2>/dev/null | grep -E "(anthropic|claude|443)" | head -5`);
-          if (netOut.trim()) {
-            console.log(`Network connections:\n${netOut.trim()}`);
-          } else {
-            // Try netstat as fallback
-            const { stdout: netstatOut } = await exec(`netstat -tnp 2>/dev/null | grep -E "(anthropic|claude|443)" | head -5`);
-            console.log(`Network (netstat): ${netstatOut.trim() || 'No active connections to Anthropic'}`);
-          }
-        } catch (e) {
-          console.log(`Network: Unable to check connections`);
-        }
-        
-        // Check if any process is making HTTPS connections
-        try {
-          const { stdout: httpsConns } = await exec(`lsof -i :443 2>/dev/null | grep -v LISTEN | head -5`);
-          if (httpsConns.trim()) {
-            console.log(`HTTPS connections:\n${httpsConns.trim()}`);
-          }
-        } catch (e) {}
-        
-        // Sample strace to see what's happening
-        try {
-          const { stdout: straceOut } = await exec(`timeout 1 strace -p ${claude.pid} 2>&1 | head -10`);
-          if (straceOut.trim() && !straceOut.includes('Operation not permitted')) {
-            console.log(`System calls:\n${straceOut.trim()}`);
-          }
-        } catch (e) {}
-        
-        // Check if Claude left any debug logs
-        try {
-          const { stdout: claudeLogs } = await exec(`find /tmp -name "*claude*" -type f -mmin -5 2>/dev/null | head -5`);
-          if (claudeLogs.trim()) {
-            console.log(`Recent Claude files: ${claudeLogs.trim()}`);
-          }
-        } catch (e) {}
-        
-      } catch (e) {
-        console.log(`Process ${claude.pid} no longer exists`);
-        clearInterval(stateInterval);
-      }
-    }, 5000); // Every 5 seconds
 
     claude.on('close', (code) => {
-      clearInterval(stateInterval);
       clearTimeout(timeout);
       rl.close();
       console.log(`\nClaude process exited with code ${code}`);
@@ -530,8 +652,16 @@ function executeClaudeTask(worktreePath, prompt, sessionId = null) {
       
       // Use the streaming result message
       if (resultMessage) {
-        if (resultMessage.is_error || resultMessage.subtype === 'error') {
-          reject(new Error(resultMessage.result || 'Claude encountered an error'));
+        if (resultMessage.is_error || resultMessage.subtype === 'error' || resultMessage.subtype === 'error_during_execution') {
+          // Send error to SSE before rejecting
+          if (taskId) {
+            sendSSE(taskId, {
+              type: 'error',
+              error: resultMessage.result || 'Claude encountered an error during execution',
+              timestamp: new Date().toISOString()
+            });
+          }
+          reject(new Error(resultMessage.result || 'Claude encountered an error during execution'));
         } else if (code !== 0 && !resultMessage.result) {
           reject(new Error(`Claude exited with code ${code}`));
         } else {

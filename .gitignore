@@ -418,3 +418,4 @@ docker/volumes/
 *:Zone.Identifier
 
 simple/test-repo/
+simple/frontend/test-*.html
