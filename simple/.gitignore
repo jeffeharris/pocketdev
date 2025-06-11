@@ -1,0 +1,23 @@
+# .gitignore for simple directory
+
+# Data directories
+projects/
+backups/
+data-snapshot/
+.archived/
+
+# Node modules
+node_modules/
+server/node_modules/
+
+# Environment files
+.env
+.env.local
+
+# System files
+.DS_Store
+*.log
+
+# Session data
+.tmux-*
+*.jsonl
