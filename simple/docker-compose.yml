@@ -1,10 +1,63 @@
 version: '3.8'
 
 services:
+  # Main Project Manager with GitHub integration
+  project-manager:
+    image: node:20
+    container_name: pocketdev-project-manager
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./projects:/workspace/projects
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+      - pocketdev-settings:/root/.pocketdev
+    ports:
+      - "3005:3005"  # API and dashboard
+    environment:
+      - PROJECTS_DIR=/workspace/projects
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - HOME=/root
+    command: >
+      sh -c "npm install express && node project-manager.js"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Claude ttyd base image (built once, used by project manager)
+  claude-ttyd:
+    build:
+      context: .
+      dockerfile: ttyd-dockerfile
+    image: claude-ttyd:latest
+    container_name: claude-ttyd-builder
+    command: echo "Claude ttyd image built"
+    profiles:
+      - build
+
+  # Claude ttyd server (runs ttyd for terminal access)
+  claude-ttyd-server:
+    image: claude-ttyd:latest
+    container_name: claude-ttyd-server
+    ports:
+      - "7681:7681"
+    volumes:
+      - ./projects:/projects
+      - ~/.claude:/root/.claude
+      - pocketdev-settings:/root/.pocketdev
+    restart: unless-stopped
+
+  # Optional: Original simple server (if you still need it)
   server:
     build: .
+    container_name: pocketdev-simple-server
     ports:
       - "3001:3001"
+      - "3003:3003"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GIT_REPO=/workspace
@@ -13,13 +66,24 @@ services:
       - pocketdev-workspace:/workspace
       - ./frontend:/frontend
       - ~/.pocketdev:/root/.pocketdev
+    profiles:
+      - simple  # Only starts when explicitly requested
     
+  # Optional: Original frontend
   frontend:
     image: nginx:alpine
+    container_name: pocketdev-frontend
     ports:
       - "2424:80"
     volumes:
       - ./frontend:/usr/share/nginx/html
+    profiles:
+      - simple  # Only starts when explicitly requested
 
 volumes:
   pocketdev-workspace:
+  pocketdev-settings:
+
+networks:
+  default:
+    name: pocketdev-network
