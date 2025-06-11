@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Claude Project Manager</title>
+  <title>Projects - PocketDev</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; }
@@ -598,7 +598,7 @@
           document.getElementById('new-project-section').style.display = 'none';
           loadProjects();
           // Navigate to project page
-          window.location.href = `/frontend/project-page.html?id=${result.project.id}`;
+          window.location.href = `/project-page.html?id=${result.project.id}`;
         } else {
           showError('Error: ' + result.error);
         }
@@ -654,7 +654,7 @@
           document.getElementById('new-project-section').style.display = 'none';
           loadProjects();
           // Navigate to project page
-          window.location.href = `/frontend/project-page.html?id=${result.project.id}`;
+          window.location.href = `/project-page.html?id=${result.project.id}`;
         } else {
           showError('Error: ' + result.error);
         }
@@ -701,7 +701,7 @@
           </div>
           
           <div class="project-actions">
-            <button onclick="window.location.href='/frontend/project-page.html?id=${project.id}'">
+            <button onclick="window.location.href='/project-page.html?id=${project.id}'">
               View Project
             </button>
             <button class="secondary" onclick="showGitOperations('${project.id}')">

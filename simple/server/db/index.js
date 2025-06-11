@@ -1,7 +1,12 @@
-const sqlite3 = require('sqlite3').verbose();
-const { open } = require('sqlite');
-const fs = require('fs').promises;
-const path = require('path');
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 class Database {
   constructor() {
@@ -17,7 +22,7 @@ class Database {
     // Open database connection
     this.db = await open({
       filename: this.dbPath,
-      driver: sqlite3.Database
+      driver: sqlite3.verbose().Database
     });
 
     // Enable foreign keys
@@ -70,19 +75,17 @@ class Database {
 // Singleton instance
 let instance = null;
 
-module.exports = {
-  async getDatabase() {
-    if (!instance) {
-      instance = new Database();
-      await instance.initialize();
-    }
-    return instance;
-  },
-
-  async closeDatabase() {
-    if (instance) {
-      await instance.close();
-      instance = null;
-    }
+export async function getDatabase() {
+  if (!instance) {
+    instance = new Database();
+    await instance.initialize();
   }
-};
+  return instance;
+}
+
+export async function closeDatabase() {
+  if (instance) {
+    await instance.close();
+    instance = null;
+  }
+}

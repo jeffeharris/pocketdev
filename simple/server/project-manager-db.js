@@ -3,22 +3,30 @@
 // Remote Project Manager for Claude Code with SQLite Persistence
 // Manages multiple repo branches with isolated Claude instances
 
-const express = require('express');
-const { spawn, exec } = require('child_process');
-const { promisify } = require('util');
-const path = require('path');
-const fs = require('fs').promises;
-const fsSync = require('fs');
-const crypto = require('crypto');
-const os = require('os');
-const GitHubAPI = require('./github.js');
-const { getDatabase } = require('./db/index.cjs');
-const Models = require('./db/models/index.cjs');
+import express from 'express';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
+import { promises as fs } from 'fs';
+import fsSync from 'fs';
+import crypto from 'crypto';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import GitHubAPI from './github.js';
+import { getDatabase } from './db/index.js';
+import Models from './db/models/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const execAsync = promisify(exec);
 const app = express();
 app.use(express.json());
-app.use(express.static('.'));
+
+// Serve frontend files directly at root
+const frontendPath = path.join(__dirname, '../frontend');
+app.use(express.static(frontendPath));
 
 const PORT = process.env.PORT || 3005;
 const PROJECTS_DIR = process.env.PROJECTS_DIR || path.join(__dirname, '../projects');
@@ -883,6 +891,9 @@ process.on('SIGINT', async () => {
   }
   process.exit();
 });
+
+// Export for ES modules
+export default app;
 
 // Start the server
 start();

@@ -300,7 +300,7 @@
 <body>
   <div class="header">
     <div style="max-width: 1400px; margin: 0 auto;">
-      <a href="/frontend/project-dashboard-v2.html" class="back-link">
+      <a href="/projects.html" class="back-link">
         ← Back to Projects
       </a>
       <h1 id="project-title">Loading...</h1>
@@ -370,7 +370,7 @@
     // Initialize
     if (!projectId) {
       alert('No project ID provided');
-      window.location.href = '/frontend/project-dashboard-v2.html';
+      window.location.href = '/projects.html';
     } else {
       loadProject();
       loadTasks();
@@ -391,7 +391,7 @@
       } catch (error) {
         console.error('Failed to load project:', error);
         alert('Failed to load project');
-        window.location.href = '/frontend/project-dashboard-v2.html';
+        window.location.href = '/projects.html';
       }
     }
     

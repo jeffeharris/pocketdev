@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 class TaskModel {
   constructor(db) {
@@ -71,115 +71,80 @@ class TaskModel {
       ORDER BY t.created_at DESC
     `, [projectId]);
 
-    // Parse metadata
-    for (const task of tasks) {
-      if (task.metadata) {
+    return tasks.map(t => {
+      if (t.metadata) {
         try {
-          task.metadata = JSON.parse(task.metadata);
+          t.metadata = JSON.parse(t.metadata);
         } catch (e) {
-          task.metadata = {};
+          t.metadata = {};
         }
       }
-    }
-
-    return tasks;
+      return t;
+    });
   }
 
   async update(id, data) {
-    const fields = [];
+    const updates = [];
     const values = [];
-
+    
     if (data.name !== undefined) {
-      fields.push('name = ?');
+      updates.push('name = ?');
       values.push(data.name);
     }
-    if (data.branch !== undefined) {
-      fields.push('branch = ?');
-      values.push(data.branch);
-    }
     if (data.status !== undefined) {
-      fields.push('status = ?');
+      updates.push('status = ?');
       values.push(data.status);
-      
-      if (data.status === 'completed') {
-        fields.push('completed_at = CURRENT_TIMESTAMP');
-      }
     }
-    if (data.hasUncommittedChanges !== undefined || data.has_uncommitted_changes !== undefined) {
-      fields.push('has_uncommitted_changes = ?');
-      values.push(data.hasUncommittedChanges || data.has_uncommitted_changes ? 1 : 0);
-    }
-    if (data.lastCommitSha !== undefined || data.last_commit_sha !== undefined) {
-      fields.push('last_commit_sha = ?');
-      values.push(data.lastCommitSha || data.last_commit_sha);
+    if (data.has_uncommitted_changes !== undefined) {
+      updates.push('has_uncommitted_changes = ?');
+      values.push(data.has_uncommitted_changes ? 1 : 0);
     }
     if (data.metadata !== undefined) {
-      fields.push('metadata = ?');
-      values.push(JSON.stringify(data.metadata));
+      updates.push('metadata = ?');
+      values.push(typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata));
     }
-
-    if (fields.length === 0) return this.findById(id);
-
-    values.push(id);
-    await this.db.run(`
-      UPDATE tasks 
-      SET ${fields.join(', ')}
-      WHERE id = ?
-    `, values);
-
+    
+    if (updates.length > 0) {
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(id);
+      
+      await this.db.run(`
+        UPDATE tasks 
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `, values);
+    }
+    
     return this.findById(id);
   }
 
   async archive(id) {
     await this.db.run(`
       UPDATE tasks 
-      SET is_archived = 1, status = 'archived'
+      SET is_archived = 1, updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `, [id]);
-
+    
     // Mark worktree as orphaned
     await this.db.run(`
       UPDATE worktree_registry 
-      SET is_orphaned = 1
+      SET is_orphaned = 1 
       WHERE task_id = ?
     `, [id]);
   }
 
   async delete(id) {
-    // Get worktree path before deletion
+    // Get worktree path first
     const task = await this.db.get('SELECT worktree_path FROM tasks WHERE id = ?', [id]);
     
     // Delete task (cascades to sessions)
     await this.db.run('DELETE FROM tasks WHERE id = ?', [id]);
     
-    // Mark worktree as orphaned
+    // Remove from worktree registry
     if (task && task.worktree_path) {
-      await this.db.run(`
-        UPDATE worktree_registry 
-        SET is_orphaned = 1, task_id = NULL
-        WHERE path = ?
-      `, [task.worktree_path]);
+      await this.db.run('DELETE FROM worktree_registry WHERE path = ?', [task.worktree_path]);
     }
-  }
-
-  async getActiveTaskCount(projectId) {
-    const result = await this.db.get(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE project_id = ? AND status = 'active' AND is_archived = 0
-    `, [projectId]);
-    
-    return result.count;
-  }
-
-  async checkForUncommittedChanges(id) {
-    const task = await this.findById(id);
-    if (!task) return null;
-
-    // This would be called by the git helper
-    // For now, just return the stored value
-    return task.has_uncommitted_changes;
   }
 }
 
-module.exports = TaskModel;
+export default TaskModel;

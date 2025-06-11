@@ -1,6 +1,6 @@
-const ProjectModel = require('./project.cjs');
-const TaskModel = require('./task.cjs');
-const SessionModel = require('./session.cjs');
+import ProjectModel from './project.js';
+import TaskModel from './task.js';
+import SessionModel from './session.js';
 
 class Models {
   constructor(db) {
@@ -81,4 +81,4 @@ class Models {
   }
 }
 
-module.exports = Models;
+export default Models;
