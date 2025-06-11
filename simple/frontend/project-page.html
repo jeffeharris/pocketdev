@@ -150,13 +150,28 @@
     }
     
     .terminal-container.fullscreen {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 1000;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
       background: #000;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+    }
+    
+    .terminal-container.fullscreen #all-terminals {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    
+    .terminal-container.fullscreen iframe {
+      width: 100% !important;
+      height: 100% !important;
     }
     
     .fullscreen-button {
@@ -176,6 +191,15 @@
     
     .fullscreen-button:hover {
       background: #1d4ed8;
+    }
+    
+    .terminal-container.fullscreen .fullscreen-button {
+      z-index: 10000;
+      background: rgba(220, 38, 38, 0.9);
+    }
+    
+    .terminal-container.fullscreen .fullscreen-button:hover {
+      background: #dc2626;
     }
     
     .task-actions {
