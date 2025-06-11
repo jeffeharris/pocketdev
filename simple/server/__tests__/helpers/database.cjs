@@ -4,10 +4,8 @@ const fs = require('fs').promises;
 const path = require('path');
 
 async function createTestDatabase() {
-  const dbPath = process.env.TEST_DB_PATH || path.join(__dirname, '..', 'test.db');
-  
-  // Ensure directory exists
-  await fs.mkdir(path.dirname(dbPath), { recursive: true });
+  // Use in-memory database for tests
+  const dbPath = ':memory:';
   
   // Open database
   const db = await open({

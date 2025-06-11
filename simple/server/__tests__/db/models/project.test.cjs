@@ -157,16 +157,25 @@ describe('Project Model', () => {
     });
 
     test('should order by last_accessed DESC', async () => {
-      const p1 = await projectModel.create({ name: 'Old', repoUrl: 'url1' });
-      await new Promise(resolve => setTimeout(resolve, 10));
-      const p2 = await projectModel.create({ name: 'New', repoUrl: 'url2' });
+      // Create projects with specific timestamps using raw SQL
+      const p1 = await projectModel.create({ name: 'First', repoUrl: 'url1' });
+      const p2 = await projectModel.create({ name: 'Second', repoUrl: 'url2' });
       
-      await projectModel.updateLastAccessed(p1.id);
+      // Manually set last_accessed times to ensure proper ordering
+      await db.run(
+        'UPDATE projects SET last_accessed = datetime("now", "-2 hours") WHERE id = ?',
+        [p2.id]
+      );
+      await db.run(
+        'UPDATE projects SET last_accessed = datetime("now", "-1 hours") WHERE id = ?',
+        [p1.id]
+      );
 
       const projects = await projectModel.findAll();
 
-      expect(projects[0].name).toBe('Old');
-      expect(projects[1].name).toBe('New');
+      // p1 should be first because it has a more recent last_accessed
+      expect(projects[0].name).toBe('First');
+      expect(projects[1].name).toBe('Second');
     });
   });
 
