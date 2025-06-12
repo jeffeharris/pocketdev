@@ -731,6 +731,20 @@
       loadTasks();
     }
     
+    // Helper function to get task status display
+    function getTaskStatusDisplay(task) {
+      if (task.status === 'merged') {
+        if (task.has_commits_since_merge) {
+          return '✅ Merged (new commits ready)';
+        } else if (task.has_uncommitted_changes) {
+          return '✅ Merged (uncommitted changes)';
+        } else {
+          return '✅ Merged';
+        }
+      }
+      return task.status || 'Active';
+    }
+    
     async function loadProject() {
       try {
         const response = await fetch(`${API_BASE}/projects/${projectId}`);
@@ -1051,19 +1065,40 @@
       container.innerHTML = tasks.map(task => {
         const isMergeTask = task.metadata?.isMergeTask || task.name.toLowerCase().includes('merge') || task.name.toLowerCase().includes('rebase');
         const isMerged = task.status === 'merged';
+        const hasNewCommits = task.has_commits_since_merge;
+        const hasUncommitted = task.has_uncommitted_changes;
+        
         let classes = 'task-item';
         if (currentTask?.id === task.id) classes += ' selected';
         if (isMergeTask) classes += ' merge-task';
         if (isMerged) classes += ' merged';
         
+        // Determine status icon and text
+        let statusIcon = '';
+        let statusText = '';
+        if (isMerged) {
+          if (hasNewCommits) {
+            statusIcon = '✅🔄';
+            statusText = 'Merged (new commits)';
+          } else if (hasUncommitted) {
+            statusIcon = '✅📝';
+            statusText = 'Merged (uncommitted)';
+          } else {
+            statusIcon = '✅';
+            statusText = 'Merged';
+          }
+        } else if (isMergeTask) {
+          statusIcon = '🔀';
+        }
+        
         return `
           <div class="${classes}" data-task-id="${task.id}">
             <div class="task-name">
-              ${isMerged ? '✅ ' : isMergeTask ? '🔀 ' : ''}${task.name}
+              ${statusIcon} ${task.name}
             </div>
             <div class="task-branch">${task.branch}</div>
-            ${isMergeTask ? '<div class="task-type">Merge Task</div>' : ''}
-            ${isMerged ? '<div class="task-status">Merged</div>' : ''}
+            ${isMergeTask && !isMerged ? '<div class="task-type">Merge Task</div>' : ''}
+            ${statusText ? `<div class="task-status">${statusText}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -1145,7 +1180,7 @@
             <div style="color: #6b7280; margin-bottom: 20px;">
               <div>Branch: <strong>${task.branch}</strong></div>
               <div>Created: ${new Date(task.created_at).toLocaleString()}</div>
-              <div>Status: <strong style="color: ${task.status === 'merged' ? '#15803d' : 'inherit'}">${task.status === 'merged' ? '✅ Merged' : task.status || 'Active'}</strong></div>
+              <div>Status: <strong style="color: ${task.status === 'merged' ? '#15803d' : 'inherit'}">${getTaskStatusDisplay(task)}</strong></div>
             </div>
             
             <div class="task-actions">
@@ -1672,13 +1707,22 @@
         // Update merge button visibility
         const mergeButton = document.getElementById(`merge-button-${taskId}`);
         if (mergeButton) {
-          // Show merge button only when:
+          // Show merge button when:
           // 1. No uncommitted changes
           // 2. No unpushed commits (everything is pushed)
-          // 3. Not already merged (check status)
-          if (!hasUncommittedChanges && !hasUnpushedCommits && currentTask && currentTask.status !== 'merged') {
+          // 3. Either never merged OR has commits since merge
+          const showMergeButton = !hasUncommittedChanges && !hasUnpushedCommits && currentTask && 
+            (currentTask.status !== 'merged' || currentTask.has_commits_since_merge);
+          
+          if (showMergeButton) {
             mergeButton.style.display = 'inline-block';
             mergeButton.disabled = false;
+            // Update button text if re-merging
+            if (currentTask.status === 'merged' && currentTask.has_commits_since_merge) {
+              mergeButton.textContent = `Re-merge to ${currentProject.base_branch}`;
+            } else {
+              mergeButton.textContent = `Merge to ${currentProject.base_branch}`;
+            }
           } else {
             mergeButton.style.display = 'none';
             mergeButton.disabled = true;

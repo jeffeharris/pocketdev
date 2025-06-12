@@ -56,6 +56,24 @@ async function initializeDatabase() {
   models = new Models(db);
   console.log('Database initialized');
   
+  // Check if migration needs to run
+  try {
+    const needsMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
+       WHERE name='merge_commit_sha'`
+    );
+    
+    if (needsMigration.count === 0) {
+      console.log('Running merge tracking migration...');
+      const migrationPath = path.join(__dirname, 'db/migrations/add_merge_tracking.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Migration completed');
+    }
+  } catch (error) {
+    console.error('Migration check failed:', error);
+  }
+  
   // Run cleanup on startup
   await cleanupOrphanedWorktrees();
 }
@@ -328,6 +346,8 @@ app.get('/api/projects/:projectId/tasks/:taskId', async (req, res) => {
     
     // Get git status for this task's worktree
     let gitInfo = null;
+    let mergeInfo = null;
+    
     if (fsSync.existsSync(task.worktree_path)) {
       const status = await gitCommand(task.worktree_path, 'git status --porcelain');
       const diff = await gitCommand(task.worktree_path, 'git diff --stat');
@@ -344,11 +364,54 @@ app.get('/api/projects/:projectId/tasks/:taskId', async (req, res) => {
           has_uncommitted_changes: gitInfo.hasChanges
         });
       }
+      
+      // Check for commits since merge if task was merged
+      if (task.merge_commit_sha) {
+        try {
+          // Get current HEAD
+          const headResult = await gitCommand(task.worktree_path, 'git rev-parse HEAD');
+          const currentHead = headResult.output.trim();
+          
+          // Check if we have commits since merge
+          let hasCommitsSinceMerge = false;
+          if (currentHead !== task.merge_commit_sha) {
+            // Count commits since merge
+            const countResult = await gitCommand(task.worktree_path, 
+              `git rev-list ${task.merge_commit_sha}..HEAD --count 2>/dev/null || echo 0`);
+            const commitsSinceMerge = parseInt(countResult.output.trim()) || 0;
+            hasCommitsSinceMerge = commitsSinceMerge > 0;
+          }
+          
+          // Update database if status changed
+          if (hasCommitsSinceMerge !== task.has_commits_since_merge) {
+            await models.tasks.update(task.id, {
+              has_commits_since_merge: hasCommitsSinceMerge
+            });
+            task.has_commits_since_merge = hasCommitsSinceMerge;
+          }
+          
+          mergeInfo = {
+            mergedAt: task.merged_at,
+            mergeCommitSha: task.merge_commit_sha,
+            hasCommitsSinceMerge: hasCommitsSinceMerge,
+            currentHead: currentHead
+          };
+        } catch (error) {
+          console.error('Error checking merge status:', error);
+          // Merge commit might be missing or branch rebased
+          mergeInfo = {
+            mergedAt: task.merged_at,
+            mergeCommitSha: task.merge_commit_sha,
+            error: 'Could not verify merge status'
+          };
+        }
+      }
     }
     
     res.json({
       ...task,
       git: gitInfo,
+      mergeInfo: mergeInfo,
       claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`
     });
   } catch (error) {
@@ -389,6 +452,13 @@ app.post('/api/projects/:projectId/tasks/:taskId/git', async (req, res) => {
           return res.status(400).json({ error: 'Commit message required' });
         }
         result = await gitCommand(task.worktree_path, `git commit -m "${message}"`);
+        
+        // If task was merged, mark that it has commits since merge
+        if (result.success && task.merge_commit_sha) {
+          await models.tasks.update(task.id, {
+            has_commits_since_merge: true
+          });
+        }
         break;
         
       case 'push':
@@ -1427,10 +1497,17 @@ Original task: ${task.name}`;
         });
       }
       
-      // Update task status
+      // Get the merge commit SHA
+      const mergeCommitResult = await gitCommand(project.local_path, 'git rev-parse HEAD');
+      const mergeCommitSha = mergeCommitResult.output.trim();
+      
+      // Update task with merge information
       await models.tasks.update(task.id, { 
         status: 'merged',
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        merged_at: new Date().toISOString(),
+        merge_commit_sha: mergeCommitSha,
+        has_commits_since_merge: false
       });
       
       // Update project last accessed
@@ -1439,7 +1516,8 @@ Original task: ${task.name}`;
       res.json({
         success: true,
         message: `Successfully merged ${task.branch} into ${project.base_branch}`,
-        output: mergeResult.output
+        output: mergeResult.output,
+        mergeCommit: mergeCommitSha
       });
     }
   } catch (error) {

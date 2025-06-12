@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     is_archived BOOLEAN DEFAULT 0,
     has_uncommitted_changes BOOLEAN DEFAULT 0,
     last_commit_sha TEXT,
+    merged_at TIMESTAMP DEFAULT NULL,
+    merge_commit_sha TEXT DEFAULT NULL,
+    has_commits_since_merge BOOLEAN DEFAULT 0,
     metadata JSON,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
