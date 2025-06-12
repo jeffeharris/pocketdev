@@ -379,7 +379,17 @@ app.get('/api/projects/:projectId/tasks/:taskId', async (req, res) => {
             const countResult = await gitCommand(task.worktree_path, 
               `git rev-list ${task.merge_commit_sha}..HEAD --count 2>/dev/null || echo 0`);
             const commitsSinceMerge = parseInt(countResult.output.trim()) || 0;
-            hasCommitsSinceMerge = commitsSinceMerge > 0;
+            
+            // Check if there are actual differences with the base branch
+            // This handles cases where rebase makes branches identical
+            if (project.base_branch) {
+              const diffResult = await gitCommand(task.worktree_path,
+                `git diff ${project.base_branch}..HEAD --name-only`);
+              const hasDifferences = diffResult.output.trim().length > 0;
+              hasCommitsSinceMerge = hasDifferences;
+            } else {
+              hasCommitsSinceMerge = commitsSinceMerge > 0;
+            }
           }
           
           // Update database if status changed
@@ -1342,6 +1352,18 @@ app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
       
       await models.projects.updateLastAccessed(project.id);
       
+      // After rebase, check if branches became identical
+      if (result.success && method === 'rebase' && task.status === 'merged') {
+        const diffResult = await gitCommand(task.worktree_path,
+          `git diff ${project.base_branch}..HEAD --name-only`);
+        if (!diffResult.output.trim()) {
+          // Branches are now identical, clear the "needs re-merge" flag
+          await models.tasks.update(task.id, {
+            has_commits_since_merge: false
+          });
+        }
+      }
+      
       res.json({ 
         success: result.success, 
         output: result.output,
@@ -1362,6 +1384,18 @@ app.post('/api/projects/:projectId/tasks/:taskId/check-merge-conflicts', async (
     }
     
     const project = await models.projects.findById(task.project_id);
+    
+    // First check if branches are identical
+    const diffCheck = await gitCommand(task.worktree_path, 
+      `git diff origin/${project.base_branch}..HEAD --name-only`);
+    if (!diffCheck.output.trim()) {
+      return res.json({
+        hasConflicts: false,
+        conflicts: [],
+        canMerge: false,
+        reason: 'Branches are identical - nothing to merge'
+      });
+    }
     
     // Save current branch state
     await gitCommand(task.worktree_path, 'git add -A');
