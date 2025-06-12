@@ -239,11 +239,30 @@
       border-color: #22c55e;
     }
     
+    .task-item.merged-needs-update {
+      background: #fffbeb;
+      border-color: #fbbf24;
+    }
+    
+    .task-item.merged-needs-update:hover {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    
+    .task-item.merged-needs-update.selected {
+      background: #fde68a;
+      border-color: #d97706;
+    }
+    
     .task-status {
       font-size: 11px;
       color: #15803d;
       font-weight: 600;
       margin-top: 4px;
+    }
+    
+    .task-status.needs-action {
+      color: #92400e;
     }
     
     .task-details {
@@ -735,7 +754,7 @@
     function getTaskStatusDisplay(task) {
       if (task.status === 'merged') {
         if (task.has_commits_since_merge) {
-          return '✅ Merged (new commits ready)';
+          return '🔄 Needs re-merge';
         } else if (task.has_uncommitted_changes) {
           return '✅ Merged (uncommitted changes)';
         } else {
@@ -1071,15 +1090,23 @@
         let classes = 'task-item';
         if (currentTask?.id === task.id) classes += ' selected';
         if (isMergeTask) classes += ' merge-task';
-        if (isMerged) classes += ' merged';
+        if (isMerged) {
+          if (hasNewCommits) {
+            classes += ' merged-needs-update';
+          } else {
+            classes += ' merged';
+          }
+        }
         
         // Determine status icon and text
         let statusIcon = '';
         let statusText = '';
+        let statusClass = 'task-status';
         if (isMerged) {
           if (hasNewCommits) {
-            statusIcon = '✅🔄';
-            statusText = 'Merged (new commits)';
+            statusIcon = '🔄';
+            statusText = 'Needs re-merge';
+            statusClass += ' needs-action';
           } else if (hasUncommitted) {
             statusIcon = '✅📝';
             statusText = 'Merged (uncommitted)';
@@ -1098,7 +1125,7 @@
             </div>
             <div class="task-branch">${task.branch}</div>
             ${isMergeTask && !isMerged ? '<div class="task-type">Merge Task</div>' : ''}
-            ${statusText ? `<div class="task-status">${statusText}</div>` : ''}
+            ${statusText ? `<div class="${statusClass}">${statusText}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -1180,7 +1207,7 @@
             <div style="color: #6b7280; margin-bottom: 20px;">
               <div>Branch: <strong>${task.branch}</strong></div>
               <div>Created: ${new Date(task.created_at).toLocaleString()}</div>
-              <div>Status: <strong style="color: ${task.status === 'merged' ? '#15803d' : 'inherit'}">${getTaskStatusDisplay(task)}</strong></div>
+              <div>Status: <strong style="color: ${task.status === 'merged' && !task.has_commits_since_merge ? '#15803d' : task.has_commits_since_merge ? '#92400e' : 'inherit'}">${getTaskStatusDisplay(task)}</strong></div>
             </div>
             
             <div class="task-actions">
