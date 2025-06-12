@@ -16,6 +16,7 @@ import { dirname } from 'path';
 import GitHubAPI from './github.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -560,6 +561,170 @@ function formatBytes(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const { projectId, taskId } = req.params;
+    const task = await models.tasks.findById(taskId);
+    if (!task || task.project_id !== projectId) {
+      return cb(new Error('Task not found'));
+    }
+    
+    // Create .pocketdev/tmp/images directory
+    const uploadDir = path.join(task.worktree_path, '.pocketdev', 'tmp', 'images');
+    await fs.mkdir(uploadDir, { recursive: true });
+    
+    // Ensure .gitignore includes .pocketdev/tmp
+    const gitignorePath = path.join(task.worktree_path, '.gitignore');
+    try {
+      const gitignoreContent = await fs.readFile(gitignorePath, 'utf8');
+      if (!gitignoreContent.includes('.pocketdev/tmp/')) {
+        await fs.appendFile(gitignorePath, '\n# PocketDev temporary files\n.pocketdev/tmp/\n');
+      }
+    } catch (e) {
+      // Create .gitignore if it doesn't exist
+      await fs.writeFile(gitignorePath, '# PocketDev temporary files\n.pocketdev/tmp/\n');
+    }
+    
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Sanitize filename and add timestamp
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9-_]/g, '-')
+      .substring(0, 50);
+    const timestamp = Date.now();
+    cb(null, `${name}-${timestamp}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    const allowedTypes = /jpeg|jpg|png|gif|webp|svg/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// Upload image to task
+app.post('/api/projects/:projectId/tasks/:taskId/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const task = await models.tasks.findById(req.params.taskId);
+    await models.projects.updateLastAccessed(req.params.projectId);
+    
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      size: req.file.size,
+      path: `.pocketdev/tmp/images/${req.file.filename}`,
+      referencePath: `@.pocketdev/tmp/images/${req.file.filename}`
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List images in task
+app.get('/api/projects/:projectId/tasks/:taskId/images', async (req, res) => {
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const imagesDir = path.join(task.worktree_path, '.pocketdev', 'tmp', 'images');
+    
+    // Check if directory exists
+    try {
+      await fs.access(imagesDir);
+    } catch (e) {
+      return res.json({ images: [] });
+    }
+    
+    const files = await fs.readdir(imagesDir);
+    const images = await Promise.all(
+      files
+        .filter(file => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file))
+        .map(async (filename) => {
+          const filePath = path.join(imagesDir, filename);
+          const stats = await fs.stat(filePath);
+          return {
+            filename,
+            size: stats.size,
+            sizeFormatted: formatBytes(stats.size),
+            created: stats.mtime,
+            path: `.pocketdev/tmp/images/${filename}`,
+            referencePath: `@.pocketdev/tmp/images/${filename}`
+          };
+        })
+    );
+    
+    // Sort by creation date, newest first
+    images.sort((a, b) => b.created - a.created);
+    
+    res.json({ images });
+  } catch (error) {
+    console.error('Error listing images:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Serve image file
+app.get('/api/projects/:projectId/tasks/:taskId/images/:filename', async (req, res) => {
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const imagePath = path.join(task.worktree_path, '.pocketdev', 'tmp', 'images', req.params.filename);
+    
+    // Check if file exists
+    await fs.access(imagePath);
+    
+    // Send the file
+    res.sendFile(imagePath);
+  } catch (error) {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
+// Delete image
+app.delete('/api/projects/:projectId/tasks/:taskId/images/:filename', async (req, res) => {
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const imagePath = path.join(task.worktree_path, '.pocketdev', 'tmp', 'images', req.params.filename);
+    
+    await fs.unlink(imagePath);
+    await models.projects.updateLastAccessed(req.params.projectId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Check git status before deletion
 app.get('/api/projects/:projectId/tasks/:taskId/check-delete', async (req, res) => {
