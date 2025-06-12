@@ -830,6 +830,39 @@ async function getDirectorySize(dirPath) {
   }
 }
 
+// Get base branch sync status
+app.get('/api/projects/:id/base-branch-status', async (req, res) => {
+  try {
+    const project = await models.projects.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!fsSync.existsSync(project.local_path)) {
+      return res.json({ behind: 0, ahead: 0, error: 'Project directory not found' });
+    }
+    
+    try {
+      // Check if base branch is behind its remote
+      const behindResult = await gitCommand(project.local_path, 
+        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`);
+      const behind = parseInt(behindResult.output.trim()) || 0;
+      
+      // Check if base branch has unpushed commits
+      const aheadResult = await gitCommand(project.local_path, 
+        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`);
+      const ahead = parseInt(aheadResult.output.trim()) || 0;
+      
+      res.json({ behind, ahead, branch: project.base_branch });
+    } catch (error) {
+      // Remote might not be set up or branch might not exist
+      res.json({ behind: 0, ahead: 0, error: error.message });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Fetch remote updates for project
 app.post('/api/projects/:id/fetch', async (req, res) => {
   try {

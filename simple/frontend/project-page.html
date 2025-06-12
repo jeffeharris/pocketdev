@@ -182,12 +182,20 @@
       position: absolute;
       top: 10px;
       right: 10px;
-      background: #f59e0b;
-      color: white;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #e5e7eb;
       padding: 2px 8px;
       border-radius: 12px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .update-indicator.ahead-only {
+      background: rgba(236, 253, 245, 0.9);
+      border-color: #10b981;
     }
     
     .task-item.has-updates {
@@ -394,7 +402,10 @@
       <div class="project-info">
         <h2 id="project-name">Loading...</h2>
         <div class="project-meta">
-          <div>Base Branch: <strong id="project-branch">-</strong></div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            Base Branch: <strong id="project-branch">-</strong>
+            <span id="base-branch-status" style="display: none;"></span>
+          </div>
           <div>Created: <span id="project-created">-</span></div>
         </div>
       </div>
@@ -476,11 +487,63 @@
         document.getElementById('project-name').textContent = currentProject.name;
         document.getElementById('project-branch').textContent = currentProject.base_branch || currentProject.branch || 'main';
         document.getElementById('project-created').textContent = new Date(currentProject.created_at).toLocaleDateString();
+        
+        // Check base branch sync status
+        checkBaseBranchStatus();
       } catch (error) {
         console.error('Failed to load project:', error);
         alert('Failed to load project');
         window.location.href = '/projects.html';
       }
+    }
+    
+    async function checkBaseBranchStatus() {
+      if (!currentProject) return;
+      
+      try {
+        // Check base branch sync status with its remote
+        const response = await fetch(`${API_BASE}/projects/${projectId}/base-branch-status`);
+        if (response.ok) {
+          const status = await response.json();
+          updateBaseBranchIndicator(status);
+        }
+      } catch (error) {
+        console.error('Failed to check base branch status:', error);
+      }
+    }
+    
+    function updateBaseBranchIndicator(status) {
+      const indicator = document.getElementById('base-branch-status');
+      if (!indicator) return;
+      
+      if (status.behind === 0 && status.ahead === 0) {
+        indicator.style.display = 'none';
+        return;
+      }
+      
+      // Build indicator with colored arrows
+      let indicatorHTML = '';
+      if (status.behind > 0) {
+        indicatorHTML += `<span style="color: #ef4444;">↓${status.behind}</span>`;
+      }
+      if (status.ahead > 0) {
+        if (indicatorHTML) indicatorHTML += ' ';
+        indicatorHTML += `<span style="color: #10b981;">↑${status.ahead}</span>`;
+      }
+      
+      indicator.innerHTML = indicatorHTML;
+      indicator.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid ${status.behind > 0 ? '#f59e0b' : '#10b981'};
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+      `;
+      indicator.title = `Base branch is ${status.behind || 0} commits behind and ${status.ahead || 0} commits ahead of origin/${currentProject.base_branch}`;
     }
     
     async function loadTasks() {
@@ -517,8 +580,9 @@
         const result = await response.json();
         
         if (result.success) {
-          // Check update status for all tasks
+          // Check update status for all tasks and base branch
           await checkForUpdates();
+          await checkBaseBranchStatus();
           showNotification('✓ Synced with remote successfully', 'success');
         } else {
           showNotification('Failed to sync: ' + (result.error || 'Unknown error'), 'error');
@@ -562,12 +626,28 @@
         const existingIndicator = el.querySelector('.update-indicator');
         if (existingIndicator) existingIndicator.remove();
         
-        if (status?.needsUpdate) {
-          el.classList.add('has-updates');
+        if (status?.needsUpdate || status?.ahead > 0) {
           const indicator = document.createElement('div');
           indicator.className = 'update-indicator';
-          indicator.textContent = `${status.behind} behind`;
-          indicator.title = `${status.behind} commits behind ${currentProject.base_branch}`;
+          
+          // Build indicator with colored arrows
+          let indicatorHTML = '';
+          if (status.behind > 0) {
+            indicatorHTML += `<span style="color: #ef4444;">↓${status.behind}</span>`;
+            el.classList.add('has-updates');
+          }
+          if (status.ahead > 0) {
+            if (indicatorHTML) indicatorHTML += ' ';
+            indicatorHTML += `<span style="color: #10b981;">↑${status.ahead}</span>`;
+          }
+          
+          // If only ahead (not behind), use green background
+          if (status.ahead > 0 && status.behind === 0) {
+            indicator.classList.add('ahead-only');
+          }
+          
+          indicator.innerHTML = indicatorHTML;
+          indicator.title = `${status.behind || 0} commits behind, ${status.ahead || 0} commits ahead of ${currentProject.base_branch}`;
           el.appendChild(indicator);
         }
       });
@@ -1144,31 +1224,54 @@
         
         const result = await response.json();
         
-        // Check if there are uncommitted changes
-        const hasUncommittedChanges = result.output && result.output.trim() !== '';
+        // Check if there are uncommitted changes by looking for clean working tree message
+        const hasUncommittedChanges = result.output && 
+          !result.output.includes('nothing to commit') && 
+          !result.output.includes('working tree clean');
         
         // Check for unpushed commits
+        // Use currentTask if available, otherwise fetch task details
+        let branch = currentTask?.branch;
+        if (!branch) {
+          const taskResponse = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}`);
+          const taskData = await taskResponse.json();
+          branch = taskData.branch;
+        }
+        
         const pushStatusResponse = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/git`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ operation: 'log', args: '--oneline origin/HEAD..HEAD' })
+          body: JSON.stringify({ operation: 'log', args: `--oneline origin/${branch}..HEAD` })
         });
         
         const pushStatus = await pushStatusResponse.json();
         const hasUnpushedCommits = pushStatus.output && pushStatus.output.trim() !== '';
         
+        // Debug logging
+        console.log('Git Status Debug:', {
+          hasUncommittedChanges,
+          hasUnpushedCommits,
+          pushStatusOutput: pushStatus.output,
+          branch
+        });
+        
         // Update push button visibility
         const pushButton = document.getElementById(`push-button-${taskId}`);
         if (pushButton) {
+          console.log('Push button found:', pushButton);
           if (hasUnpushedCommits && !hasUncommittedChanges) {
             pushButton.style.display = 'inline-block';
             pushButton.disabled = false;
             const commitCount = pushStatus.output.trim().split('\n').filter(l => l).length;
             pushButton.textContent = `Push ${commitCount} commit${commitCount > 1 ? 's' : ''}`;
+            console.log('Push button should be visible now');
           } else {
             pushButton.style.display = 'none';
             pushButton.disabled = true;
+            console.log('Push button hidden because:', { hasUnpushedCommits, hasUncommittedChanges });
           }
+        } else {
+          console.log('Push button not found for taskId:', taskId);
         }
         
         // Display status with enhanced info
