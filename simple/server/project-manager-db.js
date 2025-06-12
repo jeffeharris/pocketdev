@@ -744,16 +744,16 @@ const storage = multer.diskStorage({
     const uploadDir = path.join(task.worktree_path, '.pocketdev', 'tmp', 'images');
     await fs.mkdir(uploadDir, { recursive: true });
     
-    // Ensure .gitignore includes .pocketdev/tmp
+    // Ensure .gitignore includes .pocketdev/tmp/images
     const gitignorePath = path.join(task.worktree_path, '.gitignore');
     try {
       const gitignoreContent = await fs.readFile(gitignorePath, 'utf8');
-      if (!gitignoreContent.includes('.pocketdev/tmp/')) {
-        await fs.appendFile(gitignorePath, '\n# PocketDev temporary files\n.pocketdev/tmp/\n');
+      if (!gitignoreContent.includes('.pocketdev/tmp/images/')) {
+        await fs.appendFile(gitignorePath, '\n# PocketDev uploaded images\n.pocketdev/tmp/images/\n');
       }
     } catch (e) {
       // Create .gitignore if it doesn't exist
-      await fs.writeFile(gitignorePath, '# PocketDev temporary files\n.pocketdev/tmp/\n');
+      await fs.writeFile(gitignorePath, '# PocketDev uploaded images\n.pocketdev/tmp/images/\n');
     }
     
     cb(null, uploadDir);
