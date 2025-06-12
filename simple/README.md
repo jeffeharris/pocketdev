@@ -81,6 +81,13 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - Safe cleanup with archive options
 - Database-backed worktree registry
 
+### Mobile UI Support
+- Fully responsive design for mobile devices
+- Collapsible sidebar with hamburger menu navigation
+- Touch-friendly controls with 44px minimum touch targets
+- Native fullscreen API support for terminal viewing
+- Optimized for iPhone and other mobile browsers
+
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design details
