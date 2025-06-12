@@ -1118,6 +1118,170 @@ app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
   }
 });
 
+// Check merge conflicts for a task
+app.post('/api/projects/:projectId/tasks/:taskId/check-merge-conflicts', async (req, res) => {
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const project = await models.projects.findById(task.project_id);
+    
+    // Save current branch state
+    await gitCommand(task.worktree_path, 'git add -A');
+    await gitCommand(task.worktree_path, 'git stash');
+    
+    try {
+      // Attempt a dry-run merge to check for conflicts
+      const mergeResult = await gitCommand(task.worktree_path, 
+        `git merge --no-commit --no-ff origin/${project.base_branch}`);
+      
+      // Check if there are conflicts
+      const statusResult = await gitCommand(task.worktree_path, 'git status --porcelain');
+      const conflicts = statusResult.output
+        .split('\n')
+        .filter(line => line.startsWith('UU ') || line.startsWith('AA '))
+        .map(line => line.substring(3).trim());
+      
+      // Abort the merge
+      await gitCommand(task.worktree_path, 'git merge --abort');
+      
+      res.json({
+        hasConflicts: conflicts.length > 0,
+        conflicts: conflicts,
+        canMerge: conflicts.length === 0
+      });
+    } finally {
+      // Restore original state
+      await gitCommand(task.worktree_path, 'git stash pop');
+    }
+  } catch (error) {
+    // If stash pop fails, try to recover
+    try {
+      await gitCommand(task.worktree_path, 'git merge --abort');
+      await gitCommand(task.worktree_path, 'git stash drop');
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Merge task into base branch
+app.post('/api/projects/:projectId/tasks/:taskId/merge-to-base', async (req, res) => {
+  const { withClaude = false } = req.body;
+  
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const project = await models.projects.findById(task.project_id);
+    
+    if (withClaude) {
+      // Create a merge task for Claude assistance
+      const mergeTaskName = `merge ${task.branch} into ${project.base_branch}`;
+      const mergeTaskId = models.tasks.generateId();
+      
+      // Switch to base branch in main repo
+      await gitCommand(project.local_path, `git checkout ${project.base_branch}`);
+      await gitCommand(project.local_path, `git pull origin ${project.base_branch}`);
+      
+      // Create a new branch for the merge
+      const mergeBranch = `merge/${task.branch}-into-${project.base_branch}`.replace(/[^a-zA-Z0-9-]/g, '-');
+      const mergeWorktreePath = path.join(PROJECTS_DIR, `${project.id}-merge-${mergeTaskId}`);
+      
+      // Create worktree from base branch
+      await execAsync(`git worktree add -b ${mergeBranch} ${mergeWorktreePath} ${project.base_branch}`, {
+        cwd: project.local_path
+      });
+      
+      // Attempt merge in the new worktree
+      const mergeResult = await gitCommand(mergeWorktreePath, `git merge origin/${task.branch}`);
+      
+      // Create merge task in database
+      const mergeTask = await models.tasks.create(project.id, {
+        id: mergeTaskId,
+        name: mergeTaskName,
+        branch: mergeBranch,
+        worktree_path: mergeWorktreePath
+      });
+      
+      // Add metadata to indicate this is a merge task
+      await db.run(`
+        UPDATE tasks 
+        SET metadata = json_object(
+          'isMergeTask', true, 
+          'sourceBranch', ?, 
+          'targetBranch', ?,
+          'originalTaskId', ?
+        )
+        WHERE id = ?
+      `, [task.branch, project.base_branch, task.id, mergeTaskId]);
+      
+      // Write instructions for Claude
+      const promptFile = path.join(mergeWorktreePath, '.claude-prompt');
+      const prompt = `Help me complete the merge of branch '${task.branch}' into '${project.base_branch}'.
+
+There are merge conflicts that need to be resolved. Please:
+1. Check the current git status to see conflicting files
+2. Resolve all conflicts by choosing the appropriate changes
+3. Make sure the code still works after merging
+4. Commit the merge with an appropriate message
+
+Original task: ${task.name}`;
+      
+      await fs.writeFile(promptFile, prompt);
+      
+      res.json({
+        success: true,
+        mergeTask: {
+          id: mergeTask.id,
+          name: mergeTask.name,
+          branch: mergeTask.branch,
+          claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(mergeWorktreePath)}`
+        }
+      });
+      
+    } else {
+      // Direct merge without Claude
+      // First ensure we're on the base branch and up to date
+      await gitCommand(project.local_path, `git checkout ${project.base_branch}`);
+      await gitCommand(project.local_path, `git pull origin ${project.base_branch}`);
+      
+      // Merge the task branch
+      const mergeResult = await gitCommand(project.local_path, 
+        `git merge origin/${task.branch} -m "Merge branch '${task.branch}' into ${project.base_branch}"`);
+      
+      if (!mergeResult.success) {
+        return res.status(500).json({ 
+          error: 'Merge failed', 
+          details: mergeResult.error 
+        });
+      }
+      
+      // Update task status
+      await models.tasks.update(task.id, { 
+        status: 'merged',
+        completed_at: new Date().toISOString()
+      });
+      
+      // Update project last accessed
+      await models.projects.updateLastAccessed(project.id);
+      
+      res.json({
+        success: true,
+        message: `Successfully merged ${task.branch} into ${project.base_branch}`,
+        output: mergeResult.output
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete project
 app.delete('/api/projects/:id', async (req, res) => {
   try {
