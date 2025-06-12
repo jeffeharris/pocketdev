@@ -242,11 +242,30 @@
       border-color: #22c55e;
     }
     
+    .task-item.merged-needs-update {
+      background: #fffbeb;
+      border-color: #fbbf24;
+    }
+    
+    .task-item.merged-needs-update:hover {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    
+    .task-item.merged-needs-update.selected {
+      background: #fde68a;
+      border-color: #d97706;
+    }
+    
     .task-status {
       font-size: 11px;
       color: #15803d;
       font-weight: 600;
       margin-top: 4px;
+    }
+    
+    .task-status.needs-action {
+      color: #92400e;
     }
     
     .task-details {
@@ -413,11 +432,10 @@
     
     /* Image Upload Styles */
     .image-section {
-      margin-top: 20px;
       background: #f9fafb;
       border: 1px solid #e5e7eb;
       border-radius: 6px;
-      padding: 15px;
+      padding: 0;
     }
     
     .image-section-header {
@@ -495,9 +513,9 @@
     
     .image-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 15px;
-      margin-top: 15px;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
     }
     
     .image-item {
@@ -516,7 +534,7 @@
     
     .image-preview {
       width: 100%;
-      height: 120px;
+      height: 80px;
       object-fit: cover;
       cursor: pointer;
     }
@@ -981,7 +999,7 @@
     function getTaskStatusDisplay(task) {
       if (task.status === 'merged') {
         if (task.has_commits_since_merge) {
-          return '✅ Merged (new commits ready)';
+          return '🔄 Needs re-merge';
         } else if (task.has_uncommitted_changes) {
           return '✅ Merged (uncommitted changes)';
         } else {
@@ -1317,15 +1335,23 @@
         let classes = 'task-item';
         if (currentTask?.id === task.id) classes += ' selected';
         if (isMergeTask) classes += ' merge-task';
-        if (isMerged) classes += ' merged';
+        if (isMerged) {
+          if (hasNewCommits) {
+            classes += ' merged-needs-update';
+          } else {
+            classes += ' merged';
+          }
+        }
         
         // Determine status icon and text
         let statusIcon = '';
         let statusText = '';
+        let statusClass = 'task-status';
         if (isMerged) {
           if (hasNewCommits) {
-            statusIcon = '✅🔄';
-            statusText = 'Merged (new commits)';
+            statusIcon = '🔄';
+            statusText = 'Needs re-merge';
+            statusClass += ' needs-action';
           } else if (hasUncommitted) {
             statusIcon = '✅📝';
             statusText = 'Merged (uncommitted)';
@@ -1344,7 +1370,7 @@
             </div>
             <div class="task-branch">${task.branch}</div>
             ${isMergeTask && !isMerged ? '<div class="task-type">Merge Task</div>' : ''}
-            ${statusText ? `<div class="task-status">${statusText}</div>` : ''}
+            ${statusText ? `<div class="${statusClass}">${statusText}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -1426,7 +1452,7 @@
             <div style="color: #6b7280; margin-bottom: 20px;">
               <div>Branch: <strong>${task.branch}</strong></div>
               <div>Created: ${new Date(task.created_at).toLocaleString()}</div>
-              <div>Status: <strong style="color: ${task.status === 'merged' ? '#15803d' : 'inherit'}">${getTaskStatusDisplay(task)}</strong></div>
+              <div>Status: <strong style="color: ${task.status === 'merged' && !task.has_commits_since_merge ? '#15803d' : task.has_commits_since_merge ? '#92400e' : 'inherit'}">${getTaskStatusDisplay(task)}</strong></div>
             </div>
             
             <div class="task-actions">
@@ -1458,27 +1484,27 @@
               </button>
             </div>
             
-            <div id="image-section" class="image-section">
-              <div class="image-section-header" onclick="toggleImageSection()">
-                <h4>
+            <div id="image-section" class="image-section collapsed" style="margin-top: 15px;">
+              <div class="image-section-header" onclick="toggleImageSection()" style="padding: 10px; margin-bottom: 0;">
+                <h4 style="margin: 0; font-size: 14px;">
                   <span class="collapse-icon">▼</span>
-                  📸 Shared Images
-                  <span id="image-count" style="font-weight: normal; color: #6b7280; font-size: 14px;"></span>
+                  📸 Images
+                  <span id="image-count" style="font-weight: normal; color: #6b7280; font-size: 12px;"></span>
                 </h4>
               </div>
-              <div class="image-content">
-                <div id="upload-zone" class="upload-zone" onclick="selectFile()">
+              <div class="image-content" style="padding: 10px;">
+                <div id="upload-zone" class="upload-zone" onclick="selectFile()" style="padding: 15px;">
                   <input type="file" id="file-input" style="display: none;" accept="image/*" onchange="handleFileSelect(event)">
-                  <div class="upload-icon">📁</div>
-                  <div class="upload-text">Drop image here or click to browse</div>
-                  <div class="upload-hint">Press Ctrl+V to paste from clipboard</div>
+                  <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <span style="font-size: 24px;">📁</span>
+                    <div style="text-align: left;">
+                      <div style="font-weight: 500; font-size: 13px;">Drop image or click to browse</div>
+                      <div style="font-size: 11px; color: #6b7280;">Ctrl+V to paste • .pocketdev/tmp/images/</div>
+                    </div>
+                  </div>
                   <div class="upload-progress" style="display: none;">
                     <div class="upload-progress-bar" style="width: 0%"></div>
                   </div>
-                </div>
-                <div style="background: #f0f9ff; border: 1px solid #60a5fa; border-radius: 6px; padding: 12px; margin: 15px 0; font-size: 13px; color: #1e40af;">
-                  <strong>📍 Image Location:</strong> Images are saved to <code style="background: #e0f2fe; padding: 2px 6px; border-radius: 3px;">.pocketdev/tmp/images/</code> in your task directory.<br>
-                  <strong>🤖 Tell Claude:</strong> "Look for images in the .pocketdev/tmp/images folder" or copy the path below when sharing.
                 </div>
                 <div id="image-grid" class="image-grid"></div>
               </div>
