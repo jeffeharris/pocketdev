@@ -44,9 +44,18 @@ else
                 # Just attach without any messages - for cleaner experience
                 exec tmux attach-session -t "$SESSION_NAME"
             else
-                # Create new tmux session and start Claude
-                # Start tmux in detached mode, then attach to avoid startup messages
-                tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE" claude
+                # Check if there's a prompt file
+                PROMPT_FILE="$WORKTREE/.claude-prompt"
+                if [ -f "$PROMPT_FILE" ]; then
+                    # Read the prompt and delete the file
+                    PROMPT=$(cat "$PROMPT_FILE")
+                    rm -f "$PROMPT_FILE"
+                    # Create new tmux session with Claude and the prompt
+                    tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE" claude "$PROMPT"
+                else
+                    # Create new tmux session and start Claude normally
+                    tmux new-session -d -s "$SESSION_NAME" -c "$WORKTREE" claude
+                fi
                 exec tmux attach-session -t "$SESSION_NAME"
             fi
         else
@@ -82,12 +91,22 @@ else
             else
                 # First time in this worktree
                 touch "$SESSION_MARKER"
-                echo "Starting new Claude session..."
-                echo "Tip: Your conversation will be automatically resumed next time!"
-                echo ""
-                # We would need to capture the session ID after Claude starts
-                # For now, just start Claude normally
-                exec claude
+                
+                # Check if there's a prompt file
+                PROMPT_FILE="$WORKTREE/.claude-prompt"
+                if [ -f "$PROMPT_FILE" ]; then
+                    # Read the prompt and delete the file
+                    PROMPT=$(cat "$PROMPT_FILE")
+                    rm -f "$PROMPT_FILE"
+                    echo "Starting Claude with task instructions..."
+                    echo ""
+                    exec claude "$PROMPT"
+                else
+                    echo "Starting new Claude session..."
+                    echo "Tip: Your conversation will be automatically resumed next time!"
+                    echo ""
+                    exec claude
+                fi
             fi
         fi
     else

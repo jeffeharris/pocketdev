@@ -108,6 +108,28 @@
       100% { opacity: 1; }
     }
     
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+    
     .task-name {
       font-weight: 500;
       margin-bottom: 5px;
@@ -132,6 +154,66 @@
     
     .new-task-button:hover {
       background: #1d4ed8;
+    }
+    
+    .sync-button {
+      padding: 12px 20px;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .sync-button:hover {
+      background: #4b5563;
+    }
+    
+    .sync-button.syncing {
+      background: #3b82f6;
+      animation: pulse 1s infinite;
+    }
+    
+    .update-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #f59e0b;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .task-item.has-updates {
+      border-color: #f59e0b;
+    }
+    
+    .task-item.merge-task {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    
+    .task-item.merge-task:hover {
+      background: #fde68a;
+      border-color: #d97706;
+    }
+    
+    .task-item.merge-task.selected {
+      background: #fcd34d;
+      border-color: #d97706;
+    }
+    
+    .task-type {
+      font-size: 11px;
+      color: #92400e;
+      font-weight: 600;
+      margin-top: 4px;
     }
     
     .task-details {
@@ -318,9 +400,14 @@
       </div>
       
       <div class="task-list">
-        <button class="new-task-button" onclick="openNewTaskModal()">
-          + New Task
-        </button>
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <button class="new-task-button" style="flex: 1; margin: 0;" onclick="openNewTaskModal()">
+            + New Task
+          </button>
+          <button class="sync-button" onclick="syncWithRemote()" title="Fetch latest changes from remote">
+            ↻ Sync
+          </button>
+        </div>
         <div id="tasks">
           <!-- Tasks will be rendered here -->
         </div>
@@ -403,10 +490,111 @@
         
         renderTasks(tasks);
         
-        // Tasks loaded
+        // Check for updates after loading tasks
+        checkForUpdates();
       } catch (error) {
         console.error('Failed to load tasks:', error);
       }
+    }
+    
+    async function syncWithRemote() {
+      const button = document.querySelector('.sync-button');
+      button.classList.add('syncing');
+      button.disabled = true;
+      button.innerHTML = '↻ Syncing...';
+      
+      try {
+        // Fetch remote updates
+        const response = await fetch(`${API_BASE}/projects/${projectId}/fetch`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          // Check update status for all tasks
+          await checkForUpdates();
+          showNotification('✓ Synced with remote successfully', 'success');
+        } else {
+          showNotification('Failed to sync: ' + (result.error || 'Unknown error'), 'error');
+        }
+      } catch (error) {
+        showNotification('Sync error: ' + error.message, 'error');
+      } finally {
+        button.classList.remove('syncing');
+        button.disabled = false;
+        button.innerHTML = '↻ Sync';
+      }
+    }
+    
+    async function checkForUpdates() {
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/update-status`);
+        const data = await response.json();
+        
+        // Store update status globally
+        window.taskUpdateStatus = {};
+        data.updateStatus.forEach(status => {
+          window.taskUpdateStatus[status.taskId] = status;
+        });
+        
+        // Update task UI to show which tasks need updates
+        updateTaskIndicators();
+      } catch (error) {
+        console.error('Failed to check update status:', error);
+      }
+    }
+    
+    function updateTaskIndicators() {
+      const taskElements = document.querySelectorAll('.task-item');
+      
+      taskElements.forEach(el => {
+        const taskId = el.getAttribute('data-task-id');
+        const status = window.taskUpdateStatus?.[taskId];
+        
+        // Remove existing indicators
+        el.classList.remove('has-updates');
+        const existingIndicator = el.querySelector('.update-indicator');
+        if (existingIndicator) existingIndicator.remove();
+        
+        if (status?.needsUpdate) {
+          el.classList.add('has-updates');
+          const indicator = document.createElement('div');
+          indicator.className = 'update-indicator';
+          indicator.textContent = `${status.behind} behind`;
+          indicator.title = `${status.behind} commits behind ${currentProject.base_branch}`;
+          el.appendChild(indicator);
+        }
+      });
+    }
+    
+    function showNotification(message, type = 'info') {
+      // Simple notification - could be improved with a toast library
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+      `;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
     }
     
     function renderTasks(tasks) {
@@ -417,13 +605,19 @@
         return;
       }
       
-      container.innerHTML = tasks.map(task => `
-        <div class="task-item ${currentTask?.id === task.id ? 'selected' : ''}" 
-             data-task-id="${task.id}">
-          <div class="task-name">${task.name}</div>
-          <div class="task-branch">${task.branch}</div>
-        </div>
-      `).join('');
+      container.innerHTML = tasks.map(task => {
+        const isMergeTask = task.metadata?.isMergeTask || task.name.toLowerCase().includes('merge') || task.name.toLowerCase().includes('rebase');
+        return `
+          <div class="task-item ${currentTask?.id === task.id ? 'selected' : ''} ${isMergeTask ? 'merge-task' : ''}" 
+               data-task-id="${task.id}">
+            <div class="task-name">
+              ${isMergeTask ? '🔀 ' : ''}${task.name}
+            </div>
+            <div class="task-branch">${task.branch}</div>
+            ${isMergeTask ? '<div class="task-type">Merge Task</div>' : ''}
+          </div>
+        `;
+      }).join('');
       
       // Add click handlers after rendering
       container.querySelectorAll('.task-item').forEach(el => {
@@ -508,6 +702,11 @@
               <button class="secondary" onclick="showGitStatus('${task.id}')">
                 Git Status
               </button>
+              ${window.taskUpdateStatus?.[task.id]?.needsUpdate ? `
+                <button class="primary" onclick="updateTask('${task.id}')" style="background: #f59e0b;">
+                  Update (${window.taskUpdateStatus[task.id].behind} behind)
+                </button>
+              ` : ''}
               <button class="secondary" onclick="refreshTerminal('${task.id}')">
                 Refresh Terminal
               </button>
@@ -969,6 +1168,123 @@
         }
       } catch (error) {
         alert('Error: ' + error.message);
+      }
+    }
+    
+    async function updateTask(taskId) {
+      const status = window.taskUpdateStatus?.[taskId];
+      if (!status) return;
+      
+      if (status.hasUncommitted) {
+        showNotification('Cannot update: You have uncommitted changes. Please commit or stash them first.', 'error');
+        return;
+      }
+      
+      // Create a custom dialog for update options
+      const dialogHtml = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+          <div style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
+            <h3 style="margin-top: 0;">Update Task: ${status.taskName}</h3>
+            <p>This task is <strong>${status.behind} commits behind</strong> ${currentProject.base_branch}.</p>
+            
+            <div style="margin: 20px 0;">
+              <label style="display: block; margin-bottom: 10px;">
+                <input type="radio" name="updateMethod" value="merge" checked style="margin-right: 8px;">
+                <strong>Merge</strong> - Safer, preserves all history
+              </label>
+              <label style="display: block; margin-bottom: 10px;">
+                <input type="radio" name="updateMethod" value="rebase" style="margin-right: 8px;">
+                <strong>Rebase</strong> - Cleaner history, may need conflict resolution
+              </label>
+            </div>
+            
+            <div style="background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 15px; margin: 20px 0;">
+              <label style="display: flex; align-items: start; cursor: pointer;">
+                <input type="checkbox" id="withClaude" style="margin-right: 8px; margin-top: 2px;">
+                <div>
+                  <strong>Use Claude assistance</strong>
+                  <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                    Claude will guide you through the merge/rebase process and help resolve any conflicts
+                  </div>
+                </div>
+              </label>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+              <button onclick="this.closest('div').parentElement.remove()" style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer;">
+                Cancel
+              </button>
+              <button onclick="performUpdate('${taskId}')" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                Update Task
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      const dialog = document.createElement('div');
+      dialog.innerHTML = dialogHtml;
+      document.body.appendChild(dialog.firstElementChild);
+    }
+    
+    async function performUpdate(taskId) {
+      const method = document.querySelector('input[name="updateMethod"]:checked').value;
+      const withClaude = document.getElementById('withClaude').checked;
+      
+      // Close dialog
+      document.querySelector('[onclick*="performUpdate"]').closest('div').parentElement.remove();
+      
+      const button = document.querySelector(`[onclick="updateTask('${taskId}')"]`);
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Updating...';
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method, withClaude })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+          if (result.claudeAssisted && result.mergeTask) {
+            // Merge task created - navigate to it
+            showNotification(`Opening Claude to assist with ${method}...`, 'info');
+            
+            // Reload tasks to include the new merge task
+            await loadTasks();
+            
+            // Select the merge task after a short delay to ensure DOM is updated
+            setTimeout(() => {
+              selectTask(result.mergeTask.id);
+            }, 100);
+          } else {
+            showNotification(`✓ Task updated successfully using ${method}`, 'success');
+          }
+          
+          // Refresh update status
+          await checkForUpdates();
+          
+          // Re-render task details if this is the current task
+          if (currentTask?.id === taskId) {
+            renderTaskDetails(currentTask);
+          }
+        } else {
+          showNotification(`Update failed: ${result.error || 'Unknown error'}`, 'error');
+          if (result.hasUncommitted) {
+            showGitStatus(taskId);
+          }
+        }
+      } catch (error) {
+        showNotification(`Update error: ${error.message}`, 'error');
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = button.textContent.replace('Updating...', 'Update');
+        }
       }
     }
     

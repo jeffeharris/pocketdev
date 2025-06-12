@@ -147,14 +147,12 @@ async function configureGitCredentials(projectPath) {
     const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
     
     if (remoteUrl.includes('github.com')) {
-      await execAsync(`git config credential.helper store`, { cwd: projectPath });
+      // Configure git to use GitHub CLI as credential helper
+      await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
       
-      const credentialUrl = remoteUrl.trim()
-        .replace('https://github.com/', `https://${githubToken}@github.com/`)
-        .replace('git@github.com:', `https://${githubToken}@github.com/`)
-        .replace('.git', '');
-      
-      await execAsync(`echo "${credentialUrl}.git" | git credential-store store`, { cwd: projectPath });
+      // Make sure GH_TOKEN is set for the environment
+      process.env.GH_TOKEN = githubToken;
+      process.env.GITHUB_TOKEN = githubToken;
     }
   } catch (error) {
     console.error('Failed to configure git credentials:', error);
@@ -730,6 +728,182 @@ async function getDirectorySize(dirPath) {
     return 0;
   }
 }
+
+// Fetch remote updates for project
+app.post('/api/projects/:id/fetch', async (req, res) => {
+  try {
+    const project = await models.projects.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await configureGitCredentials(project.local_path);
+    
+    // Fetch with git (will use gh credential helper if configured)
+    const result = await gitCommand(project.local_path, 'git fetch --all --prune --tags');
+    
+    // Get updated branch info
+    const branchResult = await gitCommand(project.local_path, 'git branch -r');
+    const branches = branchResult.output
+      .split('\n')
+      .filter(b => b.trim())
+      .map(b => b.trim().replace('origin/', ''));
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: result.success, 
+      output: result.output,
+      branches: branches
+    });
+  } catch (error) {
+    console.error('Fetch error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check update status for all tasks
+app.get('/api/projects/:id/update-status', async (req, res) => {
+  try {
+    const project = await models.projects.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const tasks = await models.tasks.findByProjectId(project.id);
+    const updateStatus = [];
+    
+    for (const task of tasks) {
+      if (!fsSync.existsSync(task.worktree_path)) continue;
+      
+      try {
+        // Check if branch is behind origin/base_branch
+        const behindResult = await gitCommand(task.worktree_path, 
+          `git rev-list --count HEAD..origin/${project.base_branch}`);
+        const behind = parseInt(behindResult.output.trim()) || 0;
+        
+        // Check if branch has unpushed commits
+        const aheadResult = await gitCommand(task.worktree_path, 
+          `git rev-list --count origin/${project.base_branch}..HEAD`);
+        const ahead = parseInt(aheadResult.output.trim()) || 0;
+        
+        // Check for uncommitted changes
+        const statusResult = await gitCommand(task.worktree_path, 'git status --porcelain');
+        const hasUncommitted = statusResult.output.trim().length > 0;
+        
+        updateStatus.push({
+          taskId: task.id,
+          taskName: task.name,
+          branch: task.branch,
+          behind,
+          ahead,
+          hasUncommitted,
+          needsUpdate: behind > 0
+        });
+      } catch (error) {
+        // Task might not have tracking set up
+        updateStatus.push({
+          taskId: task.id,
+          taskName: task.name,
+          branch: task.branch,
+          behind: 0,
+          ahead: 0,
+          hasUncommitted: false,
+          needsUpdate: false,
+          error: error.message
+        });
+      }
+    }
+    
+    res.json({ updateStatus });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a task with remote changes
+app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
+  const { method = 'merge', withClaude = false } = req.body; // 'merge' or 'rebase', with or without Claude assistance
+  
+  try {
+    const task = await models.tasks.findById(req.params.taskId);
+    if (!task || task.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const project = await models.projects.findById(task.project_id);
+    
+    // Check for uncommitted changes
+    const statusResult = await gitCommand(task.worktree_path, 'git status --porcelain');
+    if (statusResult.output.trim()) {
+      return res.status(400).json({ 
+        error: 'Cannot update: You have uncommitted changes',
+        hasUncommitted: true,
+        changes: statusResult.output
+      });
+    }
+    
+    if (withClaude) {
+      // Create a special merge task that uses the same worktree
+      const operation = method === 'rebase' ? 'rebase' : 'merge';
+      const mergeTaskName = `${operation} ${project.base_branch} into ${task.name}`;
+      const prompt = `Help me ${operation} the branch '${project.base_branch}' into this task branch '${task.branch}'. ` +
+        `Please guide me through the process and help resolve any conflicts that may arise. ` +
+        `Start by checking the current status and then perform the ${operation}.`;
+      
+      // Create a temporary merge task in the database
+      const mergeTaskId = models.tasks.generateId();
+      const mergeTask = await models.tasks.create(project.id, {
+        id: mergeTaskId,
+        name: mergeTaskName,
+        branch: task.branch, // Same branch as original task
+        worktreePath: task.worktree_path // Use the SAME worktree
+      });
+      
+      // Update metadata to mark this as a merge task
+      await db.run(`
+        UPDATE tasks 
+        SET metadata = json_object('isMergeTask', true, 'parentTaskId', ?, 'operation', ?)
+        WHERE id = ?
+      `, [task.id, operation, mergeTaskId]);
+      
+      // Write prompt to a file in the worktree
+      const promptFile = path.join(task.worktree_path, '.claude-prompt');
+      await fs.writeFile(promptFile, prompt);
+      
+      // Return the merge task info so UI can open it
+      res.json({ 
+        success: true,
+        claudeAssisted: true,
+        mergeTask: {
+          id: mergeTask.id,
+          name: mergeTask.name,
+          claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(`/projects/${project.id}-task-${task.id}`)}`
+        },
+        message: `Created merge task with Claude assistance`
+      });
+    } else {
+      // Perform update directly
+      let result;
+      if (method === 'rebase') {
+        result = await gitCommand(task.worktree_path, `git rebase origin/${project.base_branch}`);
+      } else {
+        result = await gitCommand(task.worktree_path, `git merge origin/${project.base_branch}`);
+      }
+      
+      await models.projects.updateLastAccessed(project.id);
+      
+      res.json({ 
+        success: result.success, 
+        output: result.output,
+        method
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Delete project
 app.delete('/api/projects/:id', async (req, res) => {
