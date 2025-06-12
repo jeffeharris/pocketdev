@@ -395,6 +395,8 @@ dist/
 *~
 .vscode/
 *.sublime-*
+.claude/*local*
+.claude-prompt
 
 # SQLite databases
 *.db

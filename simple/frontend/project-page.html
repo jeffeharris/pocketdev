@@ -407,6 +407,229 @@
       margin-bottom: 10px;
       color: #374151;
     }
+    
+    /* Image Upload Styles */
+    .image-section {
+      margin-top: 20px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 15px;
+    }
+    
+    .image-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .image-section-header h4 {
+      margin: 0;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .collapse-icon {
+      transition: transform 0.2s;
+    }
+    
+    .image-section.collapsed .collapse-icon {
+      transform: rotate(-90deg);
+    }
+    
+    .image-section.collapsed .image-content {
+      display: none;
+    }
+    
+    .upload-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 6px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: white;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .upload-zone:hover {
+      border-color: #2563eb;
+      background: #f0f9ff;
+    }
+    
+    .upload-zone.dragover {
+      border-color: #2563eb;
+      background: #dbeafe;
+    }
+    
+    .upload-zone.has-clipboard {
+      border-color: #10b981;
+      background: #d1fae5;
+    }
+    
+    .upload-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+      color: #6b7280;
+    }
+    
+    .upload-text {
+      color: #374151;
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+    
+    .upload-hint {
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .image-item {
+      position: relative;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    
+    .image-item:hover {
+      border-color: #2563eb;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .image-preview {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      cursor: pointer;
+    }
+    
+    .image-info {
+      padding: 8px;
+      font-size: 12px;
+    }
+    
+    .image-filename {
+      font-weight: 500;
+      color: #374151;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .image-size {
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    
+    .image-actions {
+      display: flex;
+      gap: 5px;
+      margin-top: 5px;
+    }
+    
+    .image-actions button {
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+    }
+    
+    .copy-button {
+      background: #10b981;
+      color: white;
+    }
+    
+    .copy-button:hover {
+      background: #059669;
+    }
+    
+    .delete-button {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .delete-button:hover {
+      background: #dc2626;
+    }
+    
+    .upload-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+    
+    .upload-progress-bar {
+      height: 100%;
+      background: #2563eb;
+      transition: width 0.3s;
+    }
+    
+    /* Image Modal */
+    .image-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 2000;
+      cursor: pointer;
+    }
+    
+    .image-modal img {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    
+    .paste-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #10b981;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+      z-index: 1500;
+      animation: slideIn 0.3s;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
   </style>
 </head>
 <body>
@@ -476,6 +699,16 @@
         </div>
       </form>
     </div>
+  </div>
+  
+  <!-- Image Modal -->
+  <div id="image-modal" class="image-modal" onclick="closeImageModal()">
+    <img id="modal-image" src="" alt="">
+  </div>
+  
+  <!-- Paste Indicator -->
+  <div id="paste-indicator" class="paste-indicator">
+    📋 Image detected in clipboard - Press Ctrl+V to paste
   </div>
   
   <script>
@@ -942,6 +1175,28 @@
               <button class="secondary" onclick="deleteTask('${task.id}')">
                 Delete Task
               </button>
+            </div>
+            
+            <div id="image-section" class="image-section">
+              <div class="image-section-header" onclick="toggleImageSection()">
+                <h4>
+                  <span class="collapse-icon">▼</span>
+                  📸 Shared Images
+                  <span id="image-count" style="font-weight: normal; color: #6b7280; font-size: 14px;"></span>
+                </h4>
+              </div>
+              <div class="image-content">
+                <div id="upload-zone" class="upload-zone" onclick="selectFile()">
+                  <input type="file" id="file-input" style="display: none;" accept="image/*" onchange="handleFileSelect(event)">
+                  <div class="upload-icon">📁</div>
+                  <div class="upload-text">Drop image here or click to browse</div>
+                  <div class="upload-hint">Press Ctrl+V to paste from clipboard</div>
+                  <div class="upload-progress" style="display: none;">
+                    <div class="upload-progress-bar" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div id="image-grid" class="image-grid"></div>
+              </div>
             </div>
             
             <div id="git-info" style="margin-top: 20px;"></div>
@@ -1874,6 +2129,277 @@
         </div>
       `;
     }
+    
+    // Image Upload Functions
+    let uploadedImages = [];
+    
+    // Initialize image functionality when task is selected
+    function initializeImages() {
+      loadImages();
+      setupDragAndDrop();
+      setupPasteHandler();
+    }
+    
+    // Toggle image section collapse
+    function toggleImageSection() {
+      const section = document.getElementById('image-section');
+      section.classList.toggle('collapsed');
+    }
+    
+    // Load images for current task
+    async function loadImages() {
+      if (!currentTask) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${currentTask.id}/images`);
+        const data = await response.json();
+        uploadedImages = data.images || [];
+        renderImages();
+        updateImageCount();
+      } catch (error) {
+        console.error('Failed to load images:', error);
+      }
+    }
+    
+    // Update image count display
+    function updateImageCount() {
+      const countEl = document.getElementById('image-count');
+      if (countEl) {
+        countEl.textContent = uploadedImages.length > 0 ? `(${uploadedImages.length})` : '';
+      }
+    }
+    
+    // Render image grid
+    function renderImages() {
+      const grid = document.getElementById('image-grid');
+      if (!grid) return;
+      
+      if (uploadedImages.length === 0) {
+        grid.innerHTML = '';
+        return;
+      }
+      
+      grid.innerHTML = uploadedImages.map(image => `
+        <div class="image-item">
+          <img class="image-preview" 
+               src="${API_BASE}/projects/${projectId}/tasks/${currentTask.id}/images/${image.filename}"
+               alt="${image.filename}"
+               onclick="openImageModal('${image.filename}')">
+          <div class="image-info">
+            <div class="image-filename" title="${image.filename}">${image.filename}</div>
+            <div class="image-size">${image.sizeFormatted}</div>
+            <div class="image-actions">
+              <button class="copy-button" onclick="copyReference('${image.referencePath}')" title="Copy @ reference">
+                📋 Copy
+              </button>
+              <button class="delete-button" onclick="deleteImage('${image.filename}')" title="Delete image">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    // File selection
+    function selectFile() {
+      document.getElementById('file-input').click();
+    }
+    
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        uploadImage(file);
+      }
+    }
+    
+    // Upload image
+    async function uploadImage(file, filename = null) {
+      if (!currentTask) return;
+      
+      const formData = new FormData();
+      formData.append('image', file, filename || file.name);
+      
+      // Show progress
+      const uploadZone = document.getElementById('upload-zone');
+      const progressBar = uploadZone.querySelector('.upload-progress');
+      const progressBarFill = uploadZone.querySelector('.upload-progress-bar');
+      progressBar.style.display = 'block';
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${currentTask.id}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        
+        const result = await response.json();
+        
+        // Reload images
+        await loadImages();
+        
+        // Show success
+        showNotification(`✅ Uploaded: ${result.filename}`);
+        
+        // Copy reference to clipboard automatically
+        copyReference(result.referencePath, true);
+        
+      } catch (error) {
+        console.error('Upload failed:', error);
+        alert('Upload failed: ' + error.message);
+      } finally {
+        // Hide progress
+        progressBar.style.display = 'none';
+        progressBarFill.style.width = '0%';
+        
+        // Reset file input
+        document.getElementById('file-input').value = '';
+      }
+    }
+    
+    // Copy @ reference to clipboard
+    function copyReference(path, silent = false) {
+      navigator.clipboard.writeText(path).then(() => {
+        if (!silent) {
+          showNotification(`📋 Copied: ${path}`);
+        }
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+      });
+    }
+    
+    // Delete image
+    async function deleteImage(filename) {
+      if (!confirm(`Delete ${filename}?`)) return;
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${currentTask.id}/images/${filename}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          await loadImages();
+          showNotification(`🗑️ Deleted: ${filename}`);
+        }
+      } catch (error) {
+        alert('Failed to delete image');
+      }
+    }
+    
+    // Image modal
+    function openImageModal(filename) {
+      const modal = document.getElementById('image-modal');
+      const img = document.getElementById('modal-image');
+      img.src = `${API_BASE}/projects/${projectId}/tasks/${currentTask.id}/images/${filename}`;
+      modal.style.display = 'block';
+    }
+    
+    function closeImageModal() {
+      document.getElementById('image-modal').style.display = 'none';
+    }
+    
+    // Drag and drop
+    function setupDragAndDrop() {
+      const uploadZone = document.getElementById('upload-zone');
+      if (!uploadZone) return;
+      
+      uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+      });
+      
+      uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+      });
+      
+      uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        
+        const files = Array.from(e.dataTransfer.files);
+        const imageFile = files.find(file => file.type.startsWith('image/'));
+        
+        if (imageFile) {
+          uploadImage(imageFile);
+        }
+      });
+    }
+    
+    // Paste handler
+    function setupPasteHandler() {
+      document.addEventListener('paste', async (e) => {
+        if (!currentTask) return;
+        
+        const items = Array.from(e.clipboardData.items);
+        const imageItem = items.find(item => item.type.startsWith('image/'));
+        
+        if (imageItem) {
+          const blob = imageItem.getAsFile();
+          const filename = `screenshot-${Date.now()}.png`;
+          uploadImage(blob, filename);
+        }
+      });
+      
+      // Check for clipboard content periodically
+      setInterval(checkClipboard, 1000);
+    }
+    
+    // Check if clipboard has image
+    async function checkClipboard() {
+      try {
+        const items = await navigator.clipboard.read();
+        const hasImage = items.some(item => item.types.some(type => type.startsWith('image/')));
+        
+        const uploadZone = document.getElementById('upload-zone');
+        const indicator = document.getElementById('paste-indicator');
+        
+        if (hasImage && currentTask) {
+          uploadZone?.classList.add('has-clipboard');
+          indicator.style.display = 'block';
+        } else {
+          uploadZone?.classList.remove('has-clipboard');
+          indicator.style.display = 'none';
+        }
+      } catch (e) {
+        // Clipboard API not available or permission denied
+      }
+    }
+    
+    // Show notification
+    function showNotification(message) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1e293b;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        z-index: 1600;
+        animation: slideIn 0.3s;
+      `;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+    
+    // Update renderTaskDetails to initialize images
+    const originalRenderTaskDetails = renderTaskDetails;
+    renderTaskDetails = function(task) {
+      originalRenderTaskDetails(task);
+      setTimeout(initializeImages, 100);
+    };
   </script>
 </body>
 </html>
