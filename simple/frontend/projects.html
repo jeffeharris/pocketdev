@@ -352,6 +352,130 @@
       border-radius: 6px;
       margin: 10px 0;
     }
+    
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+      .header {
+        padding: 15px;
+      }
+      
+      .header h1 {
+        font-size: 18px;
+      }
+      
+      .header .container {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 15px;
+      }
+      
+      .header-controls {
+        width: 100%;
+        flex-direction: column;
+        gap: 10px !important;
+      }
+      
+      .github-status {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .settings-button {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .container {
+        padding: 15px;
+      }
+      
+      .new-project {
+        padding: 15px;
+      }
+      
+      .projects-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      
+      .project-card {
+        padding: 15px;
+      }
+      
+      .project-actions {
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .project-actions button {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 10px;
+      }
+      
+      .ide-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .tab-buttons {
+        flex-wrap: wrap;
+      }
+      
+      .tab-button {
+        flex: 1;
+        min-width: 120px;
+      }
+      
+      .repo-list {
+        max-height: 200px;
+      }
+      
+      .repo-item {
+        padding: 15px;
+      }
+      
+      button {
+        padding: 12px 20px;
+        font-size: 16px;
+      }
+      
+      input, select {
+        padding: 12px;
+        font-size: 16px;
+      }
+      
+      .modal-content {
+        width: 95%;
+        margin: 20px auto;
+        padding: 20px;
+      }
+      
+      /* Improve touch targets */
+      .repo-item,
+      .ide-button,
+      button,
+      .settings-button {
+        min-height: 44px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .header h1 {
+        font-size: 16px;
+      }
+      
+      .repo-search {
+        font-size: 16px;
+      }
+      
+      .project-title {
+        font-size: 16px;
+      }
+      
+      .project-info {
+        font-size: 12px;
+      }
+    }
   </style>
 </head>
 <body>

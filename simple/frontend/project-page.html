@@ -2,7 +2,10 @@
 <html>
 <head>
   <title>Project Details</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <style>
     * { box-sizing: border-box; }
     
@@ -630,9 +633,223 @@
         opacity: 1;
       }
     }
+    /* Mobile Menu Button */
+    .mobile-menu-button {
+      display: none;
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1001;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .mobile-menu-button:hover {
+      background: #1d4ed8;
+    }
+    
+    /* Mobile Overlay */
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+      .header {
+        padding: 15px;
+        padding-left: 60px; /* Space for menu button */
+      }
+      
+      .header h1 {
+        font-size: 18px;
+      }
+      
+      .container {
+        height: calc(100vh - 60px);
+      }
+      
+      .mobile-menu-button {
+        display: block;
+      }
+      
+      .left-panel {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 80%;
+        max-width: 300px;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+      }
+      
+      .left-panel.open {
+        left: 0;
+      }
+      
+      .mobile-overlay.show {
+        display: block;
+      }
+      
+      .right-panel {
+        padding: 15px;
+        width: 100%;
+      }
+      
+      .task-details {
+        padding: 15px;
+      }
+      
+      .task-actions {
+        flex-wrap: wrap;
+      }
+      
+      .task-actions button {
+        flex: 1;
+        min-width: 120px;
+        padding: 12px 16px;
+        font-size: 14px;
+      }
+      
+      .terminal-container {
+        margin-top: 15px;
+        height: 400px;
+      }
+      
+      #all-terminals {
+        height: 350px;
+      }
+      
+      .fullscreen-button {
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      
+      .image-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+      }
+      
+      .modal-content {
+        margin: 20px auto;
+        padding: 20px;
+        width: 95%;
+      }
+      
+      .form-group input {
+        padding: 12px;
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      
+      .new-task-button,
+      .sync-button {
+        padding: 14px;
+        font-size: 14px;
+      }
+      
+      .task-item {
+        padding: 12px;
+      }
+      
+      .back-link {
+        font-size: 14px;
+      }
+      
+      /* Better touch targets */
+      button, .task-item {
+        min-height: 44px;
+      }
+      
+      /* Adjust upload zone for mobile */
+      .upload-zone {
+        padding: 20px;
+      }
+      
+      .upload-icon {
+        font-size: 36px;
+      }
+      
+      /* Stack form buttons on mobile */
+      .modal-content form > div:last-child {
+        flex-direction: column;
+      }
+      
+      .modal-content form button {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .header h1 {
+        font-size: 16px;
+      }
+      
+      .task-actions {
+        flex-direction: column;
+      }
+      
+      .task-actions button {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      
+      .terminal-container {
+        height: 300px;
+      }
+      
+      #all-terminals {
+        height: 250px;
+      }
+      
+      .project-info h2 {
+        font-size: 18px;
+      }
+      
+      .image-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    /* Fullscreen improvements for mobile */
+    @media (max-width: 768px) and (orientation: landscape) {
+      .terminal-container.fullscreen {
+        padding: 0;
+      }
+      
+      .terminal-container.fullscreen .fullscreen-button {
+        top: 5px;
+        right: 5px;
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Mobile Menu Button -->
+  <button class="mobile-menu-button" onclick="toggleMobileMenu()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+  
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
+  
   <div class="header">
     <div style="max-width: 1400px; margin: 0 auto;">
       <a href="/projects.html" class="back-link">
@@ -643,7 +860,7 @@
   </div>
   
   <div class="container">
-    <div class="left-panel">
+    <div class="left-panel" id="left-panel">
       <div class="project-info">
         <h2 id="project-name">Loading...</h2>
         <div class="project-meta">
@@ -729,6 +946,35 @@
     } else {
       loadProject();
       loadTasks();
+    }
+    
+    // Mobile menu functions
+    function toggleMobileMenu() {
+      const leftPanel = document.getElementById('left-panel');
+      const overlay = document.querySelector('.mobile-overlay');
+      
+      if (leftPanel.classList.contains('open')) {
+        closeMobileMenu();
+      } else {
+        leftPanel.classList.add('open');
+        overlay.classList.add('show');
+      }
+    }
+    
+    function closeMobileMenu() {
+      const leftPanel = document.getElementById('left-panel');
+      const overlay = document.querySelector('.mobile-overlay');
+      
+      leftPanel.classList.remove('open');
+      overlay.classList.remove('show');
+    }
+    
+    // Close mobile menu when selecting a task
+    function selectTaskWithMenuClose(taskId) {
+      if (window.innerWidth <= 768) {
+        closeMobileMenu();
+      }
+      selectTask(taskId);
     }
     
     // Helper function to get task status display
@@ -1107,7 +1353,7 @@
       container.querySelectorAll('.task-item').forEach(el => {
         el.addEventListener('click', function() {
           const taskId = this.getAttribute('data-task-id');
-          selectTask(taskId);
+          selectTaskWithMenuClose(taskId);
         });
       });
     }
@@ -1278,13 +1524,61 @@
       const text = document.getElementById('fullscreen-text');
       
       if (container.classList.contains('fullscreen')) {
+        // Exit fullscreen
         container.classList.remove('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Fullscreen';
+        
+        // Exit native fullscreen if active
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
       } else {
+        // Enter fullscreen
         container.classList.add('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Exit Fullscreen';
+        
+        // Try native fullscreen API (works on some mobile browsers)
+        if (container.requestFullscreen) {
+          container.requestFullscreen().catch(err => {
+            console.log('Fullscreen API not available:', err);
+          });
+        } else if (container.webkitRequestFullscreen) {
+          // Safari/iOS
+          container.webkitRequestFullscreen().catch(err => {
+            console.log('Webkit fullscreen API not available:', err);
+          });
+        }
+        
+        // For iOS, suggest adding to home screen for better fullscreen experience
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone) {
+          if (!localStorage.getItem('fullscreenTipShown')) {
+            showNotification('💡 Tip: Add this page to your home screen for better fullscreen experience', 'info');
+            localStorage.setItem('fullscreenTipShown', 'true');
+          }
+        }
+      }
+    }
+    
+    // Handle fullscreen change events to sync UI
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    function handleFullscreenChange() {
+      const container = document.getElementById('terminal-container');
+      const icon = document.getElementById('fullscreen-icon');
+      const text = document.getElementById('fullscreen-text');
+      
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        // Exited fullscreen
+        container.classList.remove('fullscreen');
+        icon.textContent = '⛶';
+        text.textContent = 'Fullscreen';
       }
     }
     
