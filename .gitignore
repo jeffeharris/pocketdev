@@ -436,3 +436,11 @@ simple/claude-*.sh
 simple/*dockerfile
 simple/Dockerfile.pty
 simple/package.json
+
+# PocketDev uploaded images
+.pocketdev/tmp/images/*.png
+.pocketdev/tmp/images/*.jpg
+.pocketdev/tmp/images/*.jpeg
+.pocketdev/tmp/images/*.gif
+.pocketdev/tmp/images/*.webp
+.pocketdev/tmp/images/*.svg
