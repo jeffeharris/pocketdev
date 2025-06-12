@@ -2,10 +2,7 @@
 <html>
 <head>
   <title>Project Details</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; }
     
@@ -651,223 +648,78 @@
         opacity: 1;
       }
     }
-    /* Mobile Menu Button */
-    .mobile-menu-button {
-      display: none;
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      z-index: 1001;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      padding: 10px;
-      cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
     
-    .mobile-menu-button:hover {
-      background: #1d4ed8;
-    }
-    
-    /* Mobile Overlay */
-    .mobile-overlay {
-      display: none;
+    /* Dialog styles */
+    .dialog-backdrop {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 999;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     
-    /* Mobile Responsive Styles */
-    @media (max-width: 768px) {
-      .header {
-        padding: 15px;
-        padding-left: 60px; /* Space for menu button */
-      }
-      
-      .header h1 {
-        font-size: 18px;
-      }
-      
-      .container {
-        height: calc(100vh - 60px);
-      }
-      
-      .mobile-menu-button {
-        display: block;
-      }
-      
-      .left-panel {
-        position: fixed;
-        top: 0;
-        left: -100%;
-        width: 80%;
-        max-width: 300px;
-        height: 100vh;
-        z-index: 1000;
-        transition: left 0.3s ease;
-        box-shadow: 2px 0 8px rgba(0,0,0,0.2);
-      }
-      
-      .left-panel.open {
-        left: 0;
-      }
-      
-      .mobile-overlay.show {
-        display: block;
-      }
-      
-      .right-panel {
-        padding: 15px;
-        width: 100%;
-      }
-      
-      .task-details {
-        padding: 15px;
-      }
-      
-      .task-actions {
-        flex-wrap: wrap;
-      }
-      
-      .task-actions button {
-        flex: 1;
-        min-width: 120px;
-        padding: 12px 16px;
-        font-size: 14px;
-      }
-      
-      .terminal-container {
-        margin-top: 15px;
-        height: 400px;
-      }
-      
-      #all-terminals {
-        height: 350px;
-      }
-      
-      .fullscreen-button {
-        padding: 10px 14px;
-        font-size: 14px;
-      }
-      
-      .image-grid {
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-        gap: 10px;
-      }
-      
-      .modal-content {
-        margin: 20px auto;
-        padding: 20px;
-        width: 95%;
-      }
-      
-      .form-group input {
-        padding: 12px;
-        font-size: 16px; /* Prevent zoom on iOS */
-      }
-      
-      .new-task-button,
-      .sync-button {
-        padding: 14px;
-        font-size: 14px;
-      }
-      
-      .task-item {
-        padding: 12px;
-      }
-      
-      .back-link {
-        font-size: 14px;
-      }
-      
-      /* Better touch targets */
-      button, .task-item {
-        min-height: 44px;
-      }
-      
-      /* Adjust upload zone for mobile */
-      .upload-zone {
-        padding: 20px;
-      }
-      
-      .upload-icon {
-        font-size: 36px;
-      }
-      
-      /* Stack form buttons on mobile */
-      .modal-content form > div:last-child {
-        flex-direction: column;
-      }
-      
-      .modal-content form button {
-        width: 100%;
-        margin-bottom: 10px;
-      }
+    .dialog {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     }
     
-    @media (max-width: 480px) {
-      .header h1 {
-        font-size: 16px;
-      }
-      
-      .task-actions {
-        flex-direction: column;
-      }
-      
-      .task-actions button {
-        width: 100%;
-        margin-bottom: 8px;
-      }
-      
-      .terminal-container {
-        height: 300px;
-      }
-      
-      #all-terminals {
-        height: 250px;
-      }
-      
-      .project-info h2 {
-        font-size: 18px;
-      }
-      
-      .image-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+    .dialog h3 {
+      margin-top: 0;
+      color: #dc2626;
     }
     
-    /* Fullscreen improvements for mobile */
-    @media (max-width: 768px) and (orientation: landscape) {
-      .terminal-container.fullscreen {
-        padding: 0;
-      }
-      
-      .terminal-container.fullscreen .fullscreen-button {
-        top: 5px;
-        right: 5px;
-      }
+    .dialog .conflict-info {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 12px;
+      margin: 16px 0;
+    }
+    
+    .dialog .dialog-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+    
+    .dialog button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .dialog button.secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    
+    .dialog button.secondary:hover {
+      background: #d1d5db;
+    }
+    
+    .dialog button.primary {
+      background: #2563eb;
+      color: white;
+    }
+    
+    .dialog button.primary:hover {
+      background: #1d4ed8;
     }
   </style>
 </head>
 <body>
-  <!-- Mobile Menu Button -->
-  <button class="mobile-menu-button" onclick="toggleMobileMenu()">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <line x1="3" y1="12" x2="21" y2="12"></line>
-      <line x1="3" y1="6" x2="21" y2="6"></line>
-      <line x1="3" y1="18" x2="21" y2="18"></line>
-    </svg>
-  </button>
-  
-  <!-- Mobile Overlay -->
-  <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
-  
   <div class="header">
     <div style="max-width: 1400px; margin: 0 auto;">
       <a href="/projects.html" class="back-link">
@@ -878,7 +730,7 @@
   </div>
   
   <div class="container">
-    <div class="left-panel" id="left-panel">
+    <div class="left-panel">
       <div class="project-info">
         <h2 id="project-name">Loading...</h2>
         <div class="project-meta">
@@ -964,35 +816,6 @@
     } else {
       loadProject();
       loadTasks();
-    }
-    
-    // Mobile menu functions
-    function toggleMobileMenu() {
-      const leftPanel = document.getElementById('left-panel');
-      const overlay = document.querySelector('.mobile-overlay');
-      
-      if (leftPanel.classList.contains('open')) {
-        closeMobileMenu();
-      } else {
-        leftPanel.classList.add('open');
-        overlay.classList.add('show');
-      }
-    }
-    
-    function closeMobileMenu() {
-      const leftPanel = document.getElementById('left-panel');
-      const overlay = document.querySelector('.mobile-overlay');
-      
-      leftPanel.classList.remove('open');
-      overlay.classList.remove('show');
-    }
-    
-    // Close mobile menu when selecting a task
-    function selectTaskWithMenuClose(taskId) {
-      if (window.innerWidth <= 768) {
-        closeMobileMenu();
-      }
-      selectTask(taskId);
     }
     
     // Helper function to get task status display
@@ -1379,7 +1202,7 @@
       container.querySelectorAll('.task-item').forEach(el => {
         el.addEventListener('click', function() {
           const taskId = this.getAttribute('data-task-id');
-          selectTaskWithMenuClose(taskId);
+          selectTask(taskId);
         });
       });
     }
@@ -1550,61 +1373,13 @@
       const text = document.getElementById('fullscreen-text');
       
       if (container.classList.contains('fullscreen')) {
-        // Exit fullscreen
         container.classList.remove('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Fullscreen';
-        
-        // Exit native fullscreen if active
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
-          if (document.exitFullscreen) {
-            document.exitFullscreen();
-          } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-          }
-        }
       } else {
-        // Enter fullscreen
         container.classList.add('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Exit Fullscreen';
-        
-        // Try native fullscreen API (works on some mobile browsers)
-        if (container.requestFullscreen) {
-          container.requestFullscreen().catch(err => {
-            console.log('Fullscreen API not available:', err);
-          });
-        } else if (container.webkitRequestFullscreen) {
-          // Safari/iOS
-          container.webkitRequestFullscreen().catch(err => {
-            console.log('Webkit fullscreen API not available:', err);
-          });
-        }
-        
-        // For iOS, suggest adding to home screen for better fullscreen experience
-        if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone) {
-          if (!localStorage.getItem('fullscreenTipShown')) {
-            showNotification('💡 Tip: Add this page to your home screen for better fullscreen experience', 'info');
-            localStorage.setItem('fullscreenTipShown', 'true');
-          }
-        }
-      }
-    }
-    
-    // Handle fullscreen change events to sync UI
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    
-    function handleFullscreenChange() {
-      const container = document.getElementById('terminal-container');
-      const icon = document.getElementById('fullscreen-icon');
-      const text = document.getElementById('fullscreen-text');
-      
-      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        // Exited fullscreen
-        container.classList.remove('fullscreen');
-        icon.textContent = '⛶';
-        text.textContent = 'Fullscreen';
       }
     }
     
@@ -2365,6 +2140,56 @@
       }
     }
     
+    // Dialog management
+    let activeDialog = null;
+    
+    function showDialog(content, onCancel, onConfirm) {
+      // Remove any existing dialog
+      closeDialog();
+      
+      const backdrop = document.createElement('div');
+      backdrop.className = 'dialog-backdrop';
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop && onCancel) {
+          onCancel();
+          closeDialog();
+        }
+      });
+      
+      const dialog = document.createElement('div');
+      dialog.className = 'dialog';
+      dialog.innerHTML = content;
+      
+      // Add event listeners to buttons
+      const cancelBtn = dialog.querySelector('[data-action="cancel"]');
+      const confirmBtn = dialog.querySelector('[data-action="confirm"]');
+      
+      if (cancelBtn && onCancel) {
+        cancelBtn.addEventListener('click', () => {
+          onCancel();
+          closeDialog();
+        });
+      }
+      
+      if (confirmBtn && onConfirm) {
+        confirmBtn.addEventListener('click', () => {
+          onConfirm();
+          closeDialog();
+        });
+      }
+      
+      backdrop.appendChild(dialog);
+      document.body.appendChild(backdrop);
+      activeDialog = backdrop;
+    }
+    
+    function closeDialog() {
+      if (activeDialog) {
+        activeDialog.remove();
+        activeDialog = null;
+      }
+    }
+    
     async function mergeToBase(taskId) {
       const mergeButton = document.getElementById(`merge-button-${taskId}`);
       const originalText = mergeButton.textContent;
@@ -2381,42 +2206,38 @@
         const conflictData = await conflictResponse.json();
         
         if (conflictData.hasConflicts) {
-          // Show conflict dialog
-          const dialogHtml = `
-            <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-              <div style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
-                <h3 style="margin-top: 0; color: #dc2626;">⚠️ Merge Conflicts Detected</h3>
-                <p>The branch <strong>${currentTask.branch}</strong> has conflicts with <strong>${currentProject.base_branch}</strong>.</p>
-                
-                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; margin: 16px 0;">
-                  <strong>Conflicting files:</strong>
-                  <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-                    ${conflictData.conflicts.map(file => `<li><code>${file}</code></li>`).join('')}
-                  </ul>
-                </div>
-                
-                <p>How would you like to proceed?</p>
-                
-                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px;">
-                  <button onclick="this.closest('div').parentElement.remove(); document.getElementById('merge-button-${taskId}').disabled = false; document.getElementById('merge-button-${taskId}').textContent = '${originalText}';" 
-                          style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer;">
-                    Cancel
-                  </button>
-                  <button onclick="this.closest('div').parentElement.remove(); mergeWithClaude('${taskId}');" 
-                          style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                    Merge with Claude Assistance
-                  </button>
-                </div>
-              </div>
+          // Show conflict dialog using the dialog system
+          const dialogContent = `
+            <h3>⚠️ Merge Conflicts Detected</h3>
+            <p>The branch <strong>${currentTask.branch}</strong> has conflicts with <strong>${currentProject.base_branch}</strong>.</p>
+            
+            <div class="conflict-info">
+              <strong>Conflicting files:</strong>
+              <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                ${conflictData.conflicts.map(file => `<li><code>${file}</code></li>`).join('')}
+              </ul>
+            </div>
+            
+            <p>How would you like to proceed?</p>
+            
+            <div class="dialog-actions">
+              <button class="secondary" data-action="cancel">Cancel</button>
+              <button class="primary" data-action="confirm">Merge with Claude Assistance</button>
             </div>
           `;
           
-          const dialog = document.createElement('div');
-          dialog.innerHTML = dialogHtml;
-          document.body.appendChild(dialog.firstElementChild);
-          
-          mergeButton.disabled = false;
-          mergeButton.textContent = originalText;
+          showDialog(
+            dialogContent,
+            () => {
+              // Cancel callback
+              mergeButton.disabled = false;
+              mergeButton.textContent = originalText;
+            },
+            () => {
+              // Confirm callback
+              mergeWithClaude(taskId);
+            }
+          );
           
         } else {
           // No conflicts, proceed with merge
@@ -2431,6 +2252,9 @@
           
           if (mergeResult.success) {
             showNotification(`✓ Successfully merged ${currentTask.branch} into ${currentProject.base_branch}`, 'success');
+            
+            // Ensure dialog is closed
+            closeDialog();
             
             // Update task status in UI
             if (currentTask) {
@@ -2458,6 +2282,8 @@
         showNotification(`Merge error: ${error.message}`, 'error');
         mergeButton.disabled = false;
         mergeButton.textContent = originalText;
+        // Ensure dialog is closed on error
+        closeDialog();
       }
     }
     
