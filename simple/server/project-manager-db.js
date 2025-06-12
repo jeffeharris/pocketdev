@@ -1482,7 +1482,16 @@ Original task: ${task.name}`;
       
     } else {
       // Direct merge without Claude
-      // First ensure we're on the base branch and up to date
+      // First ensure the task branch is pushed to origin
+      const pushResult = await gitCommand(task.worktree_path, `git push -u origin ${task.branch}`);
+      if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
+        return res.status(500).json({ 
+          error: 'Failed to push branch', 
+          details: pushResult.error 
+        });
+      }
+      
+      // Now ensure we're on the base branch and up to date
       await gitCommand(project.local_path, `git checkout ${project.base_branch}`);
       await gitCommand(project.local_path, `git pull origin ${project.base_branch}`);
       

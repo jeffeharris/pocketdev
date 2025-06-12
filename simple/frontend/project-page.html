@@ -2055,9 +2055,7 @@
         
         if (result.success) {
           showNotification('✓ Changes pushed successfully', 'success');
-          // Hide the push button after successful push
-          pushButton.style.display = 'none';
-          // Refresh git status
+          // Refresh git status - this will update button visibility based on actual state
           showGitStatus(taskId);
           // Check for updates
           checkForUpdates();
@@ -2143,10 +2141,12 @@
             // Update task status in UI
             if (currentTask) {
               currentTask.status = 'merged';
+              // Reset merge tracking flags - will be updated by git status check
+              currentTask.has_commits_since_merge = false;
             }
             
-            // Hide the merge button
-            mergeButton.style.display = 'none';
+            // Refresh git status to update button visibility based on actual state
+            showGitStatus(taskId);
             
             // Refresh task list to show updated status
             loadTasks();
