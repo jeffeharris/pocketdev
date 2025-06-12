@@ -40,7 +40,7 @@ export function TaskView() {
   const [task, setTask] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'result' | 'diff' | 'logs'>('result');
+  const [activeTab, setActiveTab] = useState<'result' | 'diff' | 'logs' | 'sessions'>('result');
   const [showFollowUpInput, setShowFollowUpInput] = useState(false);
   const [followUpTask, setFollowUpTask] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,6 +48,8 @@ export function TaskView() {
   const [recovery, setRecovery] = useState<any>(null);
   const [showQuestionInput, setShowQuestionInput] = useState(false);
   const [question, setQuestion] = useState('');
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   useEffect(() => {
     fetchTaskDetails();
@@ -152,6 +154,27 @@ export function TaskView() {
       }
     } catch (err) {
       console.error('Failed to check recovery options:', err);
+    }
+  };
+
+  const fetchSessions = async () => {
+    if (!task || !task.engineerId) return;
+    
+    setSessionsLoading(true);
+    try {
+      const response = await fetch(`http://localhost:3005/api/projects/${task.engineerId}/tasks/${task.id}/sessions`);
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data.sessions || []);
+      } else {
+        console.error('Failed to fetch sessions');
+        setSessions([]);
+      }
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
     }
   };
 
@@ -468,6 +491,21 @@ export function TaskView() {
                     >
                       Logs
                     </button>
+                    <button
+                      onClick={() => {
+                        setActiveTab('sessions');
+                        if (sessions.length === 0 && !sessionsLoading) {
+                          fetchSessions();
+                        }
+                      }}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'sessions' 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Sessions
+                    </button>
                   </div>
                 </div>
               </div>
@@ -483,6 +521,93 @@ export function TaskView() {
                     taskId={task.id} 
                     engineerId={task.engineerId}
                   />
+                ) : activeTab === 'sessions' ? (
+                  <div className="space-y-4">
+                    {sessionsLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      </div>
+                    ) : sessions.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500">
+                        <p>No sessions found for this task.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium text-gray-700">Claude Sessions ({sessions.length})</h4>
+                        {sessions.map((session, index) => (
+                          <div key={session.sessionId} className="border rounded-lg p-4 hover:bg-gray-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                    index === 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {index === 0 ? 'Active' : 'Previous'}
+                                  </span>
+                                  <span className="text-sm text-gray-600">
+                                    {new Date(session.created).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="font-mono text-sm text-gray-700 mb-2">{session.sessionId}</p>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-500">Messages:</span>
+                                    <span className="ml-2 font-medium">{session.messageCount}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Size:</span>
+                                    <span className="ml-2 font-medium">{session.sizeFormatted}</span>
+                                  </div>
+                                  {session.analytics && (
+                                    <>
+                                      <div>
+                                        <span className="text-gray-500">Tokens:</span>
+                                        <span className="ml-2 font-medium">
+                                          {(session.analytics.totalInputTokens + session.analytics.totalOutputTokens).toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Model:</span>
+                                        <span className="ml-2 font-medium text-xs">
+                                          {session.analytics.model?.split('/').pop() || 'Unknown'}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                {session.analytics?.toolUsage && Object.keys(session.analytics.toolUsage).length > 0 && (
+                                  <div className="mt-3">
+                                    <p className="text-xs text-gray-500 mb-1">Tools Used:</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {Object.entries(session.analytics.toolUsage).map(([tool, count]) => (
+                                        <span key={tool} className="px-2 py-0.5 text-xs bg-gray-100 rounded">
+                                          {tool} ({count as number})
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="ml-4">
+                                <button
+                                  onClick={() => {
+                                    // Copy command to clipboard
+                                    const command = `claude -r ${session.sessionId}`;
+                                    navigator.clipboard.writeText(command);
+                                    alert(`Command copied to clipboard:\n${command}`);
+                                  }}
+                                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  title="Copy resume command"
+                                >
+                                  Resume
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {/* Check if this is a failed task with supervisor interpretation */}
