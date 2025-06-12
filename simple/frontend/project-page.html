@@ -845,11 +845,14 @@
         const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/sessions`);
         const data = await response.json();
         
+        console.log('Sessions API response:', data); // Debug logging
+        
         if (!data.success) {
           throw new Error(data.error || 'Failed to load sessions');
         }
         
-        const { sessions } = data;
+        const { sessions, worktreePath } = data;
+        console.log(`Found ${sessions.length} sessions for task ${taskId} at ${worktreePath}`);
         
         if (sessions.length === 0) {
           infoDiv.innerHTML = `
@@ -970,14 +973,12 @@
                       </div>
                     ` : ''}
                   </div>
-                  ${session.isActive && !sessionPersistence ? `
-                    <div style="margin-top: 8px;">
-                      <button style="padding: 4px 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;"
-                              onclick="resumeSession('${taskId}', '${session.sessionId}')">
-                        Resume This Session
-                      </button>
-                    </div>
-                  ` : ''}
+                  <div style="margin-top: 8px;">
+                    <button style="padding: 4px 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;"
+                            onclick="copyResumeCommand('${session.sessionId}')">
+                      Copy Resume Command
+                    </button>
+                  </div>
                 </div>
               `).join('')}
             </div>
@@ -993,7 +994,18 @@
           </div>
         `;
       } catch (error) {
-        infoDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        console.error('Failed to load sessions:', error);
+        infoDiv.innerHTML = `
+          <div style="background: #fee; border: 1px solid #fcc; border-radius: 6px; padding: 15px;">
+            <strong>Error Loading Sessions</strong>
+            <p style="margin: 10px 0 0 0; color: #c00;">
+              ${error.message}
+            </p>
+            <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">
+              Check the console for more details. Make sure the API server is running on port 3005.
+            </p>
+          </div>
+        `;
       }
     }
     
@@ -1014,6 +1026,42 @@
       } catch (error) {
         alert('Failed to set session: ' + error.message);
       }
+    }
+    
+    function copyResumeCommand(sessionId) {
+      const command = `claude -r ${sessionId}`;
+      
+      // Use modern clipboard API if available
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(command).then(() => {
+          alert(`Command copied to clipboard:\n${command}`);
+        }).catch(err => {
+          // Fallback to older method
+          fallbackCopyToClipboard(command);
+        });
+      } else {
+        // Fallback for older browsers
+        fallbackCopyToClipboard(command);
+      }
+    }
+    
+    function fallbackCopyToClipboard(text) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        alert(`Command copied to clipboard:\n${text}`);
+      } catch (err) {
+        alert(`Failed to copy. Please copy manually:\n${text}`);
+      }
+      
+      document.body.removeChild(textArea);
     }
     
     async function showGitStatus(taskId) {
