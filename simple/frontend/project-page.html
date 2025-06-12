@@ -871,9 +871,7 @@
         if (result.success) {
           closeModal();
           await loadTasks();
-          // Create terminal for new task
-          createAllTerminals([result.task]);
-          // Small delay to ensure DOM is updated
+          // Small delay to ensure DOM is updated, then select the new task
           setTimeout(() => selectTask(result.task.id), 100);
         } else {
           alert('Error: ' + result.error);
