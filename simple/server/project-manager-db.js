@@ -247,7 +247,7 @@ app.post('/api/projects/:projectId/tasks', async (req, res) => {
       id: taskId,
       name,
       branch,
-      worktreePath
+      worktree_path: worktreePath
     });
     
     // Update project last accessed
@@ -1071,7 +1071,7 @@ app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
         id: mergeTaskId,
         name: mergeTaskName,
         branch: task.branch, // Same branch as original task
-        worktreePath: task.worktree_path // Use the SAME worktree
+        worktree_path: task.worktree_path // Use the SAME worktree (use snake_case for DB field)
       });
       
       // Update metadata to mark this as a merge task
@@ -1092,7 +1092,7 @@ app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
         mergeTask: {
           id: mergeTask.id,
           name: mergeTask.name,
-          claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(`/projects/${project.id}-task-${task.id}`)}`
+          claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`
         },
         message: `Created merge task with Claude assistance`
       });

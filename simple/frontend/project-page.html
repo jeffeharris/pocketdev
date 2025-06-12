@@ -846,7 +846,8 @@
     
     function renderTaskDetails(task) {
       const container = document.getElementById('task-content');
-      const worktreePath = `/projects/${projectId}-task-${task.id}`;
+      // Use the actual worktree path from the task, don't construct it
+      const worktreePath = task.worktree_path || `/projects/${projectId}-task-${task.id}`;
       const claudeUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(worktreePath)}`;
       
       // Update task details without recreating terminal container
