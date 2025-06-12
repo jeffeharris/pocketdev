@@ -46,10 +46,13 @@ services:
     container_name: claude-ttyd-server
     ports:
       - "7681:7681"
+      - "3006:3006"  # Session API
     volumes:
       - ./projects:/projects
       - ~/.claude:/root/.claude
       - pocketdev-settings:/root/.pocketdev
+    environment:
+      - SESSION_API_PORT=3006
     restart: unless-stopped
 
   # Optional: Original simple server (if you still need it)

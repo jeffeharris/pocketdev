@@ -40,7 +40,7 @@ class SessionModel {
   }
 
   async findById(id) {
-    const session = await this.db.get(`
+    let session = await this.db.get(`
       SELECT cs.*,
         t.name as task_name,
         t.branch as task_branch,

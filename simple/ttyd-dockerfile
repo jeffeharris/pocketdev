@@ -17,6 +17,14 @@ COPY worktree-claude.sh /usr/local/bin/worktree-claude
 RUN chmod +x /usr/local/bin/worktree-claude
 COPY .tmux.conf /root/.tmux.conf
 
+# Copy and setup session API
+COPY ttyd-session-api.js /usr/local/bin/ttyd-session-api.js
+RUN cd /usr/local/bin && npm install express
+
+# Copy entrypoint script
+COPY ttyd-entrypoint.sh /usr/local/bin/ttyd-entrypoint.sh
+RUN chmod +x /usr/local/bin/ttyd-entrypoint.sh
+
 # Create a working directory
 WORKDIR /workspace
 
@@ -24,5 +32,8 @@ WORKDIR /workspace
 ENV TERM=xterm-256color
 ENV COLORTERM=truecolor
 
-# Start ttyd with URL arguments enabled and the wrapper script
-CMD ["ttyd", "-p", "7681", "-W", "-a", "/usr/local/bin/worktree-claude"]
+# Expose both ports
+EXPOSE 7681 3006
+
+# Start both services
+CMD ["/usr/local/bin/ttyd-entrypoint.sh"]

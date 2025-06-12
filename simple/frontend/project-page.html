@@ -647,6 +647,9 @@
         
         // Render task details
         renderTaskDetails(task);
+        
+        // Check git status to update push button
+        showGitStatus(taskId);
       } catch (error) {
         console.error('Failed to load task:', error);
         alert('Failed to load task: ' + error.message);
@@ -702,6 +705,9 @@
               <button class="secondary" onclick="showGitStatus('${task.id}')">
                 Git Status
               </button>
+              <button class="primary git-push-button" id="push-button-${task.id}" onclick="pushChanges('${task.id}')" style="background: #10b981; display: none;" disabled>
+                Push Changes
+              </button>
               ${window.taskUpdateStatus?.[task.id]?.needsUpdate ? `
                 <button class="primary" onclick="updateTask('${task.id}')" style="background: #f59e0b;">
                   Update (${window.taskUpdateStatus[task.id].behind} behind)
@@ -732,8 +738,7 @@
         // Check if iframe already exists for this task
         if (!allTerminalIframes.has(task.id)) {
           // Create new iframe
-          const terminalPath = sessionPersistence ? worktreePath : worktreePath + '@notmux';
-          const terminalUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(terminalPath)}`;
+          const terminalUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(worktreePath)}`;
           
           const iframe = document.createElement('iframe');
           iframe.src = terminalUrl;
@@ -973,11 +978,25 @@
                       </div>
                     ` : ''}
                   </div>
+                  ${session.analytics.summaries && session.analytics.summaries.length > 0 ? `
+                    <div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 4px; font-size: 12px;">
+                      <div style="font-weight: 500; margin-bottom: 4px;">Summary:</div>
+                      <div style="color: #4b5563;">${session.analytics.summaries[session.analytics.summaries.length - 1]}</div>
+                    </div>
+                  ` : ''}
+                  ${session.analytics.firstUserMessage ? `
+                    <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                      <strong>Started with:</strong> ${session.analytics.firstUserMessage.substring(0, 100)}${session.analytics.firstUserMessage.length > 100 ? '...' : ''}
+                    </div>
+                  ` : ''}
                   <div style="margin-top: 8px;">
                     <button style="padding: 4px 12px; background: #2563eb; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;"
-                            onclick="copyResumeCommand('${session.sessionId}')">
-                      Copy Resume Command
+                            onclick="resumeThreadInTerminal('${taskId}', '${session.sessionId}')">
+                      Resume Thread
                     </button>
+                    ${session.analytics.isSummaryOnly ? `
+                      <span style="margin-left: 8px; padding: 2px 8px; background: #fbbf24; color: #92400e; border-radius: 4px; font-size: 11px;">Summary Only</span>
+                    ` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -1028,20 +1047,68 @@
       }
     }
     
-    function copyResumeCommand(sessionId) {
-      const command = `claude -r ${sessionId}`;
+    function resumeThreadInTerminal(taskId, sessionId) {
+      // Close the sessions modal
+      const modal = document.getElementById('git-info');
+      if (modal) {
+        modal.innerHTML = '';
+      }
       
-      // Use modern clipboard API if available
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(command).then(() => {
-          alert(`Command copied to clipboard:\n${command}`);
-        }).catch(err => {
-          // Fallback to older method
-          fallbackCopyToClipboard(command);
-        });
-      } else {
-        // Fallback for older browsers
-        fallbackCopyToClipboard(command);
+      // First, we need to select the task if it's not already selected
+      const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+      if (taskElement && (!currentTask || currentTask.id !== taskId)) {
+        // Click the task to select it
+        taskElement.click();
+        // Wait for the task to load and then resume
+        setTimeout(() => resumeThreadInTerminal(taskId, sessionId), 500);
+        return;
+      }
+      
+      // Use default worktree path structure
+      const worktreePath = `/projects/${projectId}-task-${taskId}`;
+      const encodedPath = encodeURIComponent(worktreePath);
+      
+      // Remove existing iframe if present
+      if (allTerminalIframes.has(taskId)) {
+        const iframe = allTerminalIframes.get(taskId);
+        iframe.remove();
+        allTerminalIframes.delete(taskId);
+      }
+      
+      // Create terminal container if it doesn't exist
+      let terminalDiv = document.getElementById(`terminal-container-${taskId}`);
+      if (!terminalDiv) {
+        const allTerminals = document.getElementById('all-terminals');
+        if (allTerminals) {
+          terminalDiv = document.createElement('div');
+          terminalDiv.id = `terminal-container-${taskId}`;
+          terminalDiv.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;';
+          allTerminals.appendChild(terminalDiv);
+        }
+      }
+      
+      // Create new iframe with resume parameter encoded in the arg
+      if (terminalDiv) {
+        const iframe = document.createElement('iframe');
+        iframe.id = `terminal-${taskId}`;
+        // Encode the session ID as part of the arg value using @ separator
+        iframe.src = `http://${window.location.hostname}:7681/?arg=${encodedPath}@resume=${sessionId}`;
+        iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
+        iframe.allow = 'clipboard-write';
+        terminalDiv.appendChild(iframe);
+        allTerminalIframes.set(taskId, iframe);
+      }
+      
+      // Show feedback
+      const button = event.target;
+      if (button) {
+        const originalText = button.textContent;
+        button.textContent = 'Launching...';
+        button.style.background = '#10b981';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.style.background = '#2563eb';
+        }, 2000);
       }
     }
     
@@ -1076,12 +1143,59 @@
         });
         
         const result = await response.json();
-        infoDiv.innerHTML = `
+        
+        // Check if there are uncommitted changes
+        const hasUncommittedChanges = result.output && result.output.trim() !== '';
+        
+        // Check for unpushed commits
+        const pushStatusResponse = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/git`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operation: 'log', args: '--oneline origin/HEAD..HEAD' })
+        });
+        
+        const pushStatus = await pushStatusResponse.json();
+        const hasUnpushedCommits = pushStatus.output && pushStatus.output.trim() !== '';
+        
+        // Update push button visibility
+        const pushButton = document.getElementById(`push-button-${taskId}`);
+        if (pushButton) {
+          if (hasUnpushedCommits && !hasUncommittedChanges) {
+            pushButton.style.display = 'inline-block';
+            pushButton.disabled = false;
+            const commitCount = pushStatus.output.trim().split('\n').filter(l => l).length;
+            pushButton.textContent = `Push ${commitCount} commit${commitCount > 1 ? 's' : ''}`;
+          } else {
+            pushButton.style.display = 'none';
+            pushButton.disabled = true;
+          }
+        }
+        
+        // Display status with enhanced info
+        let statusHtml = `
           <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px;">
             <strong>Git Status:</strong>
-            <pre style="margin: 10px 0 0 0; white-space: pre-wrap;">${result.output || 'No changes'}</pre>
-          </div>
+            <pre style="margin: 10px 0 0 0; white-space: pre-wrap;">${result.output || 'Working tree clean'}</pre>
         `;
+        
+        if (hasUnpushedCommits) {
+          statusHtml += `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+              <strong>Unpushed Commits:</strong>
+              <pre style="margin: 10px 0 0 0; white-space: pre-wrap;">${pushStatus.output}</pre>
+            </div>
+          `;
+        }
+        
+        if (!hasUncommittedChanges && !hasUnpushedCommits) {
+          statusHtml += `
+            <p style="margin: 15px 0 0 0; color: #10b981;">✓ Everything is up to date</p>
+          `;
+        }
+        
+        statusHtml += `</div>`;
+        infoDiv.innerHTML = statusHtml;
+        
       } catch (error) {
         infoDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
       }
@@ -1333,6 +1447,41 @@
           button.disabled = false;
           button.textContent = button.textContent.replace('Updating...', 'Update');
         }
+      }
+    }
+    
+    async function pushChanges(taskId) {
+      const pushButton = document.getElementById(`push-button-${taskId}`);
+      const originalText = pushButton.textContent;
+      pushButton.disabled = true;
+      pushButton.textContent = 'Pushing...';
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/git`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operation: 'push' })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showNotification('✓ Changes pushed successfully', 'success');
+          // Hide the push button after successful push
+          pushButton.style.display = 'none';
+          // Refresh git status
+          showGitStatus(taskId);
+          // Check for updates
+          checkForUpdates();
+        } else {
+          showNotification(`Push failed: ${result.error || 'Unknown error'}`, 'error');
+          pushButton.disabled = false;
+          pushButton.textContent = originalText;
+        }
+      } catch (error) {
+        showNotification(`Push error: ${error.message}`, 'error');
+        pushButton.disabled = false;
+        pushButton.textContent = originalText;
       }
     }
     

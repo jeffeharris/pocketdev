@@ -402,6 +402,11 @@ app.post('/api/projects/:projectId/tasks/:taskId/git', async (req, res) => {
         );
         break;
         
+      case 'log':
+        const logArgs = req.body.args || '--oneline -n 10';
+        result = await gitCommand(task.worktree_path, `git log ${logArgs}`);
+        break;
+        
       default:
         return res.status(400).json({ error: 'Invalid operation' });
     }
@@ -424,126 +429,222 @@ app.get('/api/projects/:projectId/tasks/:taskId/sessions', async (req, res) => {
     const dbSessions = await models.sessions.findByTaskId(task.id);
     
     // Also scan filesystem for any untracked sessions
-    const realPath = path.resolve(task.worktree_path);
-    const encodedPath = realPath.replace(/\//g, '-');
+    // Claude sessions in containers use the /projects path
+    const worktreePath = task.worktree_path.startsWith('/') ? 
+      task.worktree_path : 
+      `/projects/${path.basename(task.worktree_path)}`;
+    const encodedPath = worktreePath.replace(/\//g, '-');
     const claudeProjectDir = path.join(os.homedir(), '.claude', 'projects', encodedPath);
     
     const sessions = [];
+    const ttydApiUrl = process.env.TTYD_SESSION_API_URL || 'http://claude-ttyd-server:3006';
     
-    if (fsSync.existsSync(claudeProjectDir)) {
-      const files = fsSync.readdirSync(claudeProjectDir)
-        .filter(f => f.endsWith('.jsonl'))
-        .sort((a, b) => {
-          const statA = fsSync.statSync(path.join(claudeProjectDir, a));
-          const statB = fsSync.statSync(path.join(claudeProjectDir, b));
-          return statB.mtime - statA.mtime;
-        });
+    try {
+      // First, try to get sessions from ttyd API
+      console.log(`Fetching sessions from ttyd API: ${ttydApiUrl}/api/sessions/${encodedPath}`);
+      const sessionsResponse = await fetch(`${ttydApiUrl}/api/sessions/${encodedPath}`);
+      const sessionsData = await sessionsResponse.json();
       
-      for (const file of files) {
-        const sessionId = file.replace('.jsonl', '');
-        const filePath = path.join(claudeProjectDir, file);
-        const stats = fsSync.statSync(filePath);
-        
-        // Check if we have this session in the database
-        let dbSession = dbSessions.find(s => s.session_id === sessionId);
-        
-        // Parse session file for analytics
-        const content = fsSync.readFileSync(filePath, 'utf8');
-        const lines = content.trim().split('\n').length;
-        
-        let analytics = {
-          totalInputTokens: 0,
-          totalOutputTokens: 0,
-          totalCacheCreated: 0,
-          totalCacheRead: 0,
-          toolUsage: {},
-          errors: 0,
-          model: null
-        };
-        
-        // Parse analytics
-        try {
-          const lineArray = content.trim().split('\n');
-          for (const line of lineArray) {
-            try {
-              const entry = JSON.parse(line);
-              
-              if (entry.message && entry.message.usage) {
-                const usage = entry.message.usage;
-                analytics.totalInputTokens += usage.input_tokens || 0;
-                analytics.totalOutputTokens += usage.output_tokens || 0;
-                analytics.totalCacheCreated += usage.cache_creation_input_tokens || 0;
-                analytics.totalCacheRead += usage.cache_read_input_tokens || 0;
-                
-                if (!analytics.model && entry.message.model) {
-                  analytics.model = entry.message.model;
-                }
+      if (sessionsData.success && sessionsData.sessions.length > 0) {
+        // Fetch detailed analytics for each session
+        for (const sessionInfo of sessionsData.sessions) {
+          const sessionId = sessionInfo.sessionId;
+          
+          // Check if we have this session in the database
+          let dbSession = dbSessions.find(s => s.session_id === sessionId);
+          
+          // Get detailed session analytics from API
+          const detailResponse = await fetch(`${ttydApiUrl}/api/sessions/${encodedPath}/${sessionId}`);
+          const detailData = await detailResponse.json();
+          
+          if (detailData.success) {
+            const sessionData = detailData.session;
+            const analytics = sessionData.analytics;
+            
+            // Update or create session in database
+            if (!dbSession) {
+              dbSession = await models.sessions.create(task.id, {
+                sessionId,
+                messageCount: sessionData.lineCount,
+                sizeBytes: sessionData.sizeBytes,
+                tokenUsage: {
+                  totalInputTokens: analytics.inputTokens,
+                  totalOutputTokens: analytics.outputTokens,
+                  totalCacheCreated: analytics.cacheCreationInputTokens,
+                  totalCacheRead: analytics.cacheReadInputTokens
+                },
+                toolUsage: analytics.toolUsage,
+                model: analytics.model,
+                errorCount: analytics.errors,
+                createdAt: sessionData.createdAt,
+                lastActivity: sessionData.modifiedAt,
+                isActive: sessions.length === 0 // First is active
+              });
+            } else {
+              // Update existing session
+              await models.sessions.update(dbSession.id, {
+                messageCount: sessionData.lineCount,
+                sizeBytes: sessionData.sizeBytes,
+                tokenUsage: {
+                  totalInputTokens: analytics.inputTokens,
+                  totalOutputTokens: analytics.outputTokens,
+                  totalCacheCreated: analytics.cacheCreationInputTokens,
+                  totalCacheRead: analytics.cacheReadInputTokens
+                },
+                toolUsage: analytics.toolUsage,
+                model: analytics.model,
+                errorCount: analytics.errors,
+                lastActivity: sessionData.modifiedAt
+              });
+            }
+            
+            sessions.push({
+              sessionId,
+              created: sessionData.createdAt,
+              modified: sessionData.modifiedAt,
+              lastActivity: sessionData.modifiedAt,
+              messageCount: sessionData.lineCount,
+              size: sessionData.sizeBytes,
+              sizeFormatted: formatBytes(sessionData.sizeBytes),
+              isActive: sessions.length === 0,
+              analytics: {
+                totalInputTokens: analytics.inputTokens,
+                totalOutputTokens: analytics.outputTokens,
+                totalCacheCreated: analytics.cacheCreationInputTokens,
+                totalCacheRead: analytics.cacheReadInputTokens,
+                toolUsage: analytics.toolUsage,
+                errors: analytics.errors,
+                model: analytics.model
               }
-              
-              if (entry.message && entry.message.content && Array.isArray(entry.message.content)) {
-                for (const content of entry.message.content) {
-                  if (content.name) {
-                    analytics.toolUsage[content.name] = (analytics.toolUsage[content.name] || 0) + 1;
+            });
+          }
+        }
+      }
+    } catch (apiError) {
+      console.error('Error fetching from ttyd API, falling back to local filesystem:', apiError);
+      
+      // Fallback to local filesystem if API fails
+      if (fsSync.existsSync(claudeProjectDir)) {
+        const files = fsSync.readdirSync(claudeProjectDir)
+          .filter(f => f.endsWith('.jsonl'))
+          .sort((a, b) => {
+            const statA = fsSync.statSync(path.join(claudeProjectDir, a));
+            const statB = fsSync.statSync(path.join(claudeProjectDir, b));
+            return statB.mtime - statA.mtime;
+          });
+        
+        for (const file of files) {
+          const sessionId = file.replace('.jsonl', '');
+          const filePath = path.join(claudeProjectDir, file);
+          const stats = fsSync.statSync(filePath);
+          
+          // Check if we have this session in the database
+          let dbSession = dbSessions.find(s => s.session_id === sessionId);
+          
+          // Parse session file for analytics
+          const content = fsSync.readFileSync(filePath, 'utf8');
+          const lines = content.trim().split('\n').length;
+          
+          let analytics = {
+            totalInputTokens: 0,
+            totalOutputTokens: 0,
+            totalCacheCreated: 0,
+            totalCacheRead: 0,
+            toolUsage: {},
+            errors: 0,
+            model: null
+          };
+          
+          // Parse analytics
+          try {
+            const lineArray = content.trim().split('\n');
+            for (const line of lineArray) {
+              try {
+                const entry = JSON.parse(line);
+                
+                if (entry.message && entry.message.usage) {
+                  const usage = entry.message.usage;
+                  analytics.totalInputTokens += usage.input_tokens || 0;
+                  analytics.totalOutputTokens += usage.output_tokens || 0;
+                  analytics.totalCacheCreated += usage.cache_creation_input_tokens || 0;
+                  analytics.totalCacheRead += usage.cache_read_input_tokens || 0;
+                  
+                  if (!analytics.model && entry.message.model) {
+                    analytics.model = entry.message.model;
                   }
                 }
+                
+                if (entry.message && entry.message.content && Array.isArray(entry.message.content)) {
+                  for (const content of entry.message.content) {
+                    if (content.name) {
+                      analytics.toolUsage[content.name] = (analytics.toolUsage[content.name] || 0) + 1;
+                    }
+                  }
+                }
+                
+                if (entry.isApiErrorMessage) {
+                  analytics.errors++;
+                }
+              } catch (e) {
+                // Skip malformed lines
               }
-              
-              if (entry.isApiErrorMessage) {
-                analytics.errors++;
-              }
-            } catch (e) {
-              // Skip malformed lines
             }
+          } catch (e) {
+            console.error('Error analyzing session:', e);
           }
-        } catch (e) {
-          console.error('Error analyzing session:', e);
-        }
-        
-        // Update or create session in database
-        if (!dbSession) {
-          dbSession = await models.sessions.create(task.id, {
+          
+          // Update or create session in database
+          if (!dbSession) {
+            dbSession = await models.sessions.create(task.id, {
+              sessionId,
+              messageCount: lines,
+              sizeBytes: stats.size,
+              tokenUsage: analytics,
+              toolUsage: analytics.toolUsage,
+              model: analytics.model,
+              errorCount: analytics.errors,
+              createdAt: stats.birthtime,
+              lastActivity: stats.mtime,
+              isActive: sessions.length === 0 // First is active
+            });
+          } else {
+            // Update existing session
+            await models.sessions.update(dbSession.id, {
+              messageCount: lines,
+              sizeBytes: stats.size,
+              tokenUsage: analytics,
+              toolUsage: analytics.toolUsage,
+              model: analytics.model,
+              errorCount: analytics.errors,
+              lastActivity: stats.mtime
+            });
+          }
+          
+          sessions.push({
             sessionId,
-            messageCount: lines,
-            sizeBytes: stats.size,
-            tokenUsage: analytics,
-            toolUsage: analytics.toolUsage,
-            model: analytics.model,
-            errorCount: analytics.errors,
-            createdAt: stats.birthtime,
+            created: stats.birthtime,
+            modified: stats.mtime,
             lastActivity: stats.mtime,
-            isActive: sessions.length === 0 // First is active
-          });
-        } else {
-          // Update existing session
-          await models.sessions.update(dbSession.id, {
             messageCount: lines,
-            sizeBytes: stats.size,
-            tokenUsage: analytics,
-            toolUsage: analytics.toolUsage,
-            model: analytics.model,
-            errorCount: analytics.errors,
-            lastActivity: stats.mtime
+            size: stats.size,
+            sizeFormatted: formatBytes(stats.size),
+            isActive: sessions.length === 0,
+            analytics
           });
         }
-        
-        sessions.push({
-          sessionId,
-          created: stats.birthtime,
-          modified: stats.mtime,
-          lastActivity: stats.mtime,
-          messageCount: lines,
-          size: stats.size,
-          sizeFormatted: formatBytes(stats.size),
-          isActive: sessions.length === 0,
-          analytics
-        });
       }
     }
     
     res.json({
       success: true,
       sessions,
-      worktreePath: task.worktree_path
+      worktreePath: worktreePath,
+      claudeProjectDir,
+      debugInfo: {
+        originalPath: task.worktree_path,
+        encodedPath,
+        dirExists: fsSync.existsSync(claudeProjectDir)
+      }
     });
   } catch (error) {
     console.error('Error fetching sessions:', error);
