@@ -863,6 +863,85 @@ app.get('/api/projects/:id/base-branch-status', async (req, res) => {
   }
 });
 
+// Pull base branch updates
+app.post('/api/projects/:id/pull-base-branch', async (req, res) => {
+  try {
+    const project = await models.projects.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await configureGitCredentials(project.local_path);
+    
+    // Check for uncommitted changes in base branch
+    const statusResult = await gitCommand(project.local_path, 'git status --porcelain');
+    if (statusResult.output && statusResult.output.trim()) {
+      return res.status(400).json({ 
+        error: 'Cannot pull: Base branch has uncommitted changes',
+        hasUncommitted: true 
+      });
+    }
+    
+    // Pull updates for base branch
+    const result = await gitCommand(project.local_path, 
+      `git pull origin ${project.base_branch}`);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        error: result.error || 'Pull failed',
+        output: result.output 
+      });
+    }
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: true, 
+      output: result.output,
+      message: `Successfully pulled updates to ${project.base_branch}`
+    });
+  } catch (error) {
+    console.error('Pull error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Push base branch changes
+app.post('/api/projects/:id/push-base-branch', async (req, res) => {
+  try {
+    const project = await models.projects.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await configureGitCredentials(project.local_path);
+    
+    // Push base branch
+    const result = await gitCommand(project.local_path, 
+      `git push origin ${project.base_branch}`);
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        error: result.error || 'Push failed',
+        output: result.output 
+      });
+    }
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: true, 
+      output: result.output,
+      message: `Successfully pushed ${project.base_branch} to origin`
+    });
+  } catch (error) {
+    console.error('Push error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Fetch remote updates for project
 app.post('/api/projects/:id/fetch', async (req, res) => {
   try {

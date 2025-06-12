@@ -415,8 +415,8 @@
           <button class="new-task-button" style="flex: 1; margin: 0;" onclick="openNewTaskModal()">
             + New Task
           </button>
-          <button class="sync-button" onclick="syncWithRemote()" title="Fetch latest changes from remote">
-            ↻ Sync
+          <button id="smart-sync-button" class="sync-button" onclick="handleSmartButton()" title="Fetch latest changes from remote">
+            ↻ Fetch
           </button>
         </div>
         <div id="tasks">
@@ -465,6 +465,7 @@
     let currentTask = null;
     let sessionPersistence = localStorage.getItem('sessionPersistence') !== 'false'; // Default to true
     let allTerminalIframes = new Map(); // Store all iframes by task ID
+    let baseBranchStatus = { behind: 0, ahead: 0 }; // Track base branch sync status
     
     // Initialize
     if (!projectId) {
@@ -505,7 +506,9 @@
         const response = await fetch(`${API_BASE}/projects/${projectId}/base-branch-status`);
         if (response.ok) {
           const status = await response.json();
+          baseBranchStatus = status; // Store the status
           updateBaseBranchIndicator(status);
+          updateSmartButton(); // Update the button based on status
         }
       } catch (error) {
         console.error('Failed to check base branch status:', error);
@@ -560,11 +563,53 @@
       }
     }
     
-    async function syncWithRemote() {
-      const button = document.querySelector('.sync-button');
+    function updateSmartButton() {
+      const button = document.getElementById('smart-sync-button');
+      if (!button) return;
+      
+      // Reset button state
+      button.classList.remove('syncing');
+      button.disabled = false;
+      
+      if (baseBranchStatus.behind > 0) {
+        // Base branch is behind - show pull
+        button.innerHTML = `↓ Pull ${baseBranchStatus.behind}`;
+        button.title = `Pull ${baseBranchStatus.behind} commits from origin/${currentProject.base_branch}`;
+        button.style.background = '#f59e0b';
+      } else if (baseBranchStatus.ahead > 0) {
+        // Base branch is ahead - show push
+        button.innerHTML = `↑ Push ${baseBranchStatus.ahead}`;
+        button.title = `Push ${baseBranchStatus.ahead} commits to origin/${currentProject.base_branch}`;
+        button.style.background = '#10b981';
+      } else if (baseBranchStatus.behind === 0 && baseBranchStatus.ahead === 0) {
+        // Everything is synced
+        button.innerHTML = '✓ Synced';
+        button.title = 'Base branch is up to date';
+        button.style.background = '#6b7280';
+        button.disabled = true;
+      } else {
+        // Default fetch state (initial load or after sync)
+        button.innerHTML = '↻ Fetch';
+        button.title = 'Fetch latest changes from remote';
+        button.style.background = '#6b7280';
+      }
+    }
+    
+    async function handleSmartButton() {
+      if (baseBranchStatus.behind > 0) {
+        await pullBaseBranch();
+      } else if (baseBranchStatus.ahead > 0) {
+        await pushBaseBranch();
+      } else {
+        await fetchRemote();
+      }
+    }
+    
+    async function fetchRemote() {
+      const button = document.getElementById('smart-sync-button');
       button.classList.add('syncing');
       button.disabled = true;
-      button.innerHTML = '↻ Syncing...';
+      button.innerHTML = '↻ Fetching...';
       
       try {
         // Fetch remote updates
@@ -583,16 +628,79 @@
           // Check update status for all tasks and base branch
           await checkForUpdates();
           await checkBaseBranchStatus();
-          showNotification('✓ Synced with remote successfully', 'success');
+          showNotification('✓ Fetched remote changes', 'success');
         } else {
-          showNotification('Failed to sync: ' + (result.error || 'Unknown error'), 'error');
+          showNotification('Failed to fetch: ' + (result.error || 'Unknown error'), 'error');
         }
       } catch (error) {
-        showNotification('Sync error: ' + error.message, 'error');
+        showNotification('Fetch error: ' + error.message, 'error');
       } finally {
-        button.classList.remove('syncing');
-        button.disabled = false;
-        button.innerHTML = '↻ Sync';
+        updateSmartButton();
+      }
+    }
+    
+    async function pullBaseBranch() {
+      const button = document.getElementById('smart-sync-button');
+      button.classList.add('syncing');
+      button.disabled = true;
+      button.innerHTML = '↓ Pulling...';
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/pull-base-branch`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showNotification(`✓ Pulled ${baseBranchStatus.behind} commits to ${currentProject.base_branch}`, 'success');
+          // Refresh everything
+          await checkForUpdates();
+          await checkBaseBranchStatus();
+        } else {
+          showNotification('Failed to pull: ' + (result.error || 'Unknown error'), 'error');
+        }
+      } catch (error) {
+        showNotification('Pull error: ' + error.message, 'error');
+      } finally {
+        updateSmartButton();
+      }
+    }
+    
+    async function pushBaseBranch() {
+      const button = document.getElementById('smart-sync-button');
+      button.classList.add('syncing');
+      button.disabled = true;
+      button.innerHTML = '↑ Pushing...';
+      
+      try {
+        const response = await fetch(`${API_BASE}/projects/${projectId}/push-base-branch`, {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showNotification(`✓ Pushed ${baseBranchStatus.ahead} commits to origin/${currentProject.base_branch}`, 'success');
+          // Refresh status
+          await checkBaseBranchStatus();
+        } else {
+          showNotification('Failed to push: ' + (result.error || 'Unknown error'), 'error');
+        }
+      } catch (error) {
+        showNotification('Push error: ' + error.message, 'error');
+      } finally {
+        updateSmartButton();
       }
     }
     
