@@ -1088,6 +1088,9 @@ app.get('/api/projects/:id/base-branch-status', async (req, res) => {
     }
     
     try {
+      // Fetch latest from remote to get accurate status
+      await gitCommand(project.local_path, 'git fetch origin');
+      
       // Check if base branch is behind its remote
       const behindResult = await gitCommand(project.local_path, 
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`);
