@@ -696,8 +696,8 @@
           </div>
           
           <div class="project-info">
-            <div>Branch: <strong>${project.baseBranch || project.branch || 'main'}</strong></div>
-            <div>Created: ${new Date(project.createdAt).toLocaleString()}</div>
+            <div>Branch: <strong>${project.base_branch || project.baseBranch || project.branch || 'main'}</strong></div>
+            <div>Created: ${new Date(project.created_at || project.createdAt).toLocaleString()}</div>
           </div>
           
           <div class="project-actions">

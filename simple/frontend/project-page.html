@@ -732,29 +732,6 @@
               <div>Branch: <strong>${task.branch}</strong></div>
               <div>Created: ${new Date(task.created_at).toLocaleString()}</div>
               <div>Status: <strong>${task.status || 'Active'}</strong></div>
-              <div style="margin-top: 10px; padding: 10px; background: #eff6ff; border-radius: 6px; color: #1e40af; font-size: 13px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div>
-                    💡 <strong>Session Mode:</strong>
-                    <span id="session-mode-text">${sessionPersistence ? 'Persistent (with tmux)' : 'Clean (with Claude --continue)'}</span>
-                  </div>
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="checkbox" id="session-persistence" ${sessionPersistence ? 'checked' : ''} onchange="toggleSessionMode()" style="cursor: pointer;">
-                    <span>Enable Persistence</span>
-                  </label>
-                </div>
-                <div id="session-mode-description" style="margin-top: 5px; font-size: 12px;">
-                  ${sessionPersistence 
-                    ? 'Sessions are preserved across reconnections using tmux. Some terminal features may be affected.'
-                    : 'Claude will automatically continue your most recent conversation in this task.'}
-                </div>
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #dbeafe;">
-                  <div style="color: #1e3a8a; font-weight: 500;">✨ All terminals stay active!</div>
-                  <div style="font-size: 11px; margin-top: 2px;">
-                    All task terminals run in the background. Switch between tasks instantly without losing your work.
-                  </div>
-                </div>
-              </div>
             </div>
             
             <div class="task-actions">
@@ -1149,9 +1126,7 @@
         if (result.success) {
           closeModal();
           await loadTasks();
-          // Create terminal for new task
-          createAllTerminals([result.task]);
-          // Small delay to ensure DOM is updated
+          // Small delay to ensure DOM is updated, then select the new task
           setTimeout(() => selectTask(result.task.id), 100);
         } else {
           alert('Error: ' + result.error);

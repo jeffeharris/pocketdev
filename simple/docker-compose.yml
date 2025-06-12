@@ -9,7 +9,7 @@ services:
     volumes:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./projects:/workspace/projects
+      - ./projects:/projects
       - ~/.ssh:/root/.ssh:ro
       - ~/.gitconfig:/root/.gitconfig:ro
       - pocketdev-settings:/root/.pocketdev
@@ -17,7 +17,7 @@ services:
     ports:
       - "3005:3005"  # API and dashboard
     environment:
-      - PROJECTS_DIR=/workspace/projects
+      - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - HOME=/root
     command: >
