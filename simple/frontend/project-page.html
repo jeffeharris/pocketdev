@@ -386,8 +386,8 @@
         // Update UI
         document.getElementById('project-title').textContent = currentProject.name;
         document.getElementById('project-name').textContent = currentProject.name;
-        document.getElementById('project-branch').textContent = currentProject.baseBranch || currentProject.branch || 'main';
-        document.getElementById('project-created').textContent = new Date(currentProject.createdAt).toLocaleDateString();
+        document.getElementById('project-branch').textContent = currentProject.base_branch || currentProject.branch || 'main';
+        document.getElementById('project-created').textContent = new Date(currentProject.created_at).toLocaleDateString();
       } catch (error) {
         console.error('Failed to load project:', error);
         alert('Failed to load project');
@@ -475,7 +475,7 @@
             <h3 style="margin: 0 0 15px 0;">${task.name}</h3>
             <div style="color: #6b7280; margin-bottom: 20px;">
               <div>Branch: <strong>${task.branch}</strong></div>
-              <div>Created: ${new Date(task.createdAt).toLocaleString()}</div>
+              <div>Created: ${new Date(task.created_at).toLocaleString()}</div>
               <div>Status: <strong>${task.status || 'Active'}</strong></div>
               <div style="margin-top: 10px; padding: 10px; background: #eff6ff; border-radius: 6px; color: #1e40af; font-size: 13px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">

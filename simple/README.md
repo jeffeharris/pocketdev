@@ -26,17 +26,25 @@ This system allows you to:
 
 ```bash
 # Using Docker with SQLite persistence
-cd /home/jeffh/projects/pocketdev-simple-server/simple
+cd simple/
 docker-compose up -d
 
-# Or using the database-backed server directly
-./start-db.sh
+# Access the project dashboard
+open http://localhost:3005/projects.html
 
-# Access dashboard
-open http://localhost:3005/frontend/project-dashboard-v2.html
+# View logs
+docker-compose logs -f project-manager
 ```
 
 The SQLite database will be created at `simple/data/pocketdev.db` and all projects, tasks, and sessions will persist across server restarts.
+
+## Technology Stack
+
+- **Backend**: Node.js with Express (ES modules)
+- **Database**: SQLite with prepared statements
+- **Frontend**: Vanilla JavaScript with modern ES6+
+- **Terminal**: ttyd for web-based terminal access
+- **Container**: Docker with Docker Compose
 
 ## Key Features
 
@@ -85,23 +93,23 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 ```
 simple/
 ├── server/
-│   ├── project-manager-db.cjs   # Database-backed API server
-│   ├── db/                      # Database layer
-│   │   ├── index.cjs           # Database connection
+│   ├── project-manager-db.js    # Database-backed API server (ES modules)
+│   ├── db/                      # Database layer (ES modules)
+│   │   ├── index.js            # Database connection
 │   │   ├── schema.sql          # SQLite schema
 │   │   └── models/             # Data models
-│   │       ├── project.cjs
-│   │       ├── task.cjs
-│   │       └── session.cjs
-│   └── server.js               # Legacy server
+│   │       ├── project.js
+│   │       ├── task.js
+│   │       └── session.js
+│   └── github.js               # GitHub API integration
 ├── data/
 │   └── pocketdev.db            # SQLite database
 ├── worktree-claude.sh          # ttyd wrapper
 ├── docker-compose.yml          # Services
-├── start-db.sh                 # Database server startup
 ├── frontend/
-│   ├── project-dashboard-v2.html
-│   └── project-page.html
+│   ├── projects.html           # Main project dashboard
+│   ├── project-page.html       # Individual project view
+│   └── cleanup-manager.html    # Orphaned worktree cleanup
 └── projects/                   # Git repositories & worktrees
 ```
 
