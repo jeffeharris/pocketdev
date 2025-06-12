@@ -366,6 +366,7 @@
     let currentProject = null;
     let currentTask = null;
     let sessionPersistence = localStorage.getItem('sessionPersistence') !== 'false'; // Default to true
+    let allTerminalIframes = new Map(); // Store all iframes by task ID
     
     // Initialize
     if (!projectId) {
@@ -463,15 +464,36 @@
       const worktreePath = `/projects/${projectId}-task-${task.id}`;
       const claudeUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(worktreePath)}`;
       
-      // Clear any existing terminal
-      const allTerminals = document.getElementById('all-terminals');
-      if (allTerminals) {
-        allTerminals.innerHTML = '';
+      // Update task details without recreating terminal container
+      let taskDetailsEl = document.querySelector('.task-details');
+      let allTerminals = document.getElementById('all-terminals');
+      
+      if (!taskDetailsEl || !allTerminals) {
+        // First time - create the full structure
+        container.innerHTML = `
+        <div class="task-details" style="height: 100%; display: flex; flex-direction: column;">
+          <div id="task-info" style="padding: 30px; padding-bottom: 20px;">
+            <!-- Task info will be updated here -->
+          </div>
+          
+          <div id="terminal-container" class="terminal-container" style="flex: 1; background: #000; border-radius: 0 0 8px 8px; overflow: hidden; min-height: 500px; position: relative;">
+            <button class="fullscreen-button" onclick="toggleFullscreen()">
+              <span id="fullscreen-icon">⛶</span> <span id="fullscreen-text">Fullscreen</span>
+            </button>
+            <!-- All task terminals will be here, but only one visible -->
+            <div id="all-terminals" style="width: 100%; height: 100%; position: relative;">
+              <!-- Terminal containers will be dynamically added here -->
+            </div>
+          </div>
+        </div>
+      `;
+        allTerminals = document.getElementById('all-terminals');
       }
       
-      container.innerHTML = `
-        <div class="task-details" style="height: 100%; display: flex; flex-direction: column;">
-          <div style="padding: 30px; padding-bottom: 20px;">
+      // Update only the task info section
+      const taskInfo = document.getElementById('task-info');
+      if (taskInfo) {
+        taskInfo.innerHTML = `
             <h3 style="margin: 0 0 15px 0;">${task.name}</h3>
             <div style="color: #6b7280; margin-bottom: 20px;">
               <div>Branch: <strong>${task.branch}</strong></div>
@@ -521,24 +543,19 @@
             </div>
             
             <div id="git-info" style="margin-top: 20px;"></div>
-          </div>
-          
-          <div id="terminal-container" class="terminal-container" style="flex: 1; background: #000; border-radius: 0 0 8px 8px; overflow: hidden; min-height: 500px; position: relative;">
-            <button class="fullscreen-button" onclick="toggleFullscreen()">
-              <span id="fullscreen-icon">⛶</span> <span id="fullscreen-text">Fullscreen</span>
-            </button>
-            <!-- All task terminals will be here, but only one visible -->
-            <div id="all-terminals" style="width: 100%; height: 100%; position: relative;">
-              <!-- Terminal containers will be dynamically added here -->
-            </div>
-          </div>
-        </div>
-      `;
+        `;
+      }
       
-      // Create the terminal iframe
-      setTimeout(() => {
-        const allTerminals = document.getElementById('all-terminals');
-        if (allTerminals) {
+      // Handle terminal iframes
+      if (allTerminals) {
+        // Hide all other iframes
+        allTerminalIframes.forEach((iframe, taskId) => {
+          iframe.style.display = taskId === task.id ? 'block' : 'none';
+        });
+        
+        // Check if iframe already exists for this task
+        if (!allTerminalIframes.has(task.id)) {
+          // Create new iframe
           const terminalPath = sessionPersistence ? worktreePath : worktreePath + '@notmux';
           const terminalUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(terminalPath)}`;
           
@@ -546,11 +563,17 @@
           iframe.src = terminalUrl;
           iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
           iframe.title = `Claude Terminal - Task ${task.id}`;
+          iframe.setAttribute('data-task-id', task.id);
           
+          allTerminalIframes.set(task.id, iframe);
           allTerminals.appendChild(iframe);
           console.log(`Created terminal iframe for task ${task.id}: ${terminalUrl}`);
+        } else {
+          // Show existing iframe
+          allTerminalIframes.get(task.id).style.display = 'block';
+          console.log(`Showing existing terminal iframe for task ${task.id}`);
         }
-      }, 100);
+      }
     }
     
     
@@ -605,14 +628,28 @@
         modeDesc.textContent = 'Claude will automatically continue your most recent conversation in this task.';
       }
       
-      // Refresh the current task view with new mode
+      // When persistence mode changes, we need to recreate the iframe
       if (currentTask) {
+        // Remove the existing iframe
+        if (allTerminalIframes.has(currentTask.id)) {
+          const iframe = allTerminalIframes.get(currentTask.id);
+          iframe.remove();
+          allTerminalIframes.delete(currentTask.id);
+        }
+        // Re-render to create a new iframe with the new mode
         renderTaskDetails(currentTask);
       }
     }
     
     function refreshTerminal(taskId) {
-      // Simply re-render the current task
+      // Remove the iframe from memory and re-create it
+      if (allTerminalIframes.has(taskId)) {
+        const iframe = allTerminalIframes.get(taskId);
+        iframe.remove();
+        allTerminalIframes.delete(taskId);
+      }
+      
+      // Re-render to create a new iframe
       if (currentTask && currentTask.id === taskId) {
         renderTaskDetails(currentTask);
       }
@@ -857,6 +894,8 @@
         if (result.success) {
           closeModal();
           await loadTasks();
+          // Create terminal for new task
+          createAllTerminals([result.task]);
           // Small delay to ensure DOM is updated
           setTimeout(() => selectTask(result.task.id), 100);
         } else {
@@ -899,6 +938,11 @@
             if (response.ok) {
               const result = await response.json();
               alert(result.message || 'Task archived successfully');
+              // Clean up iframe
+              if (allTerminalIframes.has(taskId)) {
+                allTerminalIframes.get(taskId).remove();
+                allTerminalIframes.delete(taskId);
+              }
               await loadTasks();
               currentTask = null;
               renderEmptyState();
@@ -916,6 +960,11 @@
             
             if (response.ok) {
               alert('Task permanently deleted');
+              // Clean up iframe
+              if (allTerminalIframes.has(taskId)) {
+                allTerminalIframes.get(taskId).remove();
+                allTerminalIframes.delete(taskId);
+              }
               await loadTasks();
               currentTask = null;
               renderEmptyState();
@@ -932,6 +981,11 @@
         });
         
         if (response.ok) {
+          // Clean up iframe
+          if (allTerminalIframes.has(taskId)) {
+            allTerminalIframes.get(taskId).remove();
+            allTerminalIframes.delete(taskId);
+          }
           await loadTasks();
           currentTask = null;
           renderEmptyState();
