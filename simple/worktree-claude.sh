@@ -1,16 +1,20 @@
 #!/bin/bash
 
-# Wrapper script for ttyd to launch Claude in the correct worktree
+# Wrapper script for ttyd to launch Claude in tmux sessions for persistence
 # Usage: ttyd passes the worktree path as a query parameter
-# Format: /path/to/worktree or with resume: /path/to/worktree&resume=sessionId
+# Format: /path/to/worktree or with resume: /path/to/worktree@resume=sessionId
 
 # ttyd with -a flag passes URL arguments as command line args
-# The URL ?arg=value passes the value as a command line argument
 WORKTREE=""
 RESUME_SESSION=""
 
-# With ttyd -a, URL ?arg=value passes just the value
-# We encode resume session as path@resume=sessionId
+# Set up environment for Ink rendering in tmux
+export TERM=xterm-256color
+export COLORTERM=truecolor
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
+# Parse arguments
 if [ ! -z "$1" ]; then
     ARG="$1"
     
@@ -39,55 +43,73 @@ else
     # Extract task ID from worktree path (e.g., /projects/2e2d632f-task-44509b74 -> task-44509b74)
     SESSION_NAME=$(basename "$WORKTREE")
     
+    # Create tmux-friendly session name (replace problematic characters)
+    TMUX_SESSION_NAME="claude-$(echo "$SESSION_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')"
+    
     if [ -d "$WORKTREE" ]; then
         cd "$WORKTREE"
         
-        # Create a marker to track if we've used this worktree before
-        MARKER_DIR="/root/.pocketdev-sessions"
-        mkdir -p "$MARKER_DIR"
-        SESSION_MARKER="$MARKER_DIR/${SESSION_NAME}.used"
-        
-        # Check if we have a stored session ID for this worktree
-        SESSION_FILE="$MARKER_DIR/${SESSION_NAME}.session"
-        
-        # If RESUME_SESSION is set from URL parameter, use it
-        if [ ! -z "$RESUME_SESSION" ]; then
-            echo "Resuming Claude thread..."
-            echo "Session ID: ${RESUME_SESSION:0:8}..."
+        # Check if tmux session exists
+        if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
+            echo "Reconnecting to existing session: $TMUX_SESSION_NAME"
+            echo "Task: $SESSION_NAME"
             echo ""
-            exec claude --resume "$RESUME_SESSION"
-        elif [ -f "$SESSION_FILE" ]; then
-            # We have a stored session ID, try to resume it
-            SESSION_ID=$(cat "$SESSION_FILE")
-            echo "Resuming Claude session..."
-            echo "Session ID: ${SESSION_ID:0:8}..."
-            echo ""
-            exec claude --resume "$SESSION_ID"
-        elif [ -f "$SESSION_MARKER" ]; then
-            # We've used this worktree before but don't have a session ID
-            # Use --continue to continue the most recent conversation
-            echo "Continuing previous Claude session..."
-            echo ""
-            exec claude --continue
+            # Attach to existing session
+            exec tmux attach-session -t "$TMUX_SESSION_NAME"
         else
-            # First time in this worktree
-            touch "$SESSION_MARKER"
+            echo "Creating new persistent session: $TMUX_SESSION_NAME"
+            echo "Task: $SESSION_NAME"
+            echo "tmux persistence enabled"
+            echo ""
             
-            # Check if there's a prompt file
-            PROMPT_FILE="$WORKTREE/.claude-prompt"
-            if [ -f "$PROMPT_FILE" ]; then
-                # Read the prompt and delete the file
-                PROMPT=$(cat "$PROMPT_FILE")
-                rm -f "$PROMPT_FILE"
-                echo "Starting Claude with task instructions..."
-                echo ""
-                exec claude "$PROMPT"
+            # Create a marker to track if we've used this worktree before
+            MARKER_DIR="/root/.pocketdev-sessions"
+            mkdir -p "$MARKER_DIR"
+            SESSION_MARKER="$MARKER_DIR/${SESSION_NAME}.used"
+            
+            # Check if we have a stored session ID for this worktree
+            SESSION_FILE="$MARKER_DIR/${SESSION_NAME}.session"
+            
+            # Build the command to run in tmux
+            if [ ! -z "$RESUME_SESSION" ]; then
+                echo "Resuming Claude thread..."
+                echo "Session ID: ${RESUME_SESSION:0:8}..."
+                CMD="claude --resume \"$RESUME_SESSION\""
+            elif [ -f "$SESSION_FILE" ]; then
+                # We have a stored session ID, try to resume it
+                SESSION_ID=$(cat "$SESSION_FILE")
+                echo "Resuming Claude session..."
+                echo "Session ID: ${SESSION_ID:0:8}..."
+                CMD="claude --resume \"$SESSION_ID\""
+            elif [ -f "$SESSION_MARKER" ]; then
+                # We've used this worktree before but don't have a session ID
+                echo "Continuing previous Claude session..."
+                CMD="claude --continue"
             else
-                echo "Starting new Claude session..."
-                echo "Tip: Your conversation will be automatically resumed next time!"
-                echo ""
-                exec claude
+                # First time in this worktree
+                touch "$SESSION_MARKER"
+                
+                # Check if there's a prompt file
+                PROMPT_FILE="$WORKTREE/.claude-prompt"
+                if [ -f "$PROMPT_FILE" ]; then
+                    # Read the prompt and delete the file
+                    PROMPT=$(cat "$PROMPT_FILE")
+                    rm -f "$PROMPT_FILE"
+                    echo "Starting Claude with task instructions..."
+                    CMD="claude \"$PROMPT\""
+                else
+                    echo "Starting new Claude session..."
+                    echo "Tip: Your conversation will be automatically resumed next time!"
+                    CMD="claude"
+                fi
             fi
+            
+            # Create new tmux session and attach
+            # Important: Set proper working directory with -c flag
+            # Export environment variables for Ink rendering
+            tmux new-session -d -s "$TMUX_SESSION_NAME" -c "$WORKTREE" \
+                "export TERM=xterm-256color; export COLORTERM=truecolor; export LANG=en_US.UTF-8; export LC_ALL=en_US.UTF-8; $CMD"
+            exec tmux attach-session -t "$TMUX_SESSION_NAME"
         fi
     else
         echo "Error: Worktree directory not found: $WORKTREE"

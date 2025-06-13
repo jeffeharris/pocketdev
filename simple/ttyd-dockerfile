@@ -1,5 +1,15 @@
 FROM node:20
 
+# Set locale for UTF-8 support
+RUN apt-get update && apt-get install -y locales && \
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
+    locale-gen && \
+    update-locale LANG=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
 RUN apt-get update && apt-get install -y wget git tmux curl && \
     wget https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -O /usr/local/bin/ttyd && \
     chmod +x /usr/local/bin/ttyd && \

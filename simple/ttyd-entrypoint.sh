@@ -7,7 +7,10 @@ SESSION_API_PID=$!
 
 # Start ttyd
 echo "Starting TTyd on port 7681..."
-ttyd -p 7681 -W -a /usr/local/bin/worktree-claude &
+# Try to disable scroll sensitivity to prevent arrow key conversion
+ttyd -p 7681 -W -a \
+    -t scrollSensitivity=0 \
+    /usr/local/bin/worktree-claude &
 TTYD_PID=$!
 
 # Function to handle shutdown
