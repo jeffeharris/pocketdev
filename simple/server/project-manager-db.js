@@ -160,6 +160,11 @@ async function gitCommand(projectPath, command) {
 
 // Configure git credentials for a repository
 async function configureGitCredentials(projectPath) {
+  // Configure merge tool
+  await execAsync(`git config merge.tool vimdiff`, { cwd: projectPath });
+  await execAsync(`git config merge.conflictstyle diff3`, { cwd: projectPath });
+  await execAsync(`git config mergetool.prompt false`, { cwd: projectPath });
+  
   if (!githubToken) return;
   
   try {
@@ -1310,7 +1315,8 @@ app.post('/api/projects/:projectId/tasks/:taskId/update', async (req, res) => {
       const operation = method === 'rebase' ? 'rebase' : 'merge';
       const mergeTaskName = `${operation} ${project.base_branch} into ${task.name}`;
       const prompt = `Help me ${operation} the branch '${project.base_branch}' into this task branch '${task.branch}'. ` +
-        `Please guide me through the process and help resolve any conflicts that may arise. ` +
+        `IMPORTANT: If there are conflicts, show me each conflicted section using git diff before resolving. ` +
+        `For each conflict, explain what would be lost by choosing either version, then suggest a resolution. ` +
         `Start by checking the current status and then perform the ${operation}.`;
       
       // Create a temporary merge task in the database
@@ -1499,9 +1505,14 @@ app.post('/api/projects/:projectId/tasks/:taskId/merge-to-base', async (req, res
 
 There are merge conflicts that need to be resolved. Please:
 1. Check the current git status to see conflicting files
-2. Resolve all conflicts by choosing the appropriate changes
-3. Make sure the code still works after merging
-4. Commit the merge with an appropriate message
+2. For EACH conflict, use 'git diff' to show me the conflicting sections
+3. Explain what each version contains and what would be lost by choosing either side
+4. Suggest how to resolve the conflict and wait for my approval
+5. Only after showing me all conflicts, proceed with resolution
+6. Make sure the code still works after merging
+7. Commit the merge with an appropriate message
+
+IMPORTANT: Never use 'git checkout --theirs' or '--ours' without first showing what would be removed.
 
 Original task: ${task.name}`;
       

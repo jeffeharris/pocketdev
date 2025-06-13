@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Project Details</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <style>
     * { box-sizing: border-box; }
     
@@ -1444,9 +1444,16 @@
       container.querySelectorAll('.task-item').forEach(el => {
         el.addEventListener('click', function() {
           const taskId = this.getAttribute('data-task-id');
-          selectTask(taskId);
+          selectTaskWithMenuClose(taskId);
         });
       });
+    }
+    
+    function selectTaskWithMenuClose(taskId) {
+      if (window.innerWidth <= 768) {
+        closeMobileMenu();
+      }
+      selectTask(taskId);
     }
     
     async function selectTask(taskId) {
@@ -1621,13 +1628,35 @@
       const text = document.getElementById('fullscreen-text');
       
       if (container.classList.contains('fullscreen')) {
+        // Exit fullscreen
         container.classList.remove('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Fullscreen';
+        
+        // Exit native fullscreen if active
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          }
+        }
       } else {
+        // Enter fullscreen
         container.classList.add('fullscreen');
         icon.textContent = '⛶';
         text.textContent = 'Exit Fullscreen';
+        
+        // Try native fullscreen API
+        if (container.requestFullscreen) {
+          container.requestFullscreen().catch(err => {
+            console.log('Fullscreen request failed:', err);
+          });
+        } else if (container.webkitRequestFullscreen) {
+          container.webkitRequestFullscreen().catch(err => {
+            console.log('Webkit fullscreen request failed:', err);
+          });
+        }
       }
     }
     
@@ -2248,58 +2277,55 @@
       }
       
       // Create a custom dialog for update options
-      const dialogHtml = `
-        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
-          <div style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%;">
-            <h3 style="margin-top: 0;">Update Task: ${status.taskName}</h3>
-            <p>This task is <strong>${status.behind} commits behind</strong> ${currentProject.base_branch}.</p>
-            
-            <div style="margin: 20px 0;">
-              <label style="display: block; margin-bottom: 10px;">
-                <input type="radio" name="updateMethod" value="merge" checked style="margin-right: 8px;">
-                <strong>Merge</strong> - Safer, preserves all history
-              </label>
-              <label style="display: block; margin-bottom: 10px;">
-                <input type="radio" name="updateMethod" value="rebase" style="margin-right: 8px;">
-                <strong>Rebase</strong> - Cleaner history, may need conflict resolution
-              </label>
+      const dialogContent = `
+        <h3>Update Task: ${status.taskName}</h3>
+        <p>This task is <strong>${status.behind} commits behind</strong> ${currentProject.base_branch}.</p>
+        
+        <div style="margin: 20px 0;">
+          <label style="display: block; margin-bottom: 10px;">
+            <input type="radio" name="updateMethod" value="merge" checked style="margin-right: 8px;">
+            <strong>Merge</strong> - Safer, preserves all history
+          </label>
+          <label style="display: block; margin-bottom: 10px;">
+            <input type="radio" name="updateMethod" value="rebase" style="margin-right: 8px;">
+            <strong>Rebase</strong> - Cleaner history, may need conflict resolution
+          </label>
+        </div>
+        
+        <div style="background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 15px; margin: 20px 0;">
+          <label style="display: flex; align-items: start; cursor: pointer;">
+            <input type="checkbox" id="withClaude" style="margin-right: 8px; margin-top: 2px;">
+            <div>
+              <strong>Use Claude assistance</strong>
+              <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                Claude will guide you through the merge/rebase process and help resolve any conflicts
+              </div>
             </div>
-            
-            <div style="background: #f0f9ff; border: 1px solid #3b82f6; border-radius: 6px; padding: 15px; margin: 20px 0;">
-              <label style="display: flex; align-items: start; cursor: pointer;">
-                <input type="checkbox" id="withClaude" style="margin-right: 8px; margin-top: 2px;">
-                <div>
-                  <strong>Use Claude assistance</strong>
-                  <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
-                    Claude will guide you through the merge/rebase process and help resolve any conflicts
-                  </div>
-                </div>
-              </label>
-            </div>
-            
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-              <button onclick="this.closest('div').parentElement.remove()" style="padding: 10px 20px; background: #e5e7eb; border: none; border-radius: 6px; cursor: pointer;">
-                Cancel
-              </button>
-              <button onclick="performUpdate('${taskId}')" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                Update Task
-              </button>
-            </div>
-          </div>
+          </label>
+        </div>
+        
+        <div class="dialog-actions">
+          <button class="secondary" data-action="cancel">Cancel</button>
+          <button class="primary" data-action="update">Update Task</button>
         </div>
       `;
       
-      const dialog = document.createElement('div');
-      dialog.innerHTML = dialogHtml;
-      document.body.appendChild(dialog.firstElementChild);
+      showDialog(
+        dialogContent,
+        () => {
+          // Cancel - nothing to do
+        },
+        (action) => {
+          if (action === 'update') {
+            performUpdate(taskId);
+          }
+        }
+      );
     }
     
     async function performUpdate(taskId) {
       const method = document.querySelector('input[name="updateMethod"]:checked').value;
       const withClaude = document.getElementById('withClaude').checked;
-      
-      // Close dialog
-      document.querySelector('[onclick*="performUpdate"]').closest('div').parentElement.remove();
       
       const button = document.querySelector(`[onclick="updateTask('${taskId}')"]`);
       if (button) {
@@ -2409,22 +2435,22 @@
       dialog.innerHTML = content;
       
       // Add event listeners to buttons
-      const cancelBtn = dialog.querySelector('[data-action="cancel"]');
-      const confirmBtn = dialog.querySelector('[data-action="confirm"]');
-      
-      if (cancelBtn && onCancel) {
-        cancelBtn.addEventListener('click', () => {
-          onCancel();
+      const buttons = dialog.querySelectorAll('[data-action]');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = btn.getAttribute('data-action');
           closeDialog();
+          
+          if (action === 'cancel' && onCancel) {
+            onCancel();
+          } else if (action === 'confirm' && onConfirm) {
+            onConfirm();
+          } else if (typeof onConfirm === 'function') {
+            // For backward compatibility
+            onConfirm(action);
+          }
         });
-      }
-      
-      if (confirmBtn && onConfirm) {
-        confirmBtn.addEventListener('click', () => {
-          onConfirm();
-          closeDialog();
-        });
-      }
+      });
       
       backdrop.appendChild(dialog);
       document.body.appendChild(backdrop);
@@ -2470,7 +2496,8 @@
             
             <div class="dialog-actions">
               <button class="secondary" data-action="cancel">Cancel</button>
-              <button class="primary" data-action="confirm">Merge with Claude Assistance</button>
+              <button class="primary" data-action="vim">Resolve in Vim</button>
+              <button class="primary" data-action="claude">Merge with Claude</button>
             </div>
           `;
           
@@ -2481,9 +2508,18 @@
               mergeButton.disabled = false;
               mergeButton.textContent = originalText;
             },
-            () => {
-              // Confirm callback
-              mergeWithClaude(taskId);
+            (action) => {
+              // Action callback
+              if (action === 'claude') {
+                mergeWithClaude(taskId);
+              } else if (action === 'vim') {
+                // Open terminal with git mergetool, just like Claude
+                const worktreePath = currentTask.worktree_path || `/projects/${projectId}-task-${taskId}`;
+                const mergetoolUrl = `http://${window.location.hostname}:7681/?arg=${encodeURIComponent(worktreePath + ' && git mergetool')}`;
+                window.open(mergetoolUrl, '_blank');
+                mergeButton.disabled = false;
+                mergeButton.textContent = originalText;
+              }
             }
           );
           
@@ -2842,6 +2878,22 @@
       originalRenderTaskDetails(task);
       setTimeout(initializeImages, 100);
     };
+    
+    // Handle fullscreen change events
+    function handleFullscreenChange() {
+      const container = document.getElementById('terminal-container');
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        // Exited native fullscreen
+        if (container && container.classList.contains('fullscreen')) {
+          container.classList.remove('fullscreen');
+          document.getElementById('fullscreen-icon').textContent = '⛶';
+          document.getElementById('fullscreen-text').textContent = 'Fullscreen';
+        }
+      }
+    }
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
   </script>
 </body>
 </html>
