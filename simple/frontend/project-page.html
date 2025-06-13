@@ -717,9 +717,230 @@
     .dialog button.primary:hover {
       background: #1d4ed8;
     }
+    
+    /* Mobile Menu Button */
+    .mobile-menu-button {
+      display: none;
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1001;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .mobile-menu-button:hover {
+      background: #1d4ed8;
+    }
+    
+    /* Mobile Overlay */
+    .mobile-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
+    }
+    
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+      .header {
+        padding: 15px;
+        padding-left: 60px; /* Space for menu button */
+      }
+      
+      .header h1 {
+        font-size: 18px;
+      }
+      
+      .container {
+        height: calc(100vh - 60px);
+      }
+      
+      .mobile-menu-button {
+        display: block;
+      }
+      
+      .left-panel {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 80%;
+        max-width: 300px;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.2);
+      }
+      
+      .left-panel.open {
+        left: 0;
+      }
+      
+      .mobile-overlay.show {
+        display: block;
+      }
+      
+      .right-panel {
+        padding: 15px;
+        width: 100%;
+      }
+      
+      .task-details {
+        padding: 15px;
+      }
+      
+      .task-actions {
+        flex-wrap: wrap;
+      }
+      
+      .task-actions button {
+        flex: 1;
+        min-width: 120px;
+        padding: 12px 16px;
+        font-size: 14px;
+      }
+      
+      .terminal-container {
+        margin-top: 15px;
+        height: 400px;
+      }
+      
+      #all-terminals {
+        height: 350px;
+      }
+      
+      .fullscreen-button {
+        padding: 10px 14px;
+        font-size: 14px;
+      }
+      
+      .image-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 10px;
+      }
+      
+      .modal-content {
+        margin: 20px auto;
+        padding: 20px;
+        width: 95%;
+      }
+      
+      .form-group input {
+        padding: 12px;
+        font-size: 16px; /* Prevent zoom on iOS */
+      }
+      
+      .new-task-button,
+      .sync-button {
+        padding: 14px;
+        font-size: 14px;
+      }
+      
+      .task-item {
+        padding: 12px;
+      }
+      
+      .back-link {
+        font-size: 14px;
+      }
+      
+      /* Better touch targets */
+      button, .task-item {
+        min-height: 44px;
+      }
+      
+      /* Adjust upload zone for mobile */
+      .upload-zone {
+        padding: 20px;
+      }
+      
+      .upload-icon {
+        font-size: 36px;
+      }
+      
+      /* Stack form buttons on mobile */
+      .modal-content form > div:last-child {
+        flex-direction: column;
+      }
+      
+      .modal-content form button {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+      
+      /* Adjust dialog for mobile */
+      .dialog {
+        padding: 20px;
+        margin: 20px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .header h1 {
+        font-size: 16px;
+      }
+      
+      .task-actions {
+        flex-direction: column;
+      }
+      
+      .task-actions button {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      
+      .terminal-container {
+        height: 300px;
+      }
+      
+      #all-terminals {
+        height: 250px;
+      }
+      
+      .project-info h2 {
+        font-size: 18px;
+      }
+      
+      .image-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    
+    /* Fullscreen improvements for mobile */
+    @media (max-width: 768px) and (orientation: landscape) {
+      .terminal-container.fullscreen {
+        padding: 0;
+      }
+      
+      .terminal-container.fullscreen .fullscreen-button {
+        top: 5px;
+        right: 5px;
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- Mobile Menu Button -->
+  <button class="mobile-menu-button" onclick="toggleMobileMenu()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+  
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" onclick="closeMobileMenu()"></div>
+  
   <div class="header">
     <div style="max-width: 1400px; margin: 0 auto;">
       <a href="/projects.html" class="back-link">
@@ -730,7 +951,7 @@
   </div>
   
   <div class="container">
-    <div class="left-panel">
+    <div class="left-panel" id="left-panel">
       <div class="project-info">
         <h2 id="project-name">Loading...</h2>
         <div class="project-meta">
@@ -816,6 +1037,27 @@
     } else {
       loadProject();
       loadTasks();
+    }
+    
+    // Mobile menu functions
+    function toggleMobileMenu() {
+      const leftPanel = document.getElementById('left-panel');
+      const overlay = document.querySelector('.mobile-overlay');
+      
+      if (leftPanel.classList.contains('open')) {
+        closeMobileMenu();
+      } else {
+        leftPanel.classList.add('open');
+        overlay.classList.add('show');
+      }
+    }
+    
+    function closeMobileMenu() {
+      const leftPanel = document.getElementById('left-panel');
+      const overlay = document.querySelector('.mobile-overlay');
+      
+      leftPanel.classList.remove('open');
+      overlay.classList.remove('show');
     }
     
     // Helper function to get task status display
@@ -1209,6 +1451,12 @@
     
     async function selectTask(taskId) {
       console.log('Selecting task:', taskId);
+      
+      // Close mobile menu when selecting a task
+      if (window.innerWidth <= 768) {
+        closeMobileMenu();
+      }
+      
       try {
         const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}`);
         const task = await response.json();
