@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+# Install Docker CLI and build dependencies for native modules
+RUN apk add --no-cache docker-cli python3 make g++
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies with proper native compilation
+RUN npm ci
+
+# Copy application files (excluding node_modules)
+COPY . .
+
+# Create workspace directory
+RUN mkdir -p /tmp/pocketdev-workspaces
+
+# Expose API port
+EXPOSE 3001
+
+# Start development server
+CMD ["npm", "run", "dev"]

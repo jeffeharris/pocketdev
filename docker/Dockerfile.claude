@@ -1,0 +1,28 @@
+FROM ubuntu:22.04
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    screen \
+    tmux \
+    expect \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code (when available)
+# For now, we'll assume it's installed via npm or similar
+
+WORKDIR /workspace
+
+# Copy bridge scripts
+COPY bridge/ /app/bridge/
+
+# Install Python dependencies
+RUN pip3 install aiohttp websockets
+
+# Entry point that maintains TTY
+ENTRYPOINT ["/bin/bash"]
