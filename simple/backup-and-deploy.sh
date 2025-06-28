@@ -58,11 +58,11 @@ docker-compose down
 
 echo ""
 echo "🔨 Step 3: Rebuilding images..."
-docker-compose --profile build build claude-ttyd
+# No need to build ttyd image anymore
 
 echo ""
 echo "🚀 Step 4: Starting services..."
-docker-compose up -d project-manager claude-ttyd-server
+docker-compose up -d project-manager
 
 echo ""
 echo "♻️  Step 5: Restoring data..."
@@ -90,7 +90,7 @@ echo ""
 echo "🔗 Access points:"
 echo "  - Dashboard: http://localhost:3005/frontend/project-dashboard-v2.html"
 echo "  - API: http://localhost:3005/api/"
-echo "  - Terminal: http://localhost:7681/"
+echo "  - Shelltender WS: ws://localhost:8080/"
 echo ""
 echo "💾 Backup location: $BACKUP_DIR"
 echo ""
