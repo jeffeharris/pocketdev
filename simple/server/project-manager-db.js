@@ -4,6 +4,7 @@
 // Manages multiple repo branches with isolated Claude instances
 
 import express from 'express';
+import { createServer } from 'http';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
@@ -13,10 +14,13 @@ import crypto from 'crypto';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+// Temporarily removed WebSocket support due to node-pty compatibility issues
 import GitHubAPI from './github.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import multer from 'multer';
+import { initializeShelltender, createTaskSession, executeCommand, getSessionInfo, listSessions } from './shelltender-simple.js';
+// import { createTerminalWebSocketServer, createTaskTerminalSession } from './simple-terminal.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,6 +32,10 @@ app.use(express.json());
 // Serve frontend files directly at root
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
+
+// Serve xterm-direct on /xterm path
+const xtermPath = path.join(__dirname, '../xterm-direct/public');
+app.use('/xterm', express.static(xtermPath));
 
 const PORT = process.env.PORT || 3005;
 const PROJECTS_DIR = process.env.PROJECTS_DIR || path.join(__dirname, '../projects');
@@ -148,13 +156,18 @@ async function gitCommand(projectPath, command) {
       env.GITHUB_TOKEN = githubToken;
     }
     
-    const { stdout, stderr } = await execAsync(command, { 
+    // Add safe directory config to avoid dubious ownership errors
+    const safeCommand = `git config --global --add safe.directory ${projectPath} 2>/dev/null; ${command}`;
+    
+    const { stdout, stderr } = await execAsync(safeCommand, { 
       cwd: projectPath,
-      env 
+      env,
+      shell: '/bin/sh'
     });
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
-    return { success: false, error: error.message };
+    // Always include output even on error to prevent undefined errors
+    return { success: false, output: '', error: error.message };
   }
 }
 
@@ -738,6 +751,88 @@ app.get('/api/projects/:projectId/tasks/:taskId/sessions', async (req, res) => {
   }
 });
 
+// Shelltender Terminal Sessions API
+
+// Get all terminal sessions
+app.get('/api/sessions', async (req, res) => {
+  try {
+    const sessions = await listSessions();
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get session info
+app.get('/api/sessions/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const session = await getSessionInfo(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create or get terminal session for a task
+app.post('/api/projects/:projectId/tasks/:taskId/terminal', async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+    
+    // Get task to verify it exists and get worktree path
+    const task = await models.tasks.findById(taskId);
+    if (!task || task.project_id !== projectId) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Create or get shelltender session
+    const session = await createTaskSession(taskId, task.worktree_path, {
+      projectId,
+      projectName: task.project_name,
+      taskTitle: task.title,
+      taskDescription: task.description,
+      createdBy: 'api'
+    });
+    
+    res.json({
+      sessionId: session.id,
+      name: session.name,
+      status: session.status,
+      websocketUrl: `/ws/shelltender?session=${session.id}`,
+      metadata: session.metadata
+    });
+  } catch (error) {
+    console.error('Error creating terminal session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Execute command in terminal session
+app.post('/api/sessions/:sessionId/execute', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { command } = req.body;
+    
+    if (!command) {
+      return res.status(400).json({ error: 'Command is required' });
+    }
+    
+    await executeCommand(sessionId, command);
+    
+    res.json({ 
+      status: 'success',
+      message: 'Command sent to terminal session'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 function formatBytes(bytes) {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -1249,10 +1344,30 @@ app.get('/api/projects/:id/update-status', async (req, res) => {
           `git rev-list --count HEAD..origin/${project.base_branch}`);
         const behind = parseInt(behindResult.output.trim()) || 0;
         
-        // Check if branch has unpushed commits
-        const aheadResult = await gitCommand(task.worktree_path, 
-          `git rev-list --count origin/${project.base_branch}..HEAD`);
-        const ahead = parseInt(aheadResult.output.trim()) || 0;
+        // Check if branch has unpushed commits to its own remote
+        let ahead = 0;
+        try {
+          // First check if remote tracking branch exists
+          const remoteCheckResult = await gitCommand(task.worktree_path, 
+            `git rev-parse --verify origin/${task.branch} 2>/dev/null`);
+          
+          if (remoteCheckResult.success) {
+            // Remote branch exists, count unpushed commits
+            const aheadResult = await gitCommand(task.worktree_path, 
+              `git rev-list --count origin/${task.branch}..HEAD`);
+            ahead = parseInt(aheadResult.output.trim()) || 0;
+          } else {
+            // No remote branch, count all commits ahead of base branch
+            const aheadResult = await gitCommand(task.worktree_path, 
+              `git rev-list --count origin/${project.base_branch}..HEAD`);
+            ahead = parseInt(aheadResult.output.trim()) || 0;
+          }
+        } catch (e) {
+          // Fallback to comparing with base branch
+          const aheadResult = await gitCommand(task.worktree_path, 
+            `git rev-list --count origin/${project.base_branch}..HEAD`);
+          ahead = parseInt(aheadResult.output.trim()) || 0;
+        }
         
         // Check for uncommitted changes
         const statusResult = await gitCommand(task.worktree_path, 'git status --porcelain');
@@ -1716,6 +1831,44 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// API endpoint to migrate tasks to shelltender
+app.post('/api/migrate-to-shelltender', async (req, res) => {
+  try {
+    const { migrateTasksToShelltender } = await import('./migrate-to-shelltender.js');
+    await migrateTasksToShelltender();
+    res.json({ success: true, message: 'Tasks migrated to shelltender' });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to get shelltender session ID for a task
+app.get('/api/tasks/:taskId/shelltender-session', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    // Get the most recent active shelltender session for this task
+    const session = await models.sessions.findByTaskId(taskId);
+    const shelltenderSession = session.find(s => 
+      s.metadata?.provider === 'shelltender' && s.is_active
+    );
+    
+    if (shelltenderSession) {
+      res.json({ 
+        sessionId: shelltenderSession.session_id,
+        taskId: taskId,
+        metadata: shelltenderSession.metadata
+      });
+    } else {
+      res.status(404).json({ error: 'No shelltender session found for this task' });
+    }
+  } catch (error) {
+    console.error('Error fetching shelltender session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server
 async function start() {
   try {
@@ -1723,10 +1876,17 @@ async function start() {
     await initializeDatabase();
     await loadSettings();
     
-    app.listen(PORT, () => {
+    // Create HTTP server for both Express and Shelltender
+    const server = createServer(app);
+    
+    // Initialize Shelltender
+    await initializeShelltender(server);
+    
+    server.listen(PORT, () => {
       console.log(`Project Manager API (SQLite) running on port ${PORT}`);
       console.log(`Projects directory: ${PROJECTS_DIR}`);
       console.log(`Database: ${path.join(__dirname, '../data/pocketdev.db')}`);
+      console.log(`Shelltender WebSocket available at ws://localhost:${PORT}/ws/shelltender`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

@@ -13,14 +13,10 @@ else
 fi
 
 echo ""
-echo "Building Claude base image..."
-docker compose --profile build build claude-ttyd
-
-echo ""
 echo "Starting services..."
 
-# Start the project manager and ttyd server
-docker compose up -d project-manager claude-ttyd-server
+# Start the project manager
+docker compose up -d project-manager
 
 # Wait for it to be healthy
 echo "Waiting for services to be ready..."
