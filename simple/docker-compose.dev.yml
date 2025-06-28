@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  project-manager:
+    environment:
+      - NODE_ENV=development
+    # Override the command to just keep the container running
+    # We'll run the services manually inside for better control
+    command: tail -f /dev/null
