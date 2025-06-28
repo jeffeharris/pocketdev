@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # Main Project Manager with GitHub integration and SQLite persistence
   project-manager:
-    image: node:20
+    build:
+      context: .
+      dockerfile: Dockerfile.project-manager
     container_name: pocketdev-project-manager
     working_dir: /app/server
     volumes:
