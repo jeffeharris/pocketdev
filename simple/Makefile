@@ -23,15 +23,20 @@ dev:
 	@docker-compose down
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 	@sleep 5
+	@echo "Installing dependencies..."
+	@docker exec pocketdev-shelltender bash -c "cd /app && npm install"
 	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm install"
 	@docker exec pocketdev-project-manager bash -c "cd /app/shelltender-client && npm install"
+	@echo "Starting services..."
+	@docker exec -d pocketdev-shelltender bash -c "cd /app && node shelltender-service.js"
 	@docker exec -d pocketdev-project-manager bash -c "cd /app/shelltender-client && npm run dev"
 	@docker exec -d pocketdev-project-manager bash -c "cd /app/server && npm run dev"
 	@echo "\n✓ Development environment started!"
 	@echo "\nServices:"
 	@echo "  React app:     http://localhost:3008"
 	@echo "  API:           http://localhost:3005"
-	@echo "  Shelltender:   ws://localhost:8080"
+	@echo "  Shelltender WS: ws://localhost:8080"
+	@echo "  Shelltender API: http://localhost:8081"
 	@echo "\nHot reloading enabled - just save your files!"
 	@echo "\nView logs: make logs"
 
@@ -60,7 +65,7 @@ restart:
 
 # View logs
 logs:
-	@docker logs -f pocketdev-project-manager
+	@docker-compose logs -f
 
 # Open shell in container
 shell:

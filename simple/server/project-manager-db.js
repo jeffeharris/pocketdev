@@ -19,7 +19,8 @@ import GitHubAPI from './github.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import multer from 'multer';
-import { initializeShelltender, createTaskSession, executeCommand, getSessionInfo, listSessions } from './shelltender-simple.js';
+import { createTaskSession, executeCommand, getSessionInfo, listSessions } from './shelltender-client.js';
+import ShelltenderWebSocketClient from './shelltender-ws-client.js';
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 // import { createTerminalWebSocketServer, createTaskTerminalSession } from './simple-terminal.js';
@@ -1945,31 +1946,49 @@ async function start() {
     await initializeDatabase();
     await loadSettings();
     
-    // Create HTTP server for both Express and Shelltender
+    // Create HTTP server for Express
     const server = createServer(app);
     
-    // Initialize Shelltender
-    const shelltender = await initializeShelltender(server);
+    // Connect to Shelltender WebSocket service
+    const shelltenderWsUrl = process.env.SHELLTENDER_WS_URL || 'ws://localhost:8080';
+    const wsClient = new ShelltenderWebSocketClient(shelltenderWsUrl);
+    wsClient.connect();
     
-    // Initialize AI monitoring
+    // Initialize AI monitoring with WebSocket client
     console.log('Initializing AI monitoring...');
-    notificationService = new NotificationService(shelltender.wsServer);
-    aiMonitor = new AISessionMonitor(shelltender.sessionManager, shelltender.wsServer, notificationService);
+    notificationService = new NotificationService(wsClient);
     
-    // Register AI patterns with Shelltender's eventManager
-    aiMonitor.registerPatterns(shelltender.eventManager);
+    // Create a mock sessionManager and eventManager for AI monitor
+    const mockSessionManager = {
+      onData: (callback) => {
+        wsClient.on('session-output', callback);
+      }
+    };
+    
+    const mockEventManager = {
+      on: (event, callback) => {
+        wsClient.on(event, callback);
+      },
+      emit: (event, data) => {
+        wsClient.send({ type: event, ...data });
+      }
+    };
+    
+    aiMonitor = new AISessionMonitor(mockSessionManager, wsClient, notificationService);
+    
+    // Register AI patterns
+    aiMonitor.registerPatterns(mockEventManager);
     
     // Listen for new session creation to register patterns
-    if (shelltender.eventManager && shelltender.eventManager.on) {
-      shelltender.eventManager.on('session-created', async (event) => {
-        console.log('New session created, registering AI patterns:', event.id);
-        await aiMonitor.registerSessionPatterns(event.id);
-      });
-    }
+    wsClient.on('session-created', async (event) => {
+      console.log('New session created, registering AI patterns:', event.id);
+      await aiMonitor.registerSessionPatterns(event.id);
+    });
     
     // Store globally for API access
     app.locals.aiMonitor = aiMonitor;
     app.locals.notificationService = notificationService;
+    app.locals.wsClient = wsClient;
     
     console.log('AI monitoring initialized successfully');
     
@@ -1977,7 +1996,7 @@ async function start() {
       console.log(`Project Manager API (SQLite) running on port ${PORT}`);
       console.log(`Projects directory: ${PROJECTS_DIR}`);
       console.log(`Database: ${path.join(__dirname, '../data/pocketdev.db')}`);
-      console.log(`Shelltender WebSocket available at ws://localhost:${PORT}/ws/shelltender`);
+      console.log(`Connected to Shelltender service at ${shelltenderWsUrl}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -1990,6 +2009,9 @@ process.on('SIGINT', async () => {
   console.log('\nShutting down...');
   if (db) {
     await db.close();
+  }
+  if (app.locals.wsClient) {
+    app.locals.wsClient.close();
   }
   process.exit();
 });

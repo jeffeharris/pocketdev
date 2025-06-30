@@ -79,8 +79,10 @@
       });
       
       // Connect to shelltender WebSocket
+      // Get WebSocket URL from config or use default
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${window.location.hostname}:8080/`);
+      const wsPort = window.SHELLTENDER_WS_PORT || 8080;
+      const ws = new WebSocket(`${protocol}//${window.location.hostname}:${wsPort}/`);
       
       ws.onopen = () => {
         console.log('Connected to shelltender WebSocket');
