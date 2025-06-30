@@ -9,6 +9,7 @@ import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import GitHubAPI from './github.js';
 import ShelltenderWebSocketClient from './shelltender-ws-client.js';
+import { ShelltenderWSAdapter } from './shelltender-ws-adapter.js';
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import createRoutes from './routes/index.js';
@@ -91,129 +92,70 @@ async function loadSettings() {
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server) {
   try {
-    // Connect to Shelltender WebSocket service
+    console.log('Initializing AI monitoring with Shelltender WebSocket adapter...');
+    
+    // Create the WebSocket adapter for terminal data monitoring
+    const wsAdapter = new ShelltenderWSAdapter(config.shelltenderWsUrl);
+    
+    // Create WebSocket client for events and notifications
     const wsClient = new ShelltenderWebSocketClient(config.shelltenderWsUrl);
     wsClient.connect();
-  
-  // Initialize AI monitoring
-  console.log('Initializing AI monitoring...');
-  notificationService = new NotificationService(wsClient);
-  
-  // Create session connections map to track individual WebSocket connections
-  const sessionConnections = new Map();
-  
-  // Function to connect to a specific session
-  const connectToSession = (sessionId) => {
-    if (sessionConnections.has(sessionId)) {
-      return; // Already connected
-    }
     
-    // Pass session ID as query parameter
-    const wsUrl = `${config.shelltenderWsUrl}?session=${sessionId}`;
-    const ws = new WebSocket(wsUrl);
+    // Initialize notification service
+    notificationService = new NotificationService(wsClient);
     
-    ws.on('open', () => {
-      console.log(`Connected to session ${sessionId}`);
-      sessionConnections.set(sessionId, ws);
-      // Don't send connect message - session is established via URL
-    });
+    // Create AI monitor with the WebSocket adapter
+    aiMonitor = new AISessionMonitor(wsAdapter, wsClient, notificationService);
     
-    ws.on('message', (msg) => {
-      const msgStr = msg.toString();
-      
-      // Check if it's JSON
-      if (msgStr.startsWith('{')) {
-        try {
-          const data = JSON.parse(msgStr);
-          console.log(`Received JSON message for session ${sessionId}:`, data.type || 'unknown');
-          if (data.type === 'output' && data.data) {
-            aiMonitor.processTerminalOutput(sessionId, data.data);
-          } else if (data.data) {
-            aiMonitor.processTerminalOutput(sessionId, data.data);
+    // Register AI patterns
+    aiMonitor.registerPatterns(wsClient);
+    
+    // Register existing sessions with the adapter
+    try {
+      const response = await fetch(`${config.shelltenderApiUrl}/sessions`);
+      if (response.ok) {
+        const existingSessions = await response.json();
+        console.log(`Found ${existingSessions.length} existing sessions`);
+        
+        for (const session of existingSessions) {
+          if (session.id && session.id.startsWith('task-')) {
+            console.log('Registering session for monitoring:', session.id);
+            await aiMonitor.registerSessionPatterns(session.id);
+            wsAdapter.registerSession(session.id);
           }
-        } catch (e) {
-          console.error(`Failed to parse JSON for session ${sessionId}:`, e.message);
         }
-      } else {
-        // Raw terminal data
-        if (msgStr.length > 0) {
-          console.log(`Processing raw terminal data for ${sessionId}: ${msgStr.substring(0, 50)}...`);
-          aiMonitor.processTerminalOutput(sessionId, msgStr);
-        }
+      }
+    } catch (error) {
+      console.error('Failed to register existing sessions:', error);
+    }
+    
+    // Listen for new session creation
+    wsClient.on('session-created', async (event) => {
+      if (event.id && event.id.startsWith('task-')) {
+        console.log('New session created, registering for monitoring:', event.id);
+        await aiMonitor.registerSessionPatterns(event.id);
+        wsAdapter.registerSession(event.id);
       }
     });
     
-    ws.on('close', () => {
-      console.log(`Disconnected from session ${sessionId}`);
-      sessionConnections.delete(sessionId);
+    // Listen for session closure
+    wsClient.on('session-closed', (sessionId) => {
+      if (sessionId && sessionId.startsWith('task-')) {
+        console.log('Session closed, unregistering:', sessionId);
+        wsAdapter.unregisterSession(sessionId);
+        aiMonitor.removeSession(sessionId);
+      }
     });
     
-    ws.on('error', (err) => {
-      console.error(`WebSocket error for session ${sessionId}:`, err);
-      sessionConnections.delete(sessionId);
-    });
-  };
-  
-  // Create WebSocket adapters for AI monitor
-  const wsSessionAdapter = {
-    onData: (callback) => {
-      // Store the callback for the AI monitor to use
-      aiMonitor.processTerminalOutput = callback;
-    }
-  };
-  
-  const wsEventAdapter = {
-    on: (event, callback) => {
-      wsClient.on(event, callback);
-    },
-    emit: (event, data) => {
-      wsClient.send({ type: event, ...data });
-    }
-  };
-  
-  aiMonitor = new AISessionMonitor(wsSessionAdapter, wsClient, notificationService);
-  
-  // Register AI patterns
-  aiMonitor.registerPatterns(wsEventAdapter);
-  
-  // Register patterns for existing sessions and connect to them
-  try {
-    const response = await fetch(`${config.shelltenderApiUrl}/sessions`);
-    if (response.ok) {
-      const existingSessions = await response.json();
-      console.log(`Found ${existingSessions.length} existing sessions`);
-      
-      for (const session of existingSessions) {
-        if (session.id && session.id.startsWith('task-')) {
-          console.log('Registering AI patterns for existing session:', session.id);
-          await aiMonitor.registerSessionPatterns(session.id);
-          // Connect WebSocket to this session
-          connectToSession(session.id);
-        }
-      }
-    }
+    // Store in app locals for API access
+    app.locals.aiMonitor = aiMonitor;
+    app.locals.notificationService = notificationService;
+    app.locals.wsClient = wsClient;
+    app.locals.wsAdapter = wsAdapter;
+    
+    console.log('AI monitoring initialized successfully');
   } catch (error) {
-    console.error('Failed to register AI patterns for existing sessions:', error);
-  }
-  
-  // Listen for new session creation
-  wsClient.on('session-created', async (event) => {
-    console.log('New session created, registering AI patterns:', event.id);
-    await aiMonitor.registerSessionPatterns(event.id);
-    // Connect WebSocket to this new session
-    if (event.id && event.id.startsWith('task-')) {
-      connectToSession(event.id);
-    }
-  });
-  
-  // Store in app locals for API access
-  app.locals.aiMonitor = aiMonitor;
-  app.locals.notificationService = notificationService;
-  app.locals.wsClient = wsClient;
-  
-  console.log('AI monitoring initialized successfully');
-  } catch (error) {
-    console.warn('Failed to initialize monitoring (Shelltender may not be running):', error.message);
+    console.warn('Failed to initialize monitoring:', error.message);
     console.warn('Server will continue without AI monitoring features');
   }
 }
@@ -262,7 +204,12 @@ process.on('SIGINT', async () => {
   
   if (app.locals.wsClient) {
     app.locals.wsClient.close();
-    console.log('WebSocket connection closed');
+    console.log('WebSocket client closed');
+  }
+  
+  if (app.locals.wsAdapter) {
+    app.locals.wsAdapter.close();
+    console.log('WebSocket adapter closed');
   }
   
   process.exit(0);

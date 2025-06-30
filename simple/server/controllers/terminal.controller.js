@@ -81,11 +81,10 @@ export async function createTerminalSession(req, res, next) {
     }
     
     // Create or get existing session
-    const sessionId = `task-${taskId}`;
-    const result = await createTaskSession(sessionId, task.worktree_path);
+    const result = await createTaskSession(taskId, task.worktree_path);
     
     res.json({
-      sessionId,
+      sessionId: result.id,
       ...result
     });
   } catch (error) {
