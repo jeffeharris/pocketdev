@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install git, network tools, debugging utilities, and build tools for node-pty
+# Install git, network tools, debugging utilities, build tools for node-pty, and locales
 RUN apt-get update && apt-get install -y \
     git \
     netstat-nat \
@@ -14,7 +14,16 @@ RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    locales \
+    && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && update-locale LANG=en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LC_CTYPE=en_US.UTF-8
 RUN npm install -g @anthropic-ai/claude-code
 
 # Create workspace directory
