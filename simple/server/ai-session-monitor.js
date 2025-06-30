@@ -415,8 +415,13 @@ export class AISessionMonitor {
    * Called when a new task session is created
    */
   async registerSessionPatterns(sessionId) {
-    // Pattern registration disabled for now - we're using onData monitoring instead
-    console.log(`Session ${sessionId} created - patterns monitored via onData`);
+    // Create state tracker for the session if it doesn't exist
+    if (!this.stateTrackers.has(sessionId)) {
+      const tracker = new AIStateTracker(sessionId);
+      this.stateTrackers.set(sessionId, tracker);
+      console.log(`Created state tracker for session ${sessionId}`);
+    }
+    console.log(`Session ${sessionId} registered - patterns monitored via onData`);
   }
 
   /**
