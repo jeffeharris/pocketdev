@@ -37,12 +37,12 @@ export async function getAIStates(req, res, next) {
   try {
     const aiMonitor = req.app.locals.aiMonitor;
     
-    if (!aiMonitor || !aiMonitor.getAllStates) {
-      return res.json({ states: {} });
+    if (!aiMonitor || !aiMonitor.getAllSessionStatuses) {
+      return res.json([]);
     }
     
-    const states = aiMonitor.getAllStates();
-    res.json({ states });
+    const states = aiMonitor.getAllSessionStatuses();
+    res.json(states);
   } catch (error) {
     next(error);
   }

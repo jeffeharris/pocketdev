@@ -35,7 +35,15 @@ RUN mkdir -p /workspace /tmp/pocketdev-worktrees && \
 WORKDIR /app
 COPY server/package*.json ./
 RUN npm install
-COPY server/*.js server/*.cjs ./
+
+# Copy the new modular structure
+COPY server/*.js ./
+COPY server/config ./config
+COPY server/controllers ./controllers
+COPY server/services ./services
+COPY server/routes ./routes
+COPY server/middleware ./middleware
+COPY server/db ./db
 
 # Configure git
 RUN git config --global user.email "claude@pocketdev.ai" && \

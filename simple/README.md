@@ -12,15 +12,17 @@ This system allows you to:
 - Perform git operations through the web UI
 - Track Claude session usage and costs
 - Clean up orphaned worktrees automatically
+- Monitor AI session states and patterns with Shelltender integration
 
 ## Architecture
 
 - **Projects = Git Repositories** (1:1 mapping)
 - **Tasks = Git Worktrees** (isolated work environments)
-- **Single ttyd instance** with URL-based routing
+- **Shelltender integration** for terminal session management
 - **GitHub integration** for repository browsing
 - **SQLite database** for persistent storage of projects, tasks, and sessions
 - **Session analytics** tracking token usage, tool usage, and costs
+- **AI monitoring** for Claude thinking patterns and session states
 
 ## Quick Start
 
@@ -40,11 +42,50 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 
 ## Technology Stack
 
-- **Backend**: Node.js with Express (ES modules)
+- **Backend**: Node.js with Express (ES modules) - Modular architecture
 - **Database**: SQLite with prepared statements
 - **Frontend**: Vanilla JavaScript with modern ES6+
-- **Terminal**: ttyd for web-based terminal access
+- **Terminal**: Shelltender for web-based terminal access with AI monitoring
 - **Container**: Docker with Docker Compose
+
+## Server Architecture (New Modular Design)
+
+The server has been refactored from a monolithic 2000+ line file into a clean modular architecture:
+
+```
+simple/server/
+├── server.js                    # Server initialization & startup
+├── app.js                       # Express app configuration
+├── config/
+│   └── index.js                # Centralized configuration
+├── controllers/                 # HTTP request handlers
+│   ├── project.controller.js   # Project CRUD operations
+│   ├── task.controller.js      # Task management
+│   ├── settings.controller.js  # Settings & GitHub token
+│   ├── monitoring.controller.js # AI monitoring endpoints
+│   ├── terminal.controller.js  # Terminal session management
+│   └── upload.controller.js    # Image upload handling
+├── services/                    # Business logic layer
+│   ├── git.service.js          # Git operations
+│   ├── cleanup.service.js      # Orphaned resource cleanup
+│   ├── merge.service.js        # Merge/rebase operations
+│   └── worktree.service.js     # Git worktree management
+├── routes/                      # API route definitions
+│   ├── index.js                # Route aggregator
+│   ├── project.routes.js       # /api/projects
+│   ├── task.routes.js          # /api/projects/:id/tasks
+│   └── ...                     # Other route modules
+├── middleware/                  # Express middleware
+│   ├── error.middleware.js     # Error handling
+│   └── upload.middleware.js    # File upload config
+└── db/                         # Database layer
+    ├── index.js                # Database connection
+    ├── schema.sql              # SQLite schema
+    └── models/                 # Data models
+        ├── project.js
+        ├── task.js
+        └── session.js
+```
 
 ## Key Features
 
@@ -64,6 +105,13 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - Task-level isolation
 - Branch management
 - Automatic detection of uncommitted changes
+- Merge conflict detection and resolution
+
+### AI Session Monitoring (New)
+- Real-time Claude thinking pattern detection
+- Session state tracking (thinking, awaiting input, etc.)
+- Notification system for AI events
+- Integration with Shelltender for enhanced terminal experience
 
 ### IDE Connectivity
 - SSH access for JetBrains
@@ -88,41 +136,57 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - Native fullscreen API support for terminal viewing
 - Optimized for iPhone and other mobile browsers
 
+## API Endpoints
+
+### Projects
+- `GET /api/projects` - List all projects
+- `POST /api/projects` - Create new project
+- `GET /api/projects/:id` - Get project details
+- `DELETE /api/projects/:id` - Delete project
+
+### Tasks
+- `GET /api/projects/:projectId/tasks` - List tasks for project
+- `POST /api/projects/:projectId/tasks` - Create new task
+- `GET /api/projects/:projectId/tasks/:taskId` - Get task details
+- `POST /api/projects/:projectId/tasks/:taskId/git` - Git operations
+- `DELETE /api/projects/:projectId/tasks/:taskId` - Delete task
+
+### Settings & Monitoring
+- `GET /api/settings` - Get settings
+- `PUT /api/settings` - Update settings (GitHub token)
+- `GET /api/monitoring/status` - AI monitoring status
+- `GET /api/monitoring/notifications` - Get notifications
+
+### Terminal Sessions
+- `GET /api/sessions` - List all terminal sessions
+- `POST /api/projects/:projectId/tasks/:taskId/terminal` - Create terminal session
+- `POST /api/sessions/:sessionId/execute` - Execute command in session
+
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System design details
+- **[docs/server-architecture.md](docs/server-architecture.md)** - New modular server architecture
 - **[REMOTE-PROJECT-MANAGER.md](REMOTE-PROJECT-MANAGER.md)** - Setup guide
 - **[REMOTE-IDE-CONNECTIVITY.md](REMOTE-IDE-CONNECTIVITY.md)** - IDE integration
 - **[LEARNINGS.md](LEARNINGS.md)** - Implementation lessons
-
-## File Structure
-
-```
-simple/
-├── server/
-│   ├── project-manager-db.js    # Database-backed API server (ES modules)
-│   ├── db/                      # Database layer (ES modules)
-│   │   ├── index.js            # Database connection
-│   │   ├── schema.sql          # SQLite schema
-│   │   └── models/             # Data models
-│   │       ├── project.js
-│   │       ├── task.js
-│   │       └── session.js
-│   └── github.js               # GitHub API integration
-├── data/
-│   └── pocketdev.db            # SQLite database
-├── worktree-claude.sh          # ttyd wrapper
-├── docker-compose.yml          # Services
-├── frontend/
-│   ├── projects.html           # Main project dashboard
-│   ├── project-page.html       # Individual project view
-│   └── cleanup-manager.html    # Orphaned worktree cleanup
-└── projects/                   # Git repositories & worktrees
-```
 
 ## Cleanup
 
 Remove legacy files:
 ```bash
 ./cleanup-legacy-files.sh
+```
+
+## Development
+
+```bash
+# Run in development mode with hot reloading
+cd simple/
+npm run dev
+
+# Run tests
+npm test
+
+# Build for production
+docker-compose build
 ```
