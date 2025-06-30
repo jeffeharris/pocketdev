@@ -390,6 +390,7 @@ export class AISessionMonitor {
           return;
         }
         
+        
         // 3. Multi-line input box with text = WAITING_INPUT (purple)
         // Confirmation has priority over single prompt
         if (foundConfirmation) {

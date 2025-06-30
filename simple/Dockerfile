@@ -49,8 +49,10 @@ COPY server/db ./db
 RUN git config --global user.email "claude@pocketdev.ai" && \
     git config --global user.name "Claude"
 
-# Set ownership of app directory to node user
-RUN chown -R node:node /app
+# Set ownership of app directory and npm cache to node user
+RUN chown -R node:node /app && \
+    mkdir -p /home/node/.npm && \
+    chown -R node:node /home/node/.npm
 
 # Switch to non-root user
 USER node

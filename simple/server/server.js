@@ -9,7 +9,7 @@ import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import GitHubAPI from './github.js';
 import ShelltenderWebSocketClient from './shelltender-ws-client.js';
-import { ShelltenderWSAdapter } from './shelltender-ws-adapter.js';
+import { ShelltenderMonitorAdapter } from './shelltender-monitor-adapter.js';
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import createRoutes from './routes/index.js';
@@ -92,10 +92,12 @@ async function loadSettings() {
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server) {
   try {
-    console.log('Initializing AI monitoring with Shelltender WebSocket adapter...');
+    console.log('Initializing AI monitoring with Shelltender Monitor Mode...');
     
-    // Create the WebSocket adapter for terminal data monitoring
-    const wsAdapter = new ShelltenderWSAdapter(config.shelltenderWsUrl);
+    // Create the monitor adapter for terminal data monitoring
+    // Uses Shelltender v0.3.0's monitor mode for efficient all-session monitoring
+    const authKey = process.env.SHELLTENDER_MONITOR_AUTH_KEY || 'pocketdev-monitor-key-2024';
+    const wsAdapter = new ShelltenderMonitorAdapter(config.shelltenderWsUrl, authKey);
     
     // Create WebSocket client for events and notifications
     const wsClient = new ShelltenderWebSocketClient(config.shelltenderWsUrl);
@@ -110,18 +112,19 @@ async function initializeMonitoring(server) {
     // Register AI patterns
     aiMonitor.registerPatterns(wsClient);
     
-    // Register existing sessions with the adapter
+    // Register existing sessions for pattern tracking (monitor mode receives all automatically)
     try {
       const response = await fetch(`${config.shelltenderApiUrl}/sessions`);
       if (response.ok) {
         const existingSessions = await response.json();
         console.log(`Found ${existingSessions.length} existing sessions`);
         
+        // In monitor mode, we just need to set up pattern tracking
+        // The monitor adapter automatically receives data from ALL sessions
         for (const session of existingSessions) {
           if (session.id && session.id.startsWith('task-')) {
-            console.log('Registering session for monitoring:', session.id);
+            console.log('Setting up pattern tracking for session:', session.id);
             await aiMonitor.registerSessionPatterns(session.id);
-            wsAdapter.registerSession(session.id);
           }
         }
       }
@@ -132,18 +135,18 @@ async function initializeMonitoring(server) {
     // Listen for new session creation
     wsClient.on('session-created', async (event) => {
       if (event.id && event.id.startsWith('task-')) {
-        console.log('New session created, registering for monitoring:', event.id);
+        console.log('New session created, setting up pattern tracking:', event.id);
         await aiMonitor.registerSessionPatterns(event.id);
-        wsAdapter.registerSession(event.id);
+        // Monitor mode automatically receives data from new sessions
       }
     });
     
     // Listen for session closure
     wsClient.on('session-closed', (sessionId) => {
       if (sessionId && sessionId.startsWith('task-')) {
-        console.log('Session closed, unregistering:', sessionId);
-        wsAdapter.unregisterSession(sessionId);
+        console.log('Session closed, removing pattern tracking:', sessionId);
         aiMonitor.removeSession(sessionId);
+        // Monitor mode continues to work for remaining sessions
       }
     });
     

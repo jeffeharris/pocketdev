@@ -164,7 +164,7 @@ export async function deleteProject(req, res, next) {
     
     // Delete project directory
     try {
-      await fs.rm(project.project_path, { recursive: true, force: true });
+      await fs.rm(project.local_path, { recursive: true, force: true });
     } catch (error) {
       console.error('Failed to delete project directory:', error);
     }
@@ -198,7 +198,7 @@ export async function createBranch(req, res, next) {
     
     // Create branch
     const result = await gitService.executeGitCommand(
-      project.project_path,
+      project.local_path,
       `git checkout -b ${branchName} ${fromBranch}`,
       config.githubToken
     );
@@ -232,7 +232,7 @@ export async function listBranches(req, res, next) {
     
     // Get all branches
     const result = await gitService.executeGitCommand(
-      project.project_path,
+      project.local_path,
       'git branch -a',
       config.githubToken
     );
@@ -279,7 +279,7 @@ export async function syncProject(req, res, next) {
     
     // Fetch from remote
     const fetchResult = await gitService.executeGitCommand(
-      project.project_path,
+      project.local_path,
       'git fetch --all --prune',
       config.githubToken
     );
@@ -290,7 +290,7 @@ export async function syncProject(req, res, next) {
     
     // Pull current branch
     const pullResult = await gitService.executeGitCommand(
-      project.project_path,
+      project.local_path,
       'git pull',
       config.githubToken
     );
@@ -300,6 +300,301 @@ export async function syncProject(req, res, next) {
       fetch: fetchResult.output,
       pull: pullResult.output
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Fetch remote updates for project
+ */
+export async function fetchProject(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    
+    // Fetch with git
+    const result = await gitService.executeGitCommand(
+      project.local_path,
+      'git fetch --all --prune --tags',
+      config.githubToken
+    );
+    
+    // Get updated branch info
+    const branchResult = await gitService.executeGitCommand(
+      project.local_path,
+      'git branch -r',
+      config.githubToken
+    );
+    
+    const branches = branchResult.output
+      .split('\n')
+      .filter(b => b.trim())
+      .map(b => b.trim().replace('origin/', ''));
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: result.success, 
+      output: result.output,
+      branches: branches
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get base branch sync status
+ */
+export async function getBaseBranchStatus(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    if (!await fs.access(project.local_path).then(() => true).catch(() => false)) {
+      return res.json({ behind: 0, ahead: 0, error: 'Project directory not found' });
+    }
+    
+    try {
+      // Fetch latest from remote to get accurate status
+      await gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken);
+      
+      // Check if base branch is behind its remote
+      const behindResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
+        config.githubToken
+      );
+      const behind = parseInt(behindResult.output.trim()) || 0;
+      
+      // Check if base branch has unpushed commits
+      const aheadResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
+        config.githubToken
+      );
+      const ahead = parseInt(aheadResult.output.trim()) || 0;
+      
+      res.json({ behind, ahead, branch: project.base_branch });
+    } catch (error) {
+      // Remote might not be set up or branch might not exist
+      res.json({ behind: 0, ahead: 0, error: error.message });
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Pull base branch updates
+ */
+export async function pullBaseBranch(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    
+    // Check for uncommitted changes in base branch
+    const statusResult = await gitService.executeGitCommand(
+      project.local_path,
+      'git status --porcelain',
+      config.githubToken
+    );
+    
+    if (statusResult.output && statusResult.output.trim()) {
+      return res.status(400).json({ 
+        error: 'Cannot pull: Base branch has uncommitted changes',
+        hasUncommitted: true 
+      });
+    }
+    
+    // Pull updates for base branch
+    const result = await gitService.executeGitCommand(
+      project.local_path,
+      `git pull origin ${project.base_branch}`,
+      config.githubToken
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        error: result.error || 'Pull failed',
+        output: result.output 
+      });
+    }
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: true, 
+      output: result.output,
+      message: `Successfully pulled updates to ${project.base_branch}`
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Push base branch changes
+ */
+export async function pushBaseBranch(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Ensure git credentials are configured
+    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    
+    // Push base branch
+    const result = await gitService.executeGitCommand(
+      project.local_path,
+      `git push origin ${project.base_branch}`,
+      config.githubToken
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({ 
+        error: result.error || 'Push failed',
+        output: result.output 
+      });
+    }
+    
+    await models.projects.updateLastAccessed(project.id);
+    
+    res.json({ 
+      success: true, 
+      output: result.output,
+      message: `Successfully pushed ${project.base_branch} to origin`
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Check update status for all tasks
+ */
+export async function getUpdateStatus(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const tasks = await models.tasks.findByProjectId(project.id);
+    const updateStatus = [];
+    
+    for (const task of tasks) {
+      if (!await fs.access(task.worktree_path).then(() => true).catch(() => false)) continue;
+      
+      try {
+        // Check if branch is behind origin/base_branch
+        const behindResult = await gitService.executeGitCommand(
+          task.worktree_path,
+          `git rev-list --count HEAD..origin/${project.base_branch}`,
+          config.githubToken
+        );
+        const behind = parseInt(behindResult.output.trim()) || 0;
+        
+        // Check if branch has unpushed commits to its own remote
+        let ahead = 0;
+        try {
+          // First check if remote tracking branch exists
+          const remoteCheckResult = await gitService.executeGitCommand(
+            task.worktree_path,
+            `git rev-parse --verify origin/${task.branch} 2>/dev/null`,
+            config.githubToken
+          );
+          
+          if (remoteCheckResult.success) {
+            // Remote branch exists, count unpushed commits
+            const aheadResult = await gitService.executeGitCommand(
+              task.worktree_path,
+              `git rev-list --count origin/${task.branch}..HEAD`,
+              config.githubToken
+            );
+            ahead = parseInt(aheadResult.output.trim()) || 0;
+          } else {
+            // No remote branch, count all commits ahead of base branch
+            const aheadResult = await gitService.executeGitCommand(
+              task.worktree_path,
+              `git rev-list --count origin/${project.base_branch}..HEAD`,
+              config.githubToken
+            );
+            ahead = parseInt(aheadResult.output.trim()) || 0;
+          }
+        } catch (e) {
+          // Fallback to comparing with base branch
+          const aheadResult = await gitService.executeGitCommand(
+            task.worktree_path,
+            `git rev-list --count origin/${project.base_branch}..HEAD`,
+            config.githubToken
+          );
+          ahead = parseInt(aheadResult.output.trim()) || 0;
+        }
+        
+        // Check for uncommitted changes
+        const statusResult = await gitService.executeGitCommand(
+          task.worktree_path,
+          'git status --porcelain',
+          config.githubToken
+        );
+        const hasUncommitted = statusResult.output.trim().length > 0;
+        
+        updateStatus.push({
+          taskId: task.id,
+          taskName: task.name,
+          branch: task.branch,
+          behind,
+          ahead,
+          hasUncommitted,
+          needsUpdate: behind > 0
+        });
+      } catch (error) {
+        // Task might not have tracking set up
+        updateStatus.push({
+          taskId: task.id,
+          taskName: task.name,
+          branch: task.branch,
+          behind: 0,
+          ahead: 0,
+          hasUncommitted: false,
+          needsUpdate: false,
+          error: error.message
+        });
+      }
+    }
+    
+    res.json({ updateStatus });
   } catch (error) {
     next(error);
   }

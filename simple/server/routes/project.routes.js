@@ -16,4 +16,11 @@ router.post('/:projectId/branches', projectController.createBranch);
 router.get('/:projectId/branches', projectController.listBranches);
 router.post('/:projectId/sync', projectController.syncProject);
 
+// Git operations
+router.post('/:projectId/fetch', projectController.fetchProject);
+router.get('/:projectId/base-branch-status', projectController.getBaseBranchStatus);
+router.post('/:projectId/pull-base-branch', projectController.pullBaseBranch);
+router.post('/:projectId/push-base-branch', projectController.pushBaseBranch);
+router.get('/:projectId/update-status', projectController.getUpdateStatus);
+
 export default router;
