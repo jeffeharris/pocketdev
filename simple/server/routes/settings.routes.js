@@ -1,10 +1,16 @@
 import { Router } from 'express';
+import * as settingsController from '../controllers/settings.controller.js';
 
 const router = Router();
 
-// TODO: Implement settings routes
-router.get('/', (req, res) => {
-  res.json({ message: 'Settings routes not yet implemented' });
-});
+// Settings management
+router.get('/', settingsController.getSettings);
+router.put('/', settingsController.updateSettings);
+
+// GitHub token testing
+router.post('/test-github', settingsController.testGithubToken);
+
+// System info
+router.get('/system-info', settingsController.getSystemInfo);
 
 export default router;

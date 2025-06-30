@@ -188,3 +188,53 @@ export async function createClaudePrompt(worktreePath, prompt) {
   const promptFile = path.join(worktreePath, '.claude-prompt');
   await fs.writeFile(promptFile, prompt);
 }
+
+/**
+ * WorktreeService class for object-oriented usage
+ */
+export class WorktreeService {
+  constructor(githubToken = '') {
+    this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
+  }
+
+  async create(mainRepoPath, branch, worktreePath, baseBranch) {
+    const result = await initializeWorktree({
+      mainRepoPath,
+      worktreePath,
+      branch,
+      baseBranch,
+      githubToken: this.githubToken
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    
+    return result;
+  }
+
+  async remove(mainRepoPath, worktreePath) {
+    const result = await removeWorktree(mainRepoPath, worktreePath);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    return result;
+  }
+
+  async move(oldPath, newPath) {
+    // Simple move operation
+    await execAsync(`mv "${oldPath}" "${newPath}"`);
+  }
+
+  async reset(worktreePath, branch) {
+    return resetWorktree(worktreePath, branch);
+  }
+
+  async list(mainRepoPath) {
+    return listWorktrees(mainRepoPath);
+  }
+
+  async prune(mainRepoPath) {
+    return pruneWorktrees(mainRepoPath);
+  }
+}

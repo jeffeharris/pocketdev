@@ -51,7 +51,7 @@ services:
       - SHELLTENDER_API_URL=http://shelltender:8081
       - SHELLTENDER_WS_URL=ws://shelltender:8080
     command: >
-      sh -c "cd /app/server && npm install && node project-manager-db.js"
+      sh -c "cd /app/server && npm install && node server.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]

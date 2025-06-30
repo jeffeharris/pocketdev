@@ -1,18 +1,34 @@
 import { Router } from 'express';
+
+// Import all route modules
 import projectRoutes from './project.routes.js';
 import taskRoutes from './task.routes.js';
 import settingsRoutes from './settings.routes.js';
 import monitoringRoutes from './monitoring.routes.js';
+import uploadRoutes from './upload.routes.js';
+import terminalRoutes from './terminal.routes.js';
 
 const router = Router();
 
-// Mount all route modules
+// Mount route modules with their base paths
 router.use('/projects', projectRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/monitoring', monitoringRoutes);
 
-// Legacy endpoints (will be moved to appropriate routes)
-// For now, we'll keep compatibility by mounting the old routes
+// Upload routes are nested, so mount at root
+router.use('/', uploadRoutes);
+
+// Terminal routes are mixed, so mount at root
+router.use('/', terminalRoutes);
+
+// Health check endpoint (already in app.js but can be here too)
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'pocketdev-project-manager-api'
+  });
+});
 
 export default router;

@@ -170,6 +170,110 @@ export async function cleanupWorktree(projectPath, worktreePath) {
   }
 }
 
+/**
+ * GitService class for object-oriented usage
+ */
+export class GitService {
+  constructor(githubToken = '') {
+    this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
+  }
+
+  async command(projectPath, command) {
+    return executeGitCommand(projectPath, command, this.githubToken);
+  }
+
+  async configureCredentials(projectPath) {
+    return configureGitCredentials(projectPath, this.githubToken);
+  }
+
+  async getStatus(projectPath) {
+    return this.command(projectPath, 'git status --porcelain');
+  }
+
+  async getDiff(projectPath, args = '') {
+    return this.command(projectPath, `git diff ${args}`);
+  }
+
+  async add(projectPath, files = '.') {
+    return this.command(projectPath, `git add ${files}`);
+  }
+
+  async commit(projectPath, message) {
+    return this.command(projectPath, `git commit -m "${message}"`);
+  }
+
+  async push(projectPath, branch, options = {}) {
+    const flags = options.setUpstream ? '-u' : '';
+    return this.command(projectPath, `git push ${flags} origin ${branch}`);
+  }
+
+  async pull(projectPath, remote, branch) {
+    return this.command(projectPath, `git pull ${remote} ${branch}`);
+  }
+
+  async checkout(projectPath, branch) {
+    return this.command(projectPath, `git checkout ${branch}`);
+  }
+
+  async merge(projectPath, branch, message = '') {
+    const msgFlag = message ? `-m "${message}"` : '';
+    return this.command(projectPath, `git merge ${branch} ${msgFlag}`);
+  }
+
+  async rebase(projectPath, branch) {
+    return this.command(projectPath, `git rebase ${branch}`);
+  }
+
+  async log(projectPath, args = '--oneline -n 10') {
+    return this.command(projectPath, `git log ${args}`);
+  }
+
+  async getHeadCommit(projectPath) {
+    return this.command(projectPath, 'git rev-parse HEAD');
+  }
+
+  async getUnpushedCommits(projectPath, branch) {
+    return this.command(projectPath, `git log origin/${branch}..${branch} --oneline`);
+  }
+
+  async createPullRequest(projectPath, title, body, baseBranch) {
+    return this.command(projectPath, 
+      `gh pr create --title "${title}" --body "${body}" --base ${baseBranch}`
+    );
+  }
+
+  async checkMergeConflicts(projectPath, targetBranch) {
+    // Save current state
+    await this.command(projectPath, 'git add -A');
+    await this.command(projectPath, 'git stash');
+    
+    try {
+      // Attempt a dry-run merge
+      const mergeResult = await this.command(projectPath, 
+        `git merge --no-commit --no-ff ${targetBranch}`);
+      
+      // Check for conflicts
+      const statusResult = await this.command(projectPath, 'git status --porcelain');
+      const conflicts = statusResult.output
+        .split('\n')
+        .filter(line => line.startsWith('UU ') || line.startsWith('AA '))
+        .map(line => line.substring(3).trim());
+      
+      // Abort the merge
+      await this.command(projectPath, 'git merge --abort');
+      
+      return {
+        hasConflicts: conflicts.length > 0,
+        conflicts: conflicts,
+        canMerge: conflicts.length === 0
+      };
+    } finally {
+      // Restore original state
+      await this.command(projectPath, 'git stash pop');
+    }
+  }
+}
+
 export default {
   executeGitCommand,
   configureGitCredentials,
@@ -177,5 +281,6 @@ export default {
   getCurrentCommitSHA,
   countCommitsBetween,
   hasDifferencesBetween,
-  cleanupWorktree
+  cleanupWorktree,
+  GitService
 };

@@ -99,6 +99,22 @@ class TaskModel {
       updates.push('has_uncommitted_changes = ?');
       values.push(data.has_uncommitted_changes ? 1 : 0);
     }
+    if (data.has_commits_since_merge !== undefined) {
+      updates.push('has_commits_since_merge = ?');
+      values.push(data.has_commits_since_merge ? 1 : 0);
+    }
+    if (data.completed_at !== undefined) {
+      updates.push('completed_at = ?');
+      values.push(data.completed_at);
+    }
+    if (data.merged_at !== undefined) {
+      updates.push('merged_at = ?');
+      values.push(data.merged_at);
+    }
+    if (data.merge_commit_sha !== undefined) {
+      updates.push('merge_commit_sha = ?');
+      values.push(data.merge_commit_sha);
+    }
     if (data.metadata !== undefined) {
       updates.push('metadata = ?');
       values.push(typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata));

@@ -2,13 +2,14 @@ import { createServer } from 'http';
 import { promises as fs } from 'fs';
 import path from 'path';
 import config from './config/index.js';
-import app from './app.js';
+import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import GitHubAPI from './github.js';
 import ShelltenderWebSocketClient from './shelltender-ws-client.js';
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
+import createRoutes from './routes/index.js';
 
 // Global instances
 let db = null;
@@ -91,14 +92,14 @@ async function initializeMonitoring(server) {
   console.log('Initializing AI monitoring...');
   notificationService = new NotificationService(wsClient);
   
-  // Create mock managers for AI monitor
-  const mockSessionManager = {
+  // Create WebSocket adapters for AI monitor
+  const wsSessionAdapter = {
     onData: (callback) => {
       wsClient.on('session-output', callback);
     }
   };
   
-  const mockEventManager = {
+  const wsEventAdapter = {
     on: (event, callback) => {
       wsClient.on(event, callback);
     },
@@ -107,10 +108,28 @@ async function initializeMonitoring(server) {
     }
   };
   
-  aiMonitor = new AISessionMonitor(mockSessionManager, wsClient, notificationService);
+  aiMonitor = new AISessionMonitor(wsSessionAdapter, wsClient, notificationService);
   
   // Register AI patterns
-  aiMonitor.registerPatterns(mockEventManager);
+  aiMonitor.registerPatterns(wsEventAdapter);
+  
+  // Register patterns for existing sessions
+  try {
+    const response = await fetch(`${config.shelltenderApiUrl}/sessions`);
+    if (response.ok) {
+      const existingSessions = await response.json();
+      console.log(`Found ${existingSessions.length} existing sessions`);
+      
+      for (const session of existingSessions) {
+        if (session.id && session.id.startsWith('task-')) {
+          console.log('Registering AI patterns for existing session:', session.id);
+          await aiMonitor.registerSessionPatterns(session.id);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to register AI patterns for existing sessions:', error);
+  }
   
   // Listen for new session creation
   wsClient.on('session-created', async (event) => {
@@ -136,6 +155,12 @@ async function start() {
     await ensureProjectsDir();
     await initializeDatabase();
     await loadSettings();
+    
+    // Mount routes after models are initialized
+    app.use('/api', createRoutes(app));
+    
+    // Add error handlers after routes
+    addErrorHandlers(app);
     
     // Create HTTP server
     const server = createServer(app);
