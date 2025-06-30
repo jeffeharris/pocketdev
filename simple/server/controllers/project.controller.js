@@ -10,7 +10,7 @@ import * as gitService from '../services/git.service.js';
 export async function listProjects(req, res, next) {
   try {
     const models = req.app.locals.models;
-    const projects = await models.getAllProjects();
+    const projects = await models.projects.findAll();
     res.json(projects);
   } catch (error) {
     next(error);
@@ -68,13 +68,12 @@ export async function createProject(req, res, next) {
     }
     
     // Save project to database
-    const project = await models.createProject({
+    const project = await models.projects.create({
       id: projectId,
       name: finalProjectName,
-      repo_url: repoUrl,
-      branch: branch,
-      project_path: projectPath,
-      created_at: new Date().toISOString()
+      repoUrl: repoUrl,
+      baseBranch: branch,
+      localPath: projectPath
     });
     
     // Get GitHub metadata if available
@@ -84,11 +83,13 @@ export async function createProject(req, res, next) {
         const repoData = await github.getRepository(owner, repo);
         
         // Update project with GitHub metadata
-        await models.updateProject(projectId, {
-          github_owner: owner,
-          github_repo: repo,
-          description: repoData.description,
-          default_branch: repoData.default_branch
+        await models.projects.update(projectId, {
+          metadata: {
+            github_owner: owner,
+            github_repo: repo,
+            description: repoData.description,
+            default_branch: repoData.default_branch
+          }
         });
         
         project.github_owner = owner;
@@ -113,7 +114,7 @@ export async function getProject(req, res, next) {
     const { projectId } = req.params;
     const models = req.app.locals.models;
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -132,16 +133,16 @@ export async function updateProject(req, res, next) {
     const { projectId } = req.params;
     const models = req.app.locals.models;
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
     // Update project in database
-    await models.updateProject(projectId, req.body);
+    await models.projects.update(projectId, req.body);
     
     // Get updated project
-    const updatedProject = await models.getProject(projectId);
+    const updatedProject = await models.projects.findById(projectId);
     res.json(updatedProject);
   } catch (error) {
     next(error);
@@ -156,7 +157,7 @@ export async function deleteProject(req, res, next) {
     const { projectId } = req.params;
     const models = req.app.locals.models;
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -169,7 +170,7 @@ export async function deleteProject(req, res, next) {
     }
     
     // Delete from database
-    await models.deleteProject(projectId);
+    await models.projects.archive(projectId);
     
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {
@@ -190,7 +191,7 @@ export async function createBranch(req, res, next) {
       return res.status(400).json({ error: 'Branch name is required' });
     }
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -224,7 +225,7 @@ export async function listBranches(req, res, next) {
     const { projectId } = req.params;
     const models = req.app.locals.models;
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
@@ -271,7 +272,7 @@ export async function syncProject(req, res, next) {
     const { projectId } = req.params;
     const models = req.app.locals.models;
     
-    const project = await models.getProject(projectId);
+    const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }

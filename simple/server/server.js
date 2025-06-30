@@ -82,9 +82,10 @@ async function loadSettings() {
 
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server) {
-  // Connect to Shelltender WebSocket service
-  const wsClient = new ShelltenderWebSocketClient(config.shelltenderWsUrl);
-  wsClient.connect();
+  try {
+    // Connect to Shelltender WebSocket service
+    const wsClient = new ShelltenderWebSocketClient(config.shelltenderWsUrl);
+    wsClient.connect();
   
   // Initialize AI monitoring
   console.log('Initializing AI monitoring...');
@@ -123,6 +124,10 @@ async function initializeMonitoring(server) {
   app.locals.wsClient = wsClient;
   
   console.log('AI monitoring initialized successfully');
+  } catch (error) {
+    console.warn('Failed to initialize monitoring (Shelltender may not be running):', error.message);
+    console.warn('Server will continue without AI monitoring features');
+  }
 }
 
 // Start server

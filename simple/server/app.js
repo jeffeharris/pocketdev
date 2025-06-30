@@ -3,11 +3,8 @@ import cors from 'cors';
 import path from 'path';
 import config from './config/index.js';
 
-// Import routes (to be created)
-// import routes from './routes/index.js';
-
-// Import middleware (to be created)
-// import errorHandler from './middleware/error.middleware.js';
+// Import routes
+import routes from './routes/index.js';
 
 const app = express();
 
@@ -30,7 +27,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mount routes
-// app.use('/api', routes);
+app.use('/api', routes);
 
 // Error handling middleware (should be last)
 app.use((err, req, res, next) => {
