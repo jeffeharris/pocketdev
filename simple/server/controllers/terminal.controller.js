@@ -175,7 +175,8 @@ export async function getShelltenderSession(req, res, next) {
     res.json({
       sessionId,
       exists: !!sessionInfo,
-      info: sessionInfo
+      info: sessionInfo,
+      metadata: sessionInfo?.metadata || {}
     });
   } catch (error) {
     next(error);

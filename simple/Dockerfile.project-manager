@@ -1,0 +1,78 @@
+# Project Manager Service (Lightweight Frontend/API)
+FROM node:20-slim
+
+# Install basic system dependencies only
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    python3 \
+    build-essential \
+    locales \
+    && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && update-locale LANG=en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LC_CTYPE=en_US.UTF-8
+
+# Install GitHub CLI (needed for git operations in project manager)
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y gh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Configure git to trust all directories (fixes ownership issues)
+RUN git config --global --add safe.directory '*'
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY server/package*.json ./server/
+RUN cd server && npm install
+
+# Copy shelltender client package
+COPY shelltender-client/package*.json ./shelltender-client/
+RUN cd shelltender-client && npm install
+
+# Copy server files
+COPY server/*.js ./server/
+COPY server/config ./server/config
+COPY server/controllers ./server/controllers
+COPY server/services ./server/services
+COPY server/routes ./server/routes
+COPY server/middleware ./server/middleware
+COPY server/db ./server/db
+
+# Copy shelltender client files
+COPY shelltender-client ./shelltender-client
+
+# Copy frontend files
+COPY frontend ./frontend
+
+# Create non-root user
+RUN useradd -m -s /bin/bash pocketdev
+
+# Create necessary directories and fix ownership
+RUN mkdir -p /projects /app/data && \
+    chmod 755 /projects /app/data && \
+    chown -R pocketdev:pocketdev /app /projects /home/pocketdev
+
+# Configure git safe directories for pocketdev user
+USER pocketdev
+RUN git config --global --add safe.directory '*'
+USER root
+
+# Switch to non-root user
+USER pocketdev
+
+# API and Frontend ports
+EXPOSE 3005 3008
+
+WORKDIR /app/server
+CMD ["npm", "start"]

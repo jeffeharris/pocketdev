@@ -55,6 +55,34 @@ class TaskModel {
     return task;
   }
 
+  async findAll(includeArchived = false) {
+    const where = includeArchived ? '' : 'WHERE t.is_archived = 0';
+    
+    const tasks = await this.db.all(`
+      SELECT t.*,
+        p.name as project_name,
+        COUNT(DISTINCT cs.id) as session_count,
+        COUNT(DISTINCT CASE WHEN cs.is_active = 1 THEN cs.id END) as active_session_count
+      FROM tasks t
+      JOIN projects p ON t.project_id = p.id
+      LEFT JOIN claude_sessions cs ON t.id = cs.task_id
+      ${where}
+      GROUP BY t.id
+      ORDER BY t.created_at DESC
+    `);
+
+    return tasks.map(t => {
+      if (t.metadata) {
+        try {
+          t.metadata = JSON.parse(t.metadata);
+        } catch (e) {
+          t.metadata = {};
+        }
+      }
+      return t;
+    });
+  }
+
   async findByProjectId(projectId, includeArchived = false) {
     const where = includeArchived ? 
       'WHERE t.project_id = ?' : 

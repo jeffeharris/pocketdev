@@ -49,6 +49,14 @@ export class TaskController {
       // Update project last accessed
       await this.models.projects.updateLastAccessed(project.id);
       
+      // Create shelltender session for this task
+      try {
+        const { createTaskSession } = await import('../shelltender-client.js');
+        await createTaskSession(taskId, worktreePath);
+      } catch (error) {
+        console.warn('Failed to create shelltender session:', error.message);
+      }
+      
       res.json({ 
         success: true, 
         task: {

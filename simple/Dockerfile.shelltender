@@ -1,0 +1,41 @@
+# Shelltender Service with AI Tools
+# Build AI base first: docker build -f Dockerfile.ai-base -t pocketdev/ai-base:latest .
+FROM pocketdev/ai-base:latest
+
+# Switch to root for setup
+USER root
+
+WORKDIR /app
+
+# Install Shelltender server package
+RUN npm install -g @shelltender/server@^0.3.0
+
+# Copy server package files for any additional dependencies
+COPY server/package*.json ./server/
+RUN cd server && npm install
+
+# Copy shelltender service files
+COPY server/shelltender-service.js ./server/
+COPY server/shelltender-ws-adapter.js ./server/
+COPY server/shelltender-monitor-adapter.js ./server/
+
+# Create necessary directories
+RUN mkdir -p /app/data/shelltender-sessions /projects /tmp/pocketdev-worktrees && \
+    chown -R pocketdev:pocketdev /app /projects /tmp/pocketdev-worktrees
+
+# Copy any additional scripts or configs needed
+COPY server/*.js ./server/
+
+# Fix ownership of all files
+RUN chown -R pocketdev:pocketdev /app
+
+# Switch back to non-root user
+USER pocketdev
+
+# Shelltender ports
+EXPOSE 8080 8081
+
+# Working directory for sessions
+WORKDIR /projects
+
+CMD ["node", "/app/server/shelltender-service.js"]

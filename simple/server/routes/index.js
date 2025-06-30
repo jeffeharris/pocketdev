@@ -7,6 +7,7 @@ import monitoringRoutes from './monitoring.routes.js';
 import uploadRoutes from './upload.routes.js';
 import terminalRoutes from './terminal.routes.js';
 import createTaskRoutes from './task.routes.js';
+import { TaskController } from '../controllers/task.controller.js';
 
 /**
  * Create all routes with access to app instance
@@ -32,6 +33,35 @@ export default function createRoutes(app) {
   
   // Terminal routes are mixed, so mount at root
   router.use('/', terminalRoutes);
+  
+  // Global tasks endpoints for shelltender-client
+  router.get('/tasks', async (req, res, next) => {
+    try {
+      const allTasks = await models.tasks.findAll();
+      res.json(allTasks);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  router.post('/tasks', async (req, res, next) => {
+    try {
+      const { projectId, branchName, description } = req.body;
+      
+      if (!projectId || !branchName) {
+        return res.status(400).json({ error: 'projectId and branchName are required' });
+      }
+      
+      // Delegate to task controller
+      req.params.projectId = projectId;
+      req.body = { name: description || branchName, branch: branchName };
+      
+      const taskController = new TaskController(models, projectsDir);
+      return taskController.createTask(req, res);
+    } catch (error) {
+      next(error);
+    }
+  });
   
   // Health check endpoint
   router.get('/health', (req, res) => {
