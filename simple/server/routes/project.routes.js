@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as projectController from '../controllers/project.controller.js';
+import { TaskController } from '../controllers/task.controller.js';
 
 const router = Router();
 

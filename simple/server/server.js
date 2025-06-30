@@ -1,6 +1,7 @@
 import { createServer } from 'http';
 import { promises as fs } from 'fs';
 import path from 'path';
+import fetch from 'node-fetch';
 import config from './config/index.js';
 import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
@@ -10,6 +11,7 @@ import ShelltenderWebSocketClient from './shelltender-ws-client.js';
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import createRoutes from './routes/index.js';
+import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 
 // Global instances
 let db = null;
@@ -56,6 +58,10 @@ async function initializeDatabase() {
   // Store models in app locals for access in routes
   app.locals.models = models;
   app.locals.db = db;
+  app.locals.projectsDir = config.projectsDir;
+  
+  // Run cleanup on startup
+  await cleanupOrphanedWorktrees(models);
 }
 
 // Load settings
@@ -157,7 +163,8 @@ async function start() {
     await loadSettings();
     
     // Mount routes after models are initialized
-    app.use('/api', createRoutes(app));
+    const routes = createRoutes(app);
+    app.use('/api', routes);
     
     // Add error handlers after routes
     addErrorHandlers(app);

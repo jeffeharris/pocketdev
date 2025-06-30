@@ -24,7 +24,7 @@ export default function createTaskRoutes(models, projectsDir) {
   // Check if task can be deleted
   router.get('/:taskId/check-delete', (req, res) => taskController.checkDelete(req, res));
 
-  // Delete or archive a task
+  // Delete or archive task
   router.delete('/:taskId', (req, res) => taskController.deleteTask(req, res));
 
   // Update task with remote changes
