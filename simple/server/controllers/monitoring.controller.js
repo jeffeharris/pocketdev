@@ -17,7 +17,7 @@ export async function getMonitoringStatus(req, res, next) {
       enabled: true,
       sessionsMonitored: aiMonitor.getMonitoredSessions ? aiMonitor.getMonitoredSessions().size : 0,
       recentPatterns: aiMonitor.recentPatterns ? aiMonitor.recentPatterns.size : 0,
-      notificationCount: notificationService ? notificationService.getNotificationCount() : 0
+      notificationCount: notificationService && notificationService.notifications ? notificationService.notifications.length : 0
     };
     
     res.json(status);

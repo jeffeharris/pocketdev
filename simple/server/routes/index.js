@@ -27,13 +27,6 @@ export default function createRoutes(app) {
   const taskRouter = createTaskRoutes(models, projectsDir);
   router.use('/projects/:projectId/tasks', taskRouter);
   
-  // Debug log
-  console.log('Routes mounted:', {
-    hasModels: !!models,
-    hasProjectsDir: !!projectsDir,
-    taskRouterType: typeof taskRouter
-  });
-  
   // Upload routes are nested, so mount at root
   router.use('/', uploadRoutes);
   
