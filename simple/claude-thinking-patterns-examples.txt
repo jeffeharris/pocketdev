@@ -1,0 +1,78 @@
+# Claude Thinking Animation Patterns
+
+Based on the code analysis, here are the actual Claude thinking/processing animation patterns used in the simple server:
+
+## Main Processing Pattern (from ai-session-monitor.js line 32):
+Pattern: /([·✢*✶✻✽✺●○◉◎])\s+(\w+ing)…?\s*\((\d+)s\s*·\s*[↑↓]\s*([\d.]+k?)\s*tokens/
+
+Examples that would match:
+- ● Analyzing… (5s · ↑ 2.3k tokens)
+- ✻ Processing… (12s · ↓ 1.5k tokens)
+- ◉ Thinking… (3s · ↑ 842 tokens)
+- ✺ Reading… (8s · ↓ 3.2k tokens)
+- ○ Searching… (2s · ↑ 1k tokens)
+
+## Simple Thinking Pattern (from ai-session-monitor.js line 52):
+Pattern: /[✻●◉]\s*\w+ing\.\.\./i
+
+Examples that would match:
+- ✻ Thinking...
+- ● Processing...
+- ◉ Analyzing...
+
+## Symbols Used:
+From the pattern, Claude uses these symbols:
+- · (middle dot)
+- ✢ (cross)
+- * (asterisk)
+- ✶ (six-pointed star)
+- ✻ (eight-pointed star)
+- ✽ (heavy eight-pointed star)
+- ✺ (eight-pointed pinwheel star)
+- ● (filled circle)
+- ○ (empty circle)  
+- ◉ (circle with dot)
+- ◎ (bullseye)
+
+## Token Direction Indicators:
+- ↑ (up arrow) - likely for input tokens
+- ↓ (down arrow) - likely for output tokens
+
+## Other Claude UI Elements:
+
+### Input Box Pattern (from ai-session-monitor.js line 107):
+Pattern: /╭─+╮\s*\n\s*│\s*>\s*│\s*\n\s*╰─+╯/
+
+Example:
+╭────────────────────╮
+│ >                  │
+╰────────────────────╯
+
+### Success Indicators (line 136):
+- ✓ Successfully completed task
+- Completed: task name
+- Finished: task name
+- Done: task name
+
+### Error Indicators (line 149):
+- Error: message
+- Failed: message
+- Exception: message
+- ❌ error message
+
+### Confusion/Clarification Patterns (line 163):
+- I'm not sure
+- I need clarification
+- I don't understand
+- Could you clarify
+
+## Real Example from Documentation (POCKETDEV_CLAUDE_INTEGRATION.md):
+The pattern specifically captures:
+- Symbol: [·✢*✶✻✽✺●○◉◎]
+- Action: Any word ending in "ing"
+- Duration: Number followed by "s"
+- Token count: Number (optionally with 'k' suffix) followed by "tokens"
+- Direction arrow: ↑ or ↓
+
+This allows PocketDev to show real-time Claude status like:
+"◉ Analyzing… (5s · ↑ 2.3k tokens)" -> Claude is analyzing, 5 seconds elapsed, 2300 input tokens processed
