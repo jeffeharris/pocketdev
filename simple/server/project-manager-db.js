@@ -20,6 +20,8 @@ import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import multer from 'multer';
 import { initializeShelltender, createTaskSession, executeCommand, getSessionInfo, listSessions } from './shelltender-simple.js';
+import { AISessionMonitor } from './ai-session-monitor.js';
+import { NotificationService } from './notification-service.js';
 // import { createTerminalWebSocketServer, createTaskTerminalSession } from './simple-terminal.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,6 +59,10 @@ if (githubToken) {
 
 // Settings file path (for GitHub token)
 const SETTINGS_PATH = path.join(process.env.HOME || '.', '.pocketdev-settings.json');
+
+// AI monitoring instances
+let aiMonitor = null;
+let notificationService = null;
 
 // Initialize database and models
 async function initializeDatabase() {
@@ -761,6 +767,27 @@ app.get('/api/sessions', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// AI Monitoring - specific routes must come before parameterized routes
+app.get('/api/sessions/attention', (req, res) => {
+  const aiMonitor = req.app.locals.aiMonitor;
+  if (!aiMonitor) {
+    return res.status(503).json({ error: 'AI monitoring not initialized' });
+  }
+  
+  const sessions = aiMonitor.getSessionsNeedingAttention();
+  res.json(sessions);
+});
+
+// Get all AI session states
+app.get('/api/sessions/ai-states', (req, res) => {
+  const aiMonitor = req.app.locals.aiMonitor;
+  if (!aiMonitor) {
+    return res.status(503).json({ error: 'AI monitoring not initialized' });
+  }
+  const states = aiMonitor.getAllSessionStatuses();
+  res.json(states);
 });
 
 // Get session info
@@ -1869,6 +1896,48 @@ app.get('/api/tasks/:taskId/shelltender-session', async (req, res) => {
   }
 });
 
+// AI Monitoring API Endpoints (removed - moved earlier in file)
+
+app.get('/api/notifications', (req, res) => {
+  const notificationService = req.app.locals.notificationService;
+  if (!notificationService) {
+    return res.status(503).json({ error: 'Notification service not initialized' });
+  }
+  
+  const limit = parseInt(req.query.limit) || 10;
+  const unreadOnly = req.query.unread === 'true';
+  const notifications = notificationService.getRecentNotifications(limit, unreadOnly);
+  res.json(notifications);
+});
+
+app.post('/api/sessions/:sessionId/acknowledge', (req, res) => {
+  const { sessionId } = req.params;
+  const aiMonitor = req.app.locals.aiMonitor;
+  
+  if (!aiMonitor) {
+    return res.status(503).json({ error: 'AI monitoring not initialized' });
+  }
+  
+  aiMonitor.acknowledgeSession(sessionId);
+  res.json({ success: true });
+});
+
+app.post('/api/sessions/:sessionId/respond', async (req, res) => {
+  const { sessionId } = req.params;
+  const { response } = req.body;
+  
+  if (!response) {
+    return res.status(400).json({ error: 'Response required' });
+  }
+  
+  try {
+    await executeCommand(sessionId, response + '\n');
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server
 async function start() {
   try {
@@ -1880,7 +1949,29 @@ async function start() {
     const server = createServer(app);
     
     // Initialize Shelltender
-    await initializeShelltender(server);
+    const shelltender = await initializeShelltender(server);
+    
+    // Initialize AI monitoring
+    console.log('Initializing AI monitoring...');
+    notificationService = new NotificationService(shelltender.wsServer);
+    aiMonitor = new AISessionMonitor(shelltender.sessionManager, shelltender.wsServer, notificationService);
+    
+    // Register AI patterns with Shelltender's eventManager
+    aiMonitor.registerPatterns(shelltender.eventManager);
+    
+    // Listen for new session creation to register patterns
+    if (shelltender.eventManager && shelltender.eventManager.on) {
+      shelltender.eventManager.on('session-created', async (event) => {
+        console.log('New session created, registering AI patterns:', event.id);
+        await aiMonitor.registerSessionPatterns(event.id);
+      });
+    }
+    
+    // Store globally for API access
+    app.locals.aiMonitor = aiMonitor;
+    app.locals.notificationService = notificationService;
+    
+    console.log('AI monitoring initialized successfully');
     
     server.listen(PORT, () => {
       console.log(`Project Manager API (SQLite) running on port ${PORT}`);

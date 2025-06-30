@@ -926,6 +926,153 @@
         right: 5px;
       }
     }
+    
+    /* AI State Indicators */
+    .ai-state-badge {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-left: 8px;
+      transition: all 0.3s ease;
+    }
+    
+    .ai-state-badge.idle {
+      background-color: #6b7280;  /* Gray - Nothing happening */
+    }
+    
+    .ai-state-badge.running {
+      background-color: #3b82f6;  /* Blue - Claude is active */
+    }
+    
+    .ai-state-badge.loading-context {
+      background-color: #8b5cf6;  /* Purple - Loading context */
+    }
+    
+    .ai-state-badge.thinking {
+      background-color: #facc15;  /* Yellow - AI is thinking (animation visible) */
+      animation: pulse 2s infinite;
+    }
+    
+    .ai-state-badge.waiting-input {
+      background-color: #8b5cf6;  /* Purple - Needs user input */
+      animation: bounce 1s infinite;
+    }
+    
+    .ai-state-badge.error {
+      background-color: #ef4444;  /* Red - Error occurred */
+    }
+    
+    .ai-state-badge.completed {
+      background-color: #10b981;  /* Green - Task completed */
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    
+    /* AI State Display Panel */
+    .ai-state-panel {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 300px;
+      z-index: 100;
+      display: none;
+    }
+    
+    .ai-state-panel.visible {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+    
+    .ai-state-panel h4 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #374151;
+    }
+    
+    .ai-state-info {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 5px;
+    }
+    
+    .ai-pattern-detected {
+      background: #f3f4f6;
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    
+    /* Notification Toast */
+    .ai-notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+    
+    .ai-notification.error {
+      border-color: #ef4444;
+      background: #fee;
+    }
+    
+    .ai-notification.warning {
+      border-color: #f59e0b;
+      background: #fffbeb;
+    }
+    
+    .ai-notification-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .ai-notification-title {
+      font-weight: 600;
+      color: #111827;
+    }
+    
+    .ai-notification-close {
+      cursor: pointer;
+      color: #6b7280;
+      font-size: 18px;
+      line-height: 1;
+    }
+    
+    .ai-notification-body {
+      font-size: 14px;
+      color: #4b5563;
+    }
+    
+    .ai-quick-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    
+    .ai-quick-actions button {
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -1432,6 +1579,7 @@
           <div class="${classes}" data-task-id="${task.id}">
             <div class="task-name">
               ${statusIcon} ${task.name}
+              <span class="ai-state-badge idle" data-task-id="${task.id}" title="AI Status: Idle"></span>
             </div>
             <div class="task-branch">${task.branch}</div>
             ${isMergeTask && !isMerged ? '<div class="task-type">Merge Task</div>' : ''}
@@ -2925,6 +3073,260 @@
     
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    // AI Session Monitoring
+    let aiWebSocket = null;
+    let aiStates = new Map(); // taskId -> state
+    let notificationQueue = [];
+    
+    function connectAIMonitoring() {
+      // Connect to Shelltender WebSocket for AI events
+      const wsUrl = `ws://${window.location.hostname}:8080`;
+      console.log('Connecting to AI monitoring WebSocket:', wsUrl);
+      
+      aiWebSocket = new WebSocket(wsUrl);
+      
+      aiWebSocket.onopen = () => {
+        console.log('AI monitoring WebSocket connected');
+        // Subscribe to AI events
+        aiWebSocket.send(JSON.stringify({
+          type: 'subscribe',
+          events: ['ai_notification', 'ai_state_update']
+        }));
+      };
+      
+      aiWebSocket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          handleAIMessage(message);
+        } catch (error) {
+          console.error('Error parsing AI WebSocket message:', error);
+        }
+      };
+      
+      aiWebSocket.onerror = (error) => {
+        console.error('AI WebSocket error:', error);
+      };
+      
+      aiWebSocket.onclose = () => {
+        console.log('AI WebSocket disconnected, reconnecting in 5s...');
+        setTimeout(connectAIMonitoring, 5000);
+      };
+    }
+    
+    function handleAIMessage(message) {
+      console.log('AI WebSocket message:', message);
+      
+      if (message.type === 'ai_state_update') {
+        updateAIState(message.sessionId, message.data);
+      } else if (message.type === 'ai_notification') {
+        showAINotification(message.data);
+      }
+    }
+    
+    function updateAIState(sessionId, stateData) {
+      // Extract task ID from session ID (format: task-123)
+      const taskId = sessionId.replace('task-', '');
+      
+      // Update state map
+      aiStates.set(taskId, stateData);
+      
+      // Update badge in task list
+      const badge = document.querySelector(`.ai-state-badge[data-task-id="${taskId}"]`);
+      if (badge) {
+        // Remove all state classes
+        badge.className = 'ai-state-badge';
+        
+        // Add new state class
+        const stateClass = stateData.currentState.toLowerCase().replace(/_/g, '-');
+        badge.classList.add(stateClass);
+        
+        // Update title
+        const stateDisplay = stateData.currentState.replace(/_/g, ' ')
+          .toLowerCase()
+          .replace(/\b\w/g, l => l.toUpperCase());
+        badge.title = `AI Status: ${stateDisplay}`;
+        
+        // If there's additional context, add it to title
+        if (stateData.contextData) {
+          if (stateData.contextData.action) {
+            badge.title += ` - ${stateData.contextData.action}`;
+          }
+          if (stateData.contextData.duration) {
+            badge.title += ` (${stateData.contextData.duration}s)`;
+          }
+        }
+      }
+      
+      // Update AI state panel if visible
+      updateAIStatePanel(taskId, stateData);
+    }
+    
+    function showAINotification(notification) {
+      // Create notification element
+      const notifEl = document.createElement('div');
+      notifEl.className = 'ai-notification';
+      if (notification.priority === 'high') {
+        notifEl.classList.add('warning');
+      }
+      
+      // Build notification HTML
+      let actionsHtml = '';
+      if (notification.actions && notification.actions.length > 0) {
+        const buttons = notification.actions.map(action => {
+          if (action.type === 'yes_no') {
+            return `
+              <button class="primary" onclick="respondToAI('${notification.sessionId}', 'y')">Yes</button>
+              <button class="secondary" onclick="respondToAI('${notification.sessionId}', 'n')">No</button>
+            `;
+          } else if (action.type === 'text') {
+            return `
+              <input type="text" id="ai-response-${notification.sessionId}" placeholder="${action.placeholder || 'Type response...'}" style="flex: 1; margin-right: 8px;">
+              <button class="primary" onclick="respondToAIText('${notification.sessionId}')">Send</button>
+            `;
+          } else if (action.options) {
+            return action.options.map((opt, idx) => 
+              `<button class="secondary" onclick="respondToAI('${notification.sessionId}', '${opt}')">${opt}</button>`
+            ).join('');
+          }
+          return '';
+        }).join('');
+        
+        actionsHtml = `<div class="ai-quick-actions">${buttons}</div>`;
+      }
+      
+      notifEl.innerHTML = `
+        <div class="ai-notification-header">
+          <span class="ai-notification-title">${notification.title || 'AI Needs Attention'}</span>
+          <span class="ai-notification-close" onclick="closeNotification(this)">×</span>
+        </div>
+        <div class="ai-notification-body">
+          ${notification.message}
+        </div>
+        ${actionsHtml}
+      `;
+      
+      document.body.appendChild(notifEl);
+      
+      // Auto-remove after 30 seconds if not high priority
+      if (notification.priority !== 'high') {
+        setTimeout(() => {
+          if (notifEl.parentNode) {
+            notifEl.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notifEl.remove(), 300);
+          }
+        }, 30000);
+      }
+    }
+    
+    function closeNotification(closeBtn) {
+      const notif = closeBtn.closest('.ai-notification');
+      notif.style.animation = 'slideOut 0.3s ease';
+      setTimeout(() => notif.remove(), 300);
+    }
+    
+    async function respondToAI(sessionId, response) {
+      try {
+        const res = await fetch(`${API_BASE}/sessions/${sessionId}/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ response })
+        });
+        
+        if (res.ok) {
+          // Close notification
+          const notif = document.querySelector('.ai-notification');
+          if (notif) closeNotification(notif.querySelector('.ai-notification-close'));
+        }
+      } catch (error) {
+        console.error('Failed to respond to AI:', error);
+      }
+    }
+    
+    async function respondToAIText(sessionId) {
+      const input = document.getElementById(`ai-response-${sessionId}`);
+      if (input && input.value.trim()) {
+        await respondToAI(sessionId, input.value.trim());
+      }
+    }
+    
+    function updateAIStatePanel(taskId, stateData) {
+      // This shows what patterns we're detecting
+      let panel = document.querySelector('.ai-state-panel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.className = 'ai-state-panel';
+        document.body.appendChild(panel);
+      }
+      
+      const stateDisplay = stateData.currentState.replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, l => l.toUpperCase());
+      
+      panel.innerHTML = `
+        <h4>AI Detection Status</h4>
+        <div class="ai-state-info">
+          <strong>Task:</strong> ${taskId}<br>
+          <strong>State:</strong> ${stateDisplay}<br>
+          <strong>Duration:</strong> ${stateData.duration || 0}s
+        </div>
+        ${stateData.lastPattern ? `
+          <div class="ai-pattern-detected">
+            <strong>Last Pattern Detected:</strong><br>
+            ${stateData.lastPattern}
+          </div>
+        ` : ''}
+        ${stateData.contextData ? `
+          <div class="ai-state-info" style="margin-top: 10px;">
+            ${Object.entries(stateData.contextData).map(([key, value]) => 
+              `<strong>${key}:</strong> ${value}`
+            ).join('<br>')}
+          </div>
+        ` : ''}
+      `;
+      
+      // Show panel when AI is active
+      if (stateData.currentState !== 'idle') {
+        panel.classList.add('visible');
+      } else {
+        setTimeout(() => panel.classList.remove('visible'), 3000);
+      }
+    }
+    
+    // Start AI monitoring when page loads
+    connectAIMonitoring();
+    
+    // Poll for AI states every 2 seconds
+    setInterval(async () => {
+      try {
+        const response = await fetch('/api/sessions/ai-states');
+        if (response.ok) {
+          const states = await response.json();
+          states.forEach(state => {
+            updateAIState(state.sessionId, state);
+          });
+        }
+      } catch (error) {
+        console.error('Error polling AI states:', error);
+      }
+    }, 2000);
+    
+    // Fetch initial AI states
+    async function loadAIStates() {
+      try {
+        const response = await fetch(`${API_BASE}/sessions/attention`);
+        const sessions = await response.json();
+        
+        sessions.forEach(session => {
+          updateAIState(session.sessionId, session);
+        });
+      } catch (error) {
+        console.error('Failed to load AI states:', error);
+      }
+    }
+    
+    // Load states on page load
+    loadAIStates();
   </script>
 </body>
 </html>

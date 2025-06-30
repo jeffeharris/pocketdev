@@ -8,7 +8,8 @@ import {
   SessionStore, 
   WebSocketServer,
   TerminalDataPipeline,
-  PipelineIntegration 
+  PipelineIntegration,
+  EventManager
 } from '@shelltender/server';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -23,6 +24,7 @@ let sessionStore = null;
 let wsServer = null;
 let pipeline = null;
 let pipelineIntegration = null;
+let eventManager = null;
 let activeSessions = new Map();
 
 // Initialize Shelltender
@@ -47,14 +49,15 @@ export async function initializeShelltender(httpServer) {
     // SessionManager expects only sessionStore
     sessionManager = new SessionManager(sessionStore);
     
+    // Create event manager for pattern matching
+    eventManager = new EventManager();
+    
     // Create data pipeline for processing terminal output
     pipeline = new TerminalDataPipeline();
     
     // Create WebSocket server using shelltender's WebSocketServer
     const port = 8080; // Use a different port for shelltender WebSocket
-    // WebSocketServer expects (port, sessionManager, bufferManager, eventManager)
-    // eventManager is optional based on the code
-    wsServer = new WebSocketServer(port, sessionManager, bufferManager, null);
+    wsServer = new WebSocketServer(port, sessionManager, bufferManager, eventManager);
     
     // Set up pipeline integration to connect all components
     pipelineIntegration = new PipelineIntegration(
@@ -63,15 +66,16 @@ export async function initializeShelltender(httpServer) {
       bufferManager,
       wsServer,
       sessionStore,
-      null // eventManager is optional
+      eventManager
     );
     pipelineIntegration.setup();
+    
     
     console.log(`Shelltender WebSocket server listening on port ${port}`);
     console.log('Shelltender initialized successfully (simplified mode)');
     console.log('Session persistence enabled - sessions will be restored automatically');
     
-    return { sessionManager, wsServer, bufferManager, sessionStore, pipeline, pipelineIntegration };
+    return { sessionManager, wsServer, bufferManager, sessionStore, pipeline, pipelineIntegration, eventManager };
     
   } catch (error) {
     console.error('Failed to initialize Shelltender:', error);
@@ -126,6 +130,11 @@ export async function createTaskSession(taskId, worktreePath, metadata = {}) {
       
       activeSessions.set(sessionId, session);
       console.log(`Created shelltender session for task ${taskId} with persistence`);
+      
+      // Emit event for AI monitoring
+      if (eventManager && eventManager.emit) {
+        eventManager.emit('session-created', { id: sessionId, session });
+      }
     }
     
     return {
@@ -186,5 +195,5 @@ export async function listSessions() {
   }));
 }
 
-// Export the manager for direct use if needed
-export { sessionManager };
+// Export the managers for direct use if needed
+export { sessionManager, eventManager };
