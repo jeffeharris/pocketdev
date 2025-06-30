@@ -1,0 +1,59 @@
+FROM node:20
+
+# Install dependencies including build tools and locales
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    python3 \
+    locales \
+    && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && update-locale LANG=en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LC_CTYPE=en_US.UTF-8
+
+# Install Claude
+RUN npm install -g @anthropic-ai/claude-code
+
+# Note: node user already exists in node:20 image, no need to create
+
+WORKDIR /app
+
+# Install node-pty with rebuild
+RUN npm init -y && npm install ws node-pty
+RUN npm rebuild node-pty
+
+# Simple PTY server
+RUN echo 'const { WebSocketServer } = require("ws"); \
+const pty = require("node-pty"); \
+const wss = new WebSocketServer({ port: 8080 }); \
+wss.on("connection", (ws) => { \
+  console.log("Client connected"); \
+  const shell = pty.spawn("bash", [], { \
+    name: "xterm-256color", \
+    cols: 80, \
+    rows: 24, \
+    cwd: process.cwd(), \
+    env: process.env \
+  }); \
+  shell.onData(d => ws.send(d)); \
+  ws.on("message", d => shell.write(d.toString())); \
+  ws.on("close", () => { \
+    console.log("Client disconnected"); \
+    shell.kill(); \
+  }); \
+}); \
+console.log("WebSocket server listening on port 8080");' > server.js
+
+# Set ownership of app directory to node user
+RUN chown -R node:node /app
+
+# Switch to non-root user
+USER node
+
+EXPOSE 8080
+CMD ["node", "server.js"]

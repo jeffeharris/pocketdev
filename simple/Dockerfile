@@ -26,8 +26,10 @@ ENV LC_ALL=en_US.UTF-8
 ENV LC_CTYPE=en_US.UTF-8
 RUN npm install -g @anthropic-ai/claude-code
 
-# Create workspace directory
-RUN mkdir -p /workspace /tmp/pocketdev-worktrees
+# Create workspace directory with proper permissions
+# Note: node user already exists in node:20-slim image
+RUN mkdir -p /workspace /tmp/pocketdev-worktrees && \
+    chown -R node:node /workspace /tmp/pocketdev-worktrees
 
 # Setup server
 WORKDIR /app
@@ -38,6 +40,12 @@ COPY server/*.js server/*.cjs ./
 # Configure git
 RUN git config --global user.email "claude@pocketdev.ai" && \
     git config --global user.name "Claude"
+
+# Set ownership of app directory to node user
+RUN chown -R node:node /app
+
+# Switch to non-root user
+USER node
 
 EXPOSE 3001
 
