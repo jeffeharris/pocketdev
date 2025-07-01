@@ -48,10 +48,9 @@ services:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
       - ./projects:/projects
-      - ~/.ssh:/root/.ssh:ro
-      - ~/.gitconfig:/root/.gitconfig:ro
-      - pocketdev-settings:/root/.pocketdev
-      - ./data:/app/data  # SQLite database persistence
+      - ~/.ssh:/home/pocketdev/.ssh:ro
+      - pocketdev-settings:/home/pocketdev/.pocketdev
+      - pocketdev-data:/app/data  # SQLite database persistence
       - ./shelltender-client:/app/shelltender-client
     ports:
       - "3005:3005"
@@ -59,7 +58,7 @@ services:
     environment:
       - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - HOME=/home/node
+      - HOME=/home/pocketdev
       - SHELLTENDER_API_URL=http://shelltender:8081
       - SHELLTENDER_WS_URL=ws://shelltender:8080
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
@@ -105,6 +104,7 @@ services:
 volumes:
   pocketdev-workspace:
   pocketdev-settings:
+  pocketdev-data:
 
 networks:
   default:

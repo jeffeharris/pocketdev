@@ -19,28 +19,20 @@ help:
 	@echo "  make status     - Show container status"
 	@echo "  make test       - Run tests"
 
-# Development mode with hot reloading
+# Development mode with BOTH frontends
 dev:
-	@echo "Starting PocketDev in development mode..."
+	@echo "Starting PocketDev with both frontends..."
 	@docker-compose down
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-	@sleep 5
-	@echo "Installing dependencies..."
-	@docker exec -u root pocketdev-shelltender bash -c "cd /app && npm install && chown -R pocketdev:pocketdev /app"
-	@docker exec -u root pocketdev-project-manager bash -c "cd /app/server && npm install && chown -R pocketdev:pocketdev /app/server/node_modules"
-	@docker exec -u root pocketdev-project-manager bash -c "cd /app/shelltender-client && npm install && chown -R pocketdev:pocketdev /app/shelltender-client/node_modules"
-	@echo "Starting services..."
-	@docker exec -d pocketdev-shelltender bash -c "cd /app/server && node shelltender-service.js"
-	@docker exec -d pocketdev-project-manager bash -c "cd /app/shelltender-client && npm run dev"
-	@docker exec -d pocketdev-project-manager bash -c "cd /app/server && npm run dev"
-	@echo "\n✓ Development environment started!"
-	@echo "\nServices:"
-	@echo "  React app:     http://localhost:3008"
+	@echo "\n✓ Starting services (this may take a moment for dependencies to install)..."
+	@echo "\nFrontends:"
+	@echo "  Legacy:        http://localhost:3008"
+	@echo "  New (React):   http://localhost:5173"
+	@echo "\nBackend:"
 	@echo "  API:           http://localhost:3005"
-	@echo "  Shelltender WS: ws://localhost:8080"
-	@echo "  Shelltender API: http://localhost:8081"
-	@echo "\nHot reloading enabled - just save your files!"
+	@echo "  Shelltender:   ws://localhost:8080"
 	@echo "\nView logs: make logs"
+	@echo "\nNote: Services may take 30-60 seconds to be fully ready on first run."
 
 # Production mode
 prod:
@@ -118,6 +110,10 @@ status:
 test:
 	@echo "Running tests..."
 	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm test"
+
+# Test the new API endpoints
+test-api:
+	@./scripts/test-api.sh
 
 # Development shortcuts
 logs-backend:

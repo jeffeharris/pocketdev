@@ -39,10 +39,10 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
  * @param {string} githubToken - Optional GitHub token
  */
 export async function configureGitCredentials(projectPath, githubToken = '') {
-  // Configure merge tool
-  await execAsync(`git config merge.tool vimdiff`, { cwd: projectPath });
-  await execAsync(`git config merge.conflictstyle diff3`, { cwd: projectPath });
-  await execAsync(`git config mergetool.prompt false`, { cwd: projectPath });
+  // Configure merge tool globally to avoid permission issues
+  await execAsync(`git config --global merge.tool vimdiff`, { cwd: projectPath });
+  await execAsync(`git config --global merge.conflictstyle diff3`, { cwd: projectPath });
+  await execAsync(`git config --global mergetool.prompt false`, { cwd: projectPath });
   
   if (!githubToken) return;
   

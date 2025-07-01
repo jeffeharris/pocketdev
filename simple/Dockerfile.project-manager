@@ -68,6 +68,10 @@ USER pocketdev
 RUN git config --global --add safe.directory '*'
 USER root
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Switch to non-root user
 USER pocketdev
 
@@ -75,4 +79,5 @@ USER pocketdev
 EXPOSE 3005 3008
 
 WORKDIR /app/server
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "start"]

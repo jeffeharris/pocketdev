@@ -19,9 +19,19 @@ COPY server/shelltender-service.js ./server/
 COPY server/shelltender-ws-adapter.js ./server/
 COPY server/shelltender-monitor-adapter.js ./server/
 
+# Copy wrapper scripts
+COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell
+COPY scripts/pocketdev-run.sh /usr/local/bin/pocketdev-run
+RUN chmod +x /usr/local/bin/pocketdev-shell /usr/local/bin/pocketdev-run
+
 # Create necessary directories
 RUN mkdir -p /app/data/shelltender-sessions /projects /tmp/pocketdev-worktrees && \
     chown -R pocketdev:pocketdev /app /projects /tmp/pocketdev-worktrees
+
+# Ensure pocketdev user has proper home directory
+RUN mkdir -p /home/pocketdev && \
+    chown -R pocketdev:pocketdev /home/pocketdev && \
+    echo 'export PS1="\u@\h:\w\$ "' >> /home/pocketdev/.bashrc
 
 # Copy any additional scripts or configs needed
 COPY server/*.js ./server/

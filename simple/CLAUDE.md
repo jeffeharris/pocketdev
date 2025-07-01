@@ -65,3 +65,28 @@ When working on this codebase:
 2. **Focus on Developer Experience**: Make it easy to manage AI developers
 3. **Preserve Context**: AI context persistence is the killer feature
 4. **Keep It Web-Based**: Everything should be accessible through a browser
+
+## Frontend Development Notes
+
+### Import Resolution with Vite
+When working with the React/TypeScript frontend in `simple/frontend`:
+
+**Important**: Vite/browser ES modules don't resolve barrel exports properly. Always use direct imports with actual file paths.
+
+❌ **Don't use barrel exports:**
+```typescript
+import { Task, Project } from '../types';  // This will fail in browser
+```
+
+✅ **Use direct imports instead:**
+```typescript
+import { Task } from '../types/task';
+import { Project } from '../types/project';
+```
+
+This is because:
+- Vite serves files as-is to the browser during development
+- The browser can't understand barrel exports without a build step
+- Direct file imports work naturally with ES modules
+
+Always specify the full path to the actual TypeScript file (without the extension).

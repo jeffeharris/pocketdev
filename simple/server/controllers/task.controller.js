@@ -4,6 +4,10 @@ import fsSync from 'fs';
 import { GitService } from '../services/git.service.js';
 import { WorktreeService } from '../services/worktree.service.js';
 
+/**
+ * Core task controller for CRUD operations
+ * Git, PR, and Container operations are handled by separate controllers
+ */
 export class TaskController {
   constructor(models, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
@@ -138,81 +142,6 @@ export class TaskController {
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
-    }
-  }
-
-  /**
-   * Perform git operations on a task
-   */
-  async gitOperation(req, res) {
-    const { projectId, taskId } = req.params;
-    const { operation, message, files } = req.body;
-    
-    try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      await this.models.projects.updateLastAccessed(projectId);
-      
-      let result;
-      
-      switch (operation) {
-        case 'status':
-          result = await this.gitService.getStatus(task.worktree_path);
-          break;
-          
-        case 'diff':
-          result = await this.gitService.getDiff(task.worktree_path);
-          break;
-          
-        case 'add':
-          const filesToAdd = files || '.';
-          result = await this.gitService.add(task.worktree_path, filesToAdd);
-          break;
-          
-        case 'commit':
-          if (!message) {
-            return res.status(400).json({ error: 'Commit message required' });
-          }
-          result = await this.gitService.commit(task.worktree_path, message);
-          
-          // If task was merged, mark that it has commits since merge
-          if (result.success && task.merge_commit_sha) {
-            await this.models.tasks.update(task.id, {
-              has_commits_since_merge: true
-            });
-          }
-          break;
-          
-        case 'push':
-          result = await this.gitService.push(task.worktree_path, task.branch);
-          break;
-          
-        case 'pr':
-          const prTitle = message || `Updates from task: ${task.name}`;
-          const project = await this.models.projects.findById(task.project_id);
-          result = await this.gitService.createPullRequest(
-            task.worktree_path,
-            prTitle,
-            `Created by Claude Code - Task: ${task.name}`,
-            project.base_branch
-          );
-          break;
-          
-        case 'log':
-          const logArgs = req.body.args || '--oneline -n 10';
-          result = await this.gitService.log(task.worktree_path, logArgs);
-          break;
-          
-        default:
-          return res.status(400).json({ error: 'Invalid operation' });
-      }
-      
-      res.json({ success: result.success, output: result.output, error: result.error });
-    } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
     }
   }
 
