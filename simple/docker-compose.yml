@@ -35,12 +35,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # Main Project Manager with GitHub integration and SQLite persistence
-  project-manager:
+  # Backend API server
+  backend:
     build:
       context: .
       dockerfile: Dockerfile.project-manager
-    container_name: pocketdev-project-manager
+    container_name: pocketdev-backend
     working_dir: /app
     depends_on:
       - shelltender
@@ -51,10 +51,8 @@ services:
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev
       - pocketdev-data:/app/data  # SQLite database persistence
-      - ./shelltender-client:/app/shelltender-client
     ports:
       - "3005:3005"
-      - "3008:3008"
     environment:
       - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -70,6 +68,23 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Legacy frontend (React app in shelltender-client)
+  frontend-legacy:
+    build:
+      context: .
+      dockerfile: Dockerfile.project-manager
+    container_name: pocketdev-frontend-legacy
+    working_dir: /app/shelltender-client
+    depends_on:
+      - backend
+    volumes:
+      - ./shelltender-client:/app/shelltender-client
+    ports:
+      - "3008:3008"
+    command: >
+      sh -c "npm install && npm run dev"
+    restart: unless-stopped
 
 
   # Optional: Original simple server (if you still need it)

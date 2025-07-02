@@ -100,10 +100,10 @@ async function initializeShelltender() {
 // Restore sessions from disk
 async function restoreExistingSessions() {
   try {
-    const sessions = await sessionStore.getAllSessions();
-    console.log(`Found ${sessions.length} existing sessions to restore`);
+    const sessions = await sessionStore.loadAllSessions();
+    console.log(`Found ${sessions.size} existing sessions to restore`);
     
-    for (const sessionData of sessions) {
+    for (const [sessionId, sessionData] of sessions) {
       if (sessionData.session && sessionData.session.id) {
         activeSessions.set(sessionData.session.id, sessionData);
         console.log(`Restored session: ${sessionData.session.id}`);
