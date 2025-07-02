@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Install git, network tools, debugging utilities, build tools for node-pty, and locales
 RUN apt-get update && apt-get install -y \
@@ -52,7 +52,8 @@ RUN chown -R pocketdev:pocketdev /app
 # Switch to pocketdev user for npm install
 USER pocketdev
 COPY --chown=pocketdev:pocketdev server/package*.json ./
-RUN npm install
+# Clean install to ensure native modules are built correctly
+RUN npm ci --only=production || npm install --production
 
 # Switch back to root for copying files
 USER root

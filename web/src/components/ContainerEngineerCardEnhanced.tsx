@@ -3,7 +3,7 @@ import { Engineer } from '../types';
 import { Bot, Code, Server, Package, Clock, CheckCircle, AlertCircle, ZapOff, RotateCcw, Container, FileText, Brain } from 'lucide-react';
 import { TaskLogViewer } from './TaskLogViewer';
 import { TaskResultView } from './TaskResultView';
-import { ContainerTaskModal } from './ContainerTaskModal';
+import { UnifiedTaskModal } from './UnifiedTaskModal';
 import { EngineerMemories } from './EngineerMemories';
 import { TaskProgress } from './TaskProgress';
 import toast from 'react-hot-toast';
@@ -314,8 +314,9 @@ export function ContainerEngineerCardEnhanced({ engineer: initialEngineer }: Pro
       </div>
       
       {showTaskModal && (
-        <ContainerTaskModal
+        <UnifiedTaskModal
           engineer={engineer}
+          mode="container"
           onClose={() => setShowTaskModal(false)}
           onTaskAssigned={handleTaskAssigned}
         />

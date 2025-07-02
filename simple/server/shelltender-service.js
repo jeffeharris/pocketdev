@@ -130,25 +130,42 @@ app.get('/health', (req, res) => {
 // Create a new session
 app.post('/sessions', async (req, res) => {
   try {
-    const { id, name, command = 'bash', cwd, env, metadata, restrictToPath, allowUpwardNavigation = false, blockedCommands = ['sudo', 'su'], readOnlyMode = false } = req.body;
+    let { id, name, command = 'bash', cwd, env, metadata } = req.body;
     
     if (!id) {
       return res.status(400).json({ error: 'Session ID is required' });
     }
     
-    // Check if session already exists
-    if (activeSessions.has(id)) {
-      const existingSession = activeSessions.get(id);
+    // Check if session already exists in sessionManager
+    let session = sessionManager.getSession(id);
+    
+    if (session) {
+      // Session exists and is active
       return res.json({
-        id: existingSession.session.id,
-        name: existingSession.session.name,
+        id: session.id,
+        name: session.name || `Session ${id}`,
         status: 'existing',
         created: false
       });
     }
     
-    // Create new session with optional restrictions
-    const sessionConfig = {
+    // Check if we have metadata for this session
+    if (activeSessions.has(id)) {
+      // We have metadata but no active session - this happens after restart
+      console.log(`Session ${id} has metadata but no active process - creating new session`);
+      const existingData = activeSessions.get(id);
+      const sessionInfo = existingData.session || existingData;
+      
+      // Use saved metadata for recreation
+      command = sessionInfo.command || command;
+      name = sessionInfo.name || name;
+      cwd = existingData.cwd || cwd;
+      env = { ...env, ...(existingData.env || {}) };
+      metadata = { ...metadata, ...(existingData.metadata || {}) };
+    }
+    
+    // Create new session
+    session = await sessionManager.createSession({
       id,
       name: name || `Session ${id}`,
       command,
@@ -157,17 +174,7 @@ app.post('/sessions', async (req, res) => {
         ...process.env,
         ...env
       }
-    };
-
-    // Add directory restrictions if specified
-    if (restrictToPath) {
-      sessionConfig.restrictToPath = restrictToPath;
-      sessionConfig.allowUpwardNavigation = allowUpwardNavigation;
-      sessionConfig.blockedCommands = blockedCommands;
-      sessionConfig.readOnlyMode = readOnlyMode;
-    }
-
-    const session = await sessionManager.createSession(sessionConfig);
+    });
     
     // Save session metadata
     const sessionData = {

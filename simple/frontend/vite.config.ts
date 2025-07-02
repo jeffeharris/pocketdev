@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://project-manager:3005',
+        target: 'http://backend:3005',
         changeOrigin: true,
       },
       '/ws': {
@@ -18,7 +18,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/shelltender-terminal.html': {
-        target: 'http://project-manager:3005',
+        target: 'http://backend:3005',
         changeOrigin: true,
       },
       '/shelltender-ws': {

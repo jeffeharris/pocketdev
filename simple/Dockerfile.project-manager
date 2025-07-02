@@ -56,17 +56,17 @@ RUN cd shelltender-client && npm install
 # Switch back to root for copying files
 USER root
 
-# Copy server files
-COPY server/*.js ./server/
-COPY server/config ./server/config
-COPY server/controllers ./server/controllers
-COPY server/services ./server/services
-COPY server/routes ./server/routes
-COPY server/middleware ./server/middleware
-COPY server/db ./server/db
+# Copy server files with proper ownership
+COPY --chown=pocketdev:pocketdev server/*.js ./server/
+COPY --chown=pocketdev:pocketdev server/config ./server/config
+COPY --chown=pocketdev:pocketdev server/controllers ./server/controllers
+COPY --chown=pocketdev:pocketdev server/services ./server/services
+COPY --chown=pocketdev:pocketdev server/routes ./server/routes
+COPY --chown=pocketdev:pocketdev server/middleware ./server/middleware
+COPY --chown=pocketdev:pocketdev server/db ./server/db
 
-# Copy shelltender client files
-COPY shelltender-client ./shelltender-client
+# Copy shelltender client files with proper ownership
+COPY --chown=pocketdev:pocketdev shelltender-client ./shelltender-client
 
 # Copy frontend files with proper ownership
 COPY --chown=pocketdev:pocketdev frontend ./frontend
