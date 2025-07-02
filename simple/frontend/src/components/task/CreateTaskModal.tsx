@@ -78,6 +78,8 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [showBranchSuggestions, setShowBranchSuggestions] = useState(false);
   // Track keyboard navigation position in dropdown (-1 = no selection)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  // Track if user has toggled branch mode (to prevent focus on initial load)
+  const [hasToggledBranchMode, setHasToggledBranchMode] = useState(false);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -100,10 +102,10 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }
   }, [isOpen]);
 
-  // Focus branch input when switching modes
+  // Focus branch input when switching modes (but not on initial load)
   // Delay prevents focus jumping when navigating with keyboard
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !hasToggledBranchMode) return;
     
     const focusTimeout = setTimeout(() => {
       if (branchMode === 'new' && newBranchRef.current) {
@@ -114,7 +116,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }, 600); // 600ms delay to allow for keyboard navigation
     
     return () => clearTimeout(focusTimeout);
-  }, [branchMode, isOpen]);
+  }, [branchMode, isOpen, hasToggledBranchMode]);
 
   // Scroll selected suggestion into view during keyboard navigation
   // 'nearest' only scrolls if the item is outside the visible area
@@ -287,17 +289,18 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     });
     setBranchMode('new');
     setBranchManuallyEdited(false);
+    setHasToggledBranchMode(false);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">Create New Task</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -349,6 +352,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   checked={branchMode === 'new'}
                   onChange={(e) => {
                     setBranchMode(e.target.value as 'new' | 'existing');
+                    setHasToggledBranchMode(true);
                     // Don't clear the branch names or reset the manually edited flag
                     // This preserves user input if they accidentally switch modes
                   }}
@@ -363,6 +367,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   checked={branchMode === 'existing'}
                   onChange={(e) => {
                     setBranchMode(e.target.value as 'new' | 'existing');
+                    setHasToggledBranchMode(true);
                     // Don't clear the branch names - preserve user input
                   }}
                   className="mr-2"
@@ -492,13 +497,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
             >
               Create Task
             </button>

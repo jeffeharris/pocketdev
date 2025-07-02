@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Bell, MoreHorizontal, Settings, AlertCircle, GitBranch } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { WorkerStatus } from '../../types/task';
@@ -20,6 +21,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
   onTaskSelect,
   notifications = 0
 }) => {
+  const navigate = useNavigate();
   const [showTaskSwitcher, setShowTaskSwitcher] = useState(false);
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const pendingValidation = tasks.filter(t => t.sessionState?.status === WorkerStatus.Waiting).length;
@@ -29,7 +31,10 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm">
+            <button 
+              onClick={() => navigate('/projects')}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm cursor-pointer"
+            >
               <ChevronLeft className="w-4 h-4" />
               Back to Projects
             </button>
@@ -50,7 +55,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
             <div className="relative">
               <button 
                 onClick={() => setShowTaskSwitcher(!showTaskSwitcher)}
-                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer"
               >
                 <span>#{activeTask?.id.slice(-3)} {activeTask?.title}</span>
                 <ChevronRight className="w-4 h-4" />
@@ -81,12 +86,12 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
             <NotificationButton count={pendingValidation} />
             
             {/* Task Actions Menu */}
-            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
               <MoreHorizontal className="w-4 h-4" />
               <span className="hidden sm:inline">Task Actions</span>
             </button>
 
-            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Settings</span>
             </button>
@@ -105,7 +110,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
 // Sub-components
 const NotificationButton: React.FC<{ count: number }> = ({ count }) => (
   <div className="relative">
-    <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+    <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
       <Bell className="w-4 h-4" />
       <span className="hidden sm:inline">Notifications</span>
     </button>
@@ -131,7 +136,7 @@ const AttentionBar: React.FC<{ count: number }> = ({ count }) => (
           {count} task{count > 1 ? 's' : ''} need{count === 1 ? 's' : ''} user input
         </span>
       </div>
-      <button className="text-yellow-800 hover:text-yellow-900 text-sm font-medium">
+      <button className="text-yellow-800 hover:text-yellow-900 text-sm font-medium cursor-pointer">
         Review Now →
       </button>
     </div>

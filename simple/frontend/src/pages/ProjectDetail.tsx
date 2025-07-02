@@ -116,7 +116,7 @@ export const ProjectDetail: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-900">Active Tasks</h2>
           <button 
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             New Task
@@ -145,7 +145,7 @@ export const ProjectDetail: React.FC = () => {
             <p className="text-gray-500 mb-4">No tasks yet</p>
             <button 
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Create your first task
