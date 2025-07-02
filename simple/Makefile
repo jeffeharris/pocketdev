@@ -23,7 +23,7 @@ help:
 dev:
 	@echo "Starting PocketDev with both frontends..."
 	@docker-compose down
-	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d shelltender backend frontend-legacy frontend
 	@echo "\n✓ Starting services (this may take a moment for dependencies to install)..."
 	@echo "\nFrontends:"
 	@echo "  Legacy:        http://localhost:3008"
@@ -50,7 +50,7 @@ up:
 	@echo "✓ Containers started"
 
 down:
-	@docker-compose down
+	@docker-compose down --remove-orphans
 	@echo "✓ Containers stopped"
 
 restart:
