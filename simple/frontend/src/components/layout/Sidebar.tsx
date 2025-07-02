@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, CheckCircle, FileText, Activity } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Activity, Plus } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
 import { TaskStatus } from '../task/TaskStatus';
@@ -9,13 +9,15 @@ interface SidebarProps {
   allTasks: Task[];
   onTaskSelect: (task: Task) => void;
   collapsed?: boolean;
+  onCreateTask?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTask,
   allTasks,
   onTaskSelect,
-  collapsed = false
+  collapsed = false,
+  onCreateTask
 }) => {
   if (collapsed) return null;
 
@@ -90,7 +92,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium text-gray-900">All Tasks</h3>
-            <span className="text-xs text-gray-500">{allTasks.length} active</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{allTasks.length} active</span>
+              {onCreateTask && (
+                <button
+                  onClick={onCreateTask}
+                  className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  title="Create new task"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

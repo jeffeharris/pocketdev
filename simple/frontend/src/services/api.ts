@@ -1,4 +1,5 @@
 import type { Task, CreateTaskDTO } from '../types/task';
+import { TaskState, WorkerStatus } from '../types/task';
 import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
@@ -94,17 +95,22 @@ class ApiService {
 
   async createTask(projectId: string, task: CreateTaskDTO): Promise<Task> {
     if (USE_MOCKS) {
+      const branch = task.useExistingBranch 
+        ? task.branch 
+        : (task.branchPrefix ? `${task.branchPrefix}${task.branch}` : task.branch);
+      
       const newTask: Task = {
         id: Math.random().toString(36).substr(2, 8),
         title: task.title,
         description: task.description,
-        branch: task.branchPrefix ? `${task.branchPrefix}${task.branch}` : task.branch,
-        status: 'not-started',
-        engineer: task.engineerId,
-        worktree: `/projects/${projectId}-task-${Date.now()}`,
-        created: new Date().toISOString(),
-        duration: '0m',
-        hasConflicts: false,
+        branch: branch,
+        worktree_path: `/projects/${projectId}-task-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        taskState: TaskState.Active,
+        sessionState: {
+          status: WorkerStatus.NotStarted,
+          lastStateChange: null
+        }
       };
       mockTasks.push(newTask);
       return newTask;

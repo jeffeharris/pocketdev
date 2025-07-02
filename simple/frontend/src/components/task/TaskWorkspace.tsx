@@ -3,7 +3,8 @@ import { MainHeader } from '../layout/MainHeader';
 import { Sidebar } from '../layout/Sidebar';
 import { TerminalPanel } from '../terminal/TerminalPanel';
 import { LensSlider } from '../common/LensSlider';
-import type { Task } from '../../types/task';
+import { CreateTaskModal } from './CreateTaskModal';
+import type { Task, CreateTaskDTO } from '../../types/task';
 import type { Project } from '../../types/project';
 import { api } from '../../services/api';
 import { mockTasks, mockProjects } from '../../services/mockData';
@@ -19,6 +20,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   const [validationMode, setValidationMode] = useState(false);
   const [activePhase, setActivePhase] = useState<'validate' | 'merge'>('validate');
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   
   // Real data from API
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -65,6 +67,36 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     handleTaskSelect(task.id);
   };
 
+  const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
+    try {
+      const newTask = await api.createTask(projectId, {
+        ...taskData,
+        projectId
+      });
+      
+      // Add the new task to our list
+      setTasks(prevTasks => [...prevTasks, newTask]);
+      
+      // Switch to the new task
+      setActiveTaskId(newTask.id);
+      
+      // Close the modal
+      setShowCreateModal(false);
+    } catch (error: any) {
+      console.error('Failed to create task:', error);
+      
+      // Show specific error message
+      const errorMessage = error.message || 'Failed to create task';
+      if (errorMessage.includes('already exists')) {
+        alert(`Cannot create task: A branch named "${taskData.branch}" already exists. Please choose a different branch name.`);
+      } else if (errorMessage.includes('worktree')) {
+        alert(`Cannot create task: This branch is already checked out in another worktree.`);
+      } else {
+        alert(`Failed to create task: ${errorMessage}`);
+      }
+    }
+  };
+
   if (loading || !project) {
     return (
       <div className="h-screen bg-gray-50 flex items-center justify-center">
@@ -90,6 +122,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
           allTasks={tasks}
           onTaskSelect={handleTaskChange}
           collapsed={sidebarCollapsed}
+          onCreateTask={() => setShowCreateModal(true)}
         />
 
         {/* Main Terminal Area - Split Layout */}
@@ -119,6 +152,16 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
           />
         </div>
       </div>
+
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateTask}
+        projectId={projectId}
+        baseBranch={project?.baseBranch}
+        occupiedBranches={tasks.map(t => t.branch)}
+      />
     </div>
   );
 };

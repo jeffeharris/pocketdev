@@ -76,7 +76,7 @@ export interface CreateTaskDTO {
   title: string;
   description: string;
   branch: string;
-  branchPrefix?: 'feature/' | 'fix/' | 'chore/';
-  engineerId: string;
+  branchPrefix?: 'feat/' | 'fix/' | 'chore/' | '';
   projectId: string;
+  useExistingBranch?: boolean;
 }
