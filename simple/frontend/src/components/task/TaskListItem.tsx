@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Task } from '../../types/task';
-import { TaskStatus } from './TaskStatus';
+import { TaskStatus as TaskStatusComponent } from './TaskStatus';
+import { TaskStatus, TaskState } from '../../types/task';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { clsx } from 'clsx';
 
@@ -19,15 +20,15 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   const { sessionState, taskState, gitStatus, idleTime } = useTaskStatus(task.id);
   
   // Merge initial data with real-time updates
-  const currentSessionState = sessionState.status !== 'not-started' ? sessionState : task.sessionState;
+  const currentSessionState = sessionState.status !== TaskStatus.NotStarted ? sessionState : task.sessionState;
   const currentTaskState = taskState || task.taskState;
   const currentGitStatus = gitStatus || task.gitStatus;
   
   // Determine if task needs attention
-  const needsAttention = currentSessionState.status === 'user-request';
+  const needsAttention = currentSessionState.status === TaskStatus.Waiting;
   
   // Style based on task state
-  const iseMerged = currentTaskState === 'merged';
+  const isMerged = currentTaskState === TaskState.Merged;
   
   return (
     <div 
@@ -35,7 +36,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
         'relative p-3 rounded-lg cursor-pointer transition-all border',
         isActive 
           ? 'bg-blue-50 border-blue-200 shadow-sm' 
-          : iseMerged
+          : isMerged
           ? 'bg-green-50 border-green-200 hover:shadow-sm'
           : needsAttention
           ? 'bg-yellow-50 border-yellow-200 hover:shadow-sm'
@@ -53,8 +54,8 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm font-medium text-gray-900">#{task.id.slice(-3)}</span>
-            <TaskStatus status={currentSessionState.status} />
-            {iseMerged && (
+            <TaskStatusComponent status={currentSessionState.status} />
+            {isMerged && (
               <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Merged</span>
             )}
           </div>
@@ -80,13 +81,11 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>{task.branch}</span>
         <span>
-          {currentSessionState.status === 'idle' && idleTime 
+          {currentSessionState.status === TaskStatus.Idle && idleTime 
             ? `Idle for ${idleTime}`
-            : currentSessionState.status === 'working' 
+            : currentSessionState.status === TaskStatus.Working
             ? 'Working'
-            : currentSessionState.status === 'thinking'
-            ? 'Thinking'
-            : currentSessionState.status === 'user-request'
+            : currentSessionState.status === TaskStatus.Waiting
             ? 'Needs input'
             : ''}
         </span>

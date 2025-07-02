@@ -1,5 +1,20 @@
 import crypto from 'crypto';
 
+// Map backend AI states to frontend task statuses
+const mapAIStateToTaskStatus = (aiState) => {
+  const stateMap = {
+    'running': 'idle',        // Single-line prompt - Claude is active but idle
+    'thinking': 'working',    // Claude is processing/building
+    'waiting_input': 'waiting', // Multi-line input/confirmation needed
+    'idle': 'idle',          // Default idle state
+    'loading_context': 'working', // Loading is also working
+    'completed': 'idle',     // Completed goes back to idle
+    'error': 'waiting'       // Error state needs user attention
+  };
+  
+  return stateMap[aiState] || 'not-started';
+};
+
 class TaskModel {
   constructor(db) {
     this.db = db;
@@ -141,7 +156,7 @@ class TaskModel {
         ...t,
         taskState,
         sessionState: session ? {
-          status: session.ai_state || 'idle',
+          status: mapAIStateToTaskStatus(session.ai_state),
           lastStateChange: session.ai_state_updated_at
         } : {
           status: 'not-started',
@@ -259,7 +274,7 @@ class TaskModel {
       ...task,
       taskState,
       sessionState: session ? {
-        status: session.ai_state || 'idle',
+        status: mapAIStateToTaskStatus(session.ai_state),
         lastStateChange: session.ai_state_updated_at
       } : {
         status: 'not-started',

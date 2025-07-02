@@ -1,6 +1,17 @@
-export type TaskStatus = 'idle' | 'user-request' | 'thinking' | 'working' | 'not-started';
+export enum TaskStatus {
+  NotStarted = 'not-started',
+  Idle = 'idle',
+  Working = 'working',
+  Waiting = 'waiting'
+}
+
+export enum TaskState {
+  Active = 'active',
+  Merged = 'merged',
+  Archived = 'archived'
+}
+
 export type TaskPhase = 'generate' | 'validate' | 'merge';
-export type TaskState = 'active' | 'merged' | 'archived';
 
 export interface SessionState {
   status: TaskStatus;

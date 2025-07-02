@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Bell, MoreHorizontal, Settings, AlertCircle, GitBranch } from 'lucide-react';
 import type { Task } from '../../types/task';
+import { TaskStatus } from '../../types/task';
 import type { Project } from '../../types/project';
 import { TaskListItem } from '../task/TaskListItem';
 
@@ -21,7 +22,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
 }) => {
   const [showTaskSwitcher, setShowTaskSwitcher] = useState(false);
   const activeTask = tasks.find(t => t.id === activeTaskId);
-  const pendingValidation = tasks.filter(t => t.status === 'user-request').length;
+  const pendingValidation = tasks.filter(t => t.sessionState?.status === TaskStatus.Waiting).length;
 
   return (
     <div className="bg-white border-b border-gray-200">

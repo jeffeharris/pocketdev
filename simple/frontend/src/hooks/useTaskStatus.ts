@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
 import type { TaskStatus } from '../types/task';
+import { TaskStatus as TaskStatusEnum, TaskState } from '../types/task';
 
 interface SessionState {
   status: TaskStatus;
@@ -9,7 +10,7 @@ interface SessionState {
 
 interface TaskStatusData {
   sessionState: SessionState;
-  taskState: 'active' | 'merged' | 'archived';
+  taskState: TaskState;
   gitStatus?: {
     ahead: number;
     behind: number;
@@ -88,8 +89,8 @@ export function useTaskStatus(taskId: string | undefined) {
   }, [taskStatus?.sessionState]);
 
   return {
-    sessionState: taskStatus?.sessionState || { status: 'not-started', lastStateChange: null },
-    taskState: taskStatus?.taskState || 'active',
+    sessionState: taskStatus?.sessionState || { status: TaskStatusEnum.NotStarted, lastStateChange: null },
+    taskState: taskStatus?.taskState || TaskState.Active,
     gitStatus: taskStatus?.gitStatus,
     idleTime
   };
