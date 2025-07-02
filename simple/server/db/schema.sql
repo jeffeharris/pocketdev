@@ -35,11 +35,14 @@ CREATE TABLE IF NOT EXISTS tasks (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
--- Claude sessions table
-CREATE TABLE IF NOT EXISTS claude_sessions (
+-- Terminal sessions table (for Shelltender terminal sessions where AI agents work)
+CREATE TABLE IF NOT EXISTS terminal_sessions (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
+    shelltender_session_id TEXT,
+    ai_state TEXT DEFAULT 'not-started',
+    ai_state_updated_at TIMESTAMP,
     is_active BOOLEAN DEFAULT 1,
     message_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -88,8 +91,10 @@ CREATE TABLE IF NOT EXISTS settings (
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON claude_sessions(task_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_active ON claude_sessions(is_active);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_task_id ON terminal_sessions(task_id);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_active ON terminal_sessions(is_active);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_ai_state ON terminal_sessions(ai_state);
+CREATE INDEX IF NOT EXISTS idx_terminal_sessions_shelltender_id ON terminal_sessions(shelltender_session_id);
 CREATE INDEX IF NOT EXISTS idx_worktree_orphaned ON worktree_registry(is_orphaned);
 CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(is_archived);
 
