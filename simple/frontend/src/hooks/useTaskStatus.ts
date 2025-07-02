@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import type { TaskStatus } from '../types/task';
-import { TaskStatus as TaskStatusEnum, TaskState } from '../types/task';
+import type { WorkerStatus } from '../types/task';
+import { WorkerStatus, TaskState } from '../types/task';
 
 interface SessionState {
-  status: TaskStatus;
+  status: WorkerStatus;
   lastStateChange: string | null;
 }
 
@@ -18,19 +18,42 @@ interface TaskStatusData {
   };
 }
 
+/**
+ * Hook for real-time task status updates via WebSocket
+ * 
+ * This hook subscribes to WebSocket events for a specific task and provides:
+ * - sessionState: Current AI worker status (not-started, idle, working, waiting)
+ * - taskState: Overall task state (active, merged, archived)
+ * - gitStatus: Real-time git branch status (ahead/behind/conflicts)
+ * - idleTime: Human-readable elapsed time (format varies by status):
+ *   - Not Started: Empty string (no time display)
+ *   - Idle: "Xm" or "Xh Xm" (minutes/hours)
+ *   - Working: "Xs" or "Xm Xs" (seconds, updates every second)
+ *   - Waiting: "Xm", "Xh Xm", or "Xd Xh" (minutes/hours/days)
+ * 
+ * The hook automatically manages WebSocket subscriptions and cleans up on unmount.
+ */
 export function useTaskStatus(taskId: string | undefined) {
   const [taskStatus, setTaskStatus] = useState<TaskStatusData | null>(null);
   const [idleTime, setIdleTime] = useState<string>('');
   const lastUpdateRef = useRef<number>(Date.now());
   const { subscribe, unsubscribe } = useWebSocketContext();
 
-  // Handle WebSocket messages
+  // Handle WebSocket messages for this task
+  // Message types:
+  // - ai_state_update: AI worker state changed (from backend AI monitor)
+  // - task_state_change: Task lifecycle state changed (active->merged, etc)
+  // - git_status_update: Git branch status changed
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
       case 'ai_state_update':
+        // Update AI worker state - this comes from terminal pattern matching
         setTaskStatus(prev => ({
           ...prev!,
-          sessionState: message.data.sessionState
+          sessionState: {
+            status: message.data.sessionState.status,
+            lastStateChange: message.data.sessionState.lastStateChange
+          }
         }));
         lastUpdateRef.current = Date.now();
         break;
@@ -59,10 +82,16 @@ export function useTaskStatus(taskId: string | undefined) {
     return () => unsubscribe('task', taskId, handleMessage);
   }, [taskId, subscribe, unsubscribe, handleMessage]);
 
-  // Calculate idle time
+  // Calculate elapsed time for display based on status
+  // - Idle: "Idle for X minutes/hours"
+  // - Waiting: "Waiting for X minutes/hours/days"
+  // - Working: "Working for X seconds"
+  // - Not Started: No time display
   useEffect(() => {
     if (!taskStatus?.sessionState?.lastStateChange) return;
-    if (taskStatus.sessionState.status !== 'idle') {
+    
+    const status = taskStatus.sessionState.status;
+    if (status === WorkerStatus.NotStarted) {
       setIdleTime('');
       return;
     }
@@ -70,26 +99,54 @@ export function useTaskStatus(taskId: string | undefined) {
     const updateIdleTime = () => {
       const lastChange = new Date(taskStatus.sessionState.lastStateChange).getTime();
       const now = Date.now();
-      const diffMinutes = Math.floor((now - lastChange) / 60000);
+      const diffMs = now - lastChange;
+      const diffSeconds = Math.floor(diffMs / 1000);
+      const diffMinutes = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
       
-      if (diffMinutes < 1) {
-        setIdleTime('< 1m');
-      } else if (diffMinutes < 60) {
-        setIdleTime(`${diffMinutes}m`);
+      let timeStr = '';
+      
+      if (status === WorkerStatus.Working) {
+        // For working status, show seconds
+        if (diffSeconds < 60) {
+          timeStr = `${diffSeconds}s`;
+        } else if (diffMinutes < 60) {
+          const seconds = diffSeconds % 60;
+          timeStr = `${diffMinutes}m ${seconds}s`;
+        } else {
+          timeStr = `${diffHours}h ${diffMinutes % 60}m`;
+        }
       } else {
-        const hours = Math.floor(diffMinutes / 60);
-        setIdleTime(`${hours}h ${diffMinutes % 60}m`);
+        // For idle/waiting, show minutes/hours/days
+        if (diffMinutes < 1) {
+          timeStr = '< 1m';
+        } else if (diffMinutes < 60) {
+          timeStr = `${diffMinutes}m`;
+        } else if (diffHours < 24) {
+          timeStr = `${diffHours}h ${diffMinutes % 60}m`;
+        } else {
+          timeStr = `${diffDays}d ${diffHours % 24}h`;
+        }
       }
+      
+      setIdleTime(timeStr);
     };
 
     updateIdleTime();
-    const interval = setInterval(updateIdleTime, 60000); // Update every minute
+    
+    // Update more frequently for working status (every second)
+    // Less frequently for idle/waiting (every minute)
+    const interval = setInterval(
+      updateIdleTime, 
+      status === WorkerStatus.Working ? 1000 : 60000
+    );
     
     return () => clearInterval(interval);
   }, [taskStatus?.sessionState]);
 
   return {
-    sessionState: taskStatus?.sessionState || { status: TaskStatusEnum.NotStarted, lastStateChange: null },
+    sessionState: taskStatus?.sessionState || { status: WorkerStatus.NotStarted, lastStateChange: null },
     taskState: taskStatus?.taskState || TaskState.Active,
     gitStatus: taskStatus?.gitStatus,
     idleTime

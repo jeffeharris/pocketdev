@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Task } from '../../types/task';
 import { TaskStatus as TaskStatusComponent } from './TaskStatus';
-import { TaskStatus, TaskState } from '../../types/task';
+import { WorkerStatus, TaskState } from '../../types/task';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { clsx } from 'clsx';
 
@@ -16,16 +16,19 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   isActive, 
   onSelect
 }) => {
-  // Get real-time status updates
+  // Get real-time status updates via WebSocket
+  // idleTime shows elapsed time based on status:
+  // - Working: updates every second (e.g., "45s", "2m 15s")
+  // - Idle/Waiting: updates every minute (e.g., "5m", "2h 30m", "3d 4h")
   const { sessionState, taskState, gitStatus, idleTime } = useTaskStatus(task.id);
   
   // Merge initial data with real-time updates
-  const currentSessionState = sessionState.status !== TaskStatus.NotStarted ? sessionState : task.sessionState;
+  const currentSessionState = sessionState.status !== WorkerStatus.NotStarted ? sessionState : task.sessionState;
   const currentTaskState = taskState || task.taskState;
   const currentGitStatus = gitStatus || task.gitStatus;
   
   // Determine if task needs attention
-  const needsAttention = currentSessionState.status === TaskStatus.Waiting;
+  const needsAttention = currentSessionState.status === WorkerStatus.Waiting;
   
   // Style based on task state
   const isMerged = currentTaskState === TaskState.Merged;
@@ -78,15 +81,17 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
         )}
       </div>
       
+      {/* Bottom row: Branch name and elapsed time */}
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>{task.branch}</span>
         <span>
-          {currentSessionState.status === TaskStatus.Idle && idleTime 
+          {/* Show elapsed time based on status - no time for "Not Started" */}
+          {currentSessionState.status === WorkerStatus.Idle && idleTime 
             ? `Idle for ${idleTime}`
-            : currentSessionState.status === TaskStatus.Working
-            ? 'Working'
-            : currentSessionState.status === TaskStatus.Waiting
-            ? 'Needs input'
+            : currentSessionState.status === WorkerStatus.Working && idleTime
+            ? `Working for ${idleTime}`
+            : currentSessionState.status === WorkerStatus.Waiting && idleTime
+            ? `Waiting for ${idleTime}`
             : ''}
         </span>
       </div>

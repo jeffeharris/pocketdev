@@ -1,4 +1,16 @@
-export enum TaskStatus {
+/**
+ * WorkerStatus represents the current state of an AI worker session.
+ * These values MUST match the backend AI state constants exactly.
+ * 
+ * State meanings:
+ * - NotStarted: No AI session active, user is at bash prompt (gray)
+ * - Idle: AI session is active and ready for commands (blue)
+ * - Working: AI is actively thinking/processing (yellow)
+ * - Waiting: AI needs user input or confirmation (purple)
+ * 
+ * State flow: NotStarted -> Idle <-> Working <-> Waiting -> NotStarted
+ */
+export enum WorkerStatus {
   NotStarted = 'not-started',
   Idle = 'idle',
   Working = 'working',
@@ -14,7 +26,7 @@ export enum TaskState {
 export type TaskPhase = 'generate' | 'validate' | 'merge';
 
 export interface SessionState {
-  status: TaskStatus;
+  status: WorkerStatus;
   lastStateChange: string | null;
 }
 

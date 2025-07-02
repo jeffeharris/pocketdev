@@ -1,5 +1,5 @@
 import type { Task } from '../types/task';
-import { TaskStatus } from '../types/task';
+import { WorkerStatus } from '../types/task';
 import type { GitStatus, ChangedFile } from '../types/git';
 import type { Project } from '../types/project';
 
@@ -32,7 +32,7 @@ export const mockTasks: Task[] = [
     created_at: '2025-01-15T22:27:16Z',
     taskState: 'active',
     sessionState: {
-      status: TaskStatus.Working,
+      status: WorkerStatus.Working,
       lastStateChange: '2025-01-15T22:50:00Z'
     },
     gitStatus: {
@@ -50,7 +50,7 @@ export const mockTasks: Task[] = [
     created_at: '2025-01-15T21:45:12Z',
     taskState: 'active',
     sessionState: {
-      status: TaskStatus.Waiting,
+      status: WorkerStatus.Waiting,
       lastStateChange: '2025-01-15T23:00:00Z'
     },
     gitStatus: {
@@ -68,7 +68,7 @@ export const mockTasks: Task[] = [
     created_at: '2025-01-15T18:30:00Z',
     taskState: 'merged',
     sessionState: {
-      status: TaskStatus.Idle,
+      status: WorkerStatus.Idle,
       lastStateChange: '2025-01-15T21:00:00Z'
     },
     merged_at: '2025-01-15T21:00:00Z'

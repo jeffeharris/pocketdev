@@ -1,30 +1,30 @@
 import React from 'react';
 import { CheckCircle, Clock, User, Activity } from 'lucide-react';
-import { TaskStatus as TaskStatusEnum } from '../../types/task';
+import { WorkerStatus } from '../../types/task';
 import { clsx } from 'clsx';
 
 interface TaskStatusProps {
-  status: TaskStatusEnum;
+  status: WorkerStatus;
   className?: string;
 }
 
 const statusConfig = {
-  [TaskStatusEnum.NotStarted]: {
+  [WorkerStatus.NotStarted]: {
     icon: Clock,
     label: 'Not Started',
     colorClass: 'bg-gray-100 text-gray-700 border-gray-300',
   },
-  [TaskStatusEnum.Idle]: {
+  [WorkerStatus.Idle]: {
     icon: CheckCircle,
     label: 'Idle',
     colorClass: 'bg-blue-100 text-blue-700 border-blue-300',
   },
-  [TaskStatusEnum.Working]: {
+  [WorkerStatus.Working]: {
     icon: Activity,
     label: 'Working',
     colorClass: 'bg-yellow-100 text-yellow-700 border-yellow-300 animate-pulse',
   },
-  [TaskStatusEnum.Waiting]: {
+  [WorkerStatus.Waiting]: {
     icon: User,
     label: 'Waiting',
     colorClass: 'bg-purple-100 text-purple-700 border-purple-300 animate-pulse',
@@ -32,7 +32,7 @@ const statusConfig = {
 };
 
 export const TaskStatus: React.FC<TaskStatusProps> = ({ status, className }) => {
-  const config = statusConfig[status] || statusConfig[TaskStatusEnum.NotStarted];
+  const config = statusConfig[status] || statusConfig[WorkerStatus.NotStarted];
   const Icon = config.icon;
 
   return (
