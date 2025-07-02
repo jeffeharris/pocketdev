@@ -1,16 +1,44 @@
 version: '3.8'
 
 services:
+  # New React frontend running in Docker
+  frontend:
+    image: node:20-alpine
+    container_name: pocketdev-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3005
+      - VITE_USE_MOCKS=false
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - default
+
   shelltender:
     environment:
       - NODE_ENV=development
-    # Override the command to just keep the container running
-    # We'll run the service manually inside for better control
-    command: tail -f /dev/null
+    user: root
+    command: sh -c "cd /app/server && npm install && node shelltender-service.js"
+    volumes:
+      - ./:/app
   
-  project-manager:
+  backend:
     environment:
       - NODE_ENV=development
-    # Override the command to just keep the container running
-    # We'll run the services manually inside for better control
-    command: tail -f /dev/null
+    user: root
+    command: sh -c "cd /app/server && npm install && npm run dev"
+    volumes:
+      - ./:/app
+  
+  frontend-legacy:
+    environment:
+      - NODE_ENV=development
+    user: root
+    command: sh -c "npm install && npm run dev"
+    volumes:
+      - ./shelltender-client:/app/shelltender-client

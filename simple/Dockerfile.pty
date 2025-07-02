@@ -16,16 +16,28 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LC_CTYPE=en_US.UTF-8
 
-# Install Claude
+# Create pocketdev user early
+RUN useradd -m -s /bin/bash pocketdev && \
+    mkdir -p /home/pocketdev/.npm-global && \
+    chown -R pocketdev:pocketdev /home/pocketdev
+
+# Configure npm to use pocketdev's global directory
+ENV NPM_CONFIG_PREFIX=/home/pocketdev/.npm-global
+ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
+
+# Switch to pocketdev user to install Claude
+USER pocketdev
 RUN npm install -g @anthropic-ai/claude-code
 
-# Note: node user already exists in node:20 image, no need to create
-
+# Create and switch to app directory
 WORKDIR /app
 
-# Install node-pty with rebuild
+# Install node-pty with rebuild as pocketdev
 RUN npm init -y && npm install ws node-pty
 RUN npm rebuild node-pty
+
+# Switch back to root for file creation
+USER root
 
 # Simple PTY server
 RUN echo 'const { WebSocketServer } = require("ws"); \
@@ -49,11 +61,11 @@ wss.on("connection", (ws) => { \
 }); \
 console.log("WebSocket server listening on port 8080");' > server.js
 
-# Set ownership of app directory to node user
-RUN chown -R node:node /app
+# Set ownership of app directory to pocketdev user
+RUN chown -R pocketdev:pocketdev /app
 
-# Switch to non-root user
-USER node
+# Switch to pocketdev user
+USER pocketdev
 
 EXPOSE 8080
 CMD ["node", "server.js"]

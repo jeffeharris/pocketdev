@@ -3,10 +3,13 @@ version: '3.8'
 services:
   # Standalone Shelltender service
   shelltender:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.shelltender
     container_name: pocketdev-shelltender
     working_dir: /app
     volumes:
+      - ./:/app
       - ./data:/app/data
       - ./projects:/projects
     ports:
@@ -16,8 +19,15 @@ services:
       - SHELLTENDER_PORT=8080
       - SHELLTENDER_API_PORT=8081
       - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
+      - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
+      # AI service credentials (passed through from host)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     command: >
-      sh -c "cd /app && npm install && node shelltender-service.js"
+      sh -c "cd server && node shelltender-service.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
@@ -25,10 +35,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # Main Project Manager with GitHub integration and SQLite persistence
-  project-manager:
-    build: .
-    container_name: pocketdev-project-manager
+  # Backend API server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.project-manager
+    container_name: pocketdev-backend
     working_dir: /app
     depends_on:
       - shelltender
@@ -36,28 +48,43 @@ services:
       - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
       - ./projects:/projects
-      - ~/.ssh:/root/.ssh:ro
-      - ~/.gitconfig:/root/.gitconfig:ro
-      - pocketdev-settings:/root/.pocketdev
-      - ./data:/app/data  # SQLite database persistence
-      - ./shelltender-client:/app/shelltender-client
+      - ~/.ssh:/home/pocketdev/.ssh:ro
+      - pocketdev-settings:/home/pocketdev/.pocketdev
+      - pocketdev-data:/app/data  # SQLite database persistence
     ports:
       - "3005:3005"
-      - "3008:3008"
     environment:
       - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - HOME=/root
+      - HOME=/home/pocketdev
       - SHELLTENDER_API_URL=http://shelltender:8081
       - SHELLTENDER_WS_URL=ws://shelltender:8080
+      - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
     command: >
-      sh -c "cd /app/server && npm install && node project-manager-db.js"
+      sh -c "cd server && node server.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Legacy frontend (React app in shelltender-client)
+  frontend-legacy:
+    build:
+      context: .
+      dockerfile: Dockerfile.project-manager
+    container_name: pocketdev-frontend-legacy
+    working_dir: /app/shelltender-client
+    depends_on:
+      - backend
+    volumes:
+      - ./shelltender-client:/app/shelltender-client
+    ports:
+      - "3008:3008"
+    command: >
+      sh -c "npm install && npm run dev"
+    restart: unless-stopped
 
 
   # Optional: Original simple server (if you still need it)
@@ -92,6 +119,7 @@ services:
 volumes:
   pocketdev-workspace:
   pocketdev-settings:
+  pocketdev-data:
 
 networks:
   default:

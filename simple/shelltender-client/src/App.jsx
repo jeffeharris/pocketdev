@@ -154,7 +154,7 @@ function App() {
         {currentSessionId ? (
           <Terminal
             sessionId={currentSessionId}
-            websocketUrl={`ws://localhost:8080`}
+            websocketUrl={window.SHELLTENDER_WS_URL || `ws://localhost:8080`}
             className="h-full"
           />
         ) : (
