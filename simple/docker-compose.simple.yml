@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  project-manager:
+    image: node:20
+    container_name: pocketdev-simple
+    working_dir: /app/server
+    volumes:
+      - ./:/app
+      - ./projects:/projects
+      - ./data:/app/data
+    ports:
+      - "3005:3005"
+      - "3008:3008"
+      - "8080:8080"
+    environment:
+      - PROJECTS_DIR=/projects
+      - HOME=/root
+    command: sh -c "cd /app/server && npm install && cd /app/shelltender-client && npm install && /app/start-all.sh"

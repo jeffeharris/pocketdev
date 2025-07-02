@@ -1,0 +1,24 @@
+# Cleanup Completed - $(date)
+
+## Untracked Files/Directories Removed:
+
+### Backup Directories (400MB)
+- simple/backups/20250611_162333/
+- simple/backups/20250611_162417/
+- simple/backups/20250611_162428/
+
+### Test Project Directories
+- simple/projects/sleep-test/
+- simple/projects/test-ink-rendering/
+- simple/projects/test-manual/
+- simple/projects/test-production-tmux/
+- simple/projects/test-task-123/
+- simple/projects/test-tmux-task/
+- simple/projects/tmux-test-xyz/
+
+### Other Cleanup
+- simple/test-repo/
+- Various .backup files throughout project directories
+- Untracked log files (server*.log, logs/*.log, logs/*.pid)
+
+Total space freed: ~450MB

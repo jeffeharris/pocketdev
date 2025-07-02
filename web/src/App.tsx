@@ -11,6 +11,7 @@ import Settings from './components/Settings';
 import Layout from './components/Layout';
 import { QuickTaskTest } from './components/QuickTaskTest';
 import { DemoPanel } from './components/DemoPanel';
+import { SimpleTaskView } from './components/SimpleTaskView';
 import { supabase, useMockData } from './lib/supabase';
 import { Engineer, Task } from './types';
 import { Toaster, toast } from 'react-hot-toast';
@@ -350,14 +351,13 @@ function Dashboard() {
 export default function App() {
   return (
     <Router>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/task/:taskId" element={<TaskView />} />
-          <Route path="/quick" element={<QuickTaskTest />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        <Route path="/" element={<SimpleTaskView />} />
+        <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
+        <Route path="/settings" element={<Layout><Settings /></Layout>} />
+        <Route path="/task/:taskId" element={<Layout><TaskView /></Layout>} />
+        <Route path="/quick" element={<Layout><QuickTaskTest /></Layout>} />
+      </Routes>
     </Router>
   );
 }

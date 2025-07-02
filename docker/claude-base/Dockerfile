@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-# Install dependencies
+# Install dependencies and locales
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -10,7 +10,16 @@ RUN apt-get update && apt-get install -y \
     npm \
     build-essential \
     sudo \
+    locales \
+    && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && update-locale LANG=en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LC_CTYPE=en_US.UTF-8
 
 # Create claude user
 RUN useradd -m -s /bin/bash claude && \
