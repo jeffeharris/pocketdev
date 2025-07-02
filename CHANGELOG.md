@@ -2,6 +2,29 @@
 
 All notable changes to the PocketDev project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Mobile-Responsive UI**
+  - Complete responsive design for projects.html and project-page.html
+  - Collapsible sidebar with hamburger menu for mobile navigation
+  - Touch-friendly controls with minimum 44px touch targets
+  - Mobile-optimized modals and forms
+  - Responsive breakpoints at 768px and 480px
+
+- **Enhanced Terminal Fullscreen**
+  - Native Fullscreen API support for compatible browsers
+  - WebKit fullscreen support for Safari/iOS
+  - iOS-specific tips for adding to home screen
+  - Proper fullscreen event handling and UI synchronization
+  - Meta tags for web app capability on mobile devices
+
+### Changed
+- Button and control sizing now relative and touch-optimized
+- Project cards stack vertically on mobile devices
+- Terminal container height adjusted for mobile viewing
+- Form inputs prevent zoom on iOS with 16px font size
+
 ## [0.3.0] - 2025-06-07 - Phase 1: Database Foundation & Task Persistence
 
 ### Added
