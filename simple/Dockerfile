@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Install git, network tools, debugging utilities, build tools for node-pty, and locales
 RUN apt-get update && apt-get install -y \
@@ -34,7 +34,8 @@ RUN mkdir -p /workspace /tmp/pocketdev-worktrees && \
 # Setup server
 WORKDIR /app
 COPY server/package*.json ./
-RUN npm install
+# Clean install to ensure native modules are built correctly
+RUN npm ci --only=production || npm install --production
 COPY server/*.js server/*.cjs ./
 
 # Configure git

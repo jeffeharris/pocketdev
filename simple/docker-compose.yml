@@ -17,7 +17,7 @@ services:
       - SHELLTENDER_API_PORT=8081
       - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
     command: >
-      sh -c "cd /app && npm install && node shelltender-service.js"
+      sh -c "cd /app && node shelltender-service.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
@@ -47,7 +47,7 @@ services:
     environment:
       - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - HOME=/root
+      - HOME=/home/node
       - SHELLTENDER_API_URL=http://shelltender:8081
       - SHELLTENDER_WS_URL=ws://shelltender:8080
     command: >
