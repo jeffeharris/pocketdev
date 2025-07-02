@@ -21,3 +21,7 @@ server/node_modules/
 # Session data
 .tmux-*
 *.jsonl
+
+# Vite cache
+.vite/
+*/.vite/
