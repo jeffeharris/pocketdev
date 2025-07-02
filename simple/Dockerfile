@@ -24,38 +24,58 @@ RUN apt-get update && apt-get install -y \
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LC_CTYPE=en_US.UTF-8
+
+# Create pocketdev user early
+RUN useradd -m -s /bin/bash pocketdev && \
+    mkdir -p /home/pocketdev/.npm-global && \
+    chown -R pocketdev:pocketdev /home/pocketdev
+
+# Configure npm to use pocketdev's global directory
+ENV NPM_CONFIG_PREFIX=/home/pocketdev/.npm-global
+ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
+
+# Switch to pocketdev user to install Claude
+USER pocketdev
 RUN npm install -g @anthropic-ai/claude-code
 
+# Switch back to root for directory creation
+USER root
+
 # Create workspace directory with proper permissions
-# Note: node user already exists in node:20-slim image
 RUN mkdir -p /workspace /tmp/pocketdev-worktrees && \
-    chown -R node:node /workspace /tmp/pocketdev-worktrees
+    chown -R pocketdev:pocketdev /workspace /tmp/pocketdev-worktrees
 
 # Setup server
 WORKDIR /app
-COPY server/package*.json ./
+RUN chown -R pocketdev:pocketdev /app
+
+# Switch to pocketdev user for npm install
+USER pocketdev
+COPY --chown=pocketdev:pocketdev server/package*.json ./
 RUN npm install
 
-# Copy the new modular structure
-COPY server/*.js ./
-COPY server/config ./config
-COPY server/controllers ./controllers
-COPY server/services ./services
-COPY server/routes ./routes
-COPY server/middleware ./middleware
-COPY server/db ./db
+# Switch back to root for copying files
+USER root
 
-# Configure git
+# Copy the new modular structure
+COPY --chown=pocketdev:pocketdev server/*.js ./
+COPY --chown=pocketdev:pocketdev server/config ./config
+COPY --chown=pocketdev:pocketdev server/controllers ./controllers
+COPY --chown=pocketdev:pocketdev server/services ./services
+COPY --chown=pocketdev:pocketdev server/routes ./routes
+COPY --chown=pocketdev:pocketdev server/middleware ./middleware
+COPY --chown=pocketdev:pocketdev server/db ./db
+
+# Configure git for both root and pocketdev
 RUN git config --global user.email "claude@pocketdev.ai" && \
     git config --global user.name "Claude"
 
-# Set ownership of app directory and npm cache to node user
-RUN chown -R node:node /app && \
-    mkdir -p /home/node/.npm && \
-    chown -R node:node /home/node/.npm
+# Configure git for pocketdev user
+USER pocketdev
+RUN git config --global user.email "claude@pocketdev.ai" && \
+    git config --global user.name "Claude"
 
-# Switch to non-root user
-USER node
+# Stay as pocketdev user
 
 EXPOSE 3001
 

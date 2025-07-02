@@ -2,12 +2,13 @@
 # Build AI base first: docker build -f Dockerfile.ai-base -t pocketdev/ai-base:latest .
 FROM pocketdev/ai-base:latest
 
-# Switch to root for setup
+# Start as root for initial setup
 USER root
 
 WORKDIR /app
 
-# Install Shelltender server package
+# Install Shelltender server package globally as root
+# (npm global packages need system permissions)
 RUN npm install -g @shelltender/server@^0.3.0
 
 # Copy server package files for any additional dependencies
