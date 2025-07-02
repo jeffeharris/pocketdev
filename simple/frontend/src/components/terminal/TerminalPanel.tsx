@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, RefreshCw, ExternalLink, Monitor, Plus } from 'lucide-react';
 import type { Task } from '../../types/task';
-import { TaskStatus } from '../task/TaskStatus';
 import { ShelltenderFrame } from './ShelltenderFrame';
 
 interface TerminalPanelProps {
@@ -43,15 +42,35 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
     >
       {/* Terminal Header */}
       <div className="bg-gray-800 border-b border-gray-700">
-        <div className="px-4 py-2 flex items-center justify-between border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <span className="text-gray-300 text-sm font-mono">
-              {task.engineer} - {task.worktree}
-            </span>
-            <TaskStatus status={task.status} />
+        <div className="flex items-center justify-between">
+          {/* Session Tabs */}
+          <div className="flex">
+            <button className="px-4 py-2 bg-gray-700 text-gray-200 text-sm border-r border-gray-600 relative">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span>Implementation</span>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-400"></div>
+            </button>
+            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                <span>Planning</span>
+              </div>
+            </button>
+            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                <span>Testing</span>
+              </div>
+            </button>
+            <button className="px-3 py-2 bg-gray-800 text-gray-500 text-sm hover:bg-gray-700 hover:text-gray-400 transition-colors">
+              <Plus className="w-4 h-4" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Control Buttons */}
+          <div className="flex items-center gap-2 pr-4">
             <button 
               onClick={onToggleSidebar}
               className="text-gray-400 hover:text-gray-200 p-1"
@@ -82,34 +101,6 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
               className={`p-1 transition-colors ${validationMode ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
             >
               <Monitor className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Session Tabs */}
-        <div className="px-4 py-0 flex items-center">
-          <div className="flex">
-            <button className="px-4 py-2 bg-gray-700 text-gray-200 text-sm border-r border-gray-600 relative">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span>Implementation</span>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-400"></div>
-            </button>
-            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                <span>Planning</span>
-              </div>
-            </button>
-            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                <span>Testing</span>
-              </div>
-            </button>
-            <button className="px-3 py-2 bg-gray-800 text-gray-500 text-sm hover:bg-gray-700 hover:text-gray-400 transition-colors">
-              <Plus className="w-4 h-4" />
             </button>
           </div>
         </div>

@@ -25,7 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">#{currentTask.id.slice(-3)} {currentTask.title}</h2>
-          <TaskStatus status={currentTask.status} />
+          <TaskStatus status={currentTask.sessionState.status} />
         </div>
 
         <div className="space-y-3">
