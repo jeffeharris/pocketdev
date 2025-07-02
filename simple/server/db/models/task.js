@@ -2,17 +2,16 @@ import crypto from 'crypto';
 
 // Map backend AI states to frontend task statuses
 const mapAIStateToTaskStatus = (aiState) => {
-  const stateMap = {
-    'running': 'idle',        // Single-line prompt - Claude is active but idle
-    'thinking': 'working',    // Claude is processing/building
-    'waiting_input': 'waiting', // Multi-line input/confirmation needed
-    'idle': 'idle',          // Default idle state
-    'loading_context': 'working', // Loading is also working
-    'completed': 'idle',     // Completed goes back to idle
-    'error': 'waiting'       // Error state needs user attention
-  };
+  // With our new implementation, backend states match frontend exactly
+  const validStates = ['not-started', 'idle', 'working', 'waiting'];
   
-  return stateMap[aiState] || 'not-started';
+  // If it's a valid state, return it directly
+  if (validStates.includes(aiState)) {
+    return aiState;
+  }
+  
+  // Default to not-started if no state or invalid state
+  return 'not-started';
 };
 
 class TaskModel {

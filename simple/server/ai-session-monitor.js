@@ -1,10 +1,23 @@
 /**
  * AI Session Monitor
- * Monitors AI developer sessions (Claude Code, GitHub Copilot, etc.) using Shelltender's pattern matching
- * Detects when sessions need attention and manages notifications
+ * 
+ * This service monitors AI developer sessions (Claude Code, GitHub Copilot, etc.) by watching
+ * terminal output through Shelltender's onData callback. It detects AI states based on
+ * pattern matching and maintains real-time state for each task.
+ * 
+ * State Flow:
+ * 1. Terminal output → Pattern matching → State detection
+ * 2. State changes → Broadcast via WebSocket + Update database
+ * 3. Frontend receives updates via WebSocket for real-time UI updates
+ * 
+ * States (matching frontend WorkerStatus enum):
+ * - 'not-started': At bash prompt, no AI session active (gray)
+ * - 'idle': AI session active but waiting for input (blue)
+ * - 'working': AI is thinking/processing (yellow)
+ * - 'waiting': AI needs user input/confirmation (purple)
  */
 
-import { AIStateTracker, AIStates } from './ai-state-tracker.js';
+import { AIStateTracker } from './ai-state-tracker.js';
 
 export class AISessionMonitor {
   constructor(sessionManager, wsServer, notificationService, wsEventService, models) {
@@ -37,7 +50,7 @@ export class AISessionMonitor {
         handler: (match, sessionId) => {
           console.log('Claude thinking detected:', match[0]);
           return {
-            state: AIStates.THINKING,
+            state: 'working',
             data: { 
               raw: match[0]
             }
@@ -51,7 +64,7 @@ export class AISessionMonitor {
         type: 'status',
         priority: 'medium',
         handler: (match, sessionId) => ({
-          state: AIStates.THINKING,
+          state: 'working',
           data: { 
             action: 'Starting',
             pattern: match[0]
@@ -68,7 +81,7 @@ export class AISessionMonitor {
         handler: (match, sessionId) => {
           const [, percentage] = match;
           return {
-            state: AIStates.LOADING_CONTEXT,
+            state: null, // Don't change state for loading
             data: { progress: parseInt(percentage) }
           };
         }
@@ -80,7 +93,7 @@ export class AISessionMonitor {
         type: 'input',
         priority: 'high',
         handler: (match, sessionId) => ({
-          state: AIStates.WAITING_INPUT,
+          state: 'waiting',
           data: { 
             inputType: 'yes_no',
             prompt: match[0].trim()
@@ -95,7 +108,7 @@ export class AISessionMonitor {
         priority: 'medium',
         handler: (match, sessionId) => {
           return {
-            state: AIStates.RUNNING,  // Blue - Claude is active but idle
+            state: 'idle',  // Blue - Claude is active but idle
             data: { 
               hasPrompt: true,
               timestamp: Date.now()
@@ -113,7 +126,7 @@ export class AISessionMonitor {
           const [, number, option] = match;
           console.log(`Claude confirmation option detected: ${number}. ${option}`);
           return {
-            state: AIStates.WAITING_INPUT,
+            state: 'waiting',
             data: { 
               inputType: 'confirmation',
               option: option.trim(),
@@ -143,7 +156,7 @@ export class AISessionMonitor {
         type: 'completion',
         priority: 'high',
         handler: (match, sessionId) => ({
-          state: AIStates.COMPLETED,
+          state: 'idle',
           data: { 
             action: match[1] || match[2] || 'task',
             success: true
@@ -163,7 +176,7 @@ export class AISessionMonitor {
             return { state: null, data: {} };
           }
           return {
-            state: AIStates.ERROR,
+            state: 'waiting',
             data: { error: errorText }
           };
         }
@@ -175,7 +188,7 @@ export class AISessionMonitor {
         type: 'input',
         priority: 'high',
         handler: (match, sessionId) => ({
-          state: AIStates.WAITING_INPUT,
+          state: 'waiting',
           data: { 
             inputType: 'clarification',
             prompt: match[0]
@@ -189,7 +202,7 @@ export class AISessionMonitor {
         type: 'context',
         priority: 'high',
         handler: (match, sessionId) => ({
-          state: AIStates.IDLE,
+          state: 'not-started',
           data: { 
             context: 'bash',
             prompt: match[0],
@@ -204,7 +217,7 @@ export class AISessionMonitor {
         type: 'status',
         priority: 'high',
         handler: (match, sessionId) => ({
-          state: AIStates.RUNNING,
+          state: 'idle',
           data: { 
             started: true,
             timestamp: Date.now()
@@ -223,6 +236,9 @@ export class AISessionMonitor {
   
   /**
    * Set up global session monitoring using Shelltender's onData callback
+   * This is the main entry point for all terminal data processing.
+   * Instead of registering patterns per-session, we monitor ALL sessions
+   * and process their data in real-time.
    */
   setupGlobalMonitoring() {
     console.log('Setting up global session monitoring with Shelltender...');
@@ -249,22 +265,11 @@ export class AISessionMonitor {
           return;
         }
         
-        // Log all data for debugging
-        if ((sessionId === 'task-7d29e028' || sessionId === 'task-7d29e08') && data.length > 5) {
-          console.log(`DATA for ${sessionId}:`, JSON.stringify(data.substring(0, 200)));
-        }
         
         // Strip ANSI escape sequences for pattern matching
         // This prevents control sequences from interfering
         const cleanData = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
         
-        // Log data for any active task to debug
-        if (sessionId.startsWith('task-')) {
-          // Only log if it contains something interesting
-          if (cleanData.includes('│') || cleanData.includes('ing') || cleanData.includes('bash')) {
-            console.log(`[${sessionId}] DATA: ${cleanData.substring(0, 100).replace(/\n/g, '\\n')}`);
-          }
-        }
         
         // Skip if data is only control sequences
         if (cleanData.trim().length === 0) {
@@ -293,25 +298,10 @@ export class AISessionMonitor {
         let foundPrompt = false;
         let foundConfirmation = false;
         
-        // Log data for active sessions
-        try {
-          if (sessionId && (sessionId.includes('7d29e028') || sessionId.includes('0d2af90a'))) {
-            console.log(`[${sessionId}] Processing data length: ${cleanData.length}`);
-            if (cleanData.includes('ing') || cleanData.includes('●') || cleanData.includes('✻')) {
-              console.log(`[${sessionId}] Potential thinking data: ${cleanData.substring(0, 100)}`);
-            }
-          }
-        } catch (logError) {
-          console.error('Error in debug logging:', logError);
-        }
         
         // Get tracker early for debugging
-        const tracker = this.stateTrackers.get(sessionId);
+        let tracker = this.stateTrackers.get(sessionId);
         
-        // Debug: Log any data that contains the prompt box
-        if (cleanData.includes('│') && cleanData.includes('>')) {
-          console.log(`DEBUG: Prompt detected in session ${sessionId}, current state: ${tracker?.currentState}`);
-        }
         
         // FIRST: Check for thinking patterns - they have absolute priority
         ['claude-thinking', 'claude-processing'].forEach(patternName => {
@@ -321,7 +311,6 @@ export class AISessionMonitor {
             if (match) {
               foundThinking = true;
               recent.lastThinking = Date.now();
-              console.log(`THINKING DETECTED: ${patternName} - ${match[0]}`);
               recent.patterns.add(patternName);
             }
           }
@@ -348,7 +337,6 @@ export class AISessionMonitor {
                 recent.lastPromptSeen = Date.now();
               } else if (patternName === 'claude-confirmation') {
                 foundConfirmation = true;
-                console.log(`CONFIRMATION FOUND: "${match[0]}"`);
               }
               
               recent.patterns.add(patternName);
@@ -359,67 +347,77 @@ export class AISessionMonitor {
         // Handle state transitions based on what we found
         if (!tracker) {
           // Create tracker if it doesn't exist
-          const newTracker = new AIStateTracker(sessionId);
-          this.stateTrackers.set(sessionId, newTracker);
-          return;
+          console.log(`Creating new state tracker for session ${sessionId}`);
+          tracker = new AIStateTracker(sessionId);
+          this.stateTrackers.set(sessionId, tracker);
+          
+          // IMPORTANT: Broadcast initial state to sync with database
+          // This ensures new sessions start with 'not-started' in the database
+          this.broadcastStateUpdate(sessionId, tracker.getStatus());
+          // Don't return - continue processing to set initial state
         }
         
-        // Simple priority-based state determination:
-        // 1. Bash prompt detected = IDLE (gray)
+        // State determination priority (highest to lowest):
+        // 1. Bash prompt = 'not-started' (AI has exited)
+        // 2. Thinking animation = 'working' (AI is processing)
+        // 3. Multi-line input = 'waiting' (AI needs confirmation)
+        // 4. Single-line prompt = 'idle' (AI is ready for input)
+        
+        // Check 1: Bash prompt detected = 'not-started' (gray)
         let foundBashPrompt = false;
         if (cleanData.match(/root@[\w-]+:[\w/~-]+#\s*$/)) {
           foundBashPrompt = true;
         }
         
         if (foundBashPrompt) {
-          // Only transition to bash if we haven't seen thinking recently
-          const timeSinceThinking = Date.now() - recent.lastThinking;
-          if (tracker.currentState !== AIStates.IDLE && timeSinceThinking > 1500) {
-            console.log('Bash prompt detected - Claude exited');
-            tracker.updateState(AIStates.IDLE, { context: 'bash' });
+          // Bash prompt means Claude has exited - user is back at shell
+          console.log(`Bash prompt found for ${sessionId}, current state: ${tracker?.currentState}`);
+          if (tracker && tracker.currentState !== 'not-started') {
+            console.log('Bash prompt detected - Claude exited, changing state from', tracker.currentState, 'to not-started');
+            tracker.updateState('not-started', { context: 'bash' });
             this.broadcastStateUpdate(sessionId, tracker.getStatus());
           }
           return;
         }
         
-        // 2. Thinking animation = THINKING (yellow) - HIGHEST PRIORITY after bash
+        // Check 2: Thinking animation = 'working' (yellow)
+        // This has priority over prompts because Claude shows prompts even while thinking
         if (foundThinking) {
-          if (tracker.currentState !== AIStates.THINKING) {
+          if (tracker.currentState !== 'working') {
             console.log('Thinking animation detected');
-            tracker.updateState(AIStates.THINKING, { animation: true });
+            tracker.updateState('working', { animation: true });
             this.broadcastStateUpdate(sessionId, tracker.getStatus());
           }
           return;
         }
         
         
-        // 3. Multi-line input box with text = WAITING_INPUT (purple)
-        // Confirmation has priority over single prompt
+        // Check 3: Multi-line input box = 'waiting' (purple)
+        // This indicates Claude needs user confirmation or selection
         if (foundConfirmation) {
-          // If we found confirmation but no thinking, Claude has stopped thinking
-          if (!foundThinking && tracker.currentState !== AIStates.WAITING_INPUT) {
+          // Only transition to waiting if not currently thinking
+          if (!foundThinking && tracker.currentState !== 'waiting') {
             console.log('Multi-line input detected - transitioning to WAITING_INPUT');
-            tracker.updateState(AIStates.WAITING_INPUT, { inputType: 'confirmation' });
+            tracker.updateState('waiting', { inputType: 'confirmation' });
             this.broadcastStateUpdate(sessionId, tracker.getStatus());
           }
           return;
         }
         
-        // 4. Single line input box with > = RUNNING (blue)
-        // Only if no confirmation found
+        // Check 4: Single line prompt = 'idle' (blue)
+        // This means Claude is active but waiting for user input
         if (foundPrompt && !foundConfirmation) {
-          // Only transition from thinking after debounce period
-          if (tracker.currentState === AIStates.THINKING) {
-            const timeSinceThinking = Date.now() - recent.lastThinking;
-            if (timeSinceThinking > 1500) {
+          // Important: Check if we're still seeing thinking text without the animation
+          // Claude's animation character disappears briefly, but the text remains
+          const hasThinkingText = cleanData.match(/\w+ing….*\d+s.*tokens/);
+          
+          if (!hasThinkingText) {
+            // No thinking text visible, safe to transition to idle
+            if (tracker.currentState !== 'idle') {
               console.log('Single line prompt detected - Claude idle');
-              tracker.updateState(AIStates.RUNNING, { active: true });
+              tracker.updateState('idle', { active: true });
               this.broadcastStateUpdate(sessionId, tracker.getStatus());
             }
-          } else if (tracker.currentState !== AIStates.RUNNING) {
-            console.log('Single line prompt detected - Claude idle');
-            tracker.updateState(AIStates.RUNNING, { active: true });
-            this.broadcastStateUpdate(sessionId, tracker.getStatus());
           }
           return;
         }
@@ -488,7 +486,9 @@ export class AISessionMonitor {
   }
 
   /**
-   * Broadcast state update to WebSocket clients
+   * Broadcast state update to WebSocket clients and persist to database
+   * This is the central point for all state changes - ensures frontend
+   * and database stay in sync with the detected AI state.
    */
   broadcastStateUpdate(sessionId, status) {
     // Extract task ID from session ID (format: task-123)
@@ -502,7 +502,8 @@ export class AISessionMonitor {
       });
     }
     
-    // Async database update (non-blocking)
+    // Update database asynchronously to not block WebSocket updates
+    // This ensures the database always reflects the current AI state
     if (this.models && this.models.sessions) {
       setImmediate(async () => {
         try {
@@ -511,6 +512,8 @@ export class AISessionMonitor {
           console.error(`Failed to update AI state in DB for task ${taskId}:`, error);
         }
       });
+    } else {
+      console.warn(`Cannot update database - models.sessions not available`);
     }
     
     console.log('AI state update:', sessionId, status.currentState);
@@ -531,8 +534,8 @@ export class AISessionMonitor {
 
     return sessions.sort((a, b) => {
       // Sort by priority: errors first, then waiting for input
-      if (a.currentState === AIStates.ERROR && b.currentState !== AIStates.ERROR) return -1;
-      if (b.currentState === AIStates.ERROR && a.currentState !== AIStates.ERROR) return 1;
+      if (a.currentState === 'error' && b.currentState !== 'error') return -1;
+      if (b.currentState === 'error' && a.currentState !== 'error') return 1;
       return 0;
     });
   }
@@ -544,7 +547,7 @@ export class AISessionMonitor {
     const tracker = this.stateTrackers.get(sessionId);
     if (tracker) {
       // Reset to idle state when acknowledged
-      tracker.updateState(AIStates.IDLE, { acknowledged: true });
+      tracker.updateState('idle', { acknowledged: true });
       this.broadcastStateUpdate(sessionId, tracker.getStatus());
     }
   }

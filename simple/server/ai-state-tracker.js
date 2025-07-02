@@ -1,24 +1,31 @@
 /**
  * AI State Tracker
- * Tracks state transitions for AI sessions to prevent notification spam
- * and provide context-aware notifications
+ * 
+ * Maintains state for individual AI sessions and tracks transitions.
+ * Each task gets its own tracker instance that persists for the session lifetime.
+ * 
+ * States match the frontend WorkerStatus enum:
+ * - 'not-started': No AI session active (at bash prompt)
+ * - 'idle': AI session active, waiting for user input  
+ * - 'working': AI is thinking/processing
+ * - 'waiting': AI needs user confirmation or input
+ * 
+ * The tracker also determines when to send notifications based on
+ * state transitions and timing to avoid spam.
  */
 
-export const AIStates = {
-  IDLE: 'idle',
-  RUNNING: 'running',  // Claude is active but not thinking
-  LOADING_CONTEXT: 'loading_context',
-  THINKING: 'thinking',  // Animation visible
-  WAITING_INPUT: 'waiting_input',
-  COMPLETED: 'completed',
-  ERROR: 'error'
-};
+// AI state constants - MUST match frontend WorkerStatus enum values
+// These are the only valid states throughout the system
+const AI_STATE_NOT_STARTED = 'not-started';  // Gray - No AI session
+const AI_STATE_IDLE = 'idle';                // Blue - AI ready for input
+const AI_STATE_WORKING = 'working';          // Yellow - AI thinking
+const AI_STATE_WAITING = 'waiting';          // Purple - AI needs response
 
 export class AIStateTracker {
   constructor(sessionId) {
     this.sessionId = sessionId;
-    this.currentState = AIStates.IDLE;
-    this.previousState = AIStates.IDLE;
+    this.currentState = AI_STATE_NOT_STARTED;
+    this.previousState = AI_STATE_IDLE;
     this.lastNotificationTime = 0;
     this.minNotificationGap = 5000; // 5 seconds
     this.context = {
@@ -40,18 +47,16 @@ export class AIStateTracker {
     // Important transitions that warrant notification
     const importantTransitions = [
       // AI needs input after thinking
-      { from: AIStates.THINKING, to: AIStates.WAITING_INPUT },
-      { from: AIStates.LOADING_CONTEXT, to: AIStates.WAITING_INPUT },
+      { from: 'working', to: 'waiting' },
       
       // Task completed
-      { from: AIStates.THINKING, to: AIStates.COMPLETED },
+      { from: 'working', to: 'idle' },
       
       // Error occurred
-      { from: AIStates.THINKING, to: AIStates.ERROR },
-      { from: AIStates.LOADING_CONTEXT, to: AIStates.ERROR },
+      { from: 'working', to: 'waiting' },
       
       // Started waiting for input from idle (e.g., Claude asking initial question)
-      { from: AIStates.IDLE, to: AIStates.WAITING_INPUT }
+      { from: 'idle', to: 'waiting' }
     ];
 
     const isImportant = importantTransitions.some(t => 
@@ -93,9 +98,9 @@ export class AIStateTracker {
     }
     
     // Track thinking duration
-    if (newState === AIStates.THINKING) {
+    if (newState === AI_STATE_WORKING) {
       this.context.thinkingStartTime = Date.now();
-    } else if (this.previousState === AIStates.THINKING) {
+    } else if (this.previousState === AI_STATE_WORKING) {
       const duration = Date.now() - (this.context.thinkingStartTime || Date.now());
       this.context.lastThinkingDuration = duration;
     }
@@ -115,7 +120,7 @@ export class AIStateTracker {
     const title = this.context.terminalTitle || `Session ${this.sessionId}`;
     
     switch (this.currentState) {
-      case AIStates.WAITING_INPUT:
+      case 'waiting':
         return {
           title: 'AI needs your input',
           body: `${title} - ${this.context.lastAction || 'Waiting for response'}`,
@@ -123,14 +128,14 @@ export class AIStateTracker {
           actions: this.getSuggestedActions()
         };
         
-      case AIStates.COMPLETED:
+      case 'idle':
         return {
           title: 'AI task completed',
           body: `${title} - ${this.context.lastAction || 'Task finished'}`,
           priority: 'low'
         };
         
-      case AIStates.ERROR:
+      case 'error':
         return {
           title: 'AI encountered an error',
           body: `${title} - ${this.context.lastError || 'Error occurred'}`,
@@ -146,7 +151,7 @@ export class AIStateTracker {
    * Get suggested quick actions based on context
    */
   getSuggestedActions() {
-    if (this.currentState === AIStates.WAITING_INPUT) {
+    if (this.currentState === 'waiting') {
       // Look for common patterns in last action
       const action = this.context.lastAction?.toLowerCase() || '';
       
@@ -176,8 +181,7 @@ export class AIStateTracker {
       currentState: this.currentState,
       previousState: this.previousState,
       context: this.context,
-      needsAttention: this.currentState === AIStates.WAITING_INPUT || 
-                       this.currentState === AIStates.ERROR,
+      needsAttention: this.currentState === 'waiting',
       duration: Date.now() - this.context.startTime
     };
   }

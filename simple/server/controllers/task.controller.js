@@ -78,6 +78,7 @@ export class TaskController {
    */
   async listTasks(req, res) {
     const { projectId } = req.params;
+    const aiMonitor = req.app.locals.aiMonitor;
     
     try {
       const tasks = await this.models.tasks.findByProjectId(projectId);
@@ -86,8 +87,8 @@ export class TaskController {
       const project = await this.models.projects.findById(projectId);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
-      // Enrich tasks with git status
-      const tasksWithGitStatus = await Promise.all(tasks.map(async (task) => {
+      // Enrich tasks with git status and session state
+      const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
         let gitStatus = null;
         
         if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
@@ -102,13 +103,55 @@ export class TaskController {
           }
         }
         
+        // Get session state from AI monitor (live) or database (persisted)
+        // This two-tier approach ensures we always show the most current state:
+        // 1. Live state from AI monitor (if terminal session is active)
+        // 2. Persisted state from database (if no active session)
+        let sessionState = { status: 'not-started', lastStateChange: null };
+        
+        // First try to get live state from AI monitor
+        let liveStatus = null;
+        if (aiMonitor && aiMonitor.getSessionStatus) {
+          const sessionId = `task-${task.id}`;
+          liveStatus = aiMonitor.getSessionStatus(sessionId);
+          
+          if (liveStatus) {
+            // Use live state from AI monitor - this is the most accurate
+            sessionState = {
+              status: liveStatus.currentState,
+              lastStateChange: new Date().toISOString()
+            };
+          }
+        }
+        
+        // If no live state from AI monitor, get from database
+        // This happens when:
+        // - No terminal session exists for this task
+        // - Backend just restarted and hasn't received terminal data yet
+        if (!liveStatus) {
+          const taskWithSession = await this.models.tasks.findByIdWithSessionState(task.id);
+          if (taskWithSession && taskWithSession.sessionState) {
+            sessionState = taskWithSession.sessionState;
+          }
+        }
+        
+        // Calculate task state
+        let taskState = 'active';
+        if (task.status === 'merged' || task.merged_at) {
+          taskState = 'merged';
+        } else if (task.is_archived) {
+          taskState = 'archived';
+        }
+        
         return {
           ...task,
-          gitStatus
+          gitStatus,
+          taskState,
+          sessionState
         };
       }));
       
-      res.json(tasksWithGitStatus);
+      res.json(tasksWithFullStatus);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
