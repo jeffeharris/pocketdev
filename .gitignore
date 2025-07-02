@@ -234,7 +234,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/  # Commented out - we have lib directories with source code
 lib64/
 parts/
 sdist/
@@ -379,5 +379,65 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
+# PocketDev specific
+workspaces/
+local-backend/.env
+web/.env
+*.log
+.DS_Store
+node_modules/
+build/
+dist/
+*.swp
+*.swo
+*~
+.vscode/
+*.sublime-*
+.claude/*local*
+.claude-prompt
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Test artifacts
+coverage/
+*.test.js.snap
+
+# Temporary files
+*.tmp
+*.temp
+*-backup.*
+*-old.*
+
+# Docker volumes
+docker/volumes/
+
+# Zone identifiers (Windows)
+*:Zone.Identifier
+
+simple/test-repo/
+simple/frontend/test-*.html
+simple/frontend/*terminal*.html
+simple/frontend/bash.html
+simple/frontend/claude*.html
+simple/frontend/direct.html
+simple/server/*pty*.js
+simple/server/terminal-handler.js
+simple/server/simple-ws-handler.js
+simple/server/test-*.js
+simple/*-dashboard.html
+simple/test-*.js
+simple/claude-*.js
+simple/claude-*.sh
+simple/*dockerfile
+simple/Dockerfile.pty
+simple/package.json
+
+# PocketDev temporary files
+.pocketdev/tmp/
+simple/data/
+../logs/
