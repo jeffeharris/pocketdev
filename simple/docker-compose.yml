@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Standalone Shelltender service
+  shelltender:
+    build: .
+    container_name: pocketdev-shelltender
+    working_dir: /app
+    volumes:
+      - ./data:/app/data
+      - ./projects:/projects
+    ports:
+      - "8080:8080"  # WebSocket port
+      - "8081:8081"  # HTTP API port
+    environment:
+      - SHELLTENDER_PORT=8080
+      - SHELLTENDER_API_PORT=8081
+      - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
+    command: >
+      sh -c "cd /app && npm install && node shelltender-service.js"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Main Project Manager with GitHub integration and SQLite persistence
+  project-manager:
+    build: .
+    container_name: pocketdev-project-manager
+    working_dir: /app
+    depends_on:
+      - shelltender
+    volumes:
+      - ./:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./projects:/projects
+      - ~/.ssh:/root/.ssh:ro
+      - ~/.gitconfig:/root/.gitconfig:ro
+      - pocketdev-settings:/root/.pocketdev
+      - ./data:/app/data  # SQLite database persistence
+      - ./shelltender-client:/app/shelltender-client
+    ports:
+      - "3005:3005"
+      - "3008:3008"
+    environment:
+      - PROJECTS_DIR=/projects
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - HOME=/root
+      - SHELLTENDER_API_URL=http://shelltender:8081
+      - SHELLTENDER_WS_URL=ws://shelltender:8080
+    command: >
+      sh -c "cd /app/server && npm install && node project-manager-db.js"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
+  # Optional: Original simple server (if you still need it)
+  server:
+    build: .
+    container_name: pocketdev-simple-server
+    ports:
+      - "3001:3001"
+      - "3003:3003"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GIT_REPO=/workspace
+      - WORKTREE_DIR=/tmp/pocketdev-worktrees
+    volumes:
+      - pocketdev-workspace:/workspace
+      - ./frontend:/frontend
+      - ~/.pocketdev:/root/.pocketdev
+    profiles:
+      - simple  # Only starts when explicitly requested
+    
+  # Optional: Original frontend
+  frontend:
+    image: nginx:alpine
+    container_name: pocketdev-frontend
+    ports:
+      - "2424:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    profiles:
+      - simple  # Only starts when explicitly requested
+
+volumes:
+  pocketdev-workspace:
+  pocketdev-settings:
+
+networks:
+  default:
+    name: pocketdev-network

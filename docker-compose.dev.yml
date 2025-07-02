@@ -1,0 +1,65 @@
+services:
+  # Frontend Web App
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: pocketdev-frontend
+    ports:
+      - "2424:5173"
+    environment:
+      - VITE_API_URL=http://backend:3001
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    networks:
+      - pocketdev
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+  # Backend API
+  backend:
+    build:
+      context: ./local-backend
+      dockerfile: Dockerfile.dev
+    container_name: pocketdev-backend
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLAUDE_MODE=host
+      - NODE_ENV=development
+      - PROJECT_PATH=/home/jeffh/projects/pocketdev
+      - CLAUDE_DEBUG=${CLAUDE_DEBUG:-false}
+      - GIT_REPO_PATH=/tmp/test-repo
+      - DEFAULT_BRANCH=main
+    volumes:
+      - ./local-backend:/app
+      - /app/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pocketdev-workspaces:/tmp/pocketdev-workspaces
+      - ./.pocketdev:/home/jeffh/projects/pocketdev/.pocketdev
+      - .:/workspace  # Mount the entire project for git operations
+    networks:
+      - pocketdev
+    command: sh -c "npm rebuild && npm run dev"
+
+  # Optional: Build AI Developer image on startup
+  ai-developer-builder:
+    build:
+      context: ./docker/ai-developer
+      dockerfile: Dockerfile
+    image: pocketdev/ai-developer:latest
+    container_name: pocketdev-ai-builder
+    command: echo "AI Developer image built successfully"
+
+networks:
+  pocketdev:
+    driver: bridge
+
+volumes:
+  workspaces:

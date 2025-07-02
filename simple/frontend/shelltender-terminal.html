@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Shelltender Terminal</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: monospace;
+      overflow: hidden;
+    }
+    #terminal {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+</head>
+<body>
+  <div id="terminal"></div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+  
+  <script>
+    // Get session ID from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session');
+    const taskId = urlParams.get('task');
+    
+    if (!sessionId) {
+      document.getElementById('terminal').innerHTML = '<p style="padding: 20px;">No session ID provided</p>';
+    } else {
+      // Initialize xterm.js
+      const term = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        theme: {
+          background: '#1e1e1e',
+          foreground: '#d4d4d4',
+          cursor: '#aeafad',
+          selection: '#264f78',
+          black: '#000000',
+          red: '#cd3131',
+          green: '#0dbc79',
+          yellow: '#e5e510',
+          blue: '#2472c8',
+          magenta: '#bc3fbc',
+          cyan: '#11a8cd',
+          white: '#e5e5e5',
+          brightBlack: '#666666',
+          brightRed: '#f14c4c',
+          brightGreen: '#23d18b',
+          brightYellow: '#f5f543',
+          brightBlue: '#3b8eea',
+          brightMagenta: '#d670d6',
+          brightCyan: '#29b8db',
+          brightWhite: '#e5e5e5'
+        }
+      });
+      
+      const fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+      
+      const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+      term.loadAddon(webLinksAddon);
+      
+      term.open(document.getElementById('terminal'));
+      fitAddon.fit();
+      
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        fitAddon.fit();
+      });
+      
+      // Connect to shelltender WebSocket
+      // Get WebSocket URL from config or use default
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsPort = window.SHELLTENDER_WS_PORT || 8080;
+      const ws = new WebSocket(`${protocol}//${window.location.hostname}:${wsPort}/`);
+      
+      ws.onopen = () => {
+        console.log('Connected to shelltender WebSocket');
+        term.writeln('Connecting to session...\r\n');
+        
+        // Connect to existing session
+        ws.send(JSON.stringify({
+          type: 'connect',
+          sessionId: sessionId,
+          cols: term.cols,
+          rows: term.rows
+        }));
+      };
+      
+      ws.onmessage = (event) => {
+        console.log('Raw message received:', event.data);
+        // Check if the message is JSON
+        try {
+          const message = JSON.parse(event.data);
+          console.log('Received JSON message:', message);
+          console.log('Message type:', message.type);
+          console.log('Checking if type === "connect":', message.type === 'connect');
+          
+          if (message.type === 'connect') {
+            console.log('Inside connect handler');
+            // Connection successful
+            const connectedId = message.sessionId || (message.session && message.session.id) || sessionId;
+            
+            // Display scrollback buffer if available
+            if (message.scrollback && message.scrollback.length > 0) {
+              console.log('Loading scrollback buffer:', message.scrollback.length, 'bytes');
+              term.write(message.scrollback);
+            } else {
+              // Only show connected message if no scrollback
+              term.writeln('Connected to session ' + connectedId + '\r\n');
+            }
+          } else if (message.type === 'output') {
+            // Terminal output
+            term.write(message.data);
+          } else if (message.type === 'error') {
+            term.writeln('\r\n\x1b[31mError: ' + message.message + '\x1b[0m\r\n');
+          }
+        } catch (e) {
+          // Not JSON, treat as raw terminal output
+          console.log('Received raw output (non-JSON):', event.data);
+          console.log('Parse error:', e);
+          term.write(event.data);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        term.writeln('\r\n\x1b[31mConnection error\x1b[0m\r\n');
+      };
+      
+      ws.onclose = () => {
+        term.writeln('\r\n\x1b[33mConnection closed\x1b[0m\r\n');
+      };
+      
+      // Send input to shelltender
+      term.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'input',
+            sessionId: sessionId,
+            data: data
+          }));
+        }
+      });
+      
+      // Handle resize
+      term.onResize(({ cols, rows }) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'resize',
+            sessionId: sessionId,
+            cols: cols,
+            rows: rows
+          }));
+        }
+      });
+      
+      // Focus terminal
+      term.focus();
+    }
+  </script>
+</body>
+</html>
