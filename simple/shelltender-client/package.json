@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@shelltender/client": "^0.2.1",
+    "@shelltender/client": "^0.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "axios": "^1.6.0",

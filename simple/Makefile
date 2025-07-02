@@ -1,44 +1,38 @@
 # PocketDev Makefile
-.PHONY: help dev prod up down restart logs shell clean migrate build status test
+.PHONY: help dev prod up down restart logs shell clean migrate build build-ai-base build-all status test
 
 # Default target
 help:
 	@echo "PocketDev Development Commands:"
-	@echo "  make dev      - Start in development mode with hot reloading"
-	@echo "  make prod     - Start in production mode"
-	@echo "  make up       - Start containers (production)"
-	@echo "  make down     - Stop and remove containers"
-	@echo "  make restart  - Restart containers"
-	@echo "  make logs     - Show container logs"
-	@echo "  make shell    - Open shell in project-manager container"
-	@echo "  make clean    - Clean up containers, volumes, and data"
-	@echo "  make migrate  - Run shelltender migration for tasks"
-	@echo "  make build    - Rebuild containers"
-	@echo "  make status   - Show container status"
-	@echo "  make test     - Run tests"
+	@echo "  make dev        - Start in development mode with hot reloading"
+	@echo "  make prod       - Start in production mode"
+	@echo "  make up         - Start containers (production)"
+	@echo "  make down       - Stop and remove containers"
+	@echo "  make restart    - Restart containers"
+	@echo "  make logs       - Show container logs"
+	@echo "  make shell      - Open shell in project-manager container"
+	@echo "  make clean      - Clean up containers, volumes, and data"
+	@echo "  make migrate    - Run shelltender migration for tasks"
+	@echo "  make build        - Rebuild service containers"
+	@echo "  make build-ai-base - Build AI base image with all development tools"
+	@echo "  make build-all    - Build AI base image and all service containers"
+	@echo "  make status     - Show container status"
+	@echo "  make test       - Run tests"
 
-# Development mode with hot reloading
+# Development mode with BOTH frontends
 dev:
-	@echo "Starting PocketDev in development mode..."
+	@echo "Starting PocketDev with both frontends..."
 	@docker-compose down
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-	@sleep 5
-	@echo "Installing dependencies..."
-	@docker exec pocketdev-shelltender bash -c "cd /app && npm install"
-	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm install"
-	@docker exec pocketdev-project-manager bash -c "cd /app/shelltender-client && npm install"
-	@echo "Starting services..."
-	@docker exec -d pocketdev-shelltender bash -c "cd /app && node shelltender-service.js"
-	@docker exec -d pocketdev-project-manager bash -c "cd /app/shelltender-client && npm run dev"
-	@docker exec -d pocketdev-project-manager bash -c "cd /app/server && npm run dev"
-	@echo "\n✓ Development environment started!"
-	@echo "\nServices:"
-	@echo "  React app:     http://localhost:3008"
+	@echo "\n✓ Starting services (this may take a moment for dependencies to install)..."
+	@echo "\nFrontends:"
+	@echo "  Legacy:        http://localhost:3008"
+	@echo "  New (React):   http://localhost:5173"
+	@echo "\nBackend:"
 	@echo "  API:           http://localhost:3005"
-	@echo "  Shelltender WS: ws://localhost:8080"
-	@echo "  Shelltender API: http://localhost:8081"
-	@echo "\nHot reloading enabled - just save your files!"
+	@echo "  Shelltender:   ws://localhost:8080"
 	@echo "\nView logs: make logs"
+	@echo "\nNote: Services may take 30-60 seconds to be fully ready on first run."
 
 # Production mode
 prod:
@@ -90,6 +84,21 @@ build:
 	@docker-compose build
 	@echo "✓ Build complete"
 
+# Build AI base image with all AI tools
+build-ai-base:
+	@echo "Building PocketDev AI base image with all development tools..."
+	@docker build -f Dockerfile.ai-base -t pocketdev/ai-base:latest -t pocketdev/ai-base:1.0 .
+	@echo "✓ AI base image built with:"
+	@echo "  - AI Agents: Claude CLI, OpenAI Codex, Google Gemini, Aider"
+	@echo "  - Dev Tools: Docker, GitHub CLI, ccusage"
+	@echo "  - Package Managers: npm, yarn, pnpm"
+	@echo "  - Testing: Jest, Mocha, ESLint, Prettier"
+	@echo "  - Databases: PostgreSQL/MySQL/Redis clients"
+
+# Build all images including base
+build-all: build-ai-base build
+	@echo "✓ All images built successfully"
+
 # Show status
 status:
 	@echo "Container Status:"
@@ -101,6 +110,10 @@ status:
 test:
 	@echo "Running tests..."
 	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm test"
+
+# Test the new API endpoints
+test-api:
+	@./scripts/test-api.sh
 
 # Development shortcuts
 logs-backend:

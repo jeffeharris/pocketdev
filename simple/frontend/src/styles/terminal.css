@@ -1,0 +1,59 @@
+/* Import xterm styles */
+@import '@xterm/xterm/css/xterm.css';
+
+/* Custom terminal styles */
+.terminal-container {
+  @apply bg-black rounded-lg overflow-hidden;
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-wrapper {
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+/* Terminal connection status */
+.terminal-status {
+  @apply absolute top-2 right-2 px-3 py-1 text-xs rounded-full font-medium z-10;
+}
+
+.terminal-status-connected {
+  @apply bg-green-500/20 text-green-400;
+}
+
+.terminal-status-connecting {
+  @apply bg-yellow-500/20 text-yellow-400;
+}
+
+.terminal-status-disconnected {
+  @apply bg-red-500/20 text-red-400;
+}
+
+/* Terminal tabs */
+.terminal-tab {
+  @apply px-4 py-2 text-sm font-medium transition-colors duration-200;
+}
+
+.terminal-tab-active {
+  @apply bg-gray-800 text-white border-b-2 border-blue-500;
+}
+
+.terminal-tab-inactive {
+  @apply bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200;
+}
+
+/* Ensure proper sizing */
+.xterm {
+  height: 100%;
+}
+
+.xterm-viewport {
+  overflow-y: auto;
+}
+
+/* Override xterm default background */
+.xterm-screen {
+  background-color: #000000;
+}

@@ -4,9 +4,10 @@
  */
 
 import fetch from 'node-fetch';
+import config from './config/index.js';
 
 class ShelltenderClient {
-  constructor(apiUrl = 'http://localhost:8081') {
+  constructor(apiUrl = config.shelltenderApiUrl) {
     this.apiUrl = apiUrl;
   }
 

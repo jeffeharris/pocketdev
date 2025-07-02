@@ -236,6 +236,12 @@ export class AISessionMonitor {
     // Monitor all session data globally
     this.sessionManager.onData((sessionId, data, metadata) => {
       try {
+        // Validate inputs
+        if (!sessionId || !data) {
+          console.warn('Invalid onData call:', { sessionId, dataLength: data ? data.length : 0 });
+          return;
+        }
+        
         // Check if this is a task session we care about
         if (!sessionId.startsWith('task-')) {
           return;
@@ -284,6 +290,18 @@ export class AISessionMonitor {
         let foundThinking = false;
         let foundPrompt = false;
         let foundConfirmation = false;
+        
+        // Log data for active sessions
+        try {
+          if (sessionId && (sessionId.includes('7d29e028') || sessionId.includes('0d2af90a'))) {
+            console.log(`[${sessionId}] Processing data length: ${cleanData.length}`);
+            if (cleanData.includes('ing') || cleanData.includes('●') || cleanData.includes('✻')) {
+              console.log(`[${sessionId}] Potential thinking data: ${cleanData.substring(0, 100)}`);
+            }
+          }
+        } catch (logError) {
+          console.error('Error in debug logging:', logError);
+        }
         
         // Get tracker early for debugging
         const tracker = this.stateTrackers.get(sessionId);
@@ -372,6 +390,7 @@ export class AISessionMonitor {
           return;
         }
         
+        
         // 3. Multi-line input box with text = WAITING_INPUT (purple)
         // Confirmation has priority over single prompt
         if (foundConfirmation) {
@@ -415,8 +434,13 @@ export class AISessionMonitor {
    * Called when a new task session is created
    */
   async registerSessionPatterns(sessionId) {
-    // Pattern registration disabled for now - we're using onData monitoring instead
-    console.log(`Session ${sessionId} created - patterns monitored via onData`);
+    // Create state tracker for the session if it doesn't exist
+    if (!this.stateTrackers.has(sessionId)) {
+      const tracker = new AIStateTracker(sessionId);
+      this.stateTrackers.set(sessionId, tracker);
+      console.log(`Created state tracker for session ${sessionId}`);
+    }
+    console.log(`Session ${sessionId} registered - patterns monitored via onData`);
   }
 
   /**

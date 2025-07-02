@@ -130,7 +130,7 @@ app.get('/health', (req, res) => {
 // Create a new session
 app.post('/sessions', async (req, res) => {
   try {
-    const { id, name, command = 'bash', cwd, env, metadata } = req.body;
+    const { id, name, command = 'bash', cwd, env, metadata, restrictToPath, allowUpwardNavigation = false, blockedCommands = ['sudo', 'su'], readOnlyMode = false } = req.body;
     
     if (!id) {
       return res.status(400).json({ error: 'Session ID is required' });
@@ -147,8 +147,8 @@ app.post('/sessions', async (req, res) => {
       });
     }
     
-    // Create new session
-    const session = await sessionManager.createSession({
+    // Create new session with optional restrictions
+    const sessionConfig = {
       id,
       name: name || `Session ${id}`,
       command,
@@ -157,7 +157,17 @@ app.post('/sessions', async (req, res) => {
         ...process.env,
         ...env
       }
-    });
+    };
+
+    // Add directory restrictions if specified
+    if (restrictToPath) {
+      sessionConfig.restrictToPath = restrictToPath;
+      sessionConfig.allowUpwardNavigation = allowUpwardNavigation;
+      sessionConfig.blockedCommands = blockedCommands;
+      sessionConfig.readOnlyMode = readOnlyMode;
+    }
+
+    const session = await sessionManager.createSession(sessionConfig);
     
     // Save session metadata
     const sessionData = {
