@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, GitBranch, Plus, Activity } from 'lucide-react';
 import type { Project } from '../types/project';
-import type { Task } from '../types/task';
+import type { Task, CreateTaskDTO } from '../types/task';
 import { TaskListItem } from '../components/task/TaskListItem';
+import { CreateTaskModal } from '../components/task/CreateTaskModal';
 import { api } from '../services/api';
 
 export const ProjectDetail: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (projectId) {
@@ -21,16 +25,44 @@ export const ProjectDetail: React.FC = () => {
   const loadProjectAndTasks = async () => {
     try {
       setLoading(true);
-      const [projectData, tasksData] = await Promise.all([
+      const [projectData, tasksData, branchesData] = await Promise.all([
         api.getProject(projectId!),
-        api.getTasks(projectId!)
+        api.getTasks(projectId!),
+        api.getProjectBranches(projectId!)
       ]);
       setProject(projectData);
       setTasks(tasksData);
+      setBranches(branchesData);
     } catch (error) {
       console.error('Failed to load project data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
+    if (!projectId) return;
+    
+    try {
+      const newTask = await api.createTask(projectId, {
+        ...taskData,
+        projectId
+      });
+      
+      // Navigate to the new task
+      navigate(`/projects/${projectId}/tasks/${newTask.id}`);
+    } catch (error: any) {
+      console.error('Failed to create task:', error);
+      
+      // Show specific error message
+      const errorMessage = error.message || 'Failed to create task';
+      if (errorMessage.includes('already exists')) {
+        alert(`Cannot create task: A branch named "${taskData.branch}" already exists. Please choose a different branch name.`);
+      } else if (errorMessage.includes('worktree')) {
+        alert(`Cannot create task: This branch is already checked out in another worktree.`);
+      } else {
+        alert(`Failed to create task: ${errorMessage}`);
+      }
     }
   };
 
@@ -82,7 +114,10 @@ export const ProjectDetail: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Active Tasks</h2>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button 
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
             <Plus className="w-4 h-4" />
             New Task
           </button>
@@ -108,13 +143,29 @@ export const ProjectDetail: React.FC = () => {
           <div className="text-center py-12">
             <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 mb-4">No tasks yet</p>
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto">
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+            >
               <Plus className="w-4 h-4" />
               Create your first task
             </button>
           </div>
         )}
       </div>
+
+      {/* Create Task Modal */}
+      {project && (
+        <CreateTaskModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={handleCreateTask}
+          projectId={projectId!}
+          baseBranch={project.baseBranch}
+          existingBranches={branches}
+          occupiedBranches={tasks.map(t => t.branch)}
+        />
+      )}
     </div>
   );
 };

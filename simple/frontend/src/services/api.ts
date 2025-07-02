@@ -58,6 +58,14 @@ class ApiService {
     };
   }
 
+  async getProjectBranches(projectId: string): Promise<string[]> {
+    if (USE_MOCKS) {
+      return ['main', 'develop', 'feature/user-auth', 'feature/api-refactor', 'fix/memory-leak'];
+    }
+    const response = await this.fetch<string[]>(`/projects/${projectId}/branches`);
+    return response;
+  }
+
   // Task endpoints
   async getTasks(projectId: string): Promise<Task[]> {
     if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
