@@ -21,3 +21,42 @@
 .terminal-tab-inactive {
   @apply bg-gray-900 text-gray-400 hover:bg-gray-800 hover:text-gray-200;
 }
+
+/* Minimal scrollbar styles for terminal */
+/* Works on Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.3); /* gray-500 with low opacity for dark terminal */
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.5);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 114, 128, 0.3) transparent;
+}
+
+/* Specific xterm viewport scrollbar */
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.4);
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6);
+}

@@ -30,3 +30,38 @@ body {
   writing-mode: vertical-rl;
   text-orientation: mixed;
 }
+
+/* Minimal scrollbar styles */
+/* Works on Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3); /* gray-400 with opacity */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+
+/* For dark sections like terminal */
+.bg-gray-900 ::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.5); /* gray-500 with opacity */
+}
+
+.bg-gray-900 ::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
