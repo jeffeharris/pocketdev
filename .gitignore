@@ -440,3 +440,4 @@ simple/package.json
 # PocketDev temporary files
 .pocketdev/tmp/
 simple/data/
+../logs/

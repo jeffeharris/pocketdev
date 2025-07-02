@@ -18,6 +18,11 @@ router.post('/sessions/:sessionId/execute',
   terminalController.executeInSession
 );
 
+// Session reset
+router.post('/sessions/:sessionId/reset',
+  terminalController.resetSession
+);
+
 // AI session management
 router.post('/sessions/:sessionId/acknowledge', 
   terminalController.acknowledgeSession

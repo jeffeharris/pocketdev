@@ -15,19 +15,18 @@ export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({
   worktreePath
 }) => {
   const [isInitializing, setIsInitializing] = useState(true);
-  // Use the provided sessionId or generate one based on taskId
-  const terminalSessionId = sessionId || `task-${taskId}`;
+  // Always use the standard session ID format for consistency
+  const terminalSessionId = `task-${taskId}`;
 
   useEffect(() => {
     // Try to create/verify the session exists on Shelltender server
     const initSession = async () => {
       try {
-        // Try to create session on Shelltender server with auth
+        // Try to create session on Shelltender server via proxy
         const response = await fetch('/shelltender-api/sessions', {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'X-Auth-Key': 'pocketdev-monitor-key-2024'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
             id: terminalSessionId,
@@ -80,7 +79,8 @@ export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({
   // For now, let's use the iframe approach that we know works
   // The @shelltender/client Terminal component seems to expect port 8081 by default
   // but our WebSocket server is on 8080
-  const iframeSrc = `http://localhost:3005/shelltender-terminal.html?task=${taskId}&session=${terminalSessionId}`;
+  // Use proxied URL that will be served through Vite
+  const iframeSrc = `/shelltender-terminal.html?task=${taskId}&session=${terminalSessionId}`;
 
   return (
     <div className={`w-full h-full ${className}`}>

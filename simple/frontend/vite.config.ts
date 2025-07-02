@@ -12,14 +12,20 @@ export default defineConfig({
         target: 'http://project-manager:3005',
         changeOrigin: true,
       },
-      '/shelltender': {
+      '/shelltender-terminal.html': {
+        target: 'http://project-manager:3005',
+        changeOrigin: true,
+      },
+      '/shelltender-ws': {
         target: 'http://shelltender:8080',
         changeOrigin: true,
         ws: true,
+        rewrite: (path) => path.replace(/^\/shelltender-ws/, ''),
       },
       '/shelltender-api': {
         target: 'http://shelltender:8081',
         changeOrigin: true,
+        ws: false, // Explicitly disable WebSocket for API endpoint
         rewrite: (path) => path.replace(/^\/shelltender-api/, ''),
       },
     },

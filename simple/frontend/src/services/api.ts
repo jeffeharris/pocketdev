@@ -70,6 +70,7 @@ class ApiService {
       status: 'idle' as const, // Backend doesn't track AI status yet
       engineer: 'Claude Code', // Default for now
       worktree: t.worktree_path,
+      worktree_path: t.worktree_path, // Include the full path
       created: t.created_at,
       duration: '0m', // Would need to calculate from sessions
       hasConflicts: false

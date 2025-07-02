@@ -182,3 +182,85 @@ export async function getShelltenderSession(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Reset terminal session to original state
+ * For now: cd to task directory and clear screen
+ * Future: could restore environment, clear command history, etc.
+ */
+export async function resetSession(req, res, next) {
+  try {
+    const { sessionId } = req.params;
+    
+    // Extract the task ID from session ID (format: task-{taskId})
+    const taskId = sessionId.replace('task-', '');
+    const models = req.app.locals.models;
+    
+    // Get task to find worktree path and session parameters
+    const task = await models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8081';
+    const authKey = process.env.SHELLTENDER_MONITOR_AUTH_KEY || 'pocketdev-monitor-key-2024';
+    
+    // Step 1: Kill the existing session
+    try {
+      await fetch(`${shelltenderUrl}/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-Auth-Key': authKey
+        }
+      });
+    } catch (error) {
+      // Session might already be gone, continue anyway
+      console.log('Could not delete session, continuing...', error.message);
+    }
+    
+    // Small delay to ensure cleanup
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Step 2: Create a new session with the same parameters
+    const createResponse = await fetch(`${shelltenderUrl}/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Auth-Key': authKey
+      },
+      body: JSON.stringify({
+        id: sessionId,
+        name: `Task ${taskId}`,
+        cwd: task.worktree_path,
+        // Re-apply directory restrictions
+        restrictToPath: task.worktree_path,
+        allowUpwardNavigation: false,
+        blockedCommands: ['sudo', 'su', 'chmod', 'chown'],
+        readOnlyMode: false,
+        env: {
+          TASK_ID: taskId,
+          WORKTREE_PATH: task.worktree_path
+        },
+        metadata: {
+          taskId,
+          worktreePath: task.worktree_path
+        }
+      })
+    });
+    
+    if (!createResponse.ok) {
+      throw new Error('Failed to create new session');
+    }
+    
+    const newSession = await createResponse.json();
+    
+    res.json({
+      sessionId,
+      message: 'Session reset successfully',
+      workingDirectory: task.worktree_path,
+      newSession
+    });
+  } catch (error) {
+    next(error);
+  }
+}

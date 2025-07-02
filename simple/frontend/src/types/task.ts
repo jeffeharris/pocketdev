@@ -10,6 +10,7 @@ export interface Task {
   phase?: TaskPhase;
   engineer: string;
   worktree: string;
+  worktree_path?: string; // Full path to the worktree directory
   created: string;
   duration: string;
   hasConflicts?: boolean;

@@ -189,6 +189,93 @@ class TaskModel {
       await this.db.run('DELETE FROM worktree_registry WHERE path = ?', [task.worktree_path]);
     }
   }
+
+  /**
+   * Get task with enriched session state information
+   */
+  async findByIdWithSessionState(id) {
+    const task = await this.findById(id);
+    if (!task) return null;
+
+    // Get active session state if exists
+    const session = await this.db.get(`
+      SELECT id, ai_state, ai_state_updated_at
+      FROM claude_sessions
+      WHERE task_id = ? AND is_active = 1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [id]);
+
+    // Calculate task state based on status
+    let taskState = 'active';
+    if (task.status === 'merged' || task.merged_at) {
+      taskState = 'merged';
+    } else if (task.is_archived) {
+      taskState = 'archived';
+    }
+
+    // Add session state to task
+    return {
+      ...task,
+      taskState,
+      sessionState: session ? {
+        status: session.ai_state || 'idle',
+        lastStateChange: session.ai_state_updated_at
+      } : {
+        status: 'not-started',
+        lastStateChange: null
+      }
+    };
+  }
+
+  /**
+   * Get all tasks for a project with session states
+   */
+  async findByProjectIdWithSessionStates(projectId, includeArchived = false) {
+    const tasks = await this.findByProjectId(projectId, includeArchived);
+    
+    // Get all active sessions for these tasks
+    const taskIds = tasks.map(t => t.id);
+    if (taskIds.length === 0) return [];
+    
+    const sessions = await this.db.all(`
+      SELECT task_id, id, ai_state, ai_state_updated_at
+      FROM claude_sessions
+      WHERE task_id IN (${taskIds.map(() => '?').join(',')}) 
+        AND is_active = 1
+    `, taskIds);
+
+    // Create a map of task_id to session for quick lookup
+    const sessionMap = new Map();
+    sessions.forEach(session => {
+      sessionMap.set(session.task_id, session);
+    });
+
+    // Enrich tasks with session state
+    return tasks.map(task => {
+      const session = sessionMap.get(task.id);
+      
+      // Calculate task state
+      let taskState = 'active';
+      if (task.status === 'merged' || task.merged_at) {
+        taskState = 'merged';
+      } else if (task.is_archived) {
+        taskState = 'archived';
+      }
+
+      return {
+        ...task,
+        taskState,
+        sessionState: session ? {
+          status: session.ai_state || 'idle',
+          lastStateChange: session.ai_state_updated_at
+        } : {
+          status: 'not-started',
+          lastStateChange: null
+        }
+      };
+    });
+  }
 }
 
 export default TaskModel;

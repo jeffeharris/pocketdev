@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, RefreshCw, ExternalLink, Monitor, Plus } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskStatus } from '../task/TaskStatus';
@@ -17,6 +17,25 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   onToggleValidation,
   onToggleSidebar
 }) => {
+  const [isResetting, setIsResetting] = useState(false);
+  const [terminalKey, setTerminalKey] = useState(0);
+  const [sessionId, setSessionId] = useState(`task-${task.id}`);
+  
+  const handleResetSession = async () => {
+    setIsResetting(true);
+    try {
+      // Generate a new session ID with timestamp to ensure it's unique
+      const newSessionId = `task-${task.id}-${Date.now()}`;
+      setSessionId(newSessionId);
+      
+      // Force the iframe to reload with the new session ID
+      setTerminalKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error resetting session:', error);
+    } finally {
+      setTimeout(() => setIsResetting(false), 1000);
+    }
+  };
   return (
     <div 
       className="bg-gray-900 flex flex-col"
@@ -36,13 +55,26 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
             <button 
               onClick={onToggleSidebar}
               className="text-gray-400 hover:text-gray-200 p-1"
+              title="Toggle sidebar"
             >
               <Eye className="w-4 h-4" />
             </button>
-            <button className="text-gray-400 hover:text-gray-200 p-1">
+            <button 
+              onClick={handleResetSession}
+              className={`p-1 transition-colors ${
+                isResetting 
+                  ? 'text-blue-400 animate-spin' 
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              disabled={isResetting}
+              title="Reset session to original state"
+            >
               <RefreshCw className="w-4 h-4" />
             </button>
-            <button className="text-gray-400 hover:text-gray-200 p-1">
+            <button 
+              className="text-gray-400 hover:text-gray-200 p-1"
+              title="Open in new window"
+            >
               <ExternalLink className="w-4 h-4" />
             </button>
             <button 
@@ -85,7 +117,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       {/* Shelltender Content */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden">
-        <ShelltenderFrame taskId={task.id} />
+        <ShelltenderFrame key={terminalKey} taskId={task.id} sessionId={sessionId} worktreePath={task.worktree_path || task.worktree} />
       </div>
     </div>
   );
