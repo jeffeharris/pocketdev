@@ -97,7 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {onCreateTask && (
                 <button
                   onClick={onCreateTask}
-                  className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-all duration-200 hover:scale-110"
                   title="Create new task"
                 >
                   <Plus className="w-4 h-4" />
