@@ -280,12 +280,12 @@ export class GitService {
       
       // Get ahead count (commits in current branch not in base)
       const aheadResult = await this.command(projectPath, 
-        `git rev-list --count ${baseBranch}..${currentBranch}`);
+        `git rev-list --count ${baseBranch}..HEAD`);
       const ahead = parseInt(aheadResult.output.trim(), 10) || 0;
       
       // Get behind count (commits in base not in current branch)
       const behindResult = await this.command(projectPath, 
-        `git rev-list --count ${currentBranch}..${baseBranch}`);
+        `git rev-list --count HEAD..${baseBranch}`);
       const behind = parseInt(behindResult.output.trim(), 10) || 0;
       
       // Check for conflicts by attempting a merge

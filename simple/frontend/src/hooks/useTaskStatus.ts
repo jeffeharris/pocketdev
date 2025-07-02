@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { useWebSocket } from './useWebSocket';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useWebSocketContext } from '../contexts/WebSocketContext';
 import type { TaskStatus } from '../types/task';
 
 interface SessionState {
@@ -21,14 +21,10 @@ export function useTaskStatus(taskId: string | undefined) {
   const [taskStatus, setTaskStatus] = useState<TaskStatusData | null>(null);
   const [idleTime, setIdleTime] = useState<string>('');
   const lastUpdateRef = useRef<number>(Date.now());
+  const { subscribe, unsubscribe } = useWebSocketContext();
 
   // Handle WebSocket messages
-  const handleMessage = (message: any) => {
-    if (!taskId) return;
-    
-    // Check if this message is for our task
-    if (message.taskId !== taskId) return;
-
+  const handleMessage = useCallback((message: any) => {
     switch (message.type) {
       case 'ai_state_update':
         setTaskStatus(prev => ({
@@ -52,17 +48,15 @@ export function useTaskStatus(taskId: string | undefined) {
         }));
         break;
     }
-  };
-
-  const { subscribe, unsubscribe } = useWebSocket({ onMessage: handleMessage });
+  }, []);
 
   // Subscribe to task updates
   useEffect(() => {
     if (!taskId) return;
     
-    subscribe('task', taskId);
-    return () => unsubscribe('task', taskId);
-  }, [taskId, subscribe, unsubscribe]);
+    subscribe('task', taskId, handleMessage);
+    return () => unsubscribe('task', taskId, handleMessage);
+  }, [taskId, subscribe, unsubscribe, handleMessage]);
 
   // Calculate idle time
   useEffect(() => {

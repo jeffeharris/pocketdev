@@ -99,7 +99,6 @@ export const ProjectDetail: React.FC = () => {
                 task={task}
                 isActive={false}
                 onSelect={() => {}} // No-op since we're using Link
-                needsAttention={task.status === 'user-request' || task.status === 'thinking'}
               />
             </Link>
           ))}

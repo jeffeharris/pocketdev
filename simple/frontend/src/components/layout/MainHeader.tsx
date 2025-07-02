@@ -67,7 +67,6 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           onTaskSelect(task.id);
                           setShowTaskSwitcher(false);
                         }}
-                        needsAttention={task.status === 'user-request'}
                       />
                     ))}
                   </div>

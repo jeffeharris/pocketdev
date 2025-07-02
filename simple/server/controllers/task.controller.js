@@ -81,7 +81,34 @@ export class TaskController {
     
     try {
       const tasks = await this.models.tasks.findByProjectId(projectId);
-      res.json(tasks);
+      
+      // Get the project to know the base branch
+      const project = await this.models.projects.findById(projectId);
+      const baseBranch = `origin/${project.base_branch || 'main'}`;
+      
+      // Enrich tasks with git status
+      const tasksWithGitStatus = await Promise.all(tasks.map(async (task) => {
+        let gitStatus = null;
+        
+        if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+          try {
+            gitStatus = await this.gitService.getBranchStatus(
+              task.worktree_path, 
+              task.branch, 
+              baseBranch
+            );
+          } catch (error) {
+            console.error(`Failed to get git status for task ${task.id}:`, error.message);
+          }
+        }
+        
+        return {
+          ...task,
+          gitStatus
+        };
+      }));
+      
+      res.json(tasksWithGitStatus);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

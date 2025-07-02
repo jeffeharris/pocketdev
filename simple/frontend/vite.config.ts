@@ -13,7 +13,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://project-manager:3005',
+        target: 'ws://backend:3005',
         ws: true,
         changeOrigin: true,
       },

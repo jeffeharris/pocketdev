@@ -78,7 +78,8 @@ class ApiService {
       project_id: t.project_id,
       is_archived: t.is_archived,
       merged_at: t.merged_at,
-      has_uncommitted_changes: t.has_uncommitted_changes
+      has_uncommitted_changes: t.has_uncommitted_changes,
+      gitStatus: t.gitStatus
     }));
   }
 
