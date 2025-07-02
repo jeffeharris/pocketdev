@@ -61,19 +61,24 @@ class ApiService {
   async getTasks(projectId: string): Promise<Task[]> {
     if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
     const response = await this.fetch<any[]>(`/projects/${projectId}/tasks`);
-    // Map backend format to our Task type
+    // Backend now includes sessionState and taskState
     return response.map(t => ({
       id: t.id,
       title: t.name || 'Untitled Task',
-      description: '', // Not in current backend
+      description: '', // Not in backend yet
       branch: t.branch,
-      status: 'idle' as const, // Backend doesn't track AI status yet
-      engineer: 'Claude Code', // Default for now
-      worktree: t.worktree_path,
-      worktree_path: t.worktree_path, // Include the full path
-      created: t.created_at,
-      duration: '0m', // Would need to calculate from sessions
-      hasConflicts: false
+      worktree_path: t.worktree_path,
+      created_at: t.created_at,
+      
+      // These come from backend now
+      taskState: t.taskState || 'active',
+      sessionState: t.sessionState || { status: 'not-started', lastStateChange: null },
+      
+      // Optional fields
+      project_id: t.project_id,
+      is_archived: t.is_archived,
+      merged_at: t.merged_at,
+      has_uncommitted_changes: t.has_uncommitted_changes
     }));
   }
 

@@ -88,6 +88,50 @@ export class TaskController {
   }
 
   /**
+   * Get task status (lightweight endpoint for polling/real-time updates)
+   */
+  async getTaskStatus(req, res) {
+    const { taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findByIdWithSessionState(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Get git status
+      let gitStatus = {
+        ahead: 0,
+        behind: 0,
+        hasConflicts: false
+      };
+      
+      if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+        // Get the project to know the base branch
+        const project = await this.models.projects.findById(task.project_id);
+        if (project) {
+          const baseBranch = `origin/${project.base_branch || 'main'}`;
+          gitStatus = await this.gitService.getBranchStatus(
+            task.worktree_path, 
+            task.branch, 
+            baseBranch
+          );
+        }
+      }
+      
+      // Return just the status information
+      res.json({
+        id: task.id,
+        taskState: task.taskState,
+        sessionState: task.sessionState,
+        gitStatus
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Get task details with git status
    */
   async getTask(req, res) {

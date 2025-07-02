@@ -14,16 +14,19 @@ class SessionModel {
     const now = new Date().toISOString();
     
     const result = await this.db.run(`
-      INSERT INTO claude_sessions (
-        id, task_id, session_id, is_active, message_count, 
-        created_at, last_activity, size_bytes, token_usage, 
-        tool_usage, model, error_count, metadata
+      INSERT INTO terminal_sessions (
+        id, task_id, session_id, shelltender_session_id, ai_state,
+        is_active, message_count, created_at, last_activity, 
+        size_bytes, token_usage, tool_usage, model, 
+        error_count, metadata
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, 
       taskId, 
       data.sessionId || data.session_id,
+      data.shelltenderSessionId || data.shelltender_session_id || null,
+      data.aiState || data.ai_state || 'not-started',
       data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,
       data.messageCount || data.message_count || 0,
       data.createdAt || data.created_at || now,
@@ -46,7 +49,7 @@ class SessionModel {
         t.branch as task_branch,
         p.id as project_id,
         p.name as project_name
-      FROM claude_sessions cs
+      FROM terminal_sessions cs
       JOIN tasks t ON cs.task_id = t.id
       JOIN projects p ON t.project_id = p.id
       WHERE cs.id = ?
@@ -61,7 +64,7 @@ class SessionModel {
 
   async findByTaskId(taskId) {
     const sessions = await this.db.all(`
-      SELECT * FROM claude_sessions 
+      SELECT * FROM terminal_sessions 
       WHERE task_id = ?
       ORDER BY last_activity DESC
     `, [taskId]);
@@ -71,7 +74,7 @@ class SessionModel {
 
   async findBySessionId(sessionId) {
     const session = await this.db.get(`
-      SELECT * FROM claude_sessions 
+      SELECT * FROM terminal_sessions 
       WHERE session_id = ?
     `, [sessionId]);
 
@@ -129,7 +132,7 @@ class SessionModel {
       values.push(id);
       
       await this.db.run(`
-        UPDATE claude_sessions 
+        UPDATE terminal_sessions 
         SET ${updates.join(', ')}
         WHERE id = ?
       `, values);
@@ -159,7 +162,7 @@ class SessionModel {
         SUM(json_extract(cs.token_usage, '$.totalCacheCreated')) as total_cache_created,
         SUM(cs.error_count) as total_errors,
         MAX(cs.last_activity) as last_activity
-      FROM claude_sessions cs
+      FROM terminal_sessions cs
       ${where}
     `, params);
 
@@ -188,6 +191,33 @@ class SessionModel {
     }
     
     return session;
+  }
+
+  /**
+   * Update AI state for a session
+   */
+  async updateAIState(taskId, aiState) {
+    const now = new Date().toISOString();
+    
+    await this.db.run(`
+      UPDATE terminal_sessions 
+      SET ai_state = ?, ai_state_updated_at = ?, last_activity = ?
+      WHERE task_id = ? AND is_active = 1
+    `, [aiState, now, now, taskId]);
+  }
+
+  /**
+   * Get active session for a task
+   */
+  async findActiveByTaskId(taskId) {
+    const session = await this.db.get(`
+      SELECT * FROM terminal_sessions
+      WHERE task_id = ? AND is_active = 1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [taskId]);
+    
+    return this._parseSession(session);
   }
 }
 

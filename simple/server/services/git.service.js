@@ -272,6 +272,43 @@ export class GitService {
       await this.command(projectPath, 'git stash pop');
     }
   }
+
+  async getBranchStatus(projectPath, currentBranch, baseBranch = 'origin/main') {
+    try {
+      // Fetch latest from remote
+      await this.command(projectPath, 'git fetch origin');
+      
+      // Get ahead count (commits in current branch not in base)
+      const aheadResult = await this.command(projectPath, 
+        `git rev-list --count ${baseBranch}..${currentBranch}`);
+      const ahead = parseInt(aheadResult.output.trim(), 10) || 0;
+      
+      // Get behind count (commits in base not in current branch)
+      const behindResult = await this.command(projectPath, 
+        `git rev-list --count ${currentBranch}..${baseBranch}`);
+      const behind = parseInt(behindResult.output.trim(), 10) || 0;
+      
+      // Check for conflicts by attempting a merge
+      let hasConflicts = false;
+      if (behind > 0) {
+        const conflictCheck = await this.checkMergeConflicts(projectPath, baseBranch);
+        hasConflicts = conflictCheck.hasConflicts;
+      }
+      
+      return {
+        ahead,
+        behind,
+        hasConflicts
+      };
+    } catch (error) {
+      console.error('Error getting branch status:', error);
+      return {
+        ahead: 0,
+        behind: 0,
+        hasConflicts: false
+      };
+    }
+  }
 }
 
 export default {

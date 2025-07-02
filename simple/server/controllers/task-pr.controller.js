@@ -33,6 +33,13 @@ export class TaskPullRequestController {
         });
       }
       
+      // Trigger git status update check after push
+      if (req.app.locals.gitStatusMonitor) {
+        req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+          console.error('Failed to update git status after push:', err)
+        );
+      }
+      
       // Create PR using GitHub CLI
       const prTitle = task.name || `Updates from task: ${task.branch}`;
       const prBody = description || `Task: ${task.name}\nBranch: ${task.branch}\n\nCreated by PocketDev`;
@@ -106,6 +113,13 @@ export class TaskPullRequestController {
           error: 'Failed to merge pull request', 
           details: mergeResult.error 
         });
+      }
+      
+      // Trigger git status update check after merge
+      if (req.app.locals.gitStatusMonitor) {
+        req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+          console.error('Failed to update git status after merge:', err)
+        );
       }
       
       // Update task status

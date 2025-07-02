@@ -27,39 +27,50 @@ export const mockTasks: Task[] = [
     title: 'Update the task view page',
     description: 'Improve the task view UI and add better status indicators',
     branch: 'feature/task-view-page',
-    status: 'working',
-    phase: 'generate',
-    engineer: 'Claude Code',
-    worktree: '/projects/17dbiode-task-7d29e028',
-    created: '2025-01-15T22:27:16Z',
-    duration: '23m',
-    hasConflicts: false,
+    worktree_path: '/projects/17dbiode-task-7d29e028',
+    created_at: '2025-01-15T22:27:16Z',
+    taskState: 'active',
+    sessionState: {
+      status: 'working',
+      lastStateChange: '2025-01-15T22:50:00Z'
+    },
+    gitStatus: {
+      ahead: 3,
+      behind: 0,
+      hasConflicts: false
+    }
   },
   {
     id: 'abc12345',
     title: 'Add user authentication',
     description: 'Implement JWT-based authentication with login/register',
     branch: 'feature/add-auth-system',
-    status: 'user-request',
-    phase: 'validate',
-    engineer: 'Claude Frontend',
-    worktree: '/projects/17dbiode-task-abc12345',
-    created: '2025-01-15T21:45:12Z',
-    duration: '1h 15m',
-    hasConflicts: true,
+    worktree_path: '/projects/17dbiode-task-abc12345',
+    created_at: '2025-01-15T21:45:12Z',
+    taskState: 'active',
+    sessionState: {
+      status: 'user-request',
+      lastStateChange: '2025-01-15T23:00:00Z'
+    },
+    gitStatus: {
+      ahead: 5,
+      behind: 2,
+      hasConflicts: true
+    }
   },
   {
     id: 'def45678',
     title: 'Fix memory leak in worker',
     description: 'Investigate and fix memory leak in background worker process',
     branch: 'fix/memory-leak-worker',
-    status: 'idle',
-    phase: 'merge',
-    engineer: 'Aider',
-    worktree: '/projects/17dbiode-task-def45678',
-    created: '2025-01-15T18:30:00Z',
-    duration: '2h 30m',
-    hasConflicts: false,
+    worktree_path: '/projects/17dbiode-task-def45678',
+    created_at: '2025-01-15T18:30:00Z',
+    taskState: 'merged',
+    sessionState: {
+      status: 'idle',
+      lastStateChange: '2025-01-15T21:00:00Z'
+    },
+    merged_at: '2025-01-15T21:00:00Z'
   },
 ];
 

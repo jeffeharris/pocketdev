@@ -12,6 +12,11 @@ export default defineConfig({
         target: 'http://project-manager:3005',
         changeOrigin: true,
       },
+      '/ws': {
+        target: 'ws://project-manager:3005',
+        ws: true,
+        changeOrigin: true,
+      },
       '/shelltender-terminal.html': {
         target: 'http://project-manager:3005',
         changeOrigin: true,

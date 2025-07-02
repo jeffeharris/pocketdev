@@ -7,10 +7,12 @@
 import { AIStateTracker, AIStates } from './ai-state-tracker.js';
 
 export class AISessionMonitor {
-  constructor(sessionManager, wsServer, notificationService) {
+  constructor(sessionManager, wsServer, notificationService, wsEventService, models) {
     this.sessionManager = sessionManager;
     this.wsServer = wsServer;
     this.notificationService = notificationService;
+    this.wsEventService = wsEventService;
+    this.models = models;
     this.stateTrackers = new Map(); // sessionId -> AIStateTracker
     this.patternMatchers = new Map(); // pattern name -> config
   }
@@ -489,27 +491,29 @@ export class AISessionMonitor {
    * Broadcast state update to WebSocket clients
    */
   broadcastStateUpdate(sessionId, status) {
-    // Send through Shelltender's WebSocket server
-    if (this.wsServer && this.wsServer.sendToAll) {
-      this.wsServer.sendToAll({
-        type: 'ai_state_update',
-        sessionId,
-        data: status
+    // Extract task ID from session ID (format: task-123)
+    const taskId = sessionId.replace('task-', '');
+    
+    // Use our WebSocket event service for broadcasting
+    if (this.wsEventService) {
+      this.wsEventService.sendAIStateUpdate(taskId, {
+        status: status.currentState,
+        lastStateChange: new Date().toISOString()
       });
-    } else if (this.wsServer && this.wsServer.clients) {
-      // Try direct client broadcast
-      this.wsServer.clients.forEach(client => {
-        if (client.readyState === 1) { // WebSocket.OPEN
-          client.send(JSON.stringify({
-            type: 'ai_state_update',
-            sessionId,
-            data: status
-          }));
+    }
+    
+    // Async database update (non-blocking)
+    if (this.models && this.models.sessions) {
+      setImmediate(async () => {
+        try {
+          await this.models.sessions.updateAIState(taskId, status.currentState);
+        } catch (error) {
+          console.error(`Failed to update AI state in DB for task ${taskId}:`, error);
         }
       });
-    } else {
-      console.log('AI state update:', sessionId, status.currentState);
     }
+    
+    console.log('AI state update:', sessionId, status.currentState);
   }
 
   /**

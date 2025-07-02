@@ -246,10 +246,24 @@ export class TaskGitController {
               has_commits_since_merge: true
             });
           }
+          
+          // Trigger git status update after commit
+          if (result.success && req.app.locals.gitStatusMonitor) {
+            req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+              console.error('Failed to update git status after commit:', err)
+            );
+          }
           break;
           
         case 'push':
           result = await this.gitService.push(task.worktree_path, task.branch);
+          
+          // Trigger git status update after push
+          if (result.success && req.app.locals.gitStatusMonitor) {
+            req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+              console.error('Failed to update git status after push:', err)
+            );
+          }
           break;
           
         case 'pr':

@@ -2,7 +2,7 @@ import { createServer } from 'http';
 import { promises as fs } from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import config from './config/index.js';
 import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
@@ -14,6 +14,8 @@ import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
+import { initializeWebSocketEvents } from './services/websocket-events.js';
+import { initializeGitStatusMonitor } from './git-status-monitor.js';
 
 // Global instances
 let db = null;
@@ -89,8 +91,38 @@ async function loadSettings() {
   }
 }
 
+// Handle WebSocket messages from clients
+function handleWebSocketMessage(ws, data) {
+  switch (data.type) {
+    case 'subscribe':
+      // Subscribe to updates for a specific project or task
+      if (data.projectId) {
+        ws.subscriptions.add(`project:${data.projectId}`);
+        console.log(`Client ${ws.clientId} subscribed to project ${data.projectId}`);
+      }
+      if (data.taskId) {
+        ws.subscriptions.add(`task:${data.taskId}`);
+        console.log(`Client ${ws.clientId} subscribed to task ${data.taskId}`);
+      }
+      break;
+      
+    case 'unsubscribe':
+      // Unsubscribe from updates
+      if (data.projectId) {
+        ws.subscriptions.delete(`project:${data.projectId}`);
+      }
+      if (data.taskId) {
+        ws.subscriptions.delete(`task:${data.taskId}`);
+      }
+      break;
+      
+    default:
+      console.log(`Unknown message type: ${data.type}`);
+  }
+}
+
 // Initialize WebSocket and monitoring
-async function initializeMonitoring(server) {
+async function initializeMonitoring(server, wsEventService, models) {
   try {
     console.log('Initializing AI monitoring with Shelltender Monitor Mode...');
     
@@ -106,8 +138,8 @@ async function initializeMonitoring(server) {
     // Initialize notification service
     notificationService = new NotificationService(wsClient);
     
-    // Create AI monitor with the WebSocket adapter
-    aiMonitor = new AISessionMonitor(wsAdapter, wsClient, notificationService);
+    // Create AI monitor with the WebSocket adapter, event service, and models
+    aiMonitor = new AISessionMonitor(wsAdapter, wsClient, notificationService, wsEventService, models);
     
     // Register AI patterns
     aiMonitor.registerPatterns(wsClient);
@@ -157,6 +189,11 @@ async function initializeMonitoring(server) {
     app.locals.wsAdapter = wsAdapter;
     
     console.log('AI monitoring initialized successfully');
+    
+    // Initialize git status monitoring
+    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService);
+    app.locals.gitStatusMonitor = gitStatusMonitor;
+    console.log('Git status monitoring initialized');
   } catch (error) {
     console.warn('Failed to initialize monitoring:', error.message);
     console.warn('Server will continue without AI monitoring features');
@@ -180,12 +217,52 @@ async function start() {
     // Create HTTP server
     const server = createServer(app);
     
+    // Create WebSocket server for app-level real-time updates
+    const wss = new WebSocketServer({ server, path: '/ws' });
+    
+    // Store WebSocket server in app locals for access by services
+    app.locals.wss = wss;
+    
+    // Initialize WebSocket event service
+    const wsEventService = initializeWebSocketEvents(wss);
+    app.locals.wsEventService = wsEventService;
+    
+    // Handle WebSocket connections
+    wss.on('connection', (ws, req) => {
+      console.log('New WebSocket client connected');
+      
+      // Store client metadata
+      ws.clientId = Math.random().toString(36).substr(2, 9);
+      ws.subscriptions = new Set();
+      
+      ws.on('message', (message) => {
+        try {
+          const data = JSON.parse(message);
+          handleWebSocketMessage(ws, data);
+        } catch (error) {
+          console.error('Invalid WebSocket message:', error);
+        }
+      });
+      
+      ws.on('close', () => {
+        console.log(`WebSocket client ${ws.clientId} disconnected`);
+      });
+      
+      ws.on('error', (error) => {
+        console.error(`WebSocket client ${ws.clientId} error:`, error);
+      });
+      
+      // Send initial connection success
+      ws.send(JSON.stringify({ type: 'connected', clientId: ws.clientId }));
+    });
+    
     // Initialize monitoring
-    await initializeMonitoring(server);
+    await initializeMonitoring(server, wsEventService, models);
     
     // Start listening
     server.listen(config.port, () => {
       console.log(`Project Manager API running on port ${config.port}`);
+      console.log(`WebSocket server running on ws://${config.host || '0.0.0.0'}:${config.port}/ws`);
       console.log(`Projects directory: ${config.projectsDir}`);
       console.log(`Database: ${config.dbPath}`);
       console.log(`Connected to Shelltender service at ${config.shelltenderWsUrl}`);

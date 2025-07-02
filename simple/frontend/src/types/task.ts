@@ -1,23 +1,46 @@
 export type TaskStatus = 'idle' | 'user-request' | 'thinking' | 'working' | 'not-started';
 export type TaskPhase = 'generate' | 'validate' | 'merge';
+export type TaskState = 'active' | 'merged' | 'archived';
+
+export interface SessionState {
+  status: TaskStatus;
+  lastStateChange: string | null;
+}
+
+export interface GitStatus {
+  ahead: number;
+  behind: number;
+  hasConflicts: boolean;
+}
 
 export interface Task {
   id: string;
-  title: string;
+  title: string;  // 'name' from backend
   description: string;
   branch: string;
-  status: TaskStatus;
-  phase?: TaskPhase;
-  engineer: string;
-  worktree: string;
-  worktree_path?: string; // Full path to the worktree directory
-  created: string;
-  duration: string;
-  hasConflicts?: boolean;
+  worktree_path: string;
+  created_at: string;  // 'created' in frontend
+  
+  // Task lifecycle state
+  taskState: TaskState;
+  
+  // AI session state
+  sessionState: SessionState;
+  
+  // Git status (optional, added by frontend)
+  gitStatus?: GitStatus;
+  
+  // Container/validation fields (optional)
   containerId?: string;
   validationStatus?: string;
   previewUrl?: string;
   prUrl?: string;
+  
+  // Backend fields we might need
+  project_id?: string;
+  is_archived?: boolean;
+  merged_at?: string;
+  has_uncommitted_changes?: boolean;
 }
 
 export interface ExtendedTask extends Task {

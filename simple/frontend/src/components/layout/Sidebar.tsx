@@ -100,7 +100,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 task={task}
                 isActive={task.id === currentTask.id}
                 onSelect={onTaskSelect}
-                needsAttention={task.status === 'user-request'}
               />
             ))}
           </div>

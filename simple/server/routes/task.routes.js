@@ -26,6 +26,9 @@ export default function createTaskRoutes(models, projectsDir) {
   // Get task details
   router.get('/:taskId', (req, res) => taskController.getTask(req, res));
 
+  // Get task status (for real-time updates)
+  router.get('/:taskId/status', (req, res) => taskController.getTaskStatus(req, res));
+
   // Git operations on task (legacy endpoint)
   router.post('/:taskId/git', (req, res) => gitController.gitOperation(req, res));
 

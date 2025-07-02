@@ -17,17 +17,17 @@ const statusConfig = {
   'user-request': {
     icon: User,
     label: 'User Request',
-    colorClass: 'bg-purple-100 text-purple-700 border-purple-300',
+    colorClass: 'bg-purple-100 text-purple-700 border-purple-300 animate-pulse',
   },
   thinking: {
     icon: Clock,
     label: 'Thinking',
-    colorClass: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+    colorClass: 'bg-yellow-100 text-yellow-700 border-yellow-300 animate-pulse',
   },
   working: {
     icon: Activity,
     label: 'Working',
-    colorClass: 'bg-yellow-100 text-yellow-700 border-yellow-300 animate-pulse',
+    colorClass: 'bg-green-100 text-green-700 border-green-300',
   },
   'not-started': {
     icon: Clock,
