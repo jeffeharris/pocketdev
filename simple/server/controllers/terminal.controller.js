@@ -80,8 +80,24 @@ export async function createTerminalSession(req, res, next) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    // Create or get existing session
-    const result = await createTaskSession(taskId, task.worktree_path);
+    // Get git config from settings
+    const gitUserName = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    const gitConfig = {
+      name: gitUserName?.value || '',
+      email: gitUserEmail?.value || ''
+    };
+    
+    // Create or get existing session with git config
+    const result = await createTaskSession(taskId, task.worktree_path, {}, gitConfig);
     
     res.json({
       sessionId: result.id,

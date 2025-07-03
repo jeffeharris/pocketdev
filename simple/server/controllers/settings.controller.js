@@ -24,6 +24,20 @@ export async function getSettings(req, res, next) {
       settings.hasGithubToken = false;
     }
     
+    // Get Git user settings
+    const gitUserName = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    settings.gitUserName = gitUserName?.value || '';
+    settings.gitUserEmail = gitUserEmail?.value || '';
+    
     // Check if settings file exists
     try {
       const fileSettings = await fs.readFile(config.settingsPath, 'utf8');
@@ -47,17 +61,32 @@ export async function getSettings(req, res, next) {
 export async function updateSettings(req, res, next) {
   try {
     const models = req.app.locals.models;
-    const { githubToken } = req.body;
+    const { githubToken, gitUserName, gitUserEmail } = req.body;
     
     if (!githubToken) {
       return res.status(400).json({ error: 'GitHub token is required' });
     }
     
-    // Save to database
+    // Save GitHub token to database
     await models.db.run(
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
       ['github_token', githubToken]
     );
+    
+    // Save Git user settings if provided
+    if (gitUserName !== undefined) {
+      await models.db.run(
+        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+        ['git_user_name', gitUserName || '']
+      );
+    }
+    
+    if (gitUserEmail !== undefined) {
+      await models.db.run(
+        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+        ['git_user_email', gitUserEmail || '']
+      );
+    }
     
     // Save to file for backward compatibility
     const settings = { githubToken };
@@ -70,7 +99,9 @@ export async function updateSettings(req, res, next) {
     
     res.json({ 
       message: 'Settings updated successfully',
-      hasGithubToken: true 
+      hasGithubToken: true,
+      gitUserName: gitUserName || '',
+      gitUserEmail: gitUserEmail || ''
     });
   } catch (error) {
     next(error);
@@ -92,16 +123,25 @@ export async function testGithubToken(req, res, next) {
     }
     
     try {
-      // Test the token by getting user info
-      const user = await github.getCurrentUser();
-      res.json({
-        valid: true,
-        user: {
-          login: user.login,
-          name: user.name,
-          email: user.email
-        }
-      });
+      // Test the token using validateToken method
+      const result = await github.validateToken();
+      if (result.valid) {
+        // Get more user info with a direct API call
+        const userInfo = await github.request('/user');
+        res.json({
+          valid: true,
+          user: {
+            login: userInfo.login,
+            name: userInfo.name || userInfo.login,
+            email: userInfo.email || ''
+          }
+        });
+      } else {
+        res.json({
+          valid: false,
+          error: result.error
+        });
+      }
     } catch (error) {
       res.json({
         valid: false,

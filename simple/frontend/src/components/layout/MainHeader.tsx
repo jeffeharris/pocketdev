@@ -5,6 +5,7 @@ import type { Task } from '../../types/task';
 import { WorkerStatus } from '../../types/task';
 import type { Project } from '../../types/project';
 import { TaskListItem } from '../task/TaskListItem';
+import { SettingsModal } from '../settings/SettingsModal';
 
 interface MainHeaderProps {
   project: Project;
@@ -23,6 +24,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const [showTaskSwitcher, setShowTaskSwitcher] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const pendingValidation = tasks.filter(t => t.sessionState?.status === WorkerStatus.Waiting).length;
 
@@ -91,7 +93,10 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
               <span className="hidden sm:inline">Task Actions</span>
             </button>
 
-            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer"
+            >
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Settings</span>
             </button>
@@ -103,6 +108,12 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
       {pendingValidation > 0 && (
         <AttentionBar count={pendingValidation} />
       )}
+      
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </div>
   );
 };

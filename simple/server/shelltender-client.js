@@ -12,9 +12,25 @@ class ShelltenderClient {
   }
 
   // Create a new task session
-  async createTaskSession(taskId, worktreePath, metadata = {}) {
+  async createTaskSession(taskId, worktreePath, metadata = {}, gitConfig = null) {
     try {
       const sessionId = `task-${taskId}`;
+      
+      // Build environment variables
+      const env = {
+        TASK_ID: taskId,
+        WORKTREE_PATH: worktreePath
+      };
+      
+      // Add git config if provided
+      if (gitConfig && gitConfig.name) {
+        env.GIT_AUTHOR_NAME = gitConfig.name;
+        env.GIT_COMMITTER_NAME = gitConfig.name;
+      }
+      if (gitConfig && gitConfig.email) {
+        env.GIT_AUTHOR_EMAIL = gitConfig.email;
+        env.GIT_COMMITTER_EMAIL = gitConfig.email;
+      }
       
       const response = await fetch(`${this.apiUrl}/sessions`, {
         method: 'POST',
@@ -24,10 +40,7 @@ class ShelltenderClient {
           name: `Task ${taskId}`,
           command: 'bash',
           cwd: worktreePath,
-          env: {
-            TASK_ID: taskId,
-            WORKTREE_PATH: worktreePath
-          },
+          env,
           metadata: {
             taskId,
             worktreePath,
@@ -184,8 +197,8 @@ const shelltenderApiUrl = process.env.SHELLTENDER_API_URL || 'http://localhost:8
 const shelltenderClient = new ShelltenderClient(shelltenderApiUrl);
 
 // Export the same interface as before to minimize changes
-export async function createTaskSession(taskId, worktreePath, metadata = {}) {
-  return shelltenderClient.createTaskSession(taskId, worktreePath, metadata);
+export async function createTaskSession(taskId, worktreePath, metadata = {}, gitConfig = null) {
+  return shelltenderClient.createTaskSession(taskId, worktreePath, metadata, gitConfig);
 }
 
 export async function executeCommand(sessionId, command) {

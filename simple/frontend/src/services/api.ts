@@ -3,6 +3,7 @@ import { TaskState, WorkerStatus } from '../types/task';
 import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
+import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
 
 const API_BASE = '/api';
@@ -207,6 +208,63 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // Settings endpoints
+  async getSettings(): Promise<Settings> {
+    if (USE_MOCKS) {
+      return {
+        hasGithubToken: false,
+        gitUserName: '',
+        gitUserEmail: ''
+      };
+    }
+    return this.fetch<Settings>('/settings');
+  }
+
+  async updateSettings(settings: UpdateSettingsDTO): Promise<any> {
+    if (USE_MOCKS) {
+      return { message: 'Settings updated successfully', hasGithubToken: true };
+    }
+    return this.fetch('/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async testGithubToken(): Promise<GithubTestResult> {
+    if (USE_MOCKS) {
+      return { 
+        valid: true, 
+        user: { 
+          login: 'mockuser', 
+          name: 'Mock User', 
+          email: 'mock@example.com' 
+        } 
+      };
+    }
+    return this.fetch<GithubTestResult>('/settings/test-github', {
+      method: 'POST',
+    });
+  }
+
+  async getSystemInfo(): Promise<any> {
+    if (USE_MOCKS) {
+      return { 
+        projectsDir: '/projects',
+        nodeVersion: 'v18.0.0',
+        platform: 'linux'
+      };
+    }
+    return this.fetch('/settings/system-info');
+  }
 }
 
 export const api = new ApiService();
+
+// Export settings API for convenience
+export const settingsApi = {
+  getSettings: () => api.getSettings(),
+  updateSettings: (settings: UpdateSettingsDTO) => api.updateSettings(settings),
+  testGithubToken: () => api.testGithubToken(),
+  getSystemInfo: () => api.getSystemInfo()
+};
