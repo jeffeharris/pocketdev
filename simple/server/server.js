@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createServer } from 'http';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -71,16 +72,35 @@ async function initializeDatabase() {
 // Load settings
 async function loadSettings() {
   try {
+    // First check database for GitHub token
+    const githubTokenSetting = await app.locals.models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['github_token']
+    );
+    
+    if (githubTokenSetting?.value) {
+      // Import decrypt function
+      const { decrypt } = await import('./utils/crypto.js');
+      const decryptedToken = decrypt(githubTokenSetting.value);
+      const token = decryptedToken || githubTokenSetting.value; // Fallback to raw value if decryption fails
+      
+      github = new GitHubAPI(token);
+      app.locals.github = github;
+      console.log('GitHub integration enabled from database');
+      return;
+    }
+    
+    // Then check settings file
     const settingsData = await fs.readFile(config.settingsPath, 'utf8');
     const settings = JSON.parse(settingsData);
     
     if (settings.githubToken) {
       github = new GitHubAPI(settings.githubToken);
       app.locals.github = github;
-      console.log('GitHub integration enabled from settings');
+      console.log('GitHub integration enabled from settings file');
     }
   } catch (error) {
-    console.log('No settings file found or error loading:', error.message);
+    console.log('No settings found or error loading:', error.message);
     
     // Fall back to environment variable
     if (config.githubToken) {

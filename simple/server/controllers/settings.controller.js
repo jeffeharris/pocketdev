@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import config from '../config/index.js';
+import { encrypt, decrypt } from '../utils/crypto.js';
 
 /**
  * Get current settings
@@ -18,8 +19,16 @@ export async function getSettings(req, res, next) {
     );
     
     if (githubTokenSetting) {
-      settings.githubToken = githubTokenSetting.value;
-      settings.hasGithubToken = true;
+      // Decrypt the token before sending
+      const decryptedToken = decrypt(githubTokenSetting.value);
+      if (decryptedToken) {
+        settings.githubToken = decryptedToken;
+        settings.hasGithubToken = true;
+      } else {
+        // Handle case where decryption fails (e.g., old unencrypted token)
+        settings.githubToken = githubTokenSetting.value;
+        settings.hasGithubToken = true;
+      }
     } else {
       settings.hasGithubToken = false;
     }
@@ -67,10 +76,11 @@ export async function updateSettings(req, res, next) {
       return res.status(400).json({ error: 'GitHub token is required' });
     }
     
-    // Save GitHub token to database
+    // Encrypt and save GitHub token to database
+    const encryptedToken = encrypt(githubToken);
     await models.db.run(
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-      ['github_token', githubToken]
+      ['github_token', encryptedToken]
     );
     
     // Save Git user settings if provided

@@ -39,7 +39,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.project-manager
+      dockerfile: Dockerfile.backend
     container_name: pocketdev-backend
     working_dir: /app
     depends_on:
@@ -60,6 +60,7 @@ services:
       - SHELLTENDER_API_URL=http://shelltender:8081
       - SHELLTENDER_WS_URL=ws://shelltender:8080
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     command: >
       sh -c "cd server && node server.js"
     restart: unless-stopped
@@ -73,7 +74,7 @@ services:
   frontend-legacy:
     build:
       context: .
-      dockerfile: Dockerfile.project-manager
+      dockerfile: Dockerfile.backend
     container_name: pocketdev-frontend-legacy
     working_dir: /app/shelltender-client
     depends_on:
