@@ -7,7 +7,7 @@ import { CreateTaskModal } from './CreateTaskModal';
 import type { Task, CreateTaskDTO } from '../../types/task';
 import type { Project } from '../../types/project';
 import { api } from '../../services/api';
-import { mockTasks, mockProjects } from '../../services/mockData';
+import { useWebSocketContext } from '../../contexts/WebSocketContext';
 
 interface TaskWorkspaceProps {
   projectId: string;
@@ -29,6 +29,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   // Track which terminals have been initialized
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
   
+  // WebSocket for real-time updates
+  const { subscribe, unsubscribe } = useWebSocketContext();
+  
   const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0];
   
   // Load project and tasks on mount
@@ -44,9 +47,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         setTasks(tasksData);
       } catch (error) {
         console.error('Failed to load data:', error);
-        // Fallback to mock data if API fails
-        setProject(mockProjects[0]);
-        setTasks(mockTasks);
+        // Don't use mock data - show error state instead
+        setProject(null);
+        setTasks([]);
       } finally {
         setLoading(false);
       }
@@ -54,6 +57,37 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     
     loadData();
   }, [projectId]);
+  
+  // Subscribe to WebSocket updates for git status
+  useEffect(() => {
+    // Handler for git status updates
+    const handleGitStatusUpdate = (data: any) => {
+      if (data.type === 'git_status_update' && data.data) {
+        const { taskId: updatedTaskId, gitStatus } = data.data;
+        
+        // Update the task's git status
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === updatedTaskId 
+              ? { ...task, gitStatus } 
+              : task
+          )
+        );
+      }
+    };
+    
+    // Subscribe to all task updates
+    tasks.forEach(task => {
+      subscribe('task', task.id, handleGitStatusUpdate);
+    });
+    
+    // Cleanup subscriptions
+    return () => {
+      tasks.forEach(task => {
+        unsubscribe('task', task.id, handleGitStatusUpdate);
+      });
+    };
+  }, [tasks, subscribe, unsubscribe]);
   
   // Update active task when taskId prop changes
   useEffect(() => {
@@ -105,10 +139,21 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     }
   };
 
-  if (loading || !project) {
+  if (loading) {
     return (
       <div className="h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to connect to backend</h2>
+          <p className="text-gray-600">Please check that the backend server is running.</p>
+        </div>
       </div>
     );
   }
@@ -126,6 +171,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
         <Sidebar
+          projectId={projectId}
           currentTask={activeTask}
           allTasks={tasks}
           onTaskSelect={handleTaskChange}

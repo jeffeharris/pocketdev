@@ -9,6 +9,24 @@ export class TaskGitController {
     this.gitService = new GitService();
   }
 
+  async getGitConfig() {
+    // Get git config from settings
+    const gitUserName = await this.models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await this.models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    return {
+      name: gitUserName?.value || 'PocketDev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
+    };
+  }
+
   /**
    * Get detailed git status
    */
@@ -159,6 +177,82 @@ export class TaskGitController {
   }
 
   /**
+   * Get full diff for all changes in a task
+   */
+  async getTaskDiff(req, res) {
+    const { projectId, taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task || task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      // Get list of changed files with their types
+      const statusResult = await this.gitService.getStatus(task.worktree_path);
+      const files = [];
+      
+      // Parse git status output
+      const lines = statusResult.output.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        const [status, ...pathParts] = line.trim().split(/\s+/);
+        const filePath = pathParts.join(' ');
+        
+        if (!filePath) continue;
+        
+        let type = 'modified';
+        if (status.includes('A') || status === '??') type = 'added';
+        else if (status.includes('D')) type = 'deleted';
+        else if (status.includes('M')) type = 'modified';
+        else if (status.includes('R')) type = 'renamed';
+        
+        // Get diff for this file
+        let diff = '';
+        let additions = 0;
+        let deletions = 0;
+        
+        try {
+          // For untracked files, show as new file
+          if (status === '??') {
+            const content = await this.gitService.command(task.worktree_path, `cat "${filePath}"`);
+            const lines = content.output.split('\n');
+            diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
+            lines.forEach(line => {
+              diff += `+${line}\n`;
+            });
+            additions = lines.length;
+          } else {
+            // Get standard diff
+            const diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${filePath}"`);
+            diff = diffResult.output;
+            
+            // Count additions/deletions
+            const diffLines = diff.split('\n');
+            diffLines.forEach(line => {
+              if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+              else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+            });
+          }
+        } catch (error) {
+          console.warn('Could not get diff for:', filePath, error);
+        }
+        
+        files.push({
+          path: filePath,
+          type,
+          additions,
+          deletions,
+          diff
+        });
+      }
+      
+      res.json({ files });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Get diff for a specific file
    */
   async getFileDiff(req, res) {
@@ -212,6 +306,17 @@ export class TaskGitController {
   /**
    * Perform git operations on a task
    */
+  /**
+   * Trigger git status update after operations that change git state
+   */
+  async triggerStatusUpdate(taskId, req) {
+    if (req.app.locals.gitStatusMonitor) {
+      req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+        console.error(`Failed to update git status for task ${taskId}:`, err)
+      );
+    }
+  }
+
   async gitOperation(req, res) {
     const { projectId, taskId } = req.params;
     const { operation, message, files } = req.body;
@@ -224,27 +329,34 @@ export class TaskGitController {
       
       await this.models.projects.updateLastAccessed(projectId);
       
+      // Get git config for this operation
+      const gitConfig = await this.getGitConfig();
+      const gitService = new GitService(this.gitService.githubToken, gitConfig);
+      
       let result;
+      
+      // Operations that should trigger status update
+      const statusUpdateOperations = ['add', 'commit', 'push', 'pull', 'merge', 'rebase', 'reset', 'checkout'];
       
       switch (operation) {
         case 'status':
-          result = await this.gitService.getStatus(task.worktree_path);
+          result = await gitService.getStatus(task.worktree_path);
           break;
           
         case 'diff':
-          result = await this.gitService.getDiff(task.worktree_path);
+          result = await gitService.getDiff(task.worktree_path);
           break;
           
         case 'add':
           const filesToAdd = files || '.';
-          result = await this.gitService.add(task.worktree_path, filesToAdd);
+          result = await gitService.add(task.worktree_path, filesToAdd);
           break;
           
         case 'commit':
           if (!message) {
             return res.status(400).json({ error: 'Commit message required' });
           }
-          result = await this.gitService.commit(task.worktree_path, message);
+          result = await gitService.commit(task.worktree_path, message);
           
           // If task was merged, mark that it has commits since merge
           if (result.success && task.merge_commit_sha) {
@@ -252,30 +364,16 @@ export class TaskGitController {
               has_commits_since_merge: true
             });
           }
-          
-          // Trigger git status update after commit
-          if (result.success && req.app.locals.gitStatusMonitor) {
-            req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
-              console.error('Failed to update git status after commit:', err)
-            );
-          }
           break;
           
         case 'push':
-          result = await this.gitService.push(task.worktree_path, task.branch);
-          
-          // Trigger git status update after push
-          if (result.success && req.app.locals.gitStatusMonitor) {
-            req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
-              console.error('Failed to update git status after push:', err)
-            );
-          }
+          result = await gitService.push(task.worktree_path, task.branch);
           break;
           
         case 'pr':
           const prTitle = message || `Updates from task: ${task.name}`;
           const project = await this.models.projects.findById(task.project_id);
-          result = await this.gitService.createPullRequest(
+          result = await gitService.createPullRequest(
             task.worktree_path,
             prTitle,
             `Created by Claude Code - Task: ${task.name}`,
@@ -285,11 +383,16 @@ export class TaskGitController {
           
         case 'log':
           const logArgs = req.body.args || '--oneline -n 10';
-          result = await this.gitService.log(task.worktree_path, logArgs);
+          result = await gitService.log(task.worktree_path, logArgs);
           break;
           
         default:
           return res.status(400).json({ error: 'Invalid operation' });
+      }
+      
+      // Trigger status update for operations that change git state
+      if (result.success && statusUpdateOperations.includes(operation)) {
+        await this.triggerStatusUpdate(taskId, req);
       }
       
       res.json({ success: result.success, output: result.output, error: result.error });

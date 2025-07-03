@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { GitBranch, Plus, Activity } from 'lucide-react';
 import type { Project } from '../types/project';
 import { api } from '../services/api';
+import { AddProjectModal } from '../components/project/AddProjectModal';
 
 export const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     loadProjects();

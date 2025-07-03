@@ -17,6 +17,17 @@ export class TaskController {
   }
 
   /**
+   * Trigger git status update after operations that change git state
+   */
+  async triggerStatusUpdate(taskId, req) {
+    if (req.app.locals.gitStatusMonitor) {
+      req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+        console.error(`Failed to update git status for task ${taskId}:`, err)
+      );
+    }
+  }
+
+  /**
    * Create a new task (worktree) within a project
    */
   async createTask(req, res) {
@@ -437,6 +448,11 @@ export class TaskController {
           }
         }
         
+        // Trigger status update if successful
+        if (result.success) {
+          await this.triggerStatusUpdate(taskId, req);
+        }
+        
         res.json({ 
           success: result.success, 
           output: result.output,
@@ -599,6 +615,9 @@ Original task: ${task.name}`;
         
         // Update project last accessed
         await this.models.projects.updateLastAccessed(project.id);
+        
+        // Trigger status update for the task
+        await this.triggerStatusUpdate(taskId, req);
         
         res.json({
           success: true,

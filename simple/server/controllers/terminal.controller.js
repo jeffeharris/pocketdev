@@ -92,12 +92,25 @@ export async function createTerminalSession(req, res, next) {
     );
     
     const gitConfig = {
-      name: gitUserName?.value || '',
-      email: gitUserEmail?.value || ''
+      name: gitUserName?.value || 'Pocketdev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
     };
     
     // Create or get existing session with git config
     const result = await createTaskSession(taskId, task.worktree_path, {}, gitConfig);
+    
+    // Configure git in the session if we have user info
+    if (gitConfig.name && gitConfig.email) {
+      const sessionId = result.id;
+      try {
+        // Set git config in the session
+        await executeCommand(sessionId, `git config user.name "${gitConfig.name}"`);
+        await executeCommand(sessionId, `git config user.email "${gitConfig.email}"`);
+      } catch (error) {
+        console.error('Failed to configure git in session:', error);
+        // Don't fail the whole request if git config fails
+      }
+    }
     
     res.json({
       sessionId: result.id,

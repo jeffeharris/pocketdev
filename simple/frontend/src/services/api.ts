@@ -141,6 +141,44 @@ class ApiService {
     return this.fetch<ChangedFile[]>(`/tasks/${taskId}/files/changed`);
   }
 
+  async getTaskDiff(projectId: string, taskId: string): Promise<{ files: Array<{
+    path: string;
+    type: 'added' | 'modified' | 'deleted' | 'renamed';
+    additions: number;
+    deletions: number;
+    diff: string;
+  }> }> {
+    if (USE_MOCKS) {
+      // Return mock diff data for testing
+      return {
+        files: [{
+          path: 'src/components/Button.tsx',
+          type: 'modified',
+          additions: 10,
+          deletions: 2,
+          diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
+index abc123..def456 100644
+--- a/src/components/Button.tsx
++++ b/src/components/Button.tsx
+@@ -1,5 +1,10 @@
+-export const Button = ({ children }) => {
++interface ButtonProps {
++  children: React.ReactNode;
++  onClick: () => void;
++}
++
++export const Button: React.FC<ButtonProps> = ({ children, onClick }) => {
+   return (
+-    <button>{children}</button>
++    <button onClick={onClick}>{children}</button>
+   );
+ };`
+        }]
+      };
+    }
+    return this.fetch<{ files: any[] }>(`/projects/${projectId}/tasks/${taskId}/git/diff`);
+  }
+
   async checkConflicts(taskId: string): Promise<boolean> {
     if (USE_MOCKS) return Math.random() > 0.7; // 30% chance of conflicts
     const result = await this.fetch<{ hasConflicts: boolean }>(`/tasks/${taskId}/git/check-conflicts`);
@@ -187,6 +225,59 @@ class ApiService {
     await this.fetch(`/tasks/${taskId}/containers`, {
       method: 'DELETE',
     });
+  }
+
+  // Git operations
+  async gitOperation(projectId: string, taskId: string, operation: string, options?: {
+    message?: string;
+    files?: string | string[];
+    args?: string;
+  }): Promise<{ success: boolean; output: string; error?: string }> {
+    if (USE_MOCKS) {
+      return { success: true, output: `Mock ${operation} successful` };
+    }
+    return this.fetch<{ success: boolean; output: string; error?: string }>(
+      `/projects/${projectId}/tasks/${taskId}/git`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ operation, ...options }),
+      }
+    );
+  }
+
+  async stageAndCommit(projectId: string, taskId: string, message: string, files?: string | string[]): Promise<{ success: boolean; output: string; error?: string }> {
+    // First stage files
+    const addResult = await this.gitOperation(projectId, taskId, 'add', { files: files || '.' });
+    if (!addResult.success) {
+      return addResult;
+    }
+    
+    // Then commit
+    return this.gitOperation(projectId, taskId, 'commit', { message });
+  }
+
+  async updateBranch(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
+    if (USE_MOCKS) {
+      return { success: true, output: 'Mock update successful' };
+    }
+    return this.fetch<{ success: boolean; output: string; error?: string }>(
+      `/projects/${projectId}/tasks/${taskId}/update`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+
+  async mergeToBase(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
+    if (USE_MOCKS) {
+      return { success: true, output: 'Mock merge successful' };
+    }
+    return this.fetch<{ success: boolean; output: string; error?: string }>(
+      `/projects/${projectId}/tasks/${taskId}/merge-to-base`,
+      {
+        method: 'POST',
+      }
+    );
   }
 
   async getContainerLogs(taskId: string): Promise<string[]> {

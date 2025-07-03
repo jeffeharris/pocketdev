@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { Projects } from './pages/Projects';
@@ -6,6 +5,9 @@ import { ProjectDetail } from './pages/ProjectDetail';
 import { TaskWorkspace } from './pages/TaskWorkspace';
 import { MergeWorkflowPrototype } from './components/prototype/MergeWorkflowPrototype';
 import { MergeStatesDiagram } from './components/prototype/MergeStatesDiagram';
+import PrototypeDiffViewers from './pages/PrototypeDiffViewers';
+import PrototypeMergeConflict from './pages/PrototypeMergeConflict';
+import PrototypeMonacoMerge from './pages/PrototypeMonacoMerge';
 
 function App() {
   return (
@@ -18,6 +20,9 @@ function App() {
           <Route path="/projects/:projectId/tasks/:taskId" element={<TaskWorkspace />} />
           <Route path="/prototype/merge-workflow" element={<MergeWorkflowPrototype />} />
           <Route path="/prototype/merge-states" element={<MergeStatesDiagram />} />
+          <Route path="/prototype/diff-viewers" element={<PrototypeDiffViewers />} />
+          <Route path="/prototype/merge-conflict" element={<PrototypeMergeConflict />} />
+          <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
         </Routes>
       </Router>
     </WebSocketProvider>

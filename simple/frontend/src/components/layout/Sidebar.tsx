@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Activity, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync } from 'lucide-react';
-import { clsx } from 'clsx';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
 import { TaskStatus } from '../task/TaskStatus';
+import { DiffViewerModal } from '../diff/DiffViewerModal';
+import { CommitModal } from '../git/CommitModal';
+import { api } from '../../services/api';
 
 interface SidebarProps {
+  projectId: string;
   currentTask: Task;
   allTasks: Task[];
   onTaskSelect: (task: Task) => void;
@@ -15,6 +18,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  projectId,
   currentTask,
   allTasks,
   onTaskSelect,
@@ -23,6 +27,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [showCommitModal, setShowCommitModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const commitOptionsRef = useRef<HTMLDivElement>(null);
   const updateOptionsRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +49,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   if (collapsed) return null;
+
+  const handleCommitClick = () => {
+    setShowCommitOptions(false);
+    setShowCommitModal(true);
+  };
+
+  const handleUpdateClick = async () => {
+    setShowUpdateOptions(false);
+    setIsProcessing(true);
+    
+    try {
+      const result = await api.updateBranch(projectId, currentTask.id);
+      if (!result.success) {
+        alert(`Update failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`Update failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCreatePR = async () => {
+    setIsProcessing(true);
+    
+    try {
+      const result = await api.gitOperation(projectId, currentTask.id, 'pr', {
+        message: `${currentTask.title} - ${currentTask.description}`
+      });
+      if (result.success) {
+        // Extract PR URL from output if available
+        const prUrlMatch = result.output.match(/https:\/\/github\.com\/[^\s]+/);
+        if (prUrlMatch) {
+          window.open(prUrlMatch[0], '_blank');
+        } else {
+          alert('Pull request created successfully!');
+        }
+      } else {
+        alert(`Failed to create PR: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`Failed to create PR: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
@@ -101,11 +154,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Branch Status</span>
               <div className="text-xs">
-                {currentTask.gitStatus?.behind > 0 && (
+                {currentTask.gitStatus && currentTask.gitStatus.behind > 0 && (
                   <span className="text-orange-600">{currentTask.gitStatus.behind} behind</span>
                 )}
-                {currentTask.gitStatus?.ahead > 0 && currentTask.gitStatus?.behind > 0 && ' • '}
-                {currentTask.gitStatus?.ahead > 0 && (
+                {currentTask.gitStatus && currentTask.gitStatus.ahead > 0 && currentTask.gitStatus.behind > 0 && ' • '}
+                {currentTask.gitStatus && currentTask.gitStatus.ahead > 0 && (
                   <span className="text-blue-600">{currentTask.gitStatus.ahead} ahead</span>
                 )}
                 {(!currentTask.gitStatus?.ahead && !currentTask.gitStatus?.behind) && (
@@ -117,13 +170,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Changes</span>
               <div className="text-xs">
-                {(currentTask.gitStatus?.staged || currentTask.gitStatus?.unstaged) ? (
+                {(currentTask.gitStatus && (currentTask.gitStatus.staged || currentTask.gitStatus.unstaged)) ? (
                   <>
-                    {currentTask.gitStatus?.staged > 0 && (
+                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && (
                       <span className="text-green-600">{currentTask.gitStatus.staged} staged</span>
                     )}
-                    {currentTask.gitStatus?.staged > 0 && currentTask.gitStatus?.unstaged > 0 && ' • '}
-                    {currentTask.gitStatus?.unstaged > 0 && (
+                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && ' • '}
+                    {currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && (
                       <span className="text-amber-600">{currentTask.gitStatus.unstaged} unstaged</span>
                     )}
                   </>
@@ -139,6 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Always show diff button for layout stability */}
             <button 
               className="w-full flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm transition-all duration-200 cursor-pointer hover:bg-gray-100 hover:border-gray-400 hover:shadow-md"
+              onClick={() => setShowDiffModal(true)}
               title={
                 currentTask.gitStatus?.hasConflicts ? "View merge conflicts" :
                 currentTask.taskState === TaskState.Merged ? "View merge commit" :
@@ -183,7 +237,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <div className="relative" ref={commitOptionsRef}>
                 <div className="flex">
-                  <button className="flex-1 flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-l-lg text-sm hover:bg-amber-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                  <button 
+                    onClick={handleCommitClick}
+                    disabled={isProcessing}
+                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-l-lg text-sm hover:bg-amber-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  >
                     <GitBranch className="w-4 h-4" />
                     {staged > 0 
                       ? `Commit Staged (${staged} files)`
@@ -225,7 +283,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 return (
                   <div className="relative" ref={updateOptionsRef}>
                 <div className="flex">
-                  <button className="flex-1 flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-l-lg text-sm hover:bg-orange-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                  <button 
+                    onClick={handleUpdateClick}
+                    disabled={isProcessing}
+                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-l-lg text-sm hover:bg-orange-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  >
                     <RefreshCw className="w-4 h-4" />
                     Update Branch (Merge)
                   </button>
@@ -265,7 +327,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               
               if (isAhead && !hasUncommitted) {
                 return (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                  <button 
+                    onClick={handleCreatePR}
+                    disabled={isProcessing}
+                    className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  >
                     <GitPullRequest className="w-4 h-4" />
                     Create Pull Request
                   </button>
@@ -309,6 +375,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Diff Viewer Modal */}
+      <DiffViewerModal
+        isOpen={showDiffModal}
+        onClose={() => setShowDiffModal(false)}
+        projectId={projectId}
+        taskId={currentTask.id}
+        taskTitle={currentTask.title}
+        branch={currentTask.branch}
+      />
+
+      {/* Commit Modal */}
+      <CommitModal
+        isOpen={showCommitModal}
+        onClose={() => setShowCommitModal(false)}
+        projectId={projectId}
+        taskId={currentTask.id}
+        fileCount={(currentTask.gitStatus?.staged || 0) + (currentTask.gitStatus?.unstaged || 0) + (currentTask.gitStatus?.untracked || 0)}
+        stagedCount={currentTask.gitStatus?.staged || 0}
+        onSuccess={() => {
+          // Git status will update automatically via WebSocket
+          // The backend triggers a status check after commit
+        }}
+      />
     </div>
   );
 };

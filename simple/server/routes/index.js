@@ -7,6 +7,7 @@ import monitoringRoutes from './monitoring.routes.js';
 import uploadRoutes from './upload.routes.js';
 import terminalRoutes from './terminal.routes.js';
 import createTaskRoutes from './task.routes.js';
+import githubRoutes from './github.routes.js';
 import { TaskController } from '../controllers/task.controller.js';
 
 /**
@@ -23,6 +24,7 @@ export default function createRoutes(app) {
   router.use('/projects', projectRoutes);
   router.use('/settings', settingsRoutes);
   router.use('/monitoring', monitoringRoutes);
+  router.use('/github', githubRoutes);
   
   // Mount nested task routes under projects
   const taskRouter = createTaskRoutes(models, projectsDir);

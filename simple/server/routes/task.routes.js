@@ -55,6 +55,9 @@ export default function createTaskRoutes(models, projectsDir) {
   // Get changed files with diff details
   router.get('/:taskId/files/changed', (req, res) => gitController.getChangedFiles(req, res));
   
+  // Get full diff for all changes in the task
+  router.get('/:taskId/git/diff', (req, res) => gitController.getTaskDiff(req, res));
+  
   // Get diff for a specific file
   router.get('/:taskId/git/diff/:file(*)', (req, res) => gitController.getFileDiff(req, res));
   

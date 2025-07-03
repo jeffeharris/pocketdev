@@ -174,12 +174,30 @@ export async function cleanupWorktree(projectPath, worktreePath) {
  * GitService class for object-oriented usage
  */
 export class GitService {
-  constructor(githubToken = '') {
+  constructor(githubToken = '', gitConfig = null) {
     this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
+    this.gitConfig = gitConfig || {
+      name: 'PocketDev User',
+      email: 'user@pocketdev.local'
+    };
   }
 
   async command(projectPath, command) {
     return executeGitCommand(projectPath, command, this.githubToken);
+  }
+
+  async ensureGitConfig(projectPath) {
+    // Check if git config is already set
+    const nameResult = await this.command(projectPath, 'git config user.name');
+    const emailResult = await this.command(projectPath, 'git config user.email');
+    
+    // Set config if not already set
+    if (!nameResult.output.trim() && this.gitConfig.name) {
+      await this.command(projectPath, `git config user.name "${this.gitConfig.name}"`);
+    }
+    if (!emailResult.output.trim() && this.gitConfig.email) {
+      await this.command(projectPath, `git config user.email "${this.gitConfig.email}"`);
+    }
   }
 
   async configureCredentials(projectPath) {
@@ -255,6 +273,8 @@ export class GitService {
   }
 
   async commit(projectPath, message) {
+    // Ensure git config is set before committing
+    await this.ensureGitConfig(projectPath);
     return this.command(projectPath, `git commit -m "${message}"`);
   }
 
