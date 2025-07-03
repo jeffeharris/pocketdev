@@ -47,11 +47,17 @@ export class TaskGitController {
         filesChanged = statusResult.output.split('\n').filter(line => line.trim()).length;
       }
 
+      // Get detailed status including staged/unstaged counts
+      const detailedStatus = await this.gitService.getDetailedStatus(task.worktree_path);
+
       res.json({
         clean: cleanStatus,
         ahead: aheadBehind.ahead,
         behind: aheadBehind.behind,
         filesChanged,
+        staged: detailedStatus.staged,
+        unstaged: detailedStatus.unstaged,
+        untracked: detailedStatus.untracked,
         rawStatus: statusResult.output
       });
     } catch (error) {

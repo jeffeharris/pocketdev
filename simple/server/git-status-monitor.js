@@ -70,8 +70,8 @@ export class GitStatusMonitor {
         baseBranch
       );
       
-      // Create status key for comparison
-      const statusKey = `${status.ahead}-${status.behind}-${status.hasConflicts}`;
+      // Create status key for comparison (including staged/unstaged/untracked)
+      const statusKey = `${status.ahead}-${status.behind}-${status.hasConflicts}-${status.staged}-${status.unstaged}-${status.untracked}`;
       const lastStatusKey = this.lastStatus.get(task.id);
       
       // Only broadcast if status changed

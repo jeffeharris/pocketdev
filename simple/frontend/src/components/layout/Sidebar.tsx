@@ -1,5 +1,6 @@
-import React from 'react';
-import { GitBranch, CheckCircle, FileText, Activity, Plus, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { GitBranch, CheckCircle, FileText, Activity, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync } from 'lucide-react';
+import { clsx } from 'clsx';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -20,21 +21,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed = false,
   onCreateTask
 }) => {
+  const [showCommitOptions, setShowCommitOptions] = useState(false);
+  const [showUpdateOptions, setShowUpdateOptions] = useState(false);
+  const commitOptionsRef = useRef<HTMLDivElement>(null);
+  const updateOptionsRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (commitOptionsRef.current && !commitOptionsRef.current.contains(event.target as Node)) {
+        setShowCommitOptions(false);
+      }
+      if (updateOptionsRef.current && !updateOptionsRef.current.contains(event.target as Node)) {
+        setShowUpdateOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (collapsed) return null;
 
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
       {/* Current Task Details */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">#{currentTask.id.slice(-3)} {currentTask.title}</h2>
-          <TaskStatus 
-            workerStatus={currentTask.sessionState.status}
-            gitStatus={currentTask.gitStatus}
-            isMerged={currentTask.taskState === TaskState.Merged}
-          />
+        <div className="mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-semibold text-gray-900 text-sm">#{currentTask.id.slice(-3)} {currentTask.title}</h2>
+          </div>
+          <div className="flex items-center justify-end">
+            <TaskStatus 
+              workerStatus={currentTask.sessionState.status}
+              gitStatus={currentTask.gitStatus}
+              isMerged={currentTask.taskState === TaskState.Merged}
+            />
+          </div>
         </div>
-
         <div className="space-y-3">
           <div>
             <p className="text-sm text-gray-600">{currentTask.description}</p>
@@ -44,38 +68,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Repository Status Section */}
       <div className="p-4 border-b border-gray-200">
-        <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+        <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2 text-sm">
           <GitBranch className="w-4 h-4" />
           {currentTask.branch}
         </h3>
         
         <div className="space-y-3">
           {/* Visual Git Status */}
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Working Tree</span>
+          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-700">Working Tree</span>
               <div className="flex items-center gap-1">
                 {currentTask.gitStatus?.hasConflicts ? (
                   <>
-                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <AlertCircle className="w-3 h-3 text-red-500" />
                     <span className="text-xs text-red-700">Conflicts</span>
                   </>
                 ) : ((currentTask.gitStatus?.staged || 0) + (currentTask.gitStatus?.unstaged || 0)) > 0 ? (
                   <>
-                    <FileText className="w-4 h-4 text-amber-500" />
+                    <FileText className="w-3 h-3 text-amber-500" />
                     <span className="text-xs text-amber-700">Modified</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-3 h-3 text-green-500" />
                     <span className="text-xs text-green-700">Clean</span>
                   </>
                 )}
               </div>
             </div>
             
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Branch Status</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-700">Branch Status</span>
               <div className="text-xs">
                 {currentTask.gitStatus?.behind > 0 && (
                   <span className="text-orange-600">{currentTask.gitStatus.behind} behind</span>
@@ -91,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Changes</span>
+              <span className="text-xs font-medium text-gray-700">Changes</span>
               <div className="text-xs">
                 {(currentTask.gitStatus?.staged || currentTask.gitStatus?.unstaged) ? (
                   <>
@@ -114,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="space-y-2">
             {/* Always show diff button for layout stability */}
             <button 
-              className="w-full flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm transition-all duration-200 cursor-pointer hover:bg-gray-100 hover:border-gray-400 hover:shadow-md"
               title={
                 currentTask.gitStatus?.hasConflicts ? "View merge conflicts" :
                 currentTask.taskState === TaskState.Merged ? "View merge commit" :
@@ -131,30 +155,125 @@ export const Sidebar: React.FC<SidebarProps> = ({
                "View Changes"}
             </button>
             
-            {/* Show context-aware primary actions */}
-            {currentTask.gitStatus?.hasConflicts && (
-              <button className="w-full flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors">
-                <AlertCircle className="w-4 h-4" />
-                Resolve Conflicts
-              </button>
-            )}
-            
-            {!currentTask.gitStatus?.hasConflicts && ((currentTask.gitStatus?.staged || 0) + (currentTask.gitStatus?.unstaged || 0)) > 0 && (
-              <button className="w-full flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 transition-colors">
-                <GitBranch className="w-4 h-4" />
-                {currentTask.gitStatus?.staged > 0 
-                  ? `Commit Staged (${currentTask.gitStatus.staged} files)`
-                  : `Stage & Commit (${currentTask.gitStatus.unstaged} files)`
-                }
-              </button>
-            )}
-            
-            {!currentTask.gitStatus?.hasConflicts && (currentTask.gitStatus?.behind || 0) > 0 && (
-              <button className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
-                <Activity className="w-4 h-4" />
-                Update Branch ({currentTask.gitStatus.behind} commits)
-              </button>
-            )}
+            {/* Context-specific primary action */}
+            {(() => {
+              // Determine which action button to show based on git state priority
+              const hasConflicts = currentTask.gitStatus?.hasConflicts;
+              // Get counts from backend (no more mocks needed!)
+              const staged = currentTask.gitStatus?.staged || 0;
+              const unstaged = currentTask.gitStatus?.unstaged || 0;
+              const untracked = currentTask.gitStatus?.untracked || 0;
+              // Total uncommitted = staged + unstaged + untracked
+              const uncommittedCount = staged + unstaged + untracked;
+              const hasUncommitted = uncommittedCount > 0;
+              const isBehind = (currentTask.gitStatus?.behind || 0) > 0;
+              const isAhead = (currentTask.gitStatus?.ahead || 0) > 0;
+              
+              // Priority order: conflicts > uncommitted > behind > ahead (clean)
+              if (hasConflicts) {
+                return (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                    <AlertCircle className="w-4 h-4" />
+                    Resolve Conflicts
+                  </button>
+                );
+              }
+              
+              if (hasUncommitted) {
+                return (
+                  <div className="relative" ref={commitOptionsRef}>
+                <div className="flex">
+                  <button className="flex-1 flex items-center gap-2 px-3 py-2 bg-amber-600 text-white rounded-l-lg text-sm hover:bg-amber-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                    <GitBranch className="w-4 h-4" />
+                    {staged > 0 
+                      ? `Commit Staged (${staged} files)`
+                      : `Stage & Commit (${unstaged + untracked} files)`
+                    }
+                  </button>
+                  <button 
+                    className="px-2 py-2 bg-amber-600 text-white rounded-r-lg text-sm hover:bg-amber-700 hover:scale-[1.02] transition-all duration-200 border-l border-amber-500 active:scale-[0.98] cursor-pointer"
+                    onClick={() => setShowCommitOptions(!showCommitOptions)}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showCommitOptions && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-amber-600 rounded-lg shadow-lg overflow-hidden z-10">
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-amber-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <MessageSquare className="w-4 h-4 opacity-80" />
+                      Commit with Message...
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-amber-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <FileEdit className="w-4 h-4 opacity-80" />
+                      Stage All & Commit
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-amber-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <Sparkles className="w-4 h-4 opacity-80" />
+                      AI-Assisted Stage & Commit
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-amber-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <Edit3 className="w-4 h-4 opacity-80" />
+                      Amend Last Commit
+                    </button>
+                  </div>
+                )}
+                  </div>
+                );
+              }
+              
+              if (isBehind) {
+                return (
+                  <div className="relative" ref={updateOptionsRef}>
+                <div className="flex">
+                  <button className="flex-1 flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-l-lg text-sm hover:bg-orange-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                    <RefreshCw className="w-4 h-4" />
+                    Update Branch (Merge)
+                  </button>
+                  <button 
+                    className="px-2 py-2 bg-orange-600 text-white rounded-r-lg text-sm hover:bg-orange-700 hover:scale-[1.02] transition-all duration-200 border-l border-orange-500 active:scale-[0.98] cursor-pointer"
+                    onClick={() => setShowUpdateOptions(!showUpdateOptions)}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {showUpdateOptions && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-orange-600 rounded-lg shadow-lg overflow-hidden z-10">
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-orange-700 transition-colors flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <GitMerge className="w-4 h-4 opacity-80" />
+                        Update via Merge
+                      </div>
+                      <span className="text-xs opacity-60">Default</span>
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-orange-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <GitBranch className="w-4 h-4 opacity-80" />
+                      Update via Rebase
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-orange-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <Sparkles className="w-4 h-4 opacity-80" />
+                      AI-Assisted Update
+                    </button>
+                    <button className="w-full text-left px-3 py-2 text-sm text-white hover:bg-orange-700 transition-colors flex items-center gap-2 cursor-pointer">
+                      <FolderSync className="w-4 h-4 opacity-80" />
+                      Sync & Update All Tasks
+                    </button>
+                  </div>
+                )}
+                  </div>
+                );
+              }
+              
+              if (isAhead && !hasUncommitted) {
+                return (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                    <GitPullRequest className="w-4 h-4" />
+                    Create Pull Request
+                  </button>
+                );
+              }
+              
+              return null; // No action needed
+            })()}
           </div>
         </div>
       </div>
@@ -162,8 +281,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* All Tasks List */}
       <div className="flex-1 overflow-auto">
         <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-medium text-gray-900">All Tasks</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium text-gray-900 text-sm">All Tasks</h3>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">{allTasks.length} active</span>
               {onCreateTask && (
@@ -178,7 +297,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             {allTasks.map(task => (
               <TaskListItem
                 key={task.id}

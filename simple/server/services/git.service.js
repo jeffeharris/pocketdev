@@ -190,6 +190,62 @@ export class GitService {
     return this.command(projectPath, 'git status --porcelain');
   }
 
+  /**
+   * Get detailed git status including staged, unstaged, and untracked file counts
+   * @param {string} projectPath - Path to the project
+   * @returns {Promise<{staged: number, unstaged: number, untracked: number, files: Array, raw: string}>}
+   */
+  async getDetailedStatus(projectPath) {
+    const result = await this.command(projectPath, 'git status --porcelain');
+    
+    let staged = 0;
+    let unstaged = 0;
+    let untracked = 0;
+    const files = [];
+    
+    // Parse each line of porcelain output
+    // Format: XY filename where X = index status, Y = working tree status
+    result.output.split('\n').forEach(line => {
+      if (!line.trim()) return;
+      
+      const indexStatus = line[0];  // First char = staged status
+      const workingStatus = line[1]; // Second char = unstaged status
+      const filePath = line.substring(3).trim();
+      
+      // Count untracked files separately
+      if (indexStatus === '?' && workingStatus === '?') {
+        untracked++;
+      } else {
+        // Count staged files (index status not ' ')
+        if (indexStatus !== ' ') {
+          staged++;
+        }
+        
+        // Count unstaged files (working tree status not ' ')
+        if (workingStatus !== ' ') {
+          unstaged++;
+        }
+      }
+      
+      files.push({
+        path: filePath,
+        staged: indexStatus !== ' ' && indexStatus !== '?',
+        unstaged: workingStatus !== ' ' && workingStatus !== '?',
+        untracked: indexStatus === '?' && workingStatus === '?',
+        status: line.substring(0, 2)
+      });
+    });
+    
+    return { 
+      staged, 
+      unstaged,
+      untracked, 
+      files, 
+      raw: result.output,
+      success: result.success 
+    };
+  }
+
   async getDiff(projectPath, args = '') {
     return this.command(projectPath, `git diff ${args}`);
   }
@@ -295,17 +351,26 @@ export class GitService {
         hasConflicts = conflictCheck.hasConflicts;
       }
       
+      // Get detailed status including staged/unstaged/untracked counts
+      const detailedStatus = await this.getDetailedStatus(projectPath);
+      
       return {
         ahead,
         behind,
-        hasConflicts
+        hasConflicts,
+        staged: detailedStatus.staged,
+        unstaged: detailedStatus.unstaged,
+        untracked: detailedStatus.untracked
       };
     } catch (error) {
       console.error('Error getting branch status:', error);
       return {
         ahead: 0,
         behind: 0,
-        hasConflicts: false
+        hasConflicts: false,
+        staged: 0,
+        unstaged: 0,
+        untracked: 0
       };
     }
   }

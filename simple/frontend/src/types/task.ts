@@ -34,6 +34,9 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   hasConflicts: boolean;
+  staged?: number;
+  unstaged?: number;
+  untracked?: number;
 }
 
 export interface Task {
