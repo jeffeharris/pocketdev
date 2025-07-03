@@ -57,28 +57,16 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-sm font-medium text-gray-900">#{task.id.slice(-3)}</span>
-            <TaskStatusComponent status={currentSessionState.status} />
-            {isMerged && (
-              <span className="text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Merged</span>
-            )}
+            <TaskStatusComponent 
+              workerStatus={currentSessionState.status}
+              gitStatus={currentGitStatus}
+              isMerged={isMerged}
+              variant="inline"
+            />
           </div>
           <h4 className="font-medium text-gray-900 text-sm truncate">{task.title}</h4>
         </div>
         
-        {/* Git status indicators */}
-        {currentGitStatus && (currentGitStatus.ahead > 0 || currentGitStatus.behind > 0) && (
-          <div className="flex items-center gap-1 text-xs">
-            {currentGitStatus.behind > 0 && (
-              <span className="text-red-600">↓{currentGitStatus.behind}</span>
-            )}
-            {currentGitStatus.ahead > 0 && (
-              <span className="text-green-600">↑{currentGitStatus.ahead}</span>
-            )}
-            {currentGitStatus.hasConflicts && (
-              <span className="text-yellow-600">⚠️</span>
-            )}
-          </div>
-        )}
       </div>
       
       {/* Bottom row: Branch name and elapsed time */}

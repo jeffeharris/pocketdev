@@ -8,27 +8,24 @@ interface TerminalPanelProps {
   validationMode: boolean;
   onToggleValidation: () => void;
   onToggleSidebar: () => void;
+  isVisible?: boolean;
 }
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({
   task,
   validationMode,
   onToggleValidation,
-  onToggleSidebar
+  onToggleSidebar,
+  isVisible = true
 }) => {
   const [isResetting, setIsResetting] = useState(false);
-  const [terminalKey, setTerminalKey] = useState(0);
-  const [sessionId, setSessionId] = useState(`task-${task.id}`);
+  const sessionId = `task-${task.id}`;
   
   const handleResetSession = async () => {
     setIsResetting(true);
     try {
-      // Generate a new session ID with timestamp to ensure it's unique
-      const newSessionId = `task-${task.id}-${Date.now()}`;
-      setSessionId(newSessionId);
-      
-      // Force the iframe to reload with the new session ID
-      setTerminalKey(prev => prev + 1);
+      // TODO: Call shelltender API to reset the session
+      // For now, we'll just show the animation
     } catch (error) {
       console.error('Error resetting session:', error);
     } finally {
@@ -108,7 +105,12 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       {/* Shelltender Content */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden">
-        <ShelltenderFrame key={terminalKey} taskId={task.id} sessionId={sessionId} worktreePath={task.worktree_path || task.worktree} />
+        <ShelltenderFrame 
+          taskId={task.id} 
+          sessionId={sessionId} 
+          worktreePath={task.worktree_path || task.worktree} 
+          isVisible={isVisible}
+        />
       </div>
     </div>
   );

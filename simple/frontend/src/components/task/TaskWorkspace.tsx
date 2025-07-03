@@ -26,6 +26,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [project, setProject] = useState<Project | null>(null);
   
+  // Track which terminals have been initialized
+  const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
+  
   const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0];
   
   // Load project and tasks on mount
@@ -55,12 +58,17 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   // Update active task when taskId prop changes
   useEffect(() => {
     setActiveTaskId(taskId);
+    // Mark this terminal as initialized
+    setInitializedTerminals(prev => new Set(prev).add(taskId));
   }, [taskId]);
 
   const handleTaskSelect = (newTaskId: string) => {
     setActiveTaskId(newTaskId);
     // Reset validation mode when switching tasks
     setValidationMode(false);
+    
+    // Mark this terminal as initialized
+    setInitializedTerminals(prev => new Set(prev).add(newTaskId));
   };
 
   const handleTaskChange = (task: Task) => {
@@ -127,13 +135,30 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
 
         {/* Main Terminal Area - Split Layout */}
         <div className="flex-1 flex flex-col bg-gray-900">
-          {/* Terminal Panel */}
-          <TerminalPanel
-            task={activeTask}
-            validationMode={validationMode}
-            onToggleValidation={() => setValidationMode(!validationMode)}
-            onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
-          />
+          {/* Render all initialized terminals but only show the active one */}
+          {tasks.map(task => {
+            const isActive = task.id === activeTaskId;
+            const isInitialized = initializedTerminals.has(task.id);
+            
+            // Only render if this is the active task or it has been initialized before
+            if (!isActive && !isInitialized) return null;
+            
+            return (
+              <div
+                key={task.id}
+                style={{ display: isActive ? 'flex' : 'none' }}
+                className="flex-1 flex flex-col"
+              >
+                <TerminalPanel
+                  task={task}
+                  validationMode={validationMode}
+                  onToggleValidation={() => setValidationMode(!validationMode)}
+                  onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  isVisible={isActive}
+                />
+              </div>
+            );
+          })}
 
           {/* Resize Handle */}
           {validationMode && (

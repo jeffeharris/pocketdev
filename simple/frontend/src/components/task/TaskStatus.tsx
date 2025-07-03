@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, CheckCircle, AlertCircle, Clock, Activity, User, GitMerge, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, Clock, Activity, User, GitMerge } from 'lucide-react';
 import { clsx } from 'clsx';
 
 /**
@@ -58,7 +58,8 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   // Job 2: Is my task out of sync?
   // Being "behind" means others have made changes we don't have yet
   // Having conflicts is a more severe form of being out of sync
-  const isOutOfSync = gitStatus && (gitStatus.behind > 0 || gitStatus.hasConflicts);
+  // Note: Currently not used in display but kept for future use
+  // const isOutOfSync = gitStatus && (gitStatus.behind > 0 || gitStatus.hasConflicts);
   
   // Job 3: Are there merge issues?
   // Conflicts are the most critical status - they block progress entirely

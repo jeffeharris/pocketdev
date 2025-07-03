@@ -6,13 +6,15 @@ interface ShelltenderFrameProps {
   sessionId?: string;
   className?: string;
   worktreePath?: string;
+  isVisible?: boolean;
 }
 
-export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({ 
+const ShelltenderFrameComponent: React.FC<ShelltenderFrameProps> = ({ 
   taskId, 
   sessionId,
   className = '',
-  worktreePath
+  worktreePath,
+  isVisible = true
 }) => {
   const [isInitializing, setIsInitializing] = useState(true);
   // Always use the standard session ID format for consistency
@@ -65,7 +67,7 @@ export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({
   }, [taskId, terminalSessionId, worktreePath]);
 
   const handleSessionCreated = useCallback((newSessionId: string) => {
-    console.log('Terminal session created:', newSessionId);
+    // Terminal session created
   }, []);
 
   if (isInitializing) {
@@ -83,7 +85,7 @@ export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({
   const iframeSrc = `/shelltender-terminal.html?task=${taskId}&session=${terminalSessionId}`;
 
   return (
-    <div className={`w-full h-full ${className}`}>
+    <div className={`w-full h-full ${className}`} style={{ display: isVisible ? 'block' : 'none' }}>
       <iframe
         src={iframeSrc}
         className="w-full h-full border-0"
@@ -92,3 +94,13 @@ export const ShelltenderFrame: React.FC<ShelltenderFrameProps> = ({
     </div>
   );
 };
+
+export const ShelltenderFrame = React.memo(ShelltenderFrameComponent, (prevProps, nextProps) => {
+  // Only re-render if taskId, sessionId, or visibility changes
+  return (
+    prevProps.taskId === nextProps.taskId &&
+    prevProps.sessionId === nextProps.sessionId &&
+    prevProps.isVisible === nextProps.isVisible &&
+    prevProps.worktreePath === nextProps.worktreePath
+  );
+});
