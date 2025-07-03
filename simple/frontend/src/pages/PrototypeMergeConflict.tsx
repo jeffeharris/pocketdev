@@ -8,10 +8,10 @@ const PrototypeMergeConflict: React.FC = () => {
   const [hasConflicts, setHasConflicts] = useState<boolean>(true);
   const [conflictCount, setConflictCount] = useState<number>(0);
   const [currentConflict, setCurrentConflict] = useState<number>(0);
-  const [conflictRanges, setConflictRanges] = useState<any[]>([]);
-  const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
-  const decorationsRef = useRef<any[]>([]);
+  const [conflictRanges, setConflictRanges] = useState<Array<{ startLine: number; endLine: number }>>([]);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof monaco | null>(null);
+  const decorationsRef = useRef<string[]>([]);
 
   // Sample file with merge conflicts
   const conflictedFile = `import React from 'react';
@@ -179,7 +179,7 @@ export function ShoppingCart() {
   // Check for conflicts and find their ranges
   const checkForConflicts = (content: string) => {
     const lines = content.split('\n');
-    const conflicts: any[] = [];
+    const conflicts: Array<{ startLine: number; endLine: number; id: number }> = [];
     let inConflict = false;
     let conflictStart = 0;
     
@@ -207,15 +207,14 @@ export function ShoppingCart() {
   };
 
   // Apply conflict decorations
-  const applyConflictDecorations = (editor: any, monaco: any) => {
-    const decorations: any[] = [];
+  const applyConflictDecorations = (editor: monaco.editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
+    const decorations: monaco.editor.IModelDeltaDecoration[] = [];
     const model = editor.getModel();
     const lines = model.getLinesContent();
 
-    let inConflict = false;
     let conflictStart = 0;
     let separatorLine = 0;
-    let currentSection = 'none'; // 'current', 'incoming', or 'none'
+    let inConflict = false;
 
     lines.forEach((line: string, index: number) => {
       const lineNumber = index + 1;
@@ -223,7 +222,6 @@ export function ShoppingCart() {
       if (line.startsWith('<<<<<<<')) {
         inConflict = true;
         conflictStart = lineNumber;
-        currentSection = 'current';
         decorations.push({
           range: new monaco.Range(lineNumber, 1, lineNumber, 1),
           options: {
@@ -242,7 +240,6 @@ export function ShoppingCart() {
         });
       } else if (line.startsWith('=======')) {
         separatorLine = lineNumber;
-        currentSection = 'incoming';
         
         // Add red highlight for the current/HEAD section
         if (conflictStart > 0) {
@@ -321,7 +318,6 @@ export function ShoppingCart() {
         });
         
         inConflict = false;
-        currentSection = 'none';
         separatorLine = 0;
       }
     });
@@ -331,7 +327,7 @@ export function ShoppingCart() {
   };
 
   // Handle editor mount for inline mode
-  const handleEditorDidMount = (editor: any, monaco: any) => {
+  const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
     
@@ -355,163 +351,7 @@ export function ShoppingCart() {
       applyConflictDecorations(editor, monaco);
     });
     
-    // Register custom commands that the code actions will trigger
-    editor.addAction({
-      id: 'merge.acceptCurrent',
-      label: 'Accept Current Changes',
-      run: () => {
-        const position = editor.getPosition();
-        if (!position) return;
-        
-        // Find which conflict we're in
-        for (let i = 0; i < conflictRanges.length; i++) {
-          const conflict = conflictRanges[i];
-          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
-            setCurrentConflict(i);
-            acceptCurrentSingle();
-            break;
-          }
-        }
-      }
-    });
-    
-    editor.addAction({
-      id: 'merge.acceptIncoming',
-      label: 'Accept Incoming Changes',
-      run: () => {
-        const position = editor.getPosition();
-        if (!position) return;
-        
-        for (let i = 0; i < conflictRanges.length; i++) {
-          const conflict = conflictRanges[i];
-          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
-            setCurrentConflict(i);
-            acceptIncomingSingle();
-            break;
-          }
-        }
-      }
-    });
-    
-    editor.addAction({
-      id: 'merge.acceptBoth',
-      label: 'Accept Both Changes',
-      run: () => {
-        const position = editor.getPosition();
-        if (!position) return;
-        
-        for (let i = 0; i < conflictRanges.length; i++) {
-          const conflict = conflictRanges[i];
-          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
-            setCurrentConflict(i);
-            acceptBothSingle();
-            break;
-          }
-        }
-      }
-    });
-    
-    // Add code actions for conflicts (these appear in the lightbulb menu)
-    monaco.languages.registerCodeActionProvider('typescript', {
-      provideCodeActions: (model: any, range: any, context: any, token: any) => {
-        const actions = [];
-        const startLine = range.startLineNumber;
-        const endLine = range.endLineNumber;
-        
-        // Check if we're in a conflict zone
-        for (let i = 0; i < conflictRanges.length; i++) {
-          const conflict = conflictRanges[i];
-          if (startLine >= conflict.startLine && endLine <= conflict.endLine) {
-            // Get the actual content for this conflict
-            const lines = model.getLinesContent();
-            let currentContent = [];
-            let incomingContent = [];
-            let inCurrent = false;
-            let inIncoming = false;
-            
-            for (let j = conflict.startLine - 1; j < conflict.endLine; j++) {
-              const line = lines[j];
-              if (line.includes('<<<<<<< HEAD')) {
-                inCurrent = true;
-                continue;
-              } else if (line.includes('=======')) {
-                inCurrent = false;
-                inIncoming = true;
-                continue;
-              } else if (line.includes('>>>>>>>')) {
-                break;
-              }
-              
-              if (inCurrent) {
-                currentContent.push(line);
-              } else if (inIncoming) {
-                incomingContent.push(line);
-              }
-            }
-            
-            // Add merge actions with the actual resolved content
-            actions.push({
-              title: '⬆️ Accept Current Changes',
-              kind: monaco.languages.CodeActionKind.QuickFix,
-              diagnostics: [],
-              edit: {
-                edits: [{
-                  resource: model.uri,
-                  textEdit: {
-                    range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: currentContent.join('\n') + (currentContent.length > 0 ? '\n' : '')
-                  }
-                }]
-              },
-              isPreferred: false
-            });
-            
-            actions.push({
-              title: '⬇️ Accept Incoming Changes',
-              kind: monaco.languages.CodeActionKind.QuickFix,
-              diagnostics: [],
-              edit: {
-                edits: [{
-                  resource: model.uri,
-                  textEdit: {
-                    range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: incomingContent.join('\n') + (incomingContent.length > 0 ? '\n' : '')
-                  }
-                }]
-              },
-              isPreferred: false
-            });
-            
-            actions.push({
-              title: '🔀 Accept Both Changes',
-              kind: monaco.languages.CodeActionKind.QuickFix,
-              diagnostics: [],
-              edit: {
-                edits: [{
-                  resource: model.uri,
-                  textEdit: {
-                    range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: currentContent.join('\n') + (currentContent.length > 0 ? '\n' : '') + incomingContent.join('\n') + (incomingContent.length > 0 ? '\n' : '')
-                  }
-                }]
-              },
-              isPreferred: false
-            });
-            
-            // Store the current conflict index for navigation
-            setCurrentConflict(i);
-            break;
-          }
-        }
-        
-        return {
-          actions: actions,
-          dispose: () => {}
-        };
-      }
-    });
-    
-    // Register commands for the code actions
+    // Register keyboard shortcuts for the conflict resolution
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_1, () => acceptCurrentSingle());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_2, () => acceptIncomingSingle());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_3, () => acceptBothSingle());
@@ -609,7 +449,7 @@ export function ShoppingCart() {
     const endLine = conflict.endLine;
     const lines = model.getLinesContent();
     
-    let currentContent = [];
+    const currentContent = [];
     let inCurrent = false;
     
     for (let i = startLine - 1; i < endLine; i++) {
@@ -650,7 +490,7 @@ export function ShoppingCart() {
     const endLine = conflict.endLine;
     const lines = model.getLinesContent();
     
-    let incomingContent = [];
+    const incomingContent = [];
     let inIncoming = false;
     
     for (let i = startLine - 1; i < endLine; i++) {
@@ -687,8 +527,8 @@ export function ShoppingCart() {
     const endLine = conflict.endLine;
     const lines = model.getLinesContent();
     
-    let currentContent = [];
-    let incomingContent = [];
+    const currentContent = [];
+    const incomingContent = [];
     let inCurrent = false;
     let inIncoming = false;
     
@@ -995,10 +835,10 @@ export function ShoppingCart() {
                     acceptSuggestionOnCommitCharacter: false,
                     tabCompletion: 'off',
                     wordBasedSuggestions: false,
-                    // Disable some editor actions
-                    'editor.action.changeAll': false,
-                    'editor.action.rename': false,
-                    'editor.action.quickCommand': false
+                    // Disable lightbulb
+                    lightbulb: { enabled: false },
+                    // Disable hover
+                    hover: { enabled: false }
                   }}
                 />
                 
