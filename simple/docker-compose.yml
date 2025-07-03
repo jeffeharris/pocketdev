@@ -106,9 +106,9 @@ services:
       - simple  # Only starts when explicitly requested
     
   # Optional: Original frontend
-  frontend:
+  frontend-nginx:
     image: nginx:alpine
-    container_name: pocketdev-frontend
+    container_name: pocketdev-frontend-nginx
     ports:
       - "2424:80"
     volumes:
