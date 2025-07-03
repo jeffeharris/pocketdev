@@ -41,6 +41,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [branchQuery, setBranchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
@@ -48,6 +49,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   const [success, setSuccess] = useState('');
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [selectedBranchIndex, setSelectedBranchIndex] = useState(-1);
   const [githubStatus, setGithubStatus] = useState<{
     enabled: boolean;
     valid: boolean;
@@ -62,12 +64,18 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const branchInputRef = useRef<HTMLInputElement>(null);
   const branchDropdownRef = useRef<HTMLDivElement>(null);
 
   // Filtered repos based on search
   const filteredRepos = searchQuery 
     ? repos.filter(repo => repo.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
+
+  // Filtered branches based on search
+  const filteredBranches = branchQuery 
+    ? branches.filter(branch => branch.toLowerCase().includes(branchQuery.toLowerCase()))
+    : branches;
 
   // Check GitHub status on mount
   useEffect(() => {
@@ -133,6 +141,7 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
       const branchData = await response.json();
       setBranches(branchData.map((b: any) => b.name));
       setSelectedBranch(repo.defaultBranch);
+      setBranchQuery(repo.defaultBranch);
     } catch (err) {
       console.error('Failed to load branches:', err);
       setError('Failed to load branches');
@@ -176,8 +185,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
         // Reset form
         setSelectedRepo(null);
         setSelectedBranch('');
+        setBranchQuery('');
         setManualForm({ repoUrl: '', branch: 'main', projectName: '' });
         setSearchQuery('');
+        setShowBranchDropdown(false);
       }, 1000);
     } catch (err: any) {
       setError(err.message || 'Failed to create project');
@@ -186,31 +197,64 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showBranchDropdown && filteredRepos.length > 0) {
+    const displayRepos = searchQuery ? filteredRepos : repos.slice(0, 10); // Show first 10 repos if no search
+    if (displayRepos.length > 0) {
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
           setSelectedSuggestionIndex(prev => 
-            prev < filteredRepos.length - 1 ? prev + 1 : 0
+            prev < displayRepos.length - 1 ? prev + 1 : 0
           );
           break;
         case 'ArrowUp':
           e.preventDefault();
           setSelectedSuggestionIndex(prev => 
-            prev > 0 ? prev - 1 : filteredRepos.length - 1
+            prev > 0 ? prev - 1 : displayRepos.length - 1
           );
           break;
         case 'Enter':
           e.preventDefault();
-          if (selectedSuggestionIndex >= 0 && filteredRepos[selectedSuggestionIndex]) {
-            selectRepo(filteredRepos[selectedSuggestionIndex]);
-            setSearchQuery(filteredRepos[selectedSuggestionIndex].fullName);
+          if (selectedSuggestionIndex >= 0 && displayRepos[selectedSuggestionIndex]) {
+            selectRepo(displayRepos[selectedSuggestionIndex]);
+            setSearchQuery(displayRepos[selectedSuggestionIndex].fullName);
             setSelectedSuggestionIndex(-1);
           }
           break;
         case 'Escape':
           setSearchQuery('');
           setSelectedSuggestionIndex(-1);
+          break;
+      }
+    }
+  };
+
+  const handleBranchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showBranchDropdown && filteredBranches.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedBranchIndex(prev => 
+            prev < filteredBranches.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedBranchIndex(prev => 
+            prev > 0 ? prev - 1 : filteredBranches.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedBranchIndex >= 0 && filteredBranches[selectedBranchIndex]) {
+            setSelectedBranch(filteredBranches[selectedBranchIndex]);
+            setBranchQuery(filteredBranches[selectedBranchIndex]);
+            setShowBranchDropdown(false);
+            setSelectedBranchIndex(-1);
+          }
+          break;
+        case 'Escape':
+          setShowBranchDropdown(false);
+          setSelectedBranchIndex(-1);
           break;
       }
     }
@@ -287,15 +331,30 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                     setSelectedSuggestionIndex(-1);
                   }}
                   onKeyDown={handleSearchKeyDown}
+                  onFocus={() => setSelectedSuggestionIndex(-1)}
                   placeholder="Search repositories..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={loading}
                 />
                 
-                {/* Repository Dropdown */}
-                {searchQuery && filteredRepos.length > 0 && !selectedRepo && (
+                {/* Repository Dropdown - Show recent repos or search results */}
+                {!selectedRepo && (searchQuery || !loading) && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                    {filteredRepos.map((repo, index) => (
+                    {!searchQuery && repos.length > 0 && (
+                      <div className="px-3 py-2 text-xs text-gray-500 border-b">
+                        Recent repositories
+                      </div>
+                    )}
+                    {(() => {
+                      const displayRepos = searchQuery ? filteredRepos : repos.slice(0, 10);
+                      if (displayRepos.length === 0) {
+                        return (
+                          <div className="p-3 text-center text-gray-500 text-sm">
+                            {searchQuery ? 'No repositories found' : 'No repositories available'}
+                          </div>
+                        );
+                      }
+                      return displayRepos.map((repo, index) => (
                       <button
                         key={repo.fullName}
                         onClick={() => {
@@ -315,7 +374,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                           <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
                         </div>
                       </button>
-                    ))}
+                    ));
+                    })()}
                   </div>
                 )}
               </div>
@@ -344,30 +404,62 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Branch Selection */}
-                  <div>
+                  {/* Branch Selection with Typeahead */}
+                  <div className="relative">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Branch
                     </label>
-                    <div className="relative">
-                      <select
-                        value={selectedBranch}
-                        onChange={(e) => setSelectedBranch(e.target.value)}
-                        disabled={branchesLoading}
-                        className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+                    <input
+                      ref={branchInputRef}
+                      type="text"
+                      value={branchQuery}
+                      onChange={(e) => {
+                        setBranchQuery(e.target.value);
+                        setShowBranchDropdown(true);
+                        setSelectedBranchIndex(-1);
+                      }}
+                      onKeyDown={handleBranchKeyDown}
+                      onFocus={() => {
+                        setShowBranchDropdown(true);
+                        setSelectedBranchIndex(-1);
+                      }}
+                      onBlur={() => setTimeout(() => {
+                        setShowBranchDropdown(false);
+                        setSelectedBranchIndex(-1);
+                      }, 200)}
+                      placeholder={branchesLoading ? "Loading branches..." : "Type to search branches..."}
+                      disabled={branchesLoading}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    
+                    {/* Branch Dropdown */}
+                    {showBranchDropdown && !branchesLoading && filteredBranches.length > 0 && (
+                      <div 
+                        ref={branchDropdownRef}
+                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto"
                       >
-                        {branchesLoading ? (
-                          <option>Loading branches...</option>
-                        ) : (
-                          branches.map((branch) => (
-                            <option key={branch} value={branch}>
-                              {branch}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-                    </div>
+                        {filteredBranches.map((branch, index) => (
+                          <button
+                            key={branch}
+                            type="button"
+                            onClick={() => {
+                              setSelectedBranch(branch);
+                              setBranchQuery(branch);
+                              setShowBranchDropdown(false);
+                              setSelectedBranchIndex(-1);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
+                              index === selectedBranchIndex ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            {branch}
+                            {branch === selectedRepo.defaultBranch && (
+                              <span className="text-xs text-gray-500 ml-2">(default)</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
