@@ -50,7 +50,32 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [originalCode, setOriginalCode] = useState<string>('');
   const [modifiedCode, setModifiedCode] = useState<string>('');
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [canUseSplitView, setCanUseSplitView] = useState(true);
 
+
+  // Check viewport width for split view capability
+  useEffect(() => {
+    const checkViewportWidth = () => {
+      // Monaco needs ~900px minimum for split view to work well
+      const minWidthForSplit = 900;
+      const viewportWidth = window.innerWidth;
+      const modalPadding = 32; // p-4 on each side
+      const availableWidth = viewportWidth - modalPadding;
+      
+      const canSplit = availableWidth >= minWidthForSplit;
+      setCanUseSplitView(canSplit);
+      
+      // If we can't use split view, force unified mode
+      if (!canSplit && viewMode === 'split') {
+        setViewMode('unified');
+      }
+    };
+
+    checkViewportWidth();
+    window.addEventListener('resize', checkViewportWidth);
+    
+    return () => window.removeEventListener('resize', checkViewportWidth);
+  }, [viewMode]);
 
   // Load diff data when modal opens
   useEffect(() => {
@@ -71,8 +96,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
       
-      // Toggle view mode with 'v' key
-      if (e.key === 'v' && !e.ctrlKey && !e.metaKey) {
+      // Toggle view mode with 'v' key (only if split view is available)
+      if (e.key === 'v' && !e.ctrlKey && !e.metaKey && canUseSplitView) {
         setViewMode(prev => prev === 'split' ? 'unified' : 'split');
       }
       
@@ -84,7 +109,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, canUseSplitView]);
 
   // Process diff when file is selected
   useEffect(() => {
@@ -282,32 +307,36 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               <div className="flex flex-col h-full">
                 <div className="px-4 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
                   <h3 className="font-mono text-sm text-gray-700">{selectedFile.path}</h3>
-                  <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setViewMode('split')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                        viewMode === 'split'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                      title="Split view - Side by side comparison"
-                    >
-                      <Columns2 className="w-3.5 h-3.5" />
-                      <span>Split</span>
-                    </button>
-                    <button
-                      onClick={() => setViewMode('unified')}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                        viewMode === 'unified'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                      title="Unified view - Inline diff"
-                    >
-                      <FileCode className="w-3.5 h-3.5" />
-                      <span>Unified</span>
-                    </button>
-                  </div>
+                  {canUseSplitView ? (
+                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                      <button
+                        onClick={() => setViewMode('split')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                          viewMode === 'split'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        title="Split view - Side by side comparison"
+                      >
+                        <Columns2 className="w-3.5 h-3.5" />
+                        <span>Split</span>
+                      </button>
+                      <button
+                        onClick={() => setViewMode('unified')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                          viewMode === 'unified'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                        title="Unified view - Inline diff"
+                      >
+                        <FileCode className="w-3.5 h-3.5" />
+                        <span>Unified</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-500">Unified view</span>
+                  )}
                 </div>
                 <div className="flex-1 relative">
                   {/* Loading overlay for smooth transitions */}
@@ -359,11 +388,15 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
           <div className="text-xs text-gray-500">
-            <span className="inline-flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">V</kbd>
-              <span>Toggle view</span>
-            </span>
-            <span className="mx-2">·</span>
+            {canUseSplitView && (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">V</kbd>
+                  <span>Toggle view</span>
+                </span>
+                <span className="mx-2">·</span>
+              </>
+            )}
             <span className="inline-flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Esc</kbd>
               <span>Close</span>

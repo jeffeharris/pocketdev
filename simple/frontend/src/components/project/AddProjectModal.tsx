@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Search, GitBranch, Lock, Globe, ChevronDown } from 'lucide-react';
+import { X, Search, GitBranch, Lock, Globe, ChevronDown, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 
 interface GitHubRepo {
@@ -26,22 +27,27 @@ interface AddProjectModalProps {
  * - Branch selection
  * - Real-time validation
  * - Keyboard navigation
+ * - Auto-navigation to project after creation
  */
 export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   isOpen,
   onClose,
   onProjectCreated
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'github' | 'manual'>('github');
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
-  const [filteredRepos, setFilteredRepos] = useState<GitHubRepo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [githubStatus, setGithubStatus] = useState<{
     enabled: boolean;
     valid: boolean;
@@ -56,32 +62,28 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Filtered repos based on search
+  const filteredRepos = searchQuery 
+    ? repos.filter(repo => repo.fullName.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
 
   // Check GitHub status on mount
   useEffect(() => {
     if (isOpen) {
       checkGitHubStatus();
+      setSuccess('');
+      setError('');
     }
   }, [isOpen]);
 
   // Focus search when tab changes to GitHub
   useEffect(() => {
     if (isOpen && activeTab === 'github' && searchInputRef.current) {
-      searchInputRef.current.focus();
+      setTimeout(() => searchInputRef.current?.focus(), 100);
     }
   }, [isOpen, activeTab]);
-
-  // Filter repos based on search
-  useEffect(() => {
-    if (searchQuery) {
-      const filtered = repos.filter(repo =>
-        repo.fullName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredRepos(filtered);
-    } else {
-      setFilteredRepos(repos);
-    }
-  }, [searchQuery, repos]);
 
   const checkGitHubStatus = async () => {
     try {
@@ -110,7 +112,6 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
       
       const repoData = await response.json();
       setRepos(repoData);
-      setFilteredRepos(repoData);
     } catch (err) {
       console.error('Failed to load repos:', err);
       setError('Failed to load repositories. Please check your GitHub token.');
@@ -144,7 +145,8 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   const handleCreateProject = async () => {
     setError('');
-    setLoading(true);
+    setSuccess('');
+    setCreating(true);
 
     try {
       let projectData;
@@ -163,19 +165,54 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
         };
       }
 
-      await createProject(projectData);
-      onProjectCreated();
-      onClose();
+      const project = await api.createProject(projectData);
+      setSuccess('Project created successfully! Redirecting...');
       
-      // Reset form
-      setSelectedRepo(null);
-      setSelectedBranch('');
-      setManualForm({ repoUrl: '', branch: 'main', projectName: '' });
-      setSearchQuery('');
+      // Auto-navigate after a short delay
+      setTimeout(() => {
+        onProjectCreated();
+        navigate(`/projects/${project.id}`);
+        
+        // Reset form
+        setSelectedRepo(null);
+        setSelectedBranch('');
+        setManualForm({ repoUrl: '', branch: 'main', projectName: '' });
+        setSearchQuery('');
+      }, 1000);
     } catch (err: any) {
       setError(err.message || 'Failed to create project');
-    } finally {
-      setLoading(false);
+      setCreating(false);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showBranchDropdown && filteredRepos.length > 0) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedSuggestionIndex(prev => 
+            prev < filteredRepos.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedSuggestionIndex(prev => 
+            prev > 0 ? prev - 1 : filteredRepos.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (selectedSuggestionIndex >= 0 && filteredRepos[selectedSuggestionIndex]) {
+            selectRepo(filteredRepos[selectedSuggestionIndex]);
+            setSearchQuery(filteredRepos[selectedSuggestionIndex].fullName);
+            setSelectedSuggestionIndex(-1);
+          }
+          break;
+        case 'Escape':
+          setSearchQuery('');
+          setSelectedSuggestionIndex(-1);
+          break;
+      }
     }
   };
 
@@ -183,10 +220,10 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">Add New Project</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Create New Project</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -219,68 +256,63 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden flex flex-col p-6">
+        {/* Content - Fixed Height */}
+        <div className="p-6" style={{ minHeight: '320px' }}>
+          {/* Status Messages */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" />
+              {success}
             </div>
           )}
 
           {activeTab === 'github' ? (
-            <div className="flex-1 flex flex-col">
-              {/* Search */}
+            <div>
+              {/* Repository Search */}
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSelectedSuggestionIndex(-1);
+                  }}
+                  onKeyDown={handleSearchKeyDown}
                   placeholder="Search repositories..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
                 />
-              </div>
-
-              {/* Repository List */}
-              <div className="flex-1 border border-gray-200 rounded-lg overflow-auto">
-                {loading ? (
-                  <div className="p-8 text-center text-gray-500">
-                    Loading repositories...
-                  </div>
-                ) : filteredRepos.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">
-                    {searchQuery ? 'No repositories found' : 'No repositories available'}
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-200">
-                    {filteredRepos.map((repo) => (
+                
+                {/* Repository Dropdown */}
+                {searchQuery && filteredRepos.length > 0 && !selectedRepo && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {filteredRepos.map((repo, index) => (
                       <button
                         key={repo.fullName}
-                        onClick={() => selectRepo(repo)}
-                        className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${
-                          selectedRepo?.fullName === repo.fullName ? 'bg-blue-50' : ''
+                        onClick={() => {
+                          selectRepo(repo);
+                          setSearchQuery(repo.fullName);
+                          setSelectedSuggestionIndex(-1);
+                        }}
+                        className={`w-full p-3 text-left hover:bg-gray-50 transition-colors ${
+                          index === selectedSuggestionIndex ? 'bg-blue-50' : ''
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-gray-900">{repo.fullName}</div>
-                            <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
-                              {repo.private ? (
-                                <Lock className="w-3 h-3" />
-                              ) : (
-                                <Globe className="w-3 h-3" />
-                              )}
-                              <span>{repo.private ? 'Private' : 'Public'}</span>
-                              <span>•</span>
-                              <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          {selectedRepo?.fullName === repo.fullName && (
-                            <div className="text-blue-600">
-                              <GitBranch className="w-5 h-5" />
-                            </div>
-                          )}
+                        <div className="font-medium text-gray-900">{repo.fullName}</div>
+                        <div className="text-sm text-gray-500 flex items-center gap-2">
+                          {repo.private ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                          <span>{repo.private ? 'Private' : 'Public'}</span>
+                          <span>•</span>
+                          <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
                         </div>
                       </button>
                     ))}
@@ -288,31 +320,71 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 )}
               </div>
 
-              {/* Branch Selection */}
+              {/* Selected Repository Info */}
               {selectedRepo && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Branch
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedBranch}
-                      onChange={(e) => setSelectedBranch(e.target.value)}
-                      disabled={branchesLoading}
-                      className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="font-medium text-gray-900">{selectedRepo.fullName}</div>
+                      <div className="text-sm text-gray-600 flex items-center gap-2 mt-1">
+                        {selectedRepo.private ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                        <span>{selectedRepo.private ? 'Private' : 'Public'}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedRepo(null);
+                        setSearchQuery('');
+                        setBranches([]);
+                        setSelectedBranch('');
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
                     >
-                      {branchesLoading ? (
-                        <option>Loading branches...</option>
-                      ) : (
-                        branches.map((branch) => (
-                          <option key={branch} value={branch}>
-                            {branch}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
+
+                  {/* Branch Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Branch
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedBranch}
+                        onChange={(e) => setSelectedBranch(e.target.value)}
+                        disabled={branchesLoading}
+                        className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+                      >
+                        {branchesLoading ? (
+                          <option>Loading branches...</option>
+                        ) : (
+                          branches.map((branch) => (
+                            <option key={branch} value={branch}>
+                              {branch}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {loading && (
+                <div className="text-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-gray-400" />
+                  <p className="text-gray-500">Loading repositories...</p>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!loading && !selectedRepo && !searchQuery && (
+                <div className="text-center py-8 text-gray-500">
+                  <GitBranch className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>Search for a repository to get started</p>
                 </div>
               )}
             </div>
@@ -366,16 +438,18 @@ export const AddProjectModal: React.FC<AddProjectModalProps> = ({
           <div className="flex gap-3 justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              disabled={creating}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateProject}
-              disabled={loading || (activeTab === 'github' ? !selectedRepo : !manualForm.repoUrl)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={creating || (activeTab === 'github' ? !selectedRepo : !manualForm.repoUrl)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {loading ? 'Creating...' : 'Create Project'}
+              {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+              {creating ? 'Creating...' : 'Create Project'}
             </button>
           </div>
         </div>

@@ -100,7 +100,10 @@ export async function createProject(req, res, next) {
       }
     }
     
-    res.status(201).json(project);
+    res.status(201).json({ 
+      success: true, 
+      project: project 
+    });
   } catch (error) {
     next(error);
   }

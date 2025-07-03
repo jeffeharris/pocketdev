@@ -355,6 +355,62 @@ export function ShoppingCart() {
       applyConflictDecorations(editor, monaco);
     });
     
+    // Register custom commands that the code actions will trigger
+    editor.addAction({
+      id: 'merge.acceptCurrent',
+      label: 'Accept Current Changes',
+      run: () => {
+        const position = editor.getPosition();
+        if (!position) return;
+        
+        // Find which conflict we're in
+        for (let i = 0; i < conflictRanges.length; i++) {
+          const conflict = conflictRanges[i];
+          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
+            setCurrentConflict(i);
+            acceptCurrentSingle();
+            break;
+          }
+        }
+      }
+    });
+    
+    editor.addAction({
+      id: 'merge.acceptIncoming',
+      label: 'Accept Incoming Changes',
+      run: () => {
+        const position = editor.getPosition();
+        if (!position) return;
+        
+        for (let i = 0; i < conflictRanges.length; i++) {
+          const conflict = conflictRanges[i];
+          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
+            setCurrentConflict(i);
+            acceptIncomingSingle();
+            break;
+          }
+        }
+      }
+    });
+    
+    editor.addAction({
+      id: 'merge.acceptBoth',
+      label: 'Accept Both Changes',
+      run: () => {
+        const position = editor.getPosition();
+        if (!position) return;
+        
+        for (let i = 0; i < conflictRanges.length; i++) {
+          const conflict = conflictRanges[i];
+          if (position.lineNumber >= conflict.startLine && position.lineNumber <= conflict.endLine) {
+            setCurrentConflict(i);
+            acceptBothSingle();
+            break;
+          }
+        }
+      }
+    });
+    
     // Add code actions for conflicts (these appear in the lightbulb menu)
     monaco.languages.registerCodeActionProvider('typescript', {
       provideCodeActions: (model: any, range: any, context: any, token: any) => {
@@ -403,7 +459,7 @@ export function ShoppingCart() {
                   resource: model.uri,
                   textEdit: {
                     range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: currentContent.join('\n') + '\n'
+                    text: currentContent.join('\n') + (currentContent.length > 0 ? '\n' : '')
                   }
                 }]
               },
@@ -419,7 +475,7 @@ export function ShoppingCart() {
                   resource: model.uri,
                   textEdit: {
                     range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: incomingContent.join('\n') + '\n'
+                    text: incomingContent.join('\n') + (incomingContent.length > 0 ? '\n' : '')
                   }
                 }]
               },
@@ -435,7 +491,7 @@ export function ShoppingCart() {
                   resource: model.uri,
                   textEdit: {
                     range: new monaco.Range(conflict.startLine, 1, conflict.endLine, model.getLineMaxColumn(conflict.endLine)),
-                    text: currentContent.join('\n') + '\n' + incomingContent.join('\n') + '\n'
+                    text: currentContent.join('\n') + (currentContent.length > 0 ? '\n' : '') + incomingContent.join('\n') + (incomingContent.length > 0 ? '\n' : '')
                   }
                 }]
               },
