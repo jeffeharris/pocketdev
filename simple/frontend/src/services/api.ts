@@ -59,6 +59,34 @@ class ApiService {
     };
   }
 
+  async createProject(data: { repoUrl: string; branch: string; projectName: string }): Promise<Project> {
+    if (USE_MOCKS) {
+      const newProject: Project = {
+        id: `proj_${Date.now()}`,
+        name: data.projectName,
+        repository: data.repoUrl,
+        baseBranch: data.branch,
+        created: new Date().toISOString(),
+        tasksCount: 0
+      };
+      mockProjects.push(newProject);
+      return newProject;
+    }
+    const response = await this.fetch<any>('/projects', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    // Map backend format to our Project type
+    return {
+      id: response.project.id,
+      name: response.project.name,
+      repository: response.project.repo_url,
+      baseBranch: response.project.base_branch,
+      created: response.project.created_at,
+      tasksCount: 0
+    };
+  }
+
   async getProjectBranches(projectId: string): Promise<string[]> {
     if (USE_MOCKS) {
       return ['main', 'develop', 'feature/user-auth', 'feature/api-refactor', 'fix/memory-leak'];

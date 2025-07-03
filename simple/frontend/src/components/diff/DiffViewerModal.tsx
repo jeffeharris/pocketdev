@@ -20,6 +20,21 @@ interface DiffViewerModalProps {
   branch: string;
 }
 
+/**
+ * DiffViewerModal - Monaco-based diff viewer with split/unified toggle
+ * 
+ * IMPORTANT: Monaco DiffEditor requires sufficient width for split view
+ * - Minimum width for split view: ~800-900px (approximate)
+ * - Below this width, Monaco automatically falls back to unified view
+ * - This is why we use max-w-7xl (80rem = 1280px) for the modal
+ * - Previous max-w-6xl (72rem = 1152px) was too narrow for reliable split view
+ * 
+ * For mobile/responsive design considerations:
+ * - On narrow screens, force unified view regardless of user selection
+ * - Consider using a media query or viewport check to disable split toggle
+ * - Monaco calculates this internally based on available width (pixel-based, not percentage)
+ * - The width requirement depends on font size and minimap settings
+ */
 export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   isOpen,
   onClose,

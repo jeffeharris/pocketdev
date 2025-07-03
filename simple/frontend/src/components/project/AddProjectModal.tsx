@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, GitBranch, Lock, Globe, ChevronDown } from 'lucide-react';
-import { createProject } from '../../services/api';
+import { api } from '../../services/api';
 
 interface GitHubRepo {
   fullName: string;
