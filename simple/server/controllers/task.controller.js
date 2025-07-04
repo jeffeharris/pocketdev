@@ -271,6 +271,38 @@ export class TaskController {
   }
 
   /**
+   * Update task metadata (name, description)
+   */
+  async updateTaskMetadata(req, res) {
+    const { projectId, taskId } = req.params;
+    const { name, description } = req.body;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Verify task belongs to project
+      if (task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found in this project' });
+      }
+      
+      // Build update object with only provided fields
+      const updates = {};
+      if (name !== undefined) updates.name = name;
+      if (description !== undefined) updates.description = description;
+      
+      // Update the task
+      const updatedTask = await this.models.tasks.update(taskId, updates);
+      
+      res.json(updatedTask);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Check if task can be safely deleted
    */
   async checkDelete(req, res) {

@@ -256,7 +256,7 @@ class ApiService {
     if (USE_MOCKS) {
       const taskIndex = mockTasks.findIndex(t => t.id === taskId);
       if (taskIndex >= 0) {
-        mockTasks[taskIndex].state = 'archived';
+        mockTasks[taskIndex].taskState = TaskState.Archived;
       }
       return;
     }

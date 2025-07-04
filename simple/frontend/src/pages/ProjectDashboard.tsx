@@ -255,7 +255,7 @@ export const ProjectDashboard: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
-                <p className="text-sm text-gray-500">Base: {project.baseBranch}</p>
+                <p className="text-sm text-gray-500">Base: {project.base_branch}</p>
               </div>
               <Link
                 to={`/projects/${projectId}/tasks`}
@@ -322,7 +322,7 @@ export const ProjectDashboard: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                Active Tasks ({tasks.filter(t => t.state === 'active').length})
+                Active Tasks ({tasks.filter(t => t.taskState === 'active').length})
               </h2>
               <button
                 onClick={() => setShowCreateModal(true)}
@@ -333,7 +333,7 @@ export const ProjectDashboard: React.FC = () => {
               </button>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
-              {tasks.filter(t => t.state === 'active').slice(0, 5).map(task => (
+              {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
                 <Link
                   key={task.id}
                   to={`/projects/${projectId}/tasks/${task.id}`}
@@ -345,10 +345,10 @@ export const ProjectDashboard: React.FC = () => {
                       <p className="text-sm text-gray-500 mt-1">{task.branch}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {task.prNumber && (
+                      {task.prUrl && (
                         <span className="flex items-center gap-1 text-sm text-purple-600">
                           <GitPullRequest className="w-4 h-4" />
-                          PR #{task.prNumber}
+                          PR
                         </span>
                       )}
                       <span className="text-sm text-gray-500">→</span>
@@ -356,17 +356,17 @@ export const ProjectDashboard: React.FC = () => {
                   </div>
                 </Link>
               ))}
-              {tasks.filter(t => t.state === 'active').length === 0 && (
+              {tasks.filter(t => t.taskState === 'active').length === 0 && (
                 <div className="p-4 text-center text-gray-500">
                   No active tasks
                 </div>
               )}
-              {tasks.filter(t => t.state === 'active').length > 5 && (
+              {tasks.filter(t => t.taskState === 'active').length > 5 && (
                 <Link
                   to={`/projects/${projectId}/tasks`}
                   className="block p-4 text-center text-sm text-blue-600 hover:text-blue-700"
                 >
-                  View all {tasks.filter(t => t.state === 'active').length} tasks →
+                  View all {tasks.filter(t => t.taskState === 'active').length} tasks →
                 </Link>
               )}
             </div>
@@ -374,7 +374,7 @@ export const ProjectDashboard: React.FC = () => {
             {/* Recent Activity */}
             <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-4">Recent Activity</h3>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
-              {tasks.filter(t => t.state === 'merged').slice(0, 3).map(task => (
+              {tasks.filter(t => t.taskState === 'merged').slice(0, 3).map(task => (
                 <div key={task.id} className="p-4">
                   <div className="flex items-center gap-2">
                     <GitMerge className="w-4 h-4 text-green-500" />
@@ -383,7 +383,7 @@ export const ProjectDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {tasks.filter(t => t.state === 'merged').length === 0 && (
+              {tasks.filter(t => t.taskState === 'merged').length === 0 && (
                 <div className="p-4 text-center text-gray-500 text-sm">
                   No recent activity
                 </div>
@@ -400,7 +400,7 @@ export const ProjectDashboard: React.FC = () => {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateTask}
           projectId={projectId!}
-          baseBranch={project.baseBranch}
+          baseBranch={project.base_branch}
           existingBranches={branches}
           occupiedBranches={tasks.map(t => t.branch)}
         />

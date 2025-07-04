@@ -139,6 +139,14 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     }
   };
 
+  const handleTaskUpdate = (taskId: string, updates: Partial<Task>) => {
+    setTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === taskId ? { ...task, ...updates } : task
+      )
+    );
+  };
+
   if (loading) {
     return (
       <div className="h-screen bg-gray-50 flex items-center justify-center">
@@ -177,6 +185,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
           onTaskSelect={handleTaskChange}
           collapsed={sidebarCollapsed}
           onCreateTask={() => setShowCreateModal(true)}
+          onTaskUpdate={handleTaskUpdate}
         />
 
         {/* Main Terminal Area - Split Layout */}

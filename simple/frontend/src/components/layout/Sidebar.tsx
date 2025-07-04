@@ -15,6 +15,7 @@ interface SidebarProps {
   onTaskSelect: (task: Task) => void;
   collapsed?: boolean;
   onCreateTask?: () => void;
+  onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -23,7 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   allTasks,
   onTaskSelect,
   collapsed = false,
-  onCreateTask
+  onCreateTask,
+  onTaskUpdate
 }) => {
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
@@ -114,9 +116,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const result = await api.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
       if (result) {
         // Update the task in the parent component
-        // This would need to be passed down as a prop
+        if (onTaskUpdate) {
+          onTaskUpdate(currentTask.id, { name: newTaskName.trim() });
+        }
         setShowRenameModal(false);
-        // TODO: Add onTaskUpdate prop to refresh the task list
       }
     } catch (error: any) {
       alert(`Failed to rename task: ${error.message}`);
@@ -155,9 +158,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     Rename Task
                   </button>
                   <button
-                    onClick={() => {
-                      // TODO: Implement archive functionality
+                    onClick={async () => {
                       setShowTaskActions(false);
+                      if (confirm(`Are you sure you want to archive "${currentTask.name}"?`)) {
+                        try {
+                          await api.archiveTask(projectId, currentTask.id);
+                          if (onTaskUpdate) {
+                            onTaskUpdate(currentTask.id, { taskState: TaskState.Archived });
+                          }
+                        } catch (error: any) {
+                          alert(`Failed to archive task: ${error.message}`);
+                        }
+                      }
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
