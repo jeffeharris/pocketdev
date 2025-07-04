@@ -12,14 +12,14 @@ interface GitHubRepo {
   updatedAt: string;
 }
 
-interface AddProjectModalProps {
+interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProjectCreated: () => void;
 }
 
 /**
- * Modal for adding new projects with GitHub integration
+ * Modal for creating new projects with GitHub integration
  * 
  * Features:
  * - GitHub repository browser with search
@@ -29,7 +29,7 @@ interface AddProjectModalProps {
  * - Keyboard navigation
  * - Auto-navigation to project after creation
  */
-export const AddProjectModal: React.FC<AddProjectModalProps> = ({
+export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   isOpen,
   onClose,
   onProjectCreated

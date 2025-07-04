@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { GitBranch, Plus, Activity } from 'lucide-react';
 import type { Project } from '../types/project';
 import { api } from '../services/api';
-import { AddProjectModal } from '../components/project/AddProjectModal';
+import { CreateProjectModal } from '../components/project/CreateProjectModal';
 
 export const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -123,8 +123,8 @@ export const Projects: React.FC = () => {
         )}
       </div>
       
-      {/* Add Project Modal */}
-      <AddProjectModal
+      {/* Create Project Modal */}
+      <CreateProjectModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onProjectCreated={() => {
