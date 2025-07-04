@@ -18,6 +18,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import type { Project } from '../types/project';
 import type { Task, CreateTaskDTO } from '../types/task';
+import { TaskListItem } from '../components/task/TaskListItem';
 import { CreateTaskModal } from '../components/task/CreateTaskModal';
 import { api } from '../services/api';
 
@@ -332,39 +333,30 @@ export const ProjectDashboard: React.FC = () => {
                 New Task
               </button>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            <div className="space-y-2">
               {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
                 <Link
                   key={task.id}
                   to={`/projects/${projectId}/tasks/${task.id}`}
-                  className="block p-4 hover:bg-gray-50 transition-colors"
+                  className="block"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{task.name}</h4>
-                      <p className="text-sm text-gray-500 mt-1">{task.branch}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {task.prUrl && (
-                        <span className="flex items-center gap-1 text-sm text-purple-600">
-                          <GitPullRequest className="w-4 h-4" />
-                          PR
-                        </span>
-                      )}
-                      <span className="text-sm text-gray-500">→</span>
-                    </div>
-                  </div>
+                  <TaskListItem
+                    task={task}
+                    isActive={false}
+                    onSelect={() => {}}
+                    isInline={true}
+                  />
                 </Link>
               ))}
               {tasks.filter(t => t.taskState === 'active').length === 0 && (
-                <div className="p-4 text-center text-gray-500">
+                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center text-gray-500">
                   No active tasks
                 </div>
               )}
               {tasks.filter(t => t.taskState === 'active').length > 5 && (
                 <Link
                   to={`/projects/${projectId}/tasks`}
-                  className="block p-4 text-center text-sm text-blue-600 hover:text-blue-700"
+                  className="block mt-2 text-center text-sm text-blue-600 hover:text-blue-700"
                 >
                   View all {tasks.filter(t => t.taskState === 'active').length} tasks →
                 </Link>
