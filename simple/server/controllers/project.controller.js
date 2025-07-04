@@ -602,3 +602,192 @@ export async function getUpdateStatus(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Get PLANNING.md content from base branch
+ */
+export async function getProjectPlanning(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Try to read PLANNING.md from base branch
+    const result = await gitService.executeGitCommand(
+      project.local_path,
+      `git show ${project.base_branch}:PLANNING.md`,
+      config.githubToken
+    );
+    
+    if (result.success) {
+      res.json({ 
+        exists: true, 
+        content: result.output 
+      });
+    } else {
+      // File doesn't exist or other error
+      if (result.error.includes('does not exist') || result.error.includes('pathspec')) {
+        res.json({ 
+          exists: false, 
+          content: null 
+        });
+      } else {
+        // Some other git error
+        res.status(500).json({ 
+          error: `Failed to read PLANNING.md: ${result.error}` 
+        });
+      }
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get comprehensive dashboard status for a project
+ */
+export async function getProjectDashboard(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Get all active tasks for this project
+    const tasks = await models.tasks.findByProjectId(projectId, { includeArchived: false });
+    
+    const needsAttention = [];
+    
+    // 1. Check base branch sync status
+    try {
+      await gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken);
+      
+      const behindResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
+        config.githubToken
+      );
+      const behind = parseInt(behindResult.output.trim()) || 0;
+      
+      const aheadResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
+        config.githubToken
+      );
+      const ahead = parseInt(aheadResult.output.trim()) || 0;
+      
+      if (behind > 0) {
+        needsAttention.push({
+          type: 'base-behind',
+          severity: 'warning',
+          message: `Base branch is ${behind} commits behind origin`,
+          details: { behind, branch: project.base_branch },
+          actions: ['pull']
+        });
+      }
+      
+      if (ahead > 0) {
+        needsAttention.push({
+          type: 'base-ahead',
+          severity: 'info',
+          message: `Local base is ${ahead} commits ahead of origin`,
+          details: { ahead, branch: project.base_branch },
+          actions: ['push']
+        });
+      }
+    } catch (error) {
+      // Git error, but continue with other checks
+      console.error('Git status check failed:', error);
+    }
+    
+    // 2. Check for stale tasks (no commits in 7+ days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    for (const task of tasks) {
+      if (task.status === 'active' && task.updated < sevenDaysAgo) {
+        const daysSinceUpdate = Math.floor((Date.now() - new Date(task.updated).getTime()) / (1000 * 60 * 60 * 24));
+        needsAttention.push({
+          type: 'stale-task',
+          severity: 'warning',
+          message: `Task "${task.name}" inactive for ${daysSinceUpdate} days`,
+          details: { taskId: task.id, taskName: task.name, daysSinceUpdate },
+          actions: ['open-task', 'archive']
+        });
+      }
+      
+      // 3. Check for merge conflicts
+      if (task.status === 'active' && task.worktree_path) {
+        try {
+          // Try to merge base branch into task branch (dry run)
+          const mergeResult = await gitService.executeGitCommand(
+            task.worktree_path,
+            `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`,
+            config.githubToken
+          );
+          
+          if (mergeResult.output && mergeResult.output.includes('<<<<<<< ')) {
+            needsAttention.push({
+              type: 'merge-conflict',
+              severity: 'error',
+              message: `Task "${task.name}" has merge conflicts with base branch`,
+              details: { taskId: task.id, taskName: task.name },
+              actions: ['open-task', 'resolve-conflicts']
+            });
+          }
+        } catch (error) {
+          // Skip conflict check for this task
+        }
+      }
+    }
+    
+    // 4. Check for open PRs (using gh CLI)
+    if (config.githubToken) {
+      try {
+        const prResult = await gitService.executeGitCommand(
+          project.local_path,
+          `gh pr list --state open --json number,title,url,author,createdAt`,
+          config.githubToken
+        );
+        
+        if (prResult.success && prResult.output) {
+          const prs = JSON.parse(prResult.output);
+          for (const pr of prs) {
+            needsAttention.push({
+              type: 'open-pr',
+              severity: 'info',
+              message: `PR #${pr.number}: ${pr.title}`,
+              details: { 
+                prNumber: pr.number, 
+                prUrl: pr.url,
+                title: pr.title,
+                author: pr.author.login,
+                createdAt: pr.createdAt
+              },
+              actions: ['view-pr', 'merge-pr']
+            });
+          }
+        }
+      } catch (error) {
+        // gh CLI might not be available or configured
+        console.error('PR check failed:', error);
+      }
+    }
+    
+    res.json({
+      project,
+      needsAttention,
+      tasksCount: tasks.length,
+      activeTasks: tasks.filter(t => t.status === 'active').length
+    });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -95,6 +95,85 @@ class ApiService {
     return response;
   }
 
+  async getProjectPlanning(projectId: string): Promise<{ exists: boolean; content: string | null }> {
+    if (USE_MOCKS) {
+      return {
+        exists: true,
+        content: `# Project Planning
+
+## 🐛 Bugs
+- [ ] Cart total not updating when quantity changes
+- [ ] Login redirect loop on mobile Safari
+
+## 💡 Ideas
+- [ ] AI-powered product recommendations
+- [ ] Wishlist functionality
+- [ ] Guest checkout flow
+
+## 🔧 Tech Debt
+- [ ] Refactor auth system to use middleware
+- [ ] Upgrade to React 18`
+      };
+    }
+    return this.fetch<{ exists: boolean; content: string | null }>(`/projects/${projectId}/planning`);
+  }
+
+  async getProjectDashboard(projectId: string): Promise<{
+    project: any;
+    needsAttention: Array<{
+      type: string;
+      severity: 'error' | 'warning' | 'info';
+      message: string;
+      details: any;
+      actions: string[];
+    }>;
+    tasksCount: number;
+    activeTasks: number;
+  }> {
+    if (USE_MOCKS) {
+      return {
+        project: mockProjects[0],
+        needsAttention: [
+          {
+            type: 'base-behind',
+            severity: 'warning',
+            message: 'Base branch is 5 commits behind origin',
+            details: { behind: 5, branch: 'main' },
+            actions: ['pull']
+          },
+          {
+            type: 'stale-task',
+            severity: 'warning', 
+            message: 'Task "Auth system" inactive for 12 days',
+            details: { taskId: '1', taskName: 'Auth system', daysSinceUpdate: 12 },
+            actions: ['open-task', 'archive']
+          }
+        ],
+        tasksCount: 3,
+        activeTasks: 2
+      };
+    }
+    return this.fetch<any>(`/projects/${projectId}/dashboard`);
+  }
+
+  async pullBaseBranch(projectId: string): Promise<{ success: boolean; message: string }> {
+    if (USE_MOCKS) {
+      return { success: true, message: 'Successfully pulled updates to main' };
+    }
+    return this.fetch<any>(`/projects/${projectId}/pull-base-branch`, {
+      method: 'POST'
+    });
+  }
+
+  async pushBaseBranch(projectId: string): Promise<{ success: boolean; message: string }> {
+    if (USE_MOCKS) {
+      return { success: true, message: 'Successfully pushed main to origin' };
+    }
+    return this.fetch<any>(`/projects/${projectId}/push-base-branch`, {
+      method: 'POST'
+    });
+  }
+
   // Task endpoints
   async getTasks(projectId: string): Promise<Task[]> {
     if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
@@ -155,6 +234,34 @@ class ApiService {
     return this.fetch<Task>(`/projects/${projectId}/tasks`, {
       method: 'POST',
       body: JSON.stringify(task),
+    });
+  }
+
+  async updateTask(projectId: string, taskId: string, updates: { name?: string; description?: string }): Promise<Task> {
+    if (USE_MOCKS) {
+      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
+      if (taskIndex >= 0) {
+        mockTasks[taskIndex] = { ...mockTasks[taskIndex], ...updates };
+        return mockTasks[taskIndex];
+      }
+      throw new Error('Task not found');
+    }
+    return this.fetch<Task>(`/projects/${projectId}/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async archiveTask(projectId: string, taskId: string): Promise<void> {
+    if (USE_MOCKS) {
+      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
+      if (taskIndex >= 0) {
+        mockTasks[taskIndex].state = 'archived';
+      }
+      return;
+    }
+    await this.fetch<void>(`/projects/${projectId}/tasks/${taskId}/archive`, {
+      method: 'POST',
     });
   }
 

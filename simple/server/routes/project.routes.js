@@ -23,4 +23,8 @@ router.post('/:projectId/pull-base-branch', projectController.pullBaseBranch);
 router.post('/:projectId/push-base-branch', projectController.pushBaseBranch);
 router.get('/:projectId/update-status', projectController.getUpdateStatus);
 
+// Planning
+router.get('/:projectId/planning', projectController.getProjectPlanning);
+router.get('/:projectId/dashboard', projectController.getProjectDashboard);
+
 export default router;
