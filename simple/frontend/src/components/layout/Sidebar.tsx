@@ -103,6 +103,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleMergeToBase = async () => {
+    // Confirm merge action
+    const confirmed = window.confirm(
+      `Are you sure you want to merge "${currentTask.name}" into the base branch?\n\nThis will merge all ${currentTask.gitStatus?.ahead || 0} commits.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      const result = await api.mergeToBase(projectId, currentTask.id);
+      if (result.success) {
+        alert('Branch merged successfully!');
+        // The task state will update via WebSocket to show it's merged
+      } else {
+        alert(`Failed to merge: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`Failed to merge: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleRenameTask = async () => {
     if (!newTaskName.trim() || newTaskName === currentTask.name) {
       setShowRenameModal(false);
@@ -402,14 +427,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               
               if (isAhead && !hasUncommitted) {
                 return (
-                  <button 
-                    onClick={handleCreatePR}
-                    disabled={isProcessing}
-                    className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                  >
-                    <GitPullRequest className="w-4 h-4" />
-                    Create Pull Request
-                  </button>
+                  <div className="space-y-2">
+                    <button 
+                      onClick={handleMergeToBase}
+                      disabled={isProcessing}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                    >
+                      <GitMerge className="w-4 h-4" />
+                      Merge to Base Branch
+                    </button>
+                    <button 
+                      onClick={handleCreatePR}
+                      disabled={isProcessing}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                    >
+                      <GitPullRequest className="w-4 h-4" />
+                      Create Pull Request
+                    </button>
+                  </div>
                 );
               }
               
