@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -130,6 +130,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     } catch (error: any) {
       alert(`Failed to create PR: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePushBranch = async () => {
+    setIsProcessing(true);
+    
+    try {
+      const result = await api.gitOperation(projectId, currentTask.id, 'push');
+      if (!result.success) {
+        alert(`Failed to push: ${result.error || 'Unknown error'}`);
+      }
+      // Git status will update automatically via WebSocket
+    } catch (error: any) {
+      alert(`Failed to push: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -471,16 +487,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
               
               if (isAhead && !hasUncommitted) {
-                return (
-                  <button 
-                    onClick={handleCreatePR}
-                    disabled={isProcessing}
-                    className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                  >
-                    <GitPullRequest className="w-4 h-4" />
-                    Create Pull Request
-                  </button>
-                );
+                // Check if we need to push first
+                const hasRemoteTracking = currentTask.gitStatus?.hasRemoteTracking;
+                
+                if (hasRemoteTracking === false || (isAhead && hasRemoteTracking !== true)) {
+                  // Branch hasn't been pushed yet or has unpushed commits
+                  return (
+                    <button 
+                      onClick={handlePushBranch}
+                      disabled={isProcessing}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {hasRemoteTracking === false 
+                        ? `Push Branch (${isAhead} commits)`
+                        : `Push ${isAhead} commit${isAhead > 1 ? 's' : ''}`
+                      }
+                    </button>
+                  );
+                } else {
+                  // All commits pushed, ready for PR
+                  return (
+                    <button 
+                      onClick={handleCreatePR}
+                      disabled={isProcessing}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                    >
+                      <GitPullRequest className="w-4 h-4" />
+                      Create Pull Request
+                    </button>
+                  );
+                }
               }
               
               return null; // No action needed

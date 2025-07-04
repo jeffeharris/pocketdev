@@ -37,6 +37,7 @@ export interface GitStatus {
   staged?: number;
   unstaged?: number;
   untracked?: number;
+  hasRemoteTracking?: boolean;
 }
 
 export interface Task {

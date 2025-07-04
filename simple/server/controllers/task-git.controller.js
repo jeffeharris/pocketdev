@@ -68,6 +68,19 @@ export class TaskGitController {
       // Get detailed status including staged/unstaged counts
       const detailedStatus = await this.gitService.getDetailedStatus(task.worktree_path);
 
+      // Check if branch has remote tracking
+      let hasRemoteTracking = false;
+      try {
+        const remoteCheckResult = await this.gitService.command(
+          task.worktree_path,
+          `git rev-parse --verify origin/${task.branch} 2>/dev/null`
+        );
+        hasRemoteTracking = remoteCheckResult.success;
+      } catch (error) {
+        // No remote tracking branch
+        hasRemoteTracking = false;
+      }
+
       res.json({
         clean: cleanStatus,
         ahead: aheadBehind.ahead,
@@ -76,6 +89,7 @@ export class TaskGitController {
         staged: detailedStatus.staged,
         unstaged: detailedStatus.unstaged,
         untracked: detailedStatus.untracked,
+        hasRemoteTracking,
         rawStatus: statusResult.output
       });
     } catch (error) {
