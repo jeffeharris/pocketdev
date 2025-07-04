@@ -335,18 +335,13 @@ export const ProjectDashboard: React.FC = () => {
             </div>
             <div className="space-y-2">
               {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
-                <Link
-                  key={task.id}
-                  to={`/projects/${projectId}/tasks/${task.id}`}
-                  className="block"
-                >
+                <div key={task.id} onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}>
                   <TaskListItem
                     task={task}
                     isActive={false}
-                    onSelect={() => {}}
-                    isInline={true}
+                    onSelect={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
                   />
-                </Link>
+                </div>
               ))}
               {tasks.filter(t => t.taskState === 'active').length === 0 && (
                 <div className="bg-white rounded-lg border border-gray-200 p-4 text-center text-gray-500">
