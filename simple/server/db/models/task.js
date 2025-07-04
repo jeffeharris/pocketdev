@@ -143,6 +143,33 @@ class TaskModel {
       // Add session state
       const session = sessionMap.get(t.id);
       
+      /**
+       * Task State Machine
+       * 
+       * Task states determine the lifecycle phase of a task:
+       * - 'active': Task is being worked on (default for new tasks)
+       * - 'merged': Task has been merged into base branch (terminal state)
+       * - 'archived': Task has been soft-deleted (terminal state)
+       * 
+       * State transitions:
+       * - active → merged (when PR is merged or commits are merged)
+       * - active → archived (when task is abandoned/deleted)
+       * - merged → archived (cleanup old merged tasks)
+       * 
+       * Related states tracked separately:
+       * - AI Session State: not-started, idle, working, waiting
+       * - Git State: has_uncommitted_changes, has_commits_since_merge
+       * - PR State: pr_status (null, open, merged, closed)
+       * 
+       * These states combine to trigger "Needs Attention" items in the dashboard:
+       * - Stale tasks (active + no recent commits)
+       * - Merge conflicts (active + conflicts with base)
+       * - Open PRs (active + pr_status='open')
+       * - AI waiting for input (active + ai_state='waiting')
+       * 
+       * @see getProjectDashboard in project.controller.js for attention logic
+       * @see /docs/task-state-machine-documentation.md for detailed documentation
+       */
       // Calculate task state
       let taskState = 'active';
       if (t.status === 'merged' || t.merged_at) {
