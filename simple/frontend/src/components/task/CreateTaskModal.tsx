@@ -3,14 +3,14 @@ import { X } from 'lucide-react';
 import type { CreateTaskDTO } from '../../types/task';
 
 /**
- * Converts a task title into a valid git branch name
+ * Converts a task name into a valid git branch name
  * Examples:
  *   "Add User Authentication" → "add-user-authentication"
  *   "Fix: Memory leak!!" → "fix-memory-leak"
  *   "URGENT --- Update deps" → "urgent-update-deps"
  */
-const generateBranchName = (title: string): string => {
-  return title
+const generateBranchName = (name: string): string => {
+  return name
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, '') // Remove special chars except spaces and hyphens
@@ -50,7 +50,7 @@ interface CreateTaskModalProps {
  * Modal for creating new tasks with git branch management
  * 
  * Features:
- * - Auto-generates branch names from task titles
+ * - Auto-generates branch names from task names
  * - Supports creating new branches or using existing ones
  * - Validates branch names in real-time
  * - Prevents selection of occupied/protected branches
@@ -82,7 +82,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [hasToggledBranchMode, setHasToggledBranchMode] = useState(false);
   
   const [formData, setFormData] = useState({
-    title: '',
+    name: '',
     description: '',
     branch: '',
     branchPrefix: 'feat/' as const,
@@ -90,15 +90,15 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   });
   
   // Refs for managing focus and scroll behavior
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const existingBranchRef = useRef<HTMLInputElement>(null);
   const newBranchRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus title input when modal opens
+  // Auto-focus name input when modal opens
   useEffect(() => {
-    if (isOpen && titleInputRef.current) {
-      titleInputRef.current.focus();
+    if (isOpen && nameInputRef.current) {
+      nameInputRef.current.focus();
     }
   }, [isOpen]);
 
@@ -133,13 +133,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   }, [selectedSuggestionIndex]);
 
   /**
-   * Handles title input changes and auto-generates branch name
+   * Handles name input changes and auto-generates branch name
    * Auto-generation only happens if:
    * 1. User hasn't manually edited the branch field
    * 2. We're in "new branch" mode
    */
-  const handleTitleChange = (value: string) => {
-    setFormData(prev => ({ ...prev, title: value }));
+  const handleNameChange = (value: string) => {
+    setFormData(prev => ({ ...prev, name: value }));
     
     // Only auto-generate if user hasn't manually edited branch and we're in new branch mode
     if (!branchManuallyEdited && branchMode === 'new') {
@@ -151,7 +151,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   /**
    * Handles manual branch name input with real-time validation
    * - Formats input as user types (lowercase, spaces→hyphens)
-   * - If field is cleared, re-enables auto-generation from title
+   * - If field is cleared, re-enables auto-generation from name
    */
   const handleBranchChange = (value: string) => {
     const formatted = formatBranchName(value);
@@ -258,7 +258,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     e.preventDefault();
     
     // Validate based on branch mode
-    if (!formData.title.trim()) return;
+    if (!formData.name.trim()) return;
     if (branchMode === 'new' && !formData.branch.trim()) return;
     if (branchMode === 'existing') {
       if (!formData.existingBranch) return;
@@ -270,7 +270,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }
     
     onSubmit({
-      title: formData.title,
+      name: formData.name,
       description: formData.description,
       branch: branchMode === 'new' 
         ? formData.branch.replace(/-+$/, '') // Clean up trailing dashes on submit
@@ -281,7 +281,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     
     // Reset form
     setFormData({
-      title: '',
+      name: '',
       description: '',
       branch: '',
       branchPrefix: 'feat/',
@@ -309,13 +309,13 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Task Title
+              Task Name
             </label>
             <input
-              ref={titleInputRef}
+              ref={nameInputRef}
               type="text"
-              value={formData.title}
-              onChange={(e) => handleTitleChange(e.target.value)}
+              value={formData.name}
+              onChange={(e) => handleNameChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., Add user authentication"
               required

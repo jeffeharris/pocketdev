@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, FileText, GitBranch, Plus, Minus, Columns2, FileCode } from 'lucide-react';
+import { X, FileText, GitBranch, Plus, Minus, Columns2, FileCode, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../../services/api';
 import { DiffEditor } from '@monaco-editor/react';
 
@@ -26,8 +26,9 @@ interface DiffViewerModalProps {
  * IMPORTANT: Monaco DiffEditor requires sufficient width for split view
  * - Minimum width for split view: ~800-900px (approximate)
  * - Below this width, Monaco automatically falls back to unified view
- * - This is why we use max-w-7xl (80rem = 1280px) for the modal
- * - Previous max-w-6xl (72rem = 1152px) was too narrow for reliable split view
+ * - Now using max-w-[90rem] (1440px) for even better split view experience
+ * - Previous max-w-7xl (80rem = 1280px) worked but this gives more room
+ * - Sidebar is collapsible to maximize diff viewer space when needed
  * 
  * For mobile/responsive design considerations:
  * - On narrow screens, force unified view regardless of user selection
@@ -51,6 +52,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [modifiedCode, setModifiedCode] = useState<string>('');
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [canUseSplitView, setCanUseSplitView] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
 
   // Check viewport width for split view capability
@@ -218,8 +220,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-[90rem] h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div>
@@ -240,41 +242,63 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* File List Sidebar */}
-          <div className="w-80 border-r border-gray-200 overflow-y-auto bg-gray-50">
-            <div className="p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">
-                Changed Files ({files.length})
-              </h3>
-              {files.length === 0 && !loading && (
-                <div className="text-sm text-gray-500">
-                  {error ? 'Failed to load changes' : 'No changes to display'}
-                </div>
+          <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 relative`}>
+            {/* Collapse Toggle Button */}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="absolute -right-3 top-4 z-10 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRight className="w-3 h-3" />
+              ) : (
+                <ChevronLeft className="w-3 h-3" />
               )}
-              <div className="space-y-1">
-                {files.map((file) => (
-                  <button
-                    key={file.path}
-                    onClick={() => setSelectedFile(file)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
-                      selectedFile?.path === file.path
-                        ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
-                        : 'hover:bg-white hover:shadow-sm text-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {getFileIcon(file.type)}
-                        <span className="truncate">{file.path}</span>
+            </button>
+
+            {!sidebarCollapsed ? (
+              <div className="p-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  Changed Files ({files.length})
+                </h3>
+                {files.length === 0 && !loading && (
+                  <div className="text-sm text-gray-500">
+                    {error ? 'Failed to load changes' : 'No changes to display'}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {files.map((file) => (
+                    <button
+                      key={file.path}
+                      onClick={() => setSelectedFile(file)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                        selectedFile?.path === file.path
+                          ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                          : 'hover:bg-white hover:shadow-sm text-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {getFileIcon(file.type)}
+                          <span className="truncate">{file.path}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-green-600">+{file.additions}</span>
+                          <span className="text-red-600">-{file.deletions}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-green-600">+{file.additions}</span>
-                        <span className="text-red-600">-{file.deletions}</span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="p-2 pt-12">
+                <div className="flex flex-col items-center gap-3">
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  <span className="text-xs text-gray-500 vertical-text">{files.length} files</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Diff Viewer */}

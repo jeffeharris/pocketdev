@@ -138,7 +138,7 @@ class ApiService {
       
       const newTask: Task = {
         id: Math.random().toString(36).substr(2, 8),
-        title: task.title,
+        name: task.name,
         description: task.description,
         branch: branch,
         worktree_path: `/projects/${projectId}-task-${Date.now()}`,

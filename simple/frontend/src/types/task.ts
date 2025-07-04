@@ -41,7 +41,7 @@ export interface GitStatus {
 
 export interface Task {
   id: string;
-  title: string;  // 'name' from backend
+  name: string;
   description: string;
   branch: string;
   worktree_path: string;
@@ -76,7 +76,7 @@ export interface ExtendedTask extends Task {
 }
 
 export interface CreateTaskDTO {
-  title: string;
+  name: string;
   description: string;
   branch: string;
   branchPrefix?: 'feat/' | 'fix/' | 'chore/' | '';
