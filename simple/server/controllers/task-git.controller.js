@@ -181,6 +181,7 @@ export class TaskGitController {
    */
   async getTaskDiff(req, res) {
     const { projectId, taskId } = req.params;
+    const { compareWith = 'working' } = req.query; // 'working' or 'base'
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -188,65 +189,125 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // Get list of changed files with their types
-      const statusResult = await this.gitService.getStatus(task.worktree_path);
+      const project = await this.models.projects.findById(projectId);
       const files = [];
-      
-      // Parse git status output
-      const lines = statusResult.output.split('\n').filter(line => line.trim());
-      for (const line of lines) {
-        const [status, ...pathParts] = line.trim().split(/\s+/);
-        const filePath = pathParts.join(' ');
+
+      if (compareWith === 'base') {
+        // Compare task branch with base branch
+        // First get all file stats in one command for performance
+        const diffStatsResult = await this.gitService.command(task.worktree_path, 
+          `git diff --numstat origin/${project.base_branch}...HEAD`);
         
-        if (!filePath) continue;
+        const diffStatusResult = await this.gitService.command(task.worktree_path, 
+          `git diff --name-status origin/${project.base_branch}...HEAD`);
         
-        let type = 'modified';
-        if (status.includes('A') || status === '??') type = 'added';
-        else if (status.includes('D')) type = 'deleted';
-        else if (status.includes('M')) type = 'modified';
-        else if (status.includes('R')) type = 'renamed';
-        
-        // Get diff for this file
-        let diff = '';
-        let additions = 0;
-        let deletions = 0;
-        
-        try {
-          // For untracked files, show as new file
-          if (status === '??') {
-            const content = await this.gitService.command(task.worktree_path, `cat "${filePath}"`);
-            const lines = content.output.split('\n');
-            diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-            lines.forEach(line => {
-              diff += `+${line}\n`;
-            });
-            additions = lines.length;
-          } else {
-            // Get standard diff
-            const diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${filePath}"`);
-            diff = diffResult.output;
-            
-            // Count additions/deletions
-            const diffLines = diff.split('\n');
-            diffLines.forEach(line => {
-              if (line.startsWith('+') && !line.startsWith('+++')) additions++;
-              else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+        // Parse stats into a map
+        const statsMap = new Map();
+        const statsLines = diffStatsResult.output.split('\n').filter(line => line.trim());
+        for (const line of statsLines) {
+          const [additions, deletions, ...pathParts] = line.split('\t');
+          const filePath = pathParts.join('\t');
+          if (filePath) {
+            statsMap.set(filePath, {
+              additions: parseInt(additions) || 0,
+              deletions: parseInt(deletions) || 0
             });
           }
-        } catch (error) {
-          console.warn('Could not get diff for:', filePath, error);
         }
         
-        files.push({
-          path: filePath,
-          type,
-          additions,
-          deletions,
-          diff
-        });
+        // Parse status
+        const statusLines = diffStatusResult.output.split('\n').filter(line => line.trim());
+        
+        for (const line of statusLines) {
+          const [status, ...pathParts] = line.trim().split(/\s+/);
+          const filePath = pathParts.join(' ');
+          
+          if (!filePath) continue;
+          
+          let type = 'modified';
+          if (status.includes('A')) type = 'added';
+          else if (status.includes('D')) type = 'deleted';
+          else if (status.includes('M')) type = 'modified';
+          else if (status.includes('R')) type = 'renamed';
+          
+          const stats = statsMap.get(filePath) || { additions: 0, deletions: 0 };
+          
+          // DON'T load the full diff here - let frontend load it on demand
+          files.push({
+            path: filePath,
+            type,
+            additions: stats.additions,
+            deletions: stats.deletions
+            // No diff property - will be loaded on demand
+          });
+        }
+      } else {
+        // Compare working directory (default behavior)
+        const statusResult = await this.gitService.getStatus(task.worktree_path);
+        const lines = statusResult.output.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          const [status, ...pathParts] = line.trim().split(/\s+/);
+          const filePath = pathParts.join(' ');
+          
+          if (!filePath) continue;
+          
+          let type = 'modified';
+          if (status.includes('A') || status === '??') type = 'added';
+          else if (status.includes('D')) type = 'deleted';
+          else if (status.includes('M')) type = 'modified';
+          else if (status.includes('R')) type = 'renamed';
+          
+          // Get diff for this file
+          let diff = '';
+          let additions = 0;
+          let deletions = 0;
+          
+          try {
+            // For untracked files, show as new file
+            if (status === '??') {
+              const content = await this.gitService.command(task.worktree_path, `cat "${filePath}"`);
+              const lines = content.output.split('\n');
+              diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
+              lines.forEach(line => {
+                diff += `+${line}\n`;
+              });
+              additions = lines.length;
+            } else {
+              // Get standard diff
+              const diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${filePath}"`);
+              diff = diffResult.output;
+              
+              // Count additions/deletions
+              const diffLines = diff.split('\n');
+              diffLines.forEach(line => {
+                if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+                else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+              });
+            }
+          } catch (error) {
+            console.warn('Could not get diff for:', filePath, error);
+          }
+          
+          files.push({
+            path: filePath,
+            type,
+            additions,
+            deletions,
+            diff
+          });
+        }
       }
       
-      res.json({ files });
+      // Check if working directory is clean to inform default comparison mode
+      const statusResult = await this.gitService.getStatus(task.worktree_path);
+      const hasWorkingChanges = statusResult.output.trim().length > 0;
+      
+      res.json({ 
+        files,
+        compareWith,
+        hasWorkingChanges
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -257,6 +318,7 @@ export class TaskGitController {
    */
   async getFileDiff(req, res) {
     const { projectId, taskId, file } = req.params;
+    const { compareWith = 'working' } = req.query; // 'working' or 'base'
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -264,13 +326,59 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      const diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${file}"`);
+      let diffResult;
+      
+      if (compareWith === 'base') {
+        const project = await this.models.projects.findById(projectId);
+        diffResult = await this.gitService.command(task.worktree_path,
+          `git diff origin/${project.base_branch}...HEAD -- "${file}"`);
+      } else {
+        diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${file}"`);
+      }
       
       res.json({
         path: file,
         diff: diffResult.output,
         hasDiff: diffResult.output.trim().length > 0
       });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Get commit history for a task
+   */
+  async getCommitHistory(req, res) {
+    const { projectId, taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task || task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      // Get commit history
+      const logResult = await this.gitService.log(
+        task.worktree_path, 
+        '--pretty=format:%H|%s|%an|%ar|%P --max-count=50'
+      );
+      
+      const commits = logResult.output.trim().split('\n').map(line => {
+        const [hash, message, author, date, parents] = line.split('|');
+        // Check if this is a merge commit (has more than one parent)
+        const isMerge = parents && parents.trim().split(' ').length > 1;
+        
+        return {
+          hash,
+          message,
+          author,
+          date,
+          isMerge
+        };
+      });
+      
+      res.json(commits);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -384,6 +492,20 @@ export class TaskGitController {
         case 'log':
           const logArgs = req.body.args || '--oneline -n 10';
           result = await gitService.log(task.worktree_path, logArgs);
+          break;
+          
+        case 'reset-uncommitted':
+          // Reset all uncommitted changes
+          result = await gitService.reset(task.worktree_path, '--hard HEAD');
+          break;
+          
+        case 'reset-to-commit':
+          const commitHash = req.body.commit;
+          if (!commitHash) {
+            return res.status(400).json({ error: 'Commit hash required for reset' });
+          }
+          // Reset to specific commit
+          result = await gitService.reset(task.worktree_path, `--hard ${commitHash}`);
           break;
           
         default:

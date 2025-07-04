@@ -275,6 +275,42 @@ class ApiService {
     });
   }
 
+  async getCommitHistory(projectId: string, taskId: string): Promise<any[]> {
+    if (USE_MOCKS) {
+      return [
+        {
+          hash: 'abc123def456',
+          message: 'Fix responsive layout in header',
+          author: 'You',
+          date: '2 hours ago',
+          isMerge: false
+        },
+        {
+          hash: 'def456ghi789',
+          message: 'Add user authentication',
+          author: 'You',
+          date: '4 hours ago',
+          isMerge: false
+        },
+        {
+          hash: 'ghi789jkl012',
+          message: 'Merge branch \'main\' into feature/auth',
+          author: 'You',
+          date: 'Yesterday',
+          isMerge: true
+        },
+        {
+          hash: 'jkl012mno345',
+          message: 'Initial auth setup',
+          author: 'You',
+          date: '2 days ago',
+          isMerge: false
+        }
+      ];
+    }
+    return this.fetch<any[]>(`/projects/${projectId}/tasks/${taskId}/git/commits`);
+  }
+
   // Git endpoints
   async getGitStatus(taskId: string): Promise<GitStatus> {
     if (USE_MOCKS) return mockGitStatus;
@@ -286,13 +322,17 @@ class ApiService {
     return this.fetch<ChangedFile[]>(`/tasks/${taskId}/files/changed`);
   }
 
-  async getTaskDiff(projectId: string, taskId: string): Promise<{ files: Array<{
-    path: string;
-    type: 'added' | 'modified' | 'deleted' | 'renamed';
-    additions: number;
-    deletions: number;
-    diff: string;
-  }> }> {
+  async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<{ 
+    files: Array<{
+      path: string;
+      type: 'added' | 'modified' | 'deleted' | 'renamed';
+      additions: number;
+      deletions: number;
+      diff: string;
+    }>;
+    compareWith: string;
+    hasWorkingChanges: boolean;
+  }> {
     if (USE_MOCKS) {
       // Return mock diff data for testing
       return {
@@ -318,13 +358,17 @@ index abc123..def456 100644
 +    <button onClick={onClick}>{children}</button>
    );
  };`
-        }]
+        }],
+        compareWith,
+        hasWorkingChanges: true
       };
     }
-    return this.fetch<{ files: any[] }>(`/projects/${projectId}/tasks/${taskId}/git/diff`);
+    return this.fetch<{ files: any[]; compareWith: string; hasWorkingChanges: boolean }>(
+      `/projects/${projectId}/tasks/${taskId}/git/diff${compareWith === 'base' ? '?compareWith=base' : ''}`
+    );
   }
 
-  async getFileDiff(projectId: string, taskId: string, filePath: string): Promise<{
+  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' = 'working'): Promise<{
     path: string;
     diff: string;
     hasDiff: boolean;
@@ -345,7 +389,7 @@ index abc123..def456 100644
     // Encode the file path to handle special characters and slashes
     const encodedPath = encodeURIComponent(filePath);
     return this.fetch<{ path: string; diff: string; hasDiff: boolean }>(
-      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}`
+      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${compareWith === 'base' ? '?compareWith=base' : ''}`
     );
   }
 
