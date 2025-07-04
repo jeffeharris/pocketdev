@@ -8,7 +8,7 @@ import { WorkerStatus } from '../../types/task';
 const mockTasks = [
   {
     id: '1',
-    title: 'Add user authentication',
+    name: 'Add user authentication',
     branch: 'feat/user-auth',
     workerStatus: 'idle',
     phase: 'generate',
@@ -17,7 +17,7 @@ const mockTasks = [
   },
   {
     id: '2',
-    title: 'Fix navigation bug',
+    name: 'Fix navigation bug',
     branch: 'fix/nav-bug',
     workerStatus: 'working',
     phase: 'validate',
@@ -26,7 +26,7 @@ const mockTasks = [
   },
   {
     id: '3',
-    title: 'Update documentation',
+    name: 'Update documentation',
     branch: 'chore/update-docs',
     workerStatus: 'waiting',
     phase: 'merge',
@@ -35,7 +35,7 @@ const mockTasks = [
   },
   {
     id: '4',
-    title: 'Implement dark mode',
+    name: 'Implement dark mode',
     branch: 'feat/dark-mode',
     workerStatus: 'not-started',
     phase: 'generate',
@@ -44,7 +44,7 @@ const mockTasks = [
   },
   {
     id: '5',
-    title: 'Fix login issue',
+    name: 'Fix login issue',
     branch: 'fix/login-issue',
     workerStatus: 'idle',
     phase: 'merge',
@@ -633,7 +633,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
               <div className="space-y-3">
                 {mockTasks.map(task => (
                   <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">{task.title}</span>
+                    <span className="text-sm text-gray-700">{task.name}</span>
                     <TaskStatus status={getWorkerStatus(task.workerStatus)} />
                   </div>
                 ))}
@@ -644,7 +644,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
               <div className="space-y-3">
                 {mockTasks.map(task => (
                   <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                    <span className="text-sm text-gray-700">{task.title}</span>
+                    <span className="text-sm text-gray-700">{task.name}</span>
                     <TaskStatusPrototype
                       workerStatus={task.workerStatus}
                       phase={task.phase}
@@ -664,7 +664,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
           <h2 className="text-lg font-semibold mb-4">Selected Task Details</h2>
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium text-gray-900">{selectedTask.title}</h3>
+              <h3 className="font-medium text-gray-900">{selectedTask.name}</h3>
               <p className="text-sm text-gray-500">{selectedTask.branch}</p>
             </div>
             
@@ -822,7 +822,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
                 <div className="p-4 border-b border-gray-200">
                   <div className="mb-2">
                     <div className="flex items-center justify-between mb-1">
-                      <h2 className="font-semibold text-gray-900 text-sm">#{selectedTask.id.slice(-3)} {selectedTask.title}</h2>
+                      <h2 className="font-semibold text-gray-900 text-sm">#{selectedTask.id.slice(-3)} {selectedTask.name}</h2>
                     </div>
                     <div className="flex items-center justify-end">
                       {useEnhancedStatus ? (
@@ -1112,7 +1112,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
                         )}
                         onClick={() => setSelectedTask(task)}
                       >
-                        <div className="font-medium text-gray-900">#{task.id} {task.title}</div>
+                        <div className="font-medium text-gray-900">#{task.id} {task.name}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           {useEnhancedStatus ? (
                             <TaskStatusPrototype

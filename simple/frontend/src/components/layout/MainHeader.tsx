@@ -59,7 +59,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                 onClick={() => setShowTaskSwitcher(!showTaskSwitcher)}
                 className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer"
               >
-                <span>#{activeTask?.id.slice(-3)} {activeTask?.title}</span>
+                <span>#{activeTask?.id.slice(-3)} {activeTask?.name}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
 

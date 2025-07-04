@@ -25,7 +25,7 @@ export const mockProjects: Project[] = [
 export const mockTasks: Task[] = [
   {
     id: '7d29e028',
-    title: 'Update the task view page',
+    name: 'Update the task view page',
     description: 'Improve the task view UI and add better status indicators',
     branch: 'feature/task-view-page',
     worktree_path: '/projects/17dbiode-task-7d29e028',
@@ -43,7 +43,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: 'abc12345',
-    title: 'Add user authentication',
+    name: 'Add user authentication',
     description: 'Implement JWT-based authentication with login/register',
     branch: 'feature/add-auth-system',
     worktree_path: '/projects/17dbiode-task-abc12345',
@@ -61,7 +61,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: 'def45678',
-    title: 'Fix memory leak in worker',
+    name: 'Fix memory leak in worker',
     description: 'Investigate and fix memory leak in background worker process',
     branch: 'fix/memory-leak-worker',
     worktree_path: '/projects/17dbiode-task-def45678',

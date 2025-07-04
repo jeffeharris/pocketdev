@@ -76,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     
     try {
       const result = await api.gitOperation(projectId, currentTask.id, 'pr', {
-        message: `${currentTask.title} - ${currentTask.description}`
+        message: `${currentTask.name} - ${currentTask.description}`
       });
       if (result.success) {
         // Extract PR URL from output if available
@@ -102,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 border-b border-gray-200">
         <div className="mb-2">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold text-gray-900 text-sm">#{currentTask.id.slice(-3)} {currentTask.title}</h2>
+            <h2 className="font-semibold text-gray-900 text-sm">#{currentTask.id.slice(-3)} {currentTask.name}</h2>
           </div>
           <div className="flex items-center justify-end">
             <TaskStatus 
@@ -382,7 +382,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         onClose={() => setShowDiffModal(false)}
         projectId={projectId}
         taskId={currentTask.id}
-        taskTitle={currentTask.title}
+        taskTitle={currentTask.name}
         branch={currentTask.branch}
       />
 
