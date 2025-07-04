@@ -333,9 +333,13 @@ export const ProjectDashboard: React.FC = () => {
                 New Task
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
               {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
-                <div key={task.id} onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}>
+                <div 
+                  key={task.id} 
+                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
+                >
                   <TaskListItem
                     task={task}
                     isActive={false}
@@ -344,19 +348,19 @@ export const ProjectDashboard: React.FC = () => {
                 </div>
               ))}
               {tasks.filter(t => t.taskState === 'active').length === 0 && (
-                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center text-gray-500">
+                <div className="p-4 text-center text-gray-500">
                   No active tasks
                 </div>
               )}
-              {tasks.filter(t => t.taskState === 'active').length > 5 && (
-                <Link
-                  to={`/projects/${projectId}/tasks`}
-                  className="block mt-2 text-center text-sm text-blue-600 hover:text-blue-700"
-                >
-                  View all {tasks.filter(t => t.taskState === 'active').length} tasks →
-                </Link>
-              )}
             </div>
+            {tasks.filter(t => t.taskState === 'active').length > 5 && (
+              <Link
+                to={`/projects/${projectId}/tasks`}
+                className="block mt-2 text-center text-sm text-blue-600 hover:text-blue-700"
+              >
+                View all {tasks.filter(t => t.taskState === 'active').length} tasks →
+              </Link>
+            )}
 
             {/* Recent Activity */}
             <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-4">Recent Activity</h3>
