@@ -258,12 +258,6 @@ export const ProjectDashboard: React.FC = () => {
                 <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
                 <p className="text-sm text-gray-500">Base: {project.base_branch}</p>
               </div>
-              <Link
-                to={`/projects/${projectId}/tasks`}
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                View All Tasks →
-              </Link>
             </div>
           </div>
         </div>
@@ -271,7 +265,7 @@ export const ProjectDashboard: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Needs Attention Section */}
-        {needsAttention.length > 0 && (
+        {needsAttention.length > 0 ? (
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">🔴 Needs Attention</h2>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
@@ -288,6 +282,31 @@ export const ProjectDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Status</h2>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-gray-600">All systems operational. Base branch is in sync.</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => handleAction('pull', { type: 'manual', severity: 'info', message: '', details: {}, actions: [] })}
+                  disabled={actionLoading === 'pull'}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  <ArrowDown className="w-3 h-3" />
+                  Pull from Origin
+                </button>
+                <button
+                  onClick={() => handleAction('push', { type: 'manual', severity: 'info', message: '', details: {}, actions: [] })}
+                  disabled={actionLoading === 'push'}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                  Push to Origin
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -353,28 +372,44 @@ export const ProjectDashboard: React.FC = () => {
                 </div>
               )}
             </div>
-            {tasks.filter(t => t.taskState === 'active').length > 5 && (
-              <Link
-                to={`/projects/${projectId}/tasks`}
-                className="block mt-2 text-center text-sm text-blue-600 hover:text-blue-700"
-              >
-                View all {tasks.filter(t => t.taskState === 'active').length} tasks →
-              </Link>
-            )}
 
             {/* Recent Activity */}
             <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-4">Recent Activity</h3>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
-              {tasks.filter(t => t.taskState === 'merged').slice(0, 3).map(task => (
-                <div key={task.id} className="p-4">
-                  <div className="flex items-center gap-2">
-                    <GitMerge className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-900">{task.name}</span>
-                    <span className="text-sm text-gray-500">merged</span>
+              {/* Show both merged and recently updated tasks */}
+              {[
+                ...tasks.filter(t => t.taskState === 'merged').map(t => ({ ...t, activityType: 'merged' })),
+                ...tasks.filter(t => t.taskState === 'active' && t.has_uncommitted_changes).map(t => ({ ...t, activityType: 'active' }))
+              ]
+                .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+                .slice(0, 5)
+                .map(task => (
+                  <div key={task.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {task.activityType === 'merged' ? (
+                          <>
+                            <GitMerge className="w-4 h-4 text-green-500" />
+                            <span className="text-sm font-medium text-gray-900">{task.name}</span>
+                            <span className="text-sm text-gray-500">merged</span>
+                          </>
+                        ) : (
+                          <>
+                            <Activity className="w-4 h-4 text-blue-500" />
+                            <span className="text-sm font-medium text-gray-900">{task.name}</span>
+                            <span className="text-sm text-gray-500">in progress</span>
+                          </>
+                        )}
+                      </div>
+                      {task.merged_at && (
+                        <span className="text-xs text-gray-400">
+                          {new Date(task.merged_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {tasks.filter(t => t.taskState === 'merged').length === 0 && (
+                ))}
+              {tasks.length === 0 && (
                 <div className="p-4 text-center text-gray-500 text-sm">
                   No recent activity
                 </div>
