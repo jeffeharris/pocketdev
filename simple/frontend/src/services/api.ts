@@ -324,6 +324,31 @@ index abc123..def456 100644
     return this.fetch<{ files: any[] }>(`/projects/${projectId}/tasks/${taskId}/git/diff`);
   }
 
+  async getFileDiff(projectId: string, taskId: string, filePath: string): Promise<{
+    path: string;
+    diff: string;
+    hasDiff: boolean;
+  }> {
+    if (USE_MOCKS) {
+      return {
+        path: filePath,
+        diff: `diff --git a/${filePath} b/${filePath}
+index abc123..def456 100644
+--- a/${filePath}
++++ b/${filePath}
+@@ -1,5 +1,10 @@
+-mock line removed
++mock line added`,
+        hasDiff: true
+      };
+    }
+    // Encode the file path to handle special characters and slashes
+    const encodedPath = encodeURIComponent(filePath);
+    return this.fetch<{ path: string; diff: string; hasDiff: boolean }>(
+      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}`
+    );
+  }
+
   async checkConflicts(taskId: string): Promise<boolean> {
     if (USE_MOCKS) return Math.random() > 0.7; // 30% chance of conflicts
     const result = await this.fetch<{ hasConflicts: boolean }>(`/tasks/${taskId}/git/check-conflicts`);

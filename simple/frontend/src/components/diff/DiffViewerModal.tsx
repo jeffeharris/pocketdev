@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, FileText, GitBranch, Plus, Minus, Columns2, FileCode, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, FileText, GitBranch, Plus, Minus, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { DiffEditor } from '@monaco-editor/react';
 
@@ -153,32 +153,54 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       const response = await api.getTaskDiff(projectId, taskId);
       const files: DiffFile[] = response.files || [];
       
-      // Mark all files as needing to load their diff content
-      const filesWithLoadingState = files.map(file => ({
-        ...file,
-        loading: !file.diff, // Only mark as loading if diff isn't already present
-      }));
-      
-      setFiles(filesWithLoadingState);
-      
-      if (filesWithLoadingState.length > 0) {
-        // Load the first file immediately
-        const firstFile = filesWithLoadingState[0];
+      if (files.length > 0) {
+        // First, set all files without their diff content (for quick sidebar display)
+        const filesWithoutDiff = files.map(file => ({
+          ...file,
+          diff: undefined,
+          loading: true
+        }));
+        setFiles(filesWithoutDiff);
+        
+        // Select and load the first file immediately
+        const firstFile = filesWithoutDiff[0];
         setSelectedFile(firstFile);
         setSelectedFileIndex(0);
         
-        // If first file needs diff content, load it
-        if (!firstFile.diff) {
+        // Load first file's diff content
+        if (files[0].diff) {
+          // If diff was already included, use it
+          setSelectedFile(files[0]);
+          setFiles(prev => {
+            const updated = [...prev];
+            updated[0] = files[0];
+            return updated;
+          });
+        } else {
+          // Load first file's diff via API
           await loadFileDiff(firstFile.path, 0);
         }
         
         // Load remaining files in the background
-        filesWithLoadingState.slice(1).forEach((file, index) => {
-          if (!file.diff) {
-            loadFileDiff(file.path, index + 1);
+        files.slice(1).forEach((file, index) => {
+          if (file.diff) {
+            // If diff was already included, update immediately
+            setTimeout(() => {
+              setFiles(prev => {
+                const updated = [...prev];
+                updated[index + 1] = { ...file, loading: false };
+                return updated;
+              });
+            }, 10 * (index + 1)); // Stagger updates slightly
+          } else {
+            // Load diff via API in background
+            setTimeout(() => {
+              loadFileDiff(file.path, index + 1);
+            }, 50 * (index + 1)); // Stagger API calls
           }
         });
       } else {
+        setFiles([]);
         setSelectedFile(null);
         setSelectedFileIndex(0);
       }
@@ -194,8 +216,6 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   
   const loadFileDiff = async (filePath: string, fileIndex: number) => {
     try {
-      // Simulate API call to load individual file diff
-      // In a real implementation, this would be a separate API endpoint
       const response = await api.getFileDiff(projectId, taskId, filePath);
       
       setFiles(prevFiles => {
@@ -229,7 +249,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         if (newFiles[fileIndex]) {
           newFiles[fileIndex] = {
             ...newFiles[fileIndex],
-            loading: false
+            loading: false,
+            diff: `// Failed to load diff for ${filePath}`
           };
         }
         return newFiles;

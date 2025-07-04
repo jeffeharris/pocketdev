@@ -16,6 +16,7 @@ import {
   ArrowDown
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Project } from '../types/project';
 import type { Task, CreateTaskDTO } from '../types/task';
 import { TaskListItem } from '../components/task/TaskListItem';
@@ -324,8 +325,8 @@ export const ProjectDashboard: React.FC = () => {
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               {planning.exists && planning.content ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown>{planning.content}</ReactMarkdown>
+                <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-ul:list-disc prose-li:marker:text-gray-600 prose-strong:text-gray-900">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{planning.content}</ReactMarkdown>
                 </div>
               ) : (
                 <div className="text-center py-8">

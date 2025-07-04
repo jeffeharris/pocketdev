@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2 } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -175,6 +175,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Archive className="w-4 h-4" />
                     Archive Task
+                  </button>
+                  <hr className="my-1 border-gray-200" />
+                  <button
+                    onClick={async () => {
+                      setShowTaskActions(false);
+                      if (confirm('Are you sure you want to reset all uncommitted changes? This cannot be undone.')) {
+                        try {
+                          await api.gitOperation(projectId, currentTask.id, 'reset-uncommitted');
+                          // Git status will update via WebSocket
+                        } catch (error: any) {
+                          alert(`Failed to reset changes: ${error.message}`);
+                        }
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Reset Uncommitted Changes
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowTaskActions(false);
+                      setShowResetModal(true);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                    Reset to Previous Commit...
                   </button>
                   <hr className="my-1 border-gray-200" />
                   <button
