@@ -38,7 +38,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
       )}
       onClick={() => onSelect(task)}
     >
-      <div className="font-medium text-gray-900">#{task.id} {task.name}</div>
+      <div className="font-medium text-gray-900">#{task.id} {task.name || 'Unnamed Task'}</div>
       <div className="text-xs text-gray-500 mt-1">
         <TaskStatusComponent 
           workerStatus={currentSessionState.status}

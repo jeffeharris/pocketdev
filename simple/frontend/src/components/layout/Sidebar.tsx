@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2 } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -29,9 +29,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
   const [showDiffModal, setShowDiffModal] = useState(false);
   const [showCommitModal, setShowCommitModal] = useState(false);
+  const [showTaskActions, setShowTaskActions] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [newTaskName, setNewTaskName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const commitOptionsRef = useRef<HTMLDivElement>(null);
   const updateOptionsRef = useRef<HTMLDivElement>(null);
+  const taskActionsRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -41,6 +45,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       if (updateOptionsRef.current && !updateOptionsRef.current.contains(event.target as Node)) {
         setShowUpdateOptions(false);
+      }
+      if (taskActionsRef.current && !taskActionsRef.current.contains(event.target as Node)) {
+        setShowTaskActions(false);
       }
     };
 
@@ -96,13 +103,81 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleRenameTask = async () => {
+    if (!newTaskName.trim() || newTaskName === currentTask.name) {
+      setShowRenameModal(false);
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await api.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
+      if (result) {
+        // Update the task in the parent component
+        // This would need to be passed down as a prop
+        setShowRenameModal(false);
+        // TODO: Add onTaskUpdate prop to refresh the task list
+      }
+    } catch (error: any) {
+      alert(`Failed to rename task: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
       {/* Current Task Details */}
       <div className="p-4 border-b border-gray-200">
         <div className="mb-2">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="font-semibold text-gray-900 text-sm">#{currentTask.id.slice(-3)} {currentTask.name}</h2>
+            <h2 className="font-semibold text-gray-900 text-sm">#{currentTask.id.slice(-3)} {currentTask.name || 'Unnamed Task'}</h2>
+            <div className="relative" ref={taskActionsRef}>
+              <button
+                onClick={() => setShowTaskActions(!showTaskActions)}
+                className="p-1 rounded hover:bg-gray-100 transition-colors"
+                title="Task actions"
+              >
+                <MoreVertical className="w-4 h-4 text-gray-500" />
+              </button>
+              
+              {showTaskActions && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setNewTaskName(currentTask.name || '');
+                      setShowRenameModal(true);
+                      setShowTaskActions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Rename Task
+                  </button>
+                  <button
+                    onClick={() => {
+                      // TODO: Implement archive functionality
+                      setShowTaskActions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Archive className="w-4 h-4" />
+                    Archive Task
+                  </button>
+                  <hr className="my-1 border-gray-200" />
+                  <button
+                    onClick={() => {
+                      // TODO: Implement delete functionality
+                      setShowTaskActions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Task
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-end">
             <TaskStatus 
@@ -399,6 +474,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
           // The backend triggers a status check after commit
         }}
       />
+
+      {/* Rename Task Modal */}
+      {showRenameModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Rename Task</h3>
+              <input
+                type="text"
+                value={newTaskName}
+                onChange={(e) => setNewTaskName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameTask();
+                  if (e.key === 'Escape') setShowRenameModal(false);
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter new task name"
+                autoFocus
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setShowRenameModal(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRenameTask}
+                  disabled={isProcessing || !newTaskName.trim() || newTaskName === currentTask.name}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? 'Renaming...' : 'Rename'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

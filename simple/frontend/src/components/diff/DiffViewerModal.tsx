@@ -53,6 +53,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
   const [canUseSplitView, setCanUseSplitView] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
 
 
   // Check viewport width for split view capability
@@ -103,6 +104,22 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         setViewMode(prev => prev === 'split' ? 'unified' : 'split');
       }
       
+      // Toggle sidebar with 's' key
+      if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
+        setSidebarCollapsed(prev => !prev);
+      }
+      
+      // Navigate files with arrow keys
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const direction = e.key === 'ArrowUp' ? -1 : 1;
+        const newIndex = Math.max(0, Math.min(files.length - 1, selectedFileIndex + direction));
+        if (newIndex !== selectedFileIndex && files[newIndex]) {
+          setSelectedFile(files[newIndex]);
+          setSelectedFileIndex(newIndex);
+        }
+      }
+      
       // Close modal with Escape
       if (e.key === 'Escape') {
         onClose();
@@ -111,7 +128,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, canUseSplitView]);
+  }, [isOpen, onClose, canUseSplitView, files, selectedFileIndex]);
 
   // Process diff when file is selected
   useEffect(() => {
@@ -134,8 +151,10 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setFiles(files);
       if (files.length > 0) {
         setSelectedFile(files[0]);
+        setSelectedFileIndex(0);
       } else {
         setSelectedFile(null);
+        setSelectedFileIndex(0);
       }
     } catch (error: any) {
       console.error('Failed to load diff:', error);
@@ -242,25 +261,21 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* File List Sidebar */}
-          <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 relative`}>
-            {/* Collapse Toggle Button */}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="absolute -right-3 top-4 z-10 w-6 h-6 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="w-3 h-3" />
-              ) : (
-                <ChevronLeft className="w-3 h-3" />
-              )}
-            </button>
-
+          <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}>
             {!sidebarCollapsed ? (
-              <div className="p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  Changed Files ({files.length})
-                </h3>
+              <div className="flex-1 p-4">
+                <div className="flex items-center justify-between mb-3 min-w-0">
+                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                    Changes ({files.length} {files.length === 1 ? 'file' : 'files'})
+                  </h3>
+                  <button
+                    onClick={() => setSidebarCollapsed(true)}
+                    className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0 ml-2"
+                    title="Collapse sidebar"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
                 {files.length === 0 && !loading && (
                   <div className="text-sm text-gray-500">
                     {error ? 'Failed to load changes' : 'No changes to display'}
@@ -270,7 +285,10 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                   {files.map((file) => (
                     <button
                       key={file.path}
-                      onClick={() => setSelectedFile(file)}
+                      onClick={() => {
+                        setSelectedFile(file);
+                        setSelectedFileIndex(files.indexOf(file));
+                      }}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
                         selectedFile?.path === file.path
                           ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
@@ -292,11 +310,27 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="p-2 pt-12">
-                <div className="flex flex-col items-center gap-3">
+              <div 
+                className="flex flex-col items-center py-4 gap-4 cursor-pointer hover:bg-gray-100 h-full"
+                onClick={() => setSidebarCollapsed(false)}
+                title="Expand sidebar"
+              >
+                <button
+                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                </button>
+                <div className="flex flex-col items-center gap-2 select-none">
                   <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs text-gray-500 vertical-text">{files.length} files</span>
+                  <span className="text-xs text-gray-500 vertical-text">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
                 </div>
+                {selectedFile && (
+                  <div className="flex flex-col items-center gap-1 select-none mt-2 pt-2 border-t border-gray-200">
+                    <span className="text-xs text-gray-600 font-medium">{selectedFileIndex + 1}</span>
+                    <span className="text-xs text-gray-400">of</span>
+                    <span className="text-xs text-gray-600 font-medium">{files.length}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -412,15 +446,26 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
           <div className="text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">↑</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">↓</kbd>
+              <span>Navigate files</span>
+            </span>
+            <span className="mx-2">·</span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">S</kbd>
+              <span>Toggle sidebar</span>
+            </span>
             {canUseSplitView && (
               <>
+                <span className="mx-2">·</span>
                 <span className="inline-flex items-center gap-1">
                   <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">V</kbd>
                   <span>Toggle view</span>
                 </span>
-                <span className="mx-2">·</span>
               </>
             )}
+            <span className="mx-2">·</span>
             <span className="inline-flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Esc</kbd>
               <span>Close</span>

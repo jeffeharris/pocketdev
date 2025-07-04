@@ -102,7 +102,7 @@ class ApiService {
     // Backend now includes sessionState and taskState
     return response.map(t => ({
       id: t.id,
-      title: t.name || 'Untitled Task',
+      name: t.name || 'Untitled Task',
       description: '', // Not in backend yet
       branch: t.branch,
       worktree_path: t.worktree_path,
