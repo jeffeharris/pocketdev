@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Force Tailwind to scan these files */
 @source "./src/**/*.{js,ts,jsx,tsx}";
