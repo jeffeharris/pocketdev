@@ -33,7 +33,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showCommitModal, setShowCommitModal] = useState(false);
   const [showTaskActions, setShowTaskActions] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
+  const [commits, setCommits] = useState<any[]>([]);
+  const [selectedCommit, setSelectedCommit] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const commitOptionsRef = useRef<HTMLDivElement>(null);
   const updateOptionsRef = useRef<HTMLDivElement>(null);
@@ -56,6 +59,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Load commit history when reset modal opens
+  useEffect(() => {
+    if (showResetModal) {
+      loadCommitHistory();
+    }
+  }, [showResetModal]);
+
+  const loadCommitHistory = async () => {
+    try {
+      const history = await api.getCommitHistory(projectId, currentTask.id);
+      
+      // Find the last merge commit
+      const lastMergeIndex = history.findIndex((commit: any) => commit.isMerge);
+      
+      // Mark commits as resettable based on merge boundary
+      const commitsWithResetFlag = history.map((commit: any, index: number) => ({
+        ...commit,
+        canReset: lastMergeIndex === -1 || index < lastMergeIndex
+      }));
+      
+      setCommits(commitsWithResetFlag);
+    } catch (error) {
+      console.error('Failed to load commit history:', error);
+      setCommits([]);
+    }
+  };
 
   if (collapsed) return null;
 
@@ -138,10 +168,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="relative" ref={taskActionsRef}>
               <button
                 onClick={() => setShowTaskActions(!showTaskActions)}
-                className="p-1 rounded hover:bg-gray-100 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-all duration-200 hover:scale-110 cursor-pointer group"
                 title="Task actions"
               >
-                <MoreVertical className="w-4 h-4 text-gray-500" />
+                <MoreVertical className="w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors" />
               </button>
               
               {showTaskActions && (
@@ -152,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowRenameModal(true);
                       setShowTaskActions(false);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 flex items-center gap-2 cursor-pointer"
                   >
                     <Edit2 className="w-4 h-4" />
                     Rename Task
@@ -171,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }
                       }
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 flex items-center gap-2 cursor-pointer"
                   >
                     <Archive className="w-4 h-4" />
                     Archive Task
@@ -189,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }
                       }
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 flex items-center gap-2 cursor-pointer"
                   >
                     <RefreshCw className="w-4 h-4" />
                     Reset Uncommitted Changes
@@ -199,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowTaskActions(false);
                       setShowResetModal(true);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150 flex items-center gap-2 cursor-pointer"
                   >
                     <RotateCw className="w-4 h-4" />
                     Reset to Previous Commit...
@@ -210,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       // TODO: Implement delete functionality
                       setShowTaskActions(false);
                     }}
-                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-100 transition-colors duration-150 flex items-center gap-2 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete Task
@@ -548,6 +578,114 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {isProcessing ? 'Renaming...' : 'Rename'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset to Commit Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">Reset to Previous Commit</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Select a commit to reset your branch to. This will remove all commits after the selected one.
+              </p>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              {commits.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  Loading commit history...
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {commits.map((commit, index) => (
+                    <div key={commit.hash} className="relative">
+                      <button
+                        onClick={() => setSelectedCommit(commit.hash)}
+                        disabled={!commit.canReset}
+                        className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
+                          selectedCommit === commit.hash
+                            ? 'border-blue-500 bg-blue-50'
+                            : commit.canReset
+                            ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-mono text-sm text-gray-600 mb-1">
+                              {commit.hash.substring(0, 7)}
+                            </div>
+                            <div className="font-medium text-gray-900">
+                              {commit.message}
+                            </div>
+                            <div className="text-sm text-gray-500 mt-1">
+                              {commit.author} • {commit.date}
+                            </div>
+                          </div>
+                          {commit.isMerge && (
+                            <div className="ml-3 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
+                              Merge
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      
+                      {commit.isMerge && !commit.canReset && (
+                        <div className="absolute inset-x-0 -bottom-2 flex items-center">
+                          <div className="flex-1 border-b border-red-300"></div>
+                          <div className="px-3 text-xs text-red-600 bg-white">
+                            Cannot reset before merge commits
+                          </div>
+                          <div className="flex-1 border-b border-red-300"></div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowResetModal(false);
+                  setSelectedCommit('');
+                }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!selectedCommit) return;
+                  
+                  const commit = commits.find(c => c.hash === selectedCommit);
+                  if (!commit) return;
+                  
+                  if (confirm(`Are you sure you want to reset to "${commit.message}"? This will remove all commits after this point.`)) {
+                    setIsProcessing(true);
+                    try {
+                      await api.gitOperation(projectId, currentTask.id, 'reset-to-commit', {
+                        commit: selectedCommit
+                      });
+                      setShowResetModal(false);
+                      setSelectedCommit('');
+                    } catch (error: any) {
+                      alert(`Failed to reset: ${error.message}`);
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }
+                }}
+                disabled={!selectedCommit || isProcessing}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? 'Resetting...' : 'Reset to Commit'}
+              </button>
             </div>
           </div>
         </div>

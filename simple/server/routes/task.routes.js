@@ -64,6 +64,9 @@ export default function createTaskRoutes(models, projectsDir) {
   // Get diff for a specific file
   router.get('/:taskId/git/diff/:file(*)', (req, res) => gitController.getFileDiff(req, res));
   
+  // Get commit history for the task
+  router.get('/:taskId/git/commits', (req, res) => gitController.getCommitHistory(req, res));
+  
   // Check for merge conflicts (simplified endpoint)
   router.get('/:taskId/git/check-conflicts', (req, res) => gitController.checkConflicts(req, res));
   
