@@ -118,6 +118,16 @@ class ApiService {
     return this.fetch<{ exists: boolean; content: string | null }>(`/projects/${projectId}/planning`);
   }
 
+  async updateProjectPlanning(projectId: string, content: string): Promise<{ success: boolean; message: string; needsPush?: boolean }> {
+    if (USE_MOCKS) {
+      return { success: true, message: 'Planning updated successfully', needsPush: true };
+    }
+    return this.fetch<any>(`/projects/${projectId}/planning`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    });
+  }
+
   async getProjectDashboard(projectId: string): Promise<{
     project: any;
     needsAttention: Array<{

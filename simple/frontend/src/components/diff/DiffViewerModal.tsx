@@ -9,6 +9,7 @@ interface DiffFile {
   deletions: number;
   type: 'added' | 'modified' | 'deleted' | 'renamed';
   diff?: string;
+  loading?: boolean;
 }
 
 interface DiffViewerModalProps {
@@ -137,6 +138,10 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     } else if (selectedFile && !selectedFile.diff) {
       setOriginalCode('');
       setModifiedCode('// No diff content available for this file');
+    } else {
+      // Clear codes when no file is selected
+      setOriginalCode('');
+      setModifiedCode('');
     }
   }, [selectedFile]);
 
@@ -148,10 +153,31 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       const response = await api.getTaskDiff(projectId, taskId);
       const files: DiffFile[] = response.files || [];
       
-      setFiles(files);
-      if (files.length > 0) {
-        setSelectedFile(files[0]);
+      // Mark all files as needing to load their diff content
+      const filesWithLoadingState = files.map(file => ({
+        ...file,
+        loading: !file.diff, // Only mark as loading if diff isn't already present
+      }));
+      
+      setFiles(filesWithLoadingState);
+      
+      if (filesWithLoadingState.length > 0) {
+        // Load the first file immediately
+        const firstFile = filesWithLoadingState[0];
+        setSelectedFile(firstFile);
         setSelectedFileIndex(0);
+        
+        // If first file needs diff content, load it
+        if (!firstFile.diff) {
+          await loadFileDiff(firstFile.path, 0);
+        }
+        
+        // Load remaining files in the background
+        filesWithLoadingState.slice(1).forEach((file, index) => {
+          if (!file.diff) {
+            loadFileDiff(file.path, index + 1);
+          }
+        });
       } else {
         setSelectedFile(null);
         setSelectedFileIndex(0);
@@ -165,8 +191,57 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setLoading(false);
     }
   };
+  
+  const loadFileDiff = async (filePath: string, fileIndex: number) => {
+    try {
+      // Simulate API call to load individual file diff
+      // In a real implementation, this would be a separate API endpoint
+      const response = await api.getFileDiff(projectId, taskId, filePath);
+      
+      setFiles(prevFiles => {
+        const newFiles = [...prevFiles];
+        if (newFiles[fileIndex]) {
+          newFiles[fileIndex] = {
+            ...newFiles[fileIndex],
+            diff: response.diff,
+            loading: false
+          };
+        }
+        return newFiles;
+      });
+      
+      // Update selected file if it's the one we just loaded
+      setSelectedFile(prev => {
+        if (prev && prev.path === filePath) {
+          return {
+            ...prev,
+            diff: response.diff,
+            loading: false
+          };
+        }
+        return prev;
+      });
+    } catch (error) {
+      console.error(`Failed to load diff for ${filePath}:`, error);
+      // Mark the file as failed to load
+      setFiles(prevFiles => {
+        const newFiles = [...prevFiles];
+        if (newFiles[fileIndex]) {
+          newFiles[fileIndex] = {
+            ...newFiles[fileIndex],
+            loading: false
+          };
+        }
+        return newFiles;
+      });
+    }
+  };
 
   const processDiff = (diff: string) => {
+    // Clear previous state first to avoid stale references
+    setOriginalCode('');
+    setModifiedCode('');
+    
     // Extract original and modified code from the diff
     const lines = diff.split('\n');
     const original: string[] = [];
@@ -403,36 +478,39 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       <div className="text-gray-500">Loading...</div>
                     </div>
                   )}
-                  <DiffEditor
-                    height="100%"
-                    language={getLanguageFromPath(selectedFile.path)}
-                    original={originalCode}
-                    modified={modifiedCode}
-                    theme="vs"
-                    options={{
-                      readOnly: true,
-                      renderSideBySide: viewMode === 'split',
-                      enableSplitViewResizing: true,
-                      renderOverviewRuler: true,
-                      minimap: {
-                        enabled: true,
-                        showSlider: 'always',
-                        renderCharacters: false,
-                        maxColumn: 200,
-                        side: 'right'
-                      },
-                      scrollbar: {
-                        vertical: 'visible',
-                        horizontal: 'visible',
-                        useShadows: true,
-                        verticalHasArrows: false,
-                        horizontalHasArrows: false,
-                        verticalScrollbarSize: 14,
-                        horizontalScrollbarSize: 14,
-                        arrowSize: 30
-                      }
-                    }}
-                  />
+                  {!loading && originalCode !== undefined && modifiedCode !== undefined && (
+                    <DiffEditor
+                      key={`${selectedFile.path}-${viewMode}`}
+                      height="100%"
+                      language={getLanguageFromPath(selectedFile.path)}
+                      original={originalCode}
+                      modified={modifiedCode}
+                      theme="vs"
+                      options={{
+                        readOnly: true,
+                        renderSideBySide: viewMode === 'split',
+                        enableSplitViewResizing: true,
+                        renderOverviewRuler: true,
+                        minimap: {
+                          enabled: true,
+                          showSlider: 'always',
+                          renderCharacters: false,
+                          maxColumn: 200,
+                          side: 'right'
+                        },
+                        scrollbar: {
+                          vertical: 'visible',
+                          horizontal: 'visible',
+                          useShadows: true,
+                          verticalHasArrows: false,
+                          horizontalHasArrows: false,
+                          verticalScrollbarSize: 14,
+                          horizontalScrollbarSize: 14,
+                          arrowSize: 30
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             ) : (

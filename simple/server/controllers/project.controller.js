@@ -76,6 +76,72 @@ export async function createProject(req, res, next) {
       localPath: projectPath
     });
     
+    // Create default PLANNING.md in .pocketdev directory
+    try {
+      const planningTemplate = `# Project Planning: ${finalProjectName}
+
+## 🎯 Project Overview
+${finalProjectName} - Created on ${new Date().toLocaleDateString()}
+
+## 🐛 Bugs & Issues
+<!-- Track bugs that need to be fixed -->
+- [ ] 
+
+## 💡 Feature Ideas
+<!-- New features and enhancements to implement -->
+- [ ] 
+
+## 🔧 Technical Debt
+<!-- Code improvements, refactoring needs, and optimization tasks -->
+- [ ] 
+
+## 📋 Current Sprint
+<!-- Tasks currently being worked on or planned for the current sprint -->
+- [ ] 
+
+## 🏗️ Architecture Decisions
+<!-- Important technical decisions and their rationale -->
+- 
+
+## 📝 Notes & Context
+<!-- Any additional context, links, or information relevant to the project -->
+- Repository: ${repoUrl}
+- Base Branch: ${branch}
+
+---
+*This file is maintained by PocketDev to track project planning and context across all tasks.*
+`;
+
+      // Create .pocketdev directory
+      await gitService.executeGitCommand(
+        projectPath,
+        'mkdir -p .pocketdev',
+        config.githubToken
+      );
+      
+      // Write the PLANNING.md file using a more robust method
+      const planningPath = path.join(projectPath, '.pocketdev', 'PLANNING.md');
+      await fs.writeFile(planningPath, planningTemplate, 'utf8');
+      
+      // Add and commit the file
+      await gitService.executeGitCommand(
+        projectPath,
+        'git add .pocketdev/PLANNING.md',
+        config.githubToken
+      );
+      
+      await gitService.executeGitCommand(
+        projectPath,
+        'git commit -m "Add PocketDev project planning file"',
+        config.githubToken
+      );
+      
+      console.log('Created default PLANNING.md for project:', finalProjectName);
+    } catch (error) {
+      // Don't fail project creation if planning file creation fails
+      console.error('Failed to create default PLANNING.md:', error);
+    }
+    
     // Get GitHub metadata if available
     if (github && repoUrl.includes('github.com')) {
       try {
@@ -616,10 +682,10 @@ export async function getProjectPlanning(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Try to read PLANNING.md from base branch
+    // Try to read PLANNING.md from .pocketdev directory in base branch
     const result = await gitService.executeGitCommand(
       project.local_path,
-      `git show ${project.base_branch}:PLANNING.md`,
+      `git show ${project.base_branch}:.pocketdev/PLANNING.md`,
       config.githubToken
     );
     
@@ -642,6 +708,69 @@ export async function getProjectPlanning(req, res, next) {
         });
       }
     }
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Create or update PLANNING.md in the .pocketdev directory
+ */
+export async function updateProjectPlanning(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const { content } = req.body;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // First, ensure we're on the base branch
+    await gitService.executeGitCommand(
+      project.local_path,
+      `git checkout ${project.base_branch}`,
+      config.githubToken
+    );
+    
+    // Create .pocketdev directory if it doesn't exist
+    await gitService.executeGitCommand(
+      project.local_path,
+      'mkdir -p .pocketdev',
+      config.githubToken
+    );
+    
+    // Write the PLANNING.md file
+    const escapedContent = content.replace(/'/g, "'\"'\"'");
+    const writeResult = await gitService.executeGitCommand(
+      project.local_path,
+      `echo '${escapedContent}' > .pocketdev/PLANNING.md`,
+      config.githubToken
+    );
+    
+    if (!writeResult.success) {
+      return res.status(500).json({ error: 'Failed to write PLANNING.md' });
+    }
+    
+    // Add and commit the file
+    await gitService.executeGitCommand(
+      project.local_path,
+      'git add .pocketdev/PLANNING.md',
+      config.githubToken
+    );
+    
+    const commitResult = await gitService.executeGitCommand(
+      project.local_path,
+      `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`,
+      config.githubToken
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'PLANNING.md updated successfully',
+      needsPush: commitResult.output.includes('file changed')
+    });
   } catch (error) {
     next(error);
   }

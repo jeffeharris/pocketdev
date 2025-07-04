@@ -25,6 +25,7 @@ router.get('/:projectId/update-status', projectController.getUpdateStatus);
 
 // Planning
 router.get('/:projectId/planning', projectController.getProjectPlanning);
+router.put('/:projectId/planning', projectController.updateProjectPlanning);
 router.get('/:projectId/dashboard', projectController.getProjectDashboard);
 
 export default router;
