@@ -741,16 +741,12 @@ export async function updateProjectPlanning(req, res, next) {
       config.githubToken
     );
     
-    // Write the PLANNING.md file
-    const escapedContent = content.replace(/'/g, "'\"'\"'");
-    const writeResult = await gitService.executeGitCommand(
-      project.local_path,
-      `echo '${escapedContent}' > .pocketdev/PLANNING.md`,
-      config.githubToken
-    );
-    
-    if (!writeResult.success) {
-      return res.status(500).json({ error: 'Failed to write PLANNING.md' });
+    // Write the PLANNING.md file using fs instead of echo to handle content properly
+    const planningPath = path.join(project.local_path, '.pocketdev', 'PLANNING.md');
+    try {
+      await fs.writeFile(planningPath, content, 'utf8');
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to write PLANNING.md: ' + error.message });
     }
     
     // Add and commit the file

@@ -21,6 +21,7 @@ import type { Project } from '../types/project';
 import type { Task, CreateTaskDTO } from '../types/task';
 import { TaskListItem } from '../components/task/TaskListItem';
 import { CreateTaskModal } from '../components/task/CreateTaskModal';
+import { PlanningEditor } from '../components/planning/PlanningEditor';
 import { api } from '../services/api';
 
 interface AttentionItem {
@@ -41,6 +42,7 @@ export const ProjectDashboard: React.FC = () => {
   const [planning, setPlanning] = useState<{ exists: boolean; content: string | null }>({ exists: false, content: null });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showPlanningEditor, setShowPlanningEditor] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -126,6 +128,22 @@ export const ProjectDashboard: React.FC = () => {
       console.error('Failed to create task:', error);
       const errorMessage = error.message || 'Failed to create task';
       alert(`Failed to create task: ${errorMessage}`);
+    }
+  };
+
+  const handleSavePlanning = async (content: string) => {
+    if (!projectId) return;
+    
+    const result = await api.updateProjectPlanning(projectId, content);
+    if (result.success) {
+      // Reload planning content
+      const planningData = await api.getProjectPlanning(projectId);
+      setPlanning(planningData);
+      
+      // If changes were committed, show in needs attention
+      if (result.needsPush) {
+        await loadDashboard();
+      }
     }
   };
 
@@ -268,7 +286,7 @@ export const ProjectDashboard: React.FC = () => {
         {/* Needs Attention Section */}
         {needsAttention.length > 0 ? (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">🔴 Needs Attention</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Needs Attention</h2>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
               {needsAttention.map((item, index) => (
                 <div key={index} className="p-4">
@@ -318,7 +336,10 @@ export const ProjectDashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Planning</h2>
               {planning.exists && (
-                <button className="text-sm text-blue-600 hover:text-blue-700">
+                <button 
+                  onClick={() => setShowPlanningEditor(true)}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
                   Edit PLANNING.md
                 </button>
               )}
@@ -331,7 +352,13 @@ export const ProjectDashboard: React.FC = () => {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-gray-500 mb-4">No planning document found</p>
-                  <button className="text-sm text-blue-600 hover:text-blue-700">
+                  <button 
+                    onClick={() => {
+                      setPlanning({ exists: true, content: `# Project Planning: ${project?.name || 'Project'}\n\n## 🎯 Project Overview\n\n## 🐛 Bugs & Issues\n\n## 💡 Feature Ideas\n\n## 🔧 Technical Debt\n\n## 📋 Current Sprint\n\n## 📝 Notes & Context\n` });
+                      setShowPlanningEditor(true);
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
                     Create PLANNING.md
                   </button>
                 </div>
@@ -430,6 +457,17 @@ export const ProjectDashboard: React.FC = () => {
           baseBranch={project.base_branch}
           existingBranches={branches}
           occupiedBranches={tasks.map(t => t.branch)}
+        />
+      )}
+
+      {/* Planning Editor */}
+      {project && (
+        <PlanningEditor
+          isOpen={showPlanningEditor}
+          content={planning.content || ''}
+          projectName={project.name}
+          onClose={() => setShowPlanningEditor(false)}
+          onSave={handleSavePlanning}
         />
       )}
     </div>

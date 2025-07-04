@@ -85,7 +85,35 @@ export class TaskController {
   }
 
   /**
-   * List all tasks for a project
+   * List minimal task info for fast loading
+   */
+  async listTasksMinimal(req, res) {
+    const { projectId } = req.params;
+    
+    try {
+      const tasks = await this.models.tasks.findByProjectId(projectId);
+      
+      // Return only essential fields for instant UI rendering
+      const minimalTasks = tasks.map(task => ({
+        id: task.id,
+        name: task.name || 'Untitled Task',
+        branch: task.branch,
+        worktree_path: task.worktree_path,
+        created_at: task.created_at,
+        taskState: task.status === 'merged' || task.merged_at ? 'merged' : 
+                  task.is_archived ? 'archived' : 'active',
+        // Placeholder session state - will be updated via websocket
+        sessionState: { status: 'not-started', lastStateChange: null }
+      }));
+      
+      res.json(minimalTasks);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * List all tasks for a project (with full git status)
    */
   async listTasks(req, res) {
     const { projectId } = req.params;
