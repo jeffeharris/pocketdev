@@ -510,6 +510,7 @@ export async function pullBaseBranch(req, res, next) {
       }
     }
     
+    
     // Ensure git credentials are configured
     await gitService.configureGitCredentials(project.local_path, githubToken);
     

@@ -14,32 +14,52 @@ const execAsync = promisify(exec);
 export async function executeGitCommand(projectPath, command, githubToken = '') {
   try {
     const env = { ...process.env };
-    if (githubToken) {
-      env.GH_TOKEN = githubToken;
-      env.GITHUB_TOKEN = githubToken;
+    
+    // If we have a GitHub token and this is a command that needs auth
+    if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
+      // Get the current remote URL
+      const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
       
-      // Create a simple askpass script for git to use
-      const askpassScript = `/tmp/git-askpass-${process.pid}-${Date.now()}.sh`;
-      await execAsync(`echo '#!/bin/sh\necho "${githubToken}"' > ${askpassScript} && chmod +x ${askpassScript}`);
-      env.GIT_ASKPASS = askpassScript;
-      
-      console.log('Git auth configured with token length:', githubToken.length);
+      if (remoteUrl && remoteUrl.includes('github.com')) {
+        // Extract username from URL
+        const urlMatch = remoteUrl.trim().match(/github\.com[/:]([\w-]+)\//);
+        const username = urlMatch ? urlMatch[1] : 'git';
+        
+        // Create a temporary remote with embedded credentials
+        const authUrl = remoteUrl.trim().replace(
+          'https://github.com',
+          `https://${username}:${githubToken}@github.com`
+        );
+        
+        console.log(`Setting up auth for ${username} with token (${githubToken.substring(0, 10)}...)`);
+        
+        // Use the authenticated URL for this command
+        const tempRemote = `temp-auth-${Date.now()}`;
+        await execAsync(`git remote add ${tempRemote} "${authUrl}"`, { cwd: projectPath });
+        
+        // Replace origin with temp remote in the command
+        command = command.replace(' origin ', ` ${tempRemote} `);
+        
+        // Execute the command
+        const { stdout, stderr } = await execAsync(command, { 
+          cwd: projectPath,
+          env,
+          shell: '/bin/sh'
+        });
+        
+        // Clean up temp remote
+        await execAsync(`git remote remove ${tempRemote}`, { cwd: projectPath });
+        
+        return { success: true, output: stdout, error: stderr };
+      }
     }
     
+    // For non-auth commands or non-GitHub repos, just run normally
     const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
       env,
       shell: '/bin/sh'
     });
-    
-    // Clean up askpass script
-    if (env.GIT_ASKPASS) {
-      try {
-        await execAsync(`rm -f ${env.GIT_ASKPASS}`);
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-    }
     
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
