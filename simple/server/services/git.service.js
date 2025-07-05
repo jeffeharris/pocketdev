@@ -349,10 +349,12 @@ export class GitService {
     }
   }
 
-  async getBranchStatus(projectPath, currentBranch, baseBranch = 'origin/main') {
+  async getBranchStatus(projectPath, currentBranch, baseBranch = 'origin/main', options = {}) {
     try {
-      // Fetch latest from remote
-      await this.command(projectPath, 'git fetch origin');
+      // Only fetch if explicitly requested (default: false for performance)
+      if (options.fetch) {
+        await this.command(projectPath, 'git fetch origin');
+      }
       
       // Get ahead count (commits in current branch not in base)
       const aheadResult = await this.command(projectPath, 

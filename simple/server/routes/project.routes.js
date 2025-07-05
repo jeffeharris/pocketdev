@@ -26,6 +26,11 @@ router.get('/:projectId/update-status', projectController.getUpdateStatus);
 // Planning
 router.get('/:projectId/planning', projectController.getProjectPlanning);
 router.put('/:projectId/planning', projectController.updateProjectPlanning);
+
+// Dashboard endpoints
+router.get('/:projectId/minimal', projectController.getProjectMinimal);
+router.get('/:projectId/dashboard/cached', projectController.getProjectDashboardCached);
 router.get('/:projectId/dashboard', projectController.getProjectDashboard);
+router.post('/:projectId/refresh', projectController.refreshProjectStatus);
 
 export default router;

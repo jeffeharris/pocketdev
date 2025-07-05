@@ -27,6 +27,24 @@ class ApiService {
   }
 
   // Project endpoints
+  async getProjectMinimal(id: string): Promise<Project> {
+    if (USE_MOCKS) {
+      const project = mockProjects.find(p => p.id === id);
+      if (!project) throw new Error('Project not found');
+      return project;
+    }
+    const response = await this.fetch<any>(`/projects/${id}/minimal`);
+    // Map backend format to our Project type
+    return {
+      id: response.id,
+      name: response.name,
+      repository: response.repository,
+      baseBranch: response.baseBranch,
+      created: response.created,
+      tasksCount: 0
+    };
+  }
+
   async getProjects(): Promise<Project[]> {
     if (USE_MOCKS) return mockProjects;
     const response = await this.fetch<any[]>('/projects');
@@ -180,6 +198,45 @@ class ApiService {
       return { success: true, message: 'Successfully pushed main to origin' };
     }
     return this.fetch<any>(`/projects/${projectId}/push-base-branch`, {
+      method: 'POST'
+    });
+  }
+
+  async getTasksMinimal(projectId: string): Promise<Task[]> {
+    if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
+    const response = await this.fetch<any[]>(`/projects/${projectId}/tasks/minimal`);
+    // Minimal response - no git status
+    return response.map(t => ({
+      id: t.id,
+      name: t.name || 'Untitled Task',
+      description: '',
+      branch: t.branch,
+      worktree_path: t.worktree_path,
+      created_at: t.created_at,
+      taskState: t.taskState || 'active',
+      sessionState: t.sessionState || { status: 'not-started', lastStateChange: null }
+    }));
+  }
+
+  async getProjectDashboardCached(projectId: string): Promise<any> {
+    if (USE_MOCKS) {
+      return {
+        project: mockProjects[0],
+        needsAttention: [],
+        tasksCount: 3,
+        activeTasks: 2,
+        cached: true,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+    return this.fetch<any>(`/projects/${projectId}/dashboard/cached`);
+  }
+
+  async refreshProjectStatus(projectId: string): Promise<{ success: boolean; message: string }> {
+    if (USE_MOCKS) {
+      return { success: true, message: 'Refresh triggered' };
+    }
+    return this.fetch<any>(`/projects/${projectId}/refresh`, {
       method: 'POST'
     });
   }

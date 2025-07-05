@@ -19,8 +19,11 @@ export default function createTaskRoutes(models, projectsDir) {
 
   // Create a new task
   router.post('/', (req, res) => taskController.createTask(req, res));
+  
+  // List minimal task info for fast loading (must be before base route)
+  router.get('/minimal', (req, res) => taskController.listTasksMinimal(req, res));
 
-  // List all tasks for a project
+  // List all tasks for a project (with full git status)
   router.get('/', (req, res) => taskController.listTasks(req, res));
 
   // Get task details

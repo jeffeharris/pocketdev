@@ -41,17 +41,75 @@ export const ProjectDashboard: React.FC = () => {
   const [needsAttention, setNeedsAttention] = useState<AttentionItem[]>([]);
   const [planning, setPlanning] = useState<{ exists: boolean; content: string | null }>({ exists: false, content: null });
   const [loading, setLoading] = useState(true);
+  const [backgroundLoading, setBackgroundLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPlanningEditor, setShowPlanningEditor] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) {
-      loadDashboard();
+      loadDashboardPhased();
     }
   }, [projectId]);
 
+  // Phase 1: Load critical data for instant UI
+  const loadCriticalData = async () => {
+    const [projectData, tasksData] = await Promise.all([
+      api.getProjectMinimal(projectId!),
+      api.getTasksMinimal(projectId!)
+    ]);
+    
+    setProject(projectData);
+    setTasks(tasksData);
+    setLoading(false); // UI is ready to use
+  };
+
+  // Phase 2: Load enrichment data in background
+  const loadBackgroundData = async () => {
+    setBackgroundLoading(true);
+    
+    try {
+      // Load cached dashboard data first (no git fetch)
+      const cachedDashboard = await api.getProjectDashboardCached(projectId!);
+      setNeedsAttention(cachedDashboard.needsAttention);
+      setLastUpdated(cachedDashboard.lastUpdated);
+      
+      // Load other data in parallel
+      const [branchesData, planningData, fullTasksData] = await Promise.all([
+        api.getProjectBranches(projectId!),
+        api.getProjectPlanning(projectId!),
+        api.getTasks(projectId!) // Full task data with git status
+      ]);
+      
+      setBranches(branchesData);
+      setPlanning(planningData);
+      // Update tasks with full git status
+      setTasks(fullTasksData);
+      
+      // Trigger background refresh for next time
+      api.refreshProjectStatus(projectId!).catch(console.error);
+    } catch (error) {
+      console.error('Failed to load background data:', error);
+    } finally {
+      setBackgroundLoading(false);
+    }
+  };
+
+  const loadDashboardPhased = async () => {
+    try {
+      // Phase 1: Load critical data
+      await loadCriticalData();
+      // Phase 2: Load background data (non-blocking)
+      loadBackgroundData();
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+      setLoading(false);
+    }
+  };
+
   const loadDashboard = async () => {
+    // Full refresh - used after actions
     try {
       setLoading(true);
       const [dashboardData, tasksData, branchesData, planningData] = await Promise.all([
@@ -66,6 +124,7 @@ export const ProjectDashboard: React.FC = () => {
       setTasks(tasksData);
       setBranches(branchesData);
       setPlanning(planningData);
+      setLastUpdated(new Date().toISOString());
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     } finally {
@@ -275,7 +334,7 @@ export const ProjectDashboard: React.FC = () => {
               </div>
               <div className="flex-1">
                 <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
-                <p className="text-sm text-gray-500">Base: {project.base_branch}</p>
+                <p className="text-sm text-gray-500">Base: {project.baseBranch}</p>
               </div>
             </div>
           </div>
@@ -286,7 +345,29 @@ export const ProjectDashboard: React.FC = () => {
         {/* Needs Attention Section */}
         {needsAttention.length > 0 ? (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Needs Attention</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Needs Attention</h2>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                {backgroundLoading && (
+                  <span className="flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Updating...
+                  </span>
+                )}
+                {lastUpdated && !backgroundLoading && (
+                  <span>
+                    Last updated: {new Date(lastUpdated).toLocaleTimeString()}
+                  </span>
+                )}
+                <button
+                  onClick={() => loadDashboard()}
+                  className="text-blue-600 hover:text-blue-700"
+                  disabled={loading || backgroundLoading}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
               {needsAttention.map((item, index) => (
                 <div key={index} className="p-4">
@@ -305,7 +386,29 @@ export const ProjectDashboard: React.FC = () => {
           </div>
         ) : (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Status</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Project Status</h2>
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                {backgroundLoading && (
+                  <span className="flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Updating...
+                  </span>
+                )}
+                {lastUpdated && !backgroundLoading && (
+                  <span>
+                    Last updated: {new Date(lastUpdated).toLocaleTimeString()}
+                  </span>
+                )}
+                <button
+                  onClick={() => loadDashboard()}
+                  className="text-blue-600 hover:text-blue-700"
+                  disabled={loading || backgroundLoading}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-gray-600">All systems operational. Base branch is in sync.</p>
               <div className="mt-3 flex gap-2">
@@ -454,7 +557,7 @@ export const ProjectDashboard: React.FC = () => {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateTask}
           projectId={projectId!}
-          baseBranch={project.base_branch}
+          baseBranch={project.baseBranch}
           existingBranches={branches}
           occupiedBranches={tasks.map(t => t.branch)}
         />

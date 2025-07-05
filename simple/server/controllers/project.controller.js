@@ -773,7 +773,138 @@ export async function updateProjectPlanning(req, res, next) {
 }
 
 /**
- * Get comprehensive dashboard status for a project
+ * Get minimal project info for fast loading
+ */
+export async function getProjectMinimal(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Return just the project info - no git operations
+    res.json({
+      id: project.id,
+      name: project.name,
+      repository: project.repo_url,
+      baseBranch: project.base_branch,
+      created: project.created_at,
+      local_path: project.local_path
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get dashboard status from cache (no git fetch)
+ */
+export async function getProjectDashboardCached(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Get all active tasks for this project
+    const tasks = await models.tasks.findByProjectId(projectId, { includeArchived: false });
+    
+    const needsAttention = [];
+    
+    // 1. Check base branch sync status WITHOUT FETCH (use cached data)
+    try {
+      // Just check current status without fetching
+      const behindResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
+        config.githubToken
+      );
+      const behind = parseInt(behindResult.output.trim()) || 0;
+      
+      const aheadResult = await gitService.executeGitCommand(
+        project.local_path,
+        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
+        config.githubToken
+      );
+      const ahead = parseInt(aheadResult.output.trim()) || 0;
+      
+      if (behind > 0) {
+        needsAttention.push({
+          type: 'base-behind',
+          severity: 'warning',
+          message: `Base branch is ${behind} commits behind origin`,
+          details: { behind, branch: project.base_branch },
+          actions: ['pull']
+        });
+      }
+      
+      if (ahead > 0) {
+        needsAttention.push({
+          type: 'base-ahead',
+          severity: 'info',
+          message: `Local base is ${ahead} commits ahead of origin`,
+          details: { ahead, branch: project.base_branch },
+          actions: ['push']
+        });
+      }
+    } catch (error) {
+      // Git error, but continue with other checks
+      console.error('Git status check failed:', error);
+    }
+    
+    // Skip expensive checks like stale tasks, merge conflicts, and PR checks
+    // These can be loaded progressively or on-demand
+    
+    res.json({
+      project,
+      needsAttention,
+      tasksCount: tasks.length,
+      activeTasks: tasks.filter(t => t.status === 'active').length,
+      cached: true,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Trigger background refresh of git status
+ */
+export async function refreshProjectStatus(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const models = req.app.locals.models;
+    
+    const project = await models.projects.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Trigger git fetch in background (non-blocking)
+    gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken)
+      .then(() => console.log(`Background fetch completed for project ${projectId}`))
+      .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
+    
+    // Return immediately
+    res.json({ 
+      success: true, 
+      message: 'Refresh triggered',
+      projectId 
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get comprehensive dashboard status for a project (includes git fetch)
  */
 export async function getProjectDashboard(req, res, next) {
   try {
