@@ -42,6 +42,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: pocketdev-backend
     working_dir: /app
+    user: pocketdev
     depends_on:
       - shelltender
     volumes:

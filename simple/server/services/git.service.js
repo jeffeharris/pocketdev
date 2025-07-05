@@ -19,10 +19,7 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
       env.GITHUB_TOKEN = githubToken;
     }
     
-    // Add safe directory config to avoid dubious ownership errors
-    const safeCommand = `git config --global --add safe.directory ${projectPath} 2>/dev/null; ${command}`;
-    
-    const { stdout, stderr } = await execAsync(safeCommand, { 
+    const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
       env,
       shell: '/bin/sh'
@@ -39,14 +36,25 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
  * @param {string} githubToken - Optional GitHub token
  */
 export async function configureGitCredentials(projectPath, githubToken = '') {
-  // Configure merge tool globally to avoid permission issues
-  await execAsync(`git config --global merge.tool vimdiff`, { cwd: projectPath });
-  await execAsync(`git config --global merge.conflictstyle diff3`, { cwd: projectPath });
-  await execAsync(`git config --global mergetool.prompt false`, { cwd: projectPath });
-  
-  if (!githubToken) return;
-  
   try {
+    // First, add this directory as safe if needed (only once per repo)
+    try {
+      const { stdout } = await execAsync('git config --get safe.directory', { cwd: projectPath });
+      if (!stdout.includes(projectPath)) {
+        await execAsync(`git config --add safe.directory ${projectPath}`, { cwd: projectPath });
+      }
+    } catch (e) {
+      // Config doesn't exist yet, add it
+      await execAsync(`git config --add safe.directory ${projectPath}`, { cwd: projectPath });
+    }
+    
+    // Configure merge tools at repository level (not global)
+    await execAsync(`git config merge.tool vimdiff`, { cwd: projectPath });
+    await execAsync(`git config merge.conflictstyle diff3`, { cwd: projectPath });
+    await execAsync(`git config mergetool.prompt false`, { cwd: projectPath });
+    
+    if (!githubToken) return;
+    
     const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
     
     if (remoteUrl.includes('github.com')) {

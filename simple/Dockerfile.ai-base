@@ -127,9 +127,9 @@ ENV GEMINI_API_KEY=""
 ENV GITHUB_TOKEN=""
 
 # Create workspace directories
-RUN mkdir -p /workspace /projects /tmp/pocketdev-worktrees && \
-    chmod 755 /workspace /projects /tmp/pocketdev-worktrees && \
-    chown -R pocketdev:pocketdev /workspace /projects /tmp/pocketdev-worktrees
+RUN mkdir -p /workspace /projects && \
+    chmod 755 /workspace /projects && \
+    chown pocketdev:pocketdev /workspace /projects
 
 # Aider configuration directory
 RUN mkdir -p /home/pocketdev/.aider && \

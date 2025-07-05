@@ -11,34 +11,19 @@ WORKDIR /app
 # (npm global packages need system permissions)
 RUN npm install -g @shelltender/server@^0.3.0
 
-# Copy server package files for any additional dependencies
-COPY server/package*.json ./server/
-RUN cd server && npm install
-
-# Copy shelltender service files
-COPY server/shelltender-service.js ./server/
-COPY server/shelltender-ws-adapter.js ./server/
-COPY server/shelltender-monitor-adapter.js ./server/
-
 # Copy wrapper scripts
 COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell
 COPY scripts/pocketdev-run.sh /usr/local/bin/pocketdev-run
 RUN chmod +x /usr/local/bin/pocketdev-shell /usr/local/bin/pocketdev-run
 
-# Create necessary directories
-RUN mkdir -p /app/data/shelltender-sessions /projects /tmp/pocketdev-worktrees && \
-    chown -R pocketdev:pocketdev /app /projects /tmp/pocketdev-worktrees
+# Create necessary directories with minimal ownership changes
+# Note: /app/data comes from volume mount, only need /projects
+RUN mkdir -p /projects && \
+    chown pocketdev:pocketdev /projects
 
-# Ensure pocketdev user has proper home directory
-RUN mkdir -p /home/pocketdev && \
-    chown -R pocketdev:pocketdev /home/pocketdev && \
-    echo 'export PS1="\u@\h:\w\$ "' >> /home/pocketdev/.bashrc
-
-# Copy any additional scripts or configs needed
-COPY server/*.js ./server/
-
-# Fix ownership of all files
-RUN chown -R pocketdev:pocketdev /app
+# Setup pocketdev user's home directory (already created in base image)
+RUN echo 'export PS1="\u@\h:\w\$ "' >> /home/pocketdev/.bashrc && \
+    chown pocketdev:pocketdev /home/pocketdev/.bashrc
 
 # Switch back to non-root user
 USER pocketdev

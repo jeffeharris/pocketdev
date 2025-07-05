@@ -38,43 +38,13 @@ ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
 # Configure git to trust all directories (fixes ownership issues)
 RUN git config --global --add safe.directory '*'
 
-# Create app directory and set permissions
+# Create app directory
 WORKDIR /app
-RUN chown -R pocketdev:pocketdev /app
 
-# Switch to pocketdev user for npm installations
-USER pocketdev
-
-# Copy package files and install dependencies as pocketdev
-COPY --chown=pocketdev:pocketdev server/package*.json ./server/
-RUN cd server && npm install
-
-# Copy shelltender client package and install as pocketdev
-COPY --chown=pocketdev:pocketdev shelltender-client/package*.json ./shelltender-client/
-RUN cd shelltender-client && npm install
-
-# Switch back to root for copying files
-USER root
-
-# Copy server files with proper ownership
-COPY --chown=pocketdev:pocketdev server/*.js ./server/
-COPY --chown=pocketdev:pocketdev server/config ./server/config
-COPY --chown=pocketdev:pocketdev server/controllers ./server/controllers
-COPY --chown=pocketdev:pocketdev server/services ./server/services
-COPY --chown=pocketdev:pocketdev server/routes ./server/routes
-COPY --chown=pocketdev:pocketdev server/middleware ./server/middleware
-COPY --chown=pocketdev:pocketdev server/db ./server/db
-
-# Copy shelltender client files with proper ownership
-COPY --chown=pocketdev:pocketdev shelltender-client ./shelltender-client
-
-# Copy frontend files with proper ownership
-COPY --chown=pocketdev:pocketdev frontend ./frontend
-
-# Create necessary directories and fix ownership
+# Create necessary directories that need specific ownership
 RUN mkdir -p /projects /app/data && \
     chmod 755 /projects /app/data && \
-    chown -R pocketdev:pocketdev /app /projects /home/pocketdev
+    chown pocketdev:pocketdev /projects /app/data
 
 # Configure git safe directories for pocketdev user
 USER pocketdev
