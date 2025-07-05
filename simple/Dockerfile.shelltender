@@ -16,11 +16,6 @@ COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell
 COPY scripts/pocketdev-run.sh /usr/local/bin/pocketdev-run
 RUN chmod +x /usr/local/bin/pocketdev-shell /usr/local/bin/pocketdev-run
 
-# Create necessary directories with minimal ownership changes
-# Note: /app/data comes from volume mount, only need /projects
-RUN mkdir -p /projects && \
-    chown pocketdev:pocketdev /projects
-
 # Setup pocketdev user's home directory (already created in base image)
 RUN echo 'export PS1="\u@\h:\w\$ "' >> /home/pocketdev/.bashrc && \
     chown pocketdev:pocketdev /home/pocketdev/.bashrc

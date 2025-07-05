@@ -89,6 +89,9 @@ export async function configureGitCredentials(projectPath, githubToken = '') {
     await execAsync(`git config merge.tool vimdiff`, { cwd: projectPath });
     await execAsync(`git config merge.conflictstyle diff3`, { cwd: projectPath });
     await execAsync(`git config mergetool.prompt false`, { cwd: projectPath });
+    
+    // Configure pull strategy to handle divergent branches
+    await execAsync(`git config pull.rebase false`, { cwd: projectPath });
   } catch (error) {
     console.error('Failed to configure git credentials:', error);
   }

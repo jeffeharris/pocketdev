@@ -38,13 +38,8 @@ ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
 # Configure git to trust all directories (fixes ownership issues)
 RUN git config --global --add safe.directory '*'
 
-# Create app directory
+# Set working directory
 WORKDIR /app
-
-# Create necessary directories that need specific ownership
-RUN mkdir -p /projects /app/data && \
-    chmod 755 /projects /app/data && \
-    chown pocketdev:pocketdev /projects /app/data
 
 # Configure git safe directories for pocketdev user
 USER pocketdev
