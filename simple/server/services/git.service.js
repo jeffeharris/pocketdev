@@ -17,6 +17,13 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     if (githubToken) {
       env.GH_TOKEN = githubToken;
       env.GITHUB_TOKEN = githubToken;
+      
+      // Create a simple askpass script for git to use
+      const askpassScript = `/tmp/git-askpass-${process.pid}-${Date.now()}.sh`;
+      await execAsync(`echo '#!/bin/sh\necho "${githubToken}"' > ${askpassScript} && chmod +x ${askpassScript}`);
+      env.GIT_ASKPASS = askpassScript;
+      
+      console.log('Git auth configured with token length:', githubToken.length);
     }
     
     const { stdout, stderr } = await execAsync(command, { 
@@ -24,6 +31,16 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
       env,
       shell: '/bin/sh'
     });
+    
+    // Clean up askpass script
+    if (env.GIT_ASKPASS) {
+      try {
+        await execAsync(`rm -f ${env.GIT_ASKPASS}`);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
     return { success: false, output: '', error: error.message };
@@ -52,27 +69,6 @@ export async function configureGitCredentials(projectPath, githubToken = '') {
     await execAsync(`git config merge.tool vimdiff`, { cwd: projectPath });
     await execAsync(`git config merge.conflictstyle diff3`, { cwd: projectPath });
     await execAsync(`git config mergetool.prompt false`, { cwd: projectPath });
-    
-    if (!githubToken) return;
-    
-    const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
-    
-    if (remoteUrl.includes('github.com')) {
-      // Set up authentication
-      if (githubToken) {
-        // Create a temporary credential file
-        const credFile = `/tmp/git-creds-${Date.now()}`;
-        await execAsync(`echo "https://x-access-token:${githubToken}@github.com" > ${credFile}`, { cwd: projectPath });
-        await execAsync(`git config credential.helper "store --file=${credFile}"`, { cwd: projectPath });
-        
-        // Also set environment variables
-        process.env.GH_TOKEN = githubToken;
-        process.env.GITHUB_TOKEN = githubToken;
-      } else {
-        // Try to use gh CLI if available
-        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
-      }
-    }
   } catch (error) {
     console.error('Failed to configure git credentials:', error);
   }

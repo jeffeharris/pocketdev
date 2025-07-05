@@ -484,24 +484,29 @@ export async function pullBaseBranch(req, res, next) {
     // Try to get GitHub token from various sources
     let githubToken = config.githubToken;
     
-    // If no env token, try to extract from existing remote URL
+    // If no env token, try to get from database
     if (!githubToken) {
       try {
-        const { stdout: remoteUrl } = await gitService.executeGitCommand(
-          project.local_path,
-          'git remote get-url origin'
+        const { decrypt } = await import('../utils/crypto.js');
+        const githubTokenSetting = await models.db.get(
+          'SELECT value FROM settings WHERE key = ?',
+          ['github_token']
         );
         
-        // Check if URL has embedded token
-        if (remoteUrl && remoteUrl.includes('github_pat_')) {
-          const tokenMatch = remoteUrl.match(/github_pat_[A-Za-z0-9_]+/);
-          if (tokenMatch) {
-            githubToken = tokenMatch[0];
-            console.log('Using token extracted from remote URL');
+        if (githubTokenSetting) {
+          // Try to decrypt the token
+          const decryptedToken = decrypt(githubTokenSetting.value);
+          if (decryptedToken) {
+            githubToken = decryptedToken;
+            console.log('Using GitHub token from database');
+          } else {
+            // Handle case where token might not be encrypted (legacy)
+            githubToken = githubTokenSetting.value;
+            console.log('Using GitHub token from database (unencrypted)');
           }
         }
       } catch (e) {
-        console.error('Failed to check remote URL:', e);
+        console.error('Failed to retrieve GitHub token from database:', e);
       }
     }
     
