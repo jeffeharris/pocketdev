@@ -58,12 +58,20 @@ export async function configureGitCredentials(projectPath, githubToken = '') {
     const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
     
     if (remoteUrl.includes('github.com')) {
-      // Configure git to use GitHub CLI as credential helper
-      await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
-      
-      // Make sure GH_TOKEN is set for the environment
-      process.env.GH_TOKEN = githubToken;
-      process.env.GITHUB_TOKEN = githubToken;
+      // Set up authentication
+      if (githubToken) {
+        // Create a temporary credential file
+        const credFile = `/tmp/git-creds-${Date.now()}`;
+        await execAsync(`echo "https://x-access-token:${githubToken}@github.com" > ${credFile}`, { cwd: projectPath });
+        await execAsync(`git config credential.helper "store --file=${credFile}"`, { cwd: projectPath });
+        
+        // Also set environment variables
+        process.env.GH_TOKEN = githubToken;
+        process.env.GITHUB_TOKEN = githubToken;
+      } else {
+        // Try to use gh CLI if available
+        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+      }
     }
   } catch (error) {
     console.error('Failed to configure git credentials:', error);

@@ -481,14 +481,38 @@ export async function pullBaseBranch(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Try to get GitHub token from various sources
+    let githubToken = config.githubToken;
+    
+    // If no env token, try to extract from existing remote URL
+    if (!githubToken) {
+      try {
+        const { stdout: remoteUrl } = await gitService.executeGitCommand(
+          project.local_path,
+          'git remote get-url origin'
+        );
+        
+        // Check if URL has embedded token
+        if (remoteUrl && remoteUrl.includes('github_pat_')) {
+          const tokenMatch = remoteUrl.match(/github_pat_[A-Za-z0-9_]+/);
+          if (tokenMatch) {
+            githubToken = tokenMatch[0];
+            console.log('Using token extracted from remote URL');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to check remote URL:', e);
+      }
+    }
+    
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    await gitService.configureGitCredentials(project.local_path, githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitService.executeGitCommand(
       project.local_path,
       'git status --porcelain',
-      config.githubToken
+      githubToken
     );
     
     if (statusResult.output && statusResult.output.trim()) {
@@ -502,7 +526,7 @@ export async function pullBaseBranch(req, res, next) {
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git pull origin ${project.base_branch}`,
-      config.githubToken
+      githubToken
     );
     
     if (!result.success) {
