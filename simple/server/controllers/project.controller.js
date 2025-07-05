@@ -538,10 +538,39 @@ export async function pullBaseBranch(req, res, next) {
     if (!result.success) {
       // Check if it's an authentication error
       if (result.error && (result.error.includes('could not read Password') || result.error.includes('Authentication failed'))) {
+        // Check if we have a token configured
+        const hasToken = !!githubToken;
+        
         return res.status(401).json({ 
-          error: 'GitHub authentication failed. Please ensure GITHUB_TOKEN environment variable is set.',
+          error: 'GitHub authentication failed',
           details: result.error,
-          hint: 'Set GITHUB_TOKEN environment variable and restart the containers with: make down && make dev'
+          hasToken,
+          tokenLength: githubToken ? githubToken.length : 0,
+          settingsUrl: '/settings',
+          helpText: hasToken 
+            ? 'Your GitHub token appears to be invalid or expired. Please update it in the settings.'
+            : 'No GitHub token found. Please configure one in the settings.',
+          steps: [
+            'Click the link below to create a new GitHub token',
+            'Set Token name: "PocketDev"',
+            'Set Expiration: 90 days (or your preference)',
+            'Repository access: Select "Selected repositories" and choose the repos you want to use',
+            'Repository permissions - set these to Read & Write:',
+            '  • Contents (for git pull/push)',
+            '  • Pull requests (for creating PRs)',
+            '  • Metadata (Read only)',
+            'Click "Generate token" and copy the token',
+            'Paste it in PocketDev Settings and save'
+          ],
+          githubTokenUrl: 'https://github.com/settings/personal-access-tokens/new',
+          githubTokenDocs: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens',
+          tokenType: 'fine-grained',
+          requiredPermissions: {
+            contents: 'write',
+            metadata: 'read',
+            pull_requests: 'write' // For future PR functionality
+          },
+          createTokenUrl: 'https://github.com/settings/personal-access-tokens/new'
         });
       }
       return res.status(500).json({ 

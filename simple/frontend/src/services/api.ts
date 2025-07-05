@@ -20,7 +20,18 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      // Try to parse JSON error response
+      try {
+        const errorData = await response.json();
+        const error = new Error(errorData.error || `API Error: ${response.statusText}`);
+        // Attach the full error data to the error object
+        (error as any).response = errorData;
+        (error as any).status = response.status;
+        throw error;
+      } catch (parseError) {
+        // If JSON parsing fails, throw generic error
+        throw new Error(`API Error: ${response.statusText}`);
+      }
     }
 
     return response.json();

@@ -165,9 +165,32 @@ export const ProjectDashboard: React.FC = () => {
         default:
           console.log('Unhandled action:', action);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to ${action}:`, error);
-      alert(`Failed to ${action}. Please try again.`);
+      
+      // Check if this is a GitHub authentication error with detailed info
+      if (error.status === 401 && error.response?.settingsUrl) {
+        const { helpText, createTokenUrl, steps } = error.response;
+        
+        const userChoice = confirm(
+          `${helpText}\n\n` +
+          `Would you like to:\n` +
+          `• Click OK to go to PocketDev settings\n` +
+          `• Click Cancel to create a new GitHub token\n\n` +
+          `Steps:\n${steps.join('\n')}`
+        );
+        
+        if (userChoice) {
+          navigate('/settings');
+        } else {
+          // Open GitHub token creation page with pre-filled settings
+          window.open(createTokenUrl, '_blank');
+          // Also navigate to settings for when they come back
+          setTimeout(() => navigate('/settings'), 100);
+        }
+      } else {
+        alert(`Failed to ${action}: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       setActionLoading(null);
     }

@@ -138,12 +138,26 @@ export async function testGithubToken(req, res, next) {
       if (result.valid) {
         // Get more user info with a direct API call
         const userInfo = await github.request('/user');
+        
+        // Also get the primary email if the email field is null
+        let email = userInfo.email;
+        if (!email) {
+          try {
+            const emails = await github.request('/user/emails');
+            const primaryEmail = emails.find(e => e.primary && e.verified);
+            email = primaryEmail ? primaryEmail.email : '';
+          } catch (e) {
+            console.error('Failed to fetch user emails:', e);
+          }
+        }
+        
         res.json({
           valid: true,
           user: {
             login: userInfo.login,
             name: userInfo.name || userInfo.login,
-            email: userInfo.email || ''
+            email: email || '',
+            avatarUrl: userInfo.avatar_url || ''
           }
         });
       } else {

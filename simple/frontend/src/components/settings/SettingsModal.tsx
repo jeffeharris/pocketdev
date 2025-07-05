@@ -13,6 +13,7 @@ interface GitHubStatus {
     login: string;
     name: string;
     email: string;
+    avatarUrl?: string;
   };
   error?: string;
 }
@@ -38,6 +39,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [saveMessage, setSaveMessage] = useState('');
+  const [autoFilledFields, setAutoFilledFields] = useState<{name: boolean, email: boolean}>({
+    name: false,
+    email: false
+  });
 
   // Load settings when modal opens
   useEffect(() => {
@@ -69,6 +74,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const result = await settingsApi.testGithubToken();
       setGithubStatus(result);
+      
+      // Auto-populate git config from GitHub user info if not already set
+      if (result.valid && result.user) {
+        if (!gitUserName && result.user.name) {
+          setGitUserName(result.user.name);
+          setAutoFilledFields(prev => ({ ...prev, name: true }));
+        }
+        if (!gitUserEmail && result.user.email) {
+          setGitUserEmail(result.user.email);
+          setAutoFilledFields(prev => ({ ...prev, email: true }));
+        }
+      }
     } catch (error) {
       setGithubStatus({ valid: false, error: 'Failed to validate token' });
     }
@@ -143,7 +160,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="mb-4">
                     {githubStatus.valid ? (
                       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-700 border border-green-300">
-                        <Github className="w-4 h-4" />
+                        {githubStatus.user?.avatarUrl ? (
+                          <img 
+                            src={githubStatus.user.avatarUrl} 
+                            alt={githubStatus.user.login}
+                            className="w-6 h-6 rounded-full"
+                          />
+                        ) : (
+                          <Github className="w-4 h-4" />
+                        )}
                         <span>{githubStatus.user?.login}</span>
                         <Check className="w-4 h-4" />
                       </div>
@@ -169,9 +194,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     placeholder={hasToken ? "Token already configured (leave blank to keep)" : "ghp_xxxxxxxxxxxx"}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  <p className="text-xs text-gray-500">
-                    Generate a token at GitHub → Settings → Developer settings → Personal access tokens
-                  </p>
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <p>
+                      <a 
+                        href="https://github.com/settings/personal-access-tokens/new" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Generate a Fine-grained Personal Access Token on GitHub
+                      </a>
+                      <span className="text-gray-400 ml-1">(recommended)</span>
+                    </p>
+                    <p className="text-xs">
+                      Required permissions: <span className="font-medium">Contents</span> (Read/Write), 
+                      <span className="font-medium"> Pull requests</span> (Read/Write), 
+                      <span className="font-medium"> Metadata</span> (Read)
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -188,12 +228,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="text"
                     id="git-name"
                     value={gitUserName}
-                    onChange={(e) => setGitUserName(e.target.value)}
+                    onChange={(e) => {
+                      setGitUserName(e.target.value);
+                      setAutoFilledFields(prev => ({ ...prev, name: false }));
+                    }}
                     placeholder="John Doe"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-500">
                     Used for git commits (git config user.name)
+                    {autoFilledFields.name && (
+                      <span className="text-green-600 ml-1">(auto-filled from GitHub)</span>
+                    )}
                   </p>
                 </div>
 
@@ -206,12 +252,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="email"
                     id="git-email"
                     value={gitUserEmail}
-                    onChange={(e) => setGitUserEmail(e.target.value)}
+                    onChange={(e) => {
+                      setGitUserEmail(e.target.value);
+                      setAutoFilledFields(prev => ({ ...prev, email: false }));
+                    }}
                     placeholder="john@example.com"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <p className="text-xs text-gray-500">
                     Used for git commits (git config user.email)
+                    {autoFilledFields.email && (
+                      <span className="text-green-600 ml-1">(auto-filled from GitHub)</span>
+                    )}
                   </p>
                 </div>
               </div>
