@@ -70,16 +70,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const loadCommitHistory = async () => {
     try {
       const history = await api.getCommitHistory(projectId, currentTask.id);
-      
+
       // Find the last merge commit
       const lastMergeIndex = history.findIndex((commit: any) => commit.isMerge);
-      
+
       // Mark commits as resettable based on merge boundary
       const commitsWithResetFlag = history.map((commit: any, index: number) => ({
         ...commit,
         canReset: lastMergeIndex === -1 || index < lastMergeIndex
       }));
-      
+
       setCommits(commitsWithResetFlag);
     } catch (error) {
       console.error('Failed to load commit history:', error);
@@ -137,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handlePushBranch = async () => {
     setIsProcessing(true);
-    
+
     try {
       const result = await api.gitOperation(projectId, currentTask.id, 'push');
       if (!result.success) {
@@ -146,6 +146,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       // Git status will update automatically via WebSocket
     } catch (error: any) {
       alert(`Failed to push: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleMergeToBase = async () => {
+    // Confirm merge action
+    const confirmed = window.confirm(
+      `Are you sure you want to merge "${currentTask.name}" into the base branch?\n\nThis will merge all ${currentTask.gitStatus?.ahead || 0} commits.`
+    );
+
+    if (!confirmed) return;
+
+    setIsProcessing(true);
+
+    try {
+      const result = await api.mergeToBase(projectId, currentTask.id);
+      if (result.success) {
+        alert('Branch merged successfully!');
+        // The task state will update via WebSocket to show it's merged
+      } else {
+        alert(`Failed to merge: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`Failed to merge: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -489,17 +514,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (isAhead && !hasUncommitted) {
                 // Check if we need to push first
                 const hasRemoteTracking = currentTask.gitStatus?.hasRemoteTracking;
-                
+
                 if (hasRemoteTracking === false || (isAhead && hasRemoteTracking !== true)) {
                   // Branch hasn't been pushed yet or has unpushed commits
                   return (
-                    <button 
+                    <button
                       onClick={handlePushBranch}
                       disabled={isProcessing}
                       className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
                     >
                       <Upload className="w-4 h-4" />
-                      {hasRemoteTracking === false 
+                      {hasRemoteTracking === false
                         ? `Push Branch (${isAhead} commits)`
                         : `Push ${isAhead} commit${isAhead > 1 ? 's' : ''}`
                       }
@@ -508,7 +533,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 } else {
                   // All commits pushed, ready for PR
                   return (
-                    <button 
+                    <div className="space-y-2">
+                    <button
+                      onClick={handleMergeToBase}
+                      disabled={isProcessing}
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                    >
+                      <GitMerge className="w-4 h-4" />
+                      Merge to Base Branch
+                    </button>
+                    <button
                       onClick={handleCreatePR}
                       disabled={isProcessing}
                       className="w-full flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50"
@@ -516,7 +550,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <GitPullRequest className="w-4 h-4" />
                       Create Pull Request
                     </button>
-                  );
+                  </div>);
                 }
               }
               
@@ -630,7 +664,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Select a commit to reset your branch to. This will remove all commits after the selected one.
               </p>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6">
               {commits.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
@@ -670,7 +704,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           )}
                         </div>
                       </button>
-                      
+
                       {commit.isMerge && !commit.canReset && (
                         <div className="absolute inset-x-0 -bottom-2 flex items-center">
                           <div className="flex-1 border-b border-red-300"></div>
@@ -685,7 +719,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               )}
             </div>
-            
+
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => {
@@ -699,10 +733,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={async () => {
                   if (!selectedCommit) return;
-                  
+
                   const commit = commits.find(c => c.hash === selectedCommit);
                   if (!commit) return;
-                  
+
                   if (confirm(`Are you sure you want to reset to "${commit.message}"? This will remove all commits after this point.`)) {
                     setIsProcessing(true);
                     try {
