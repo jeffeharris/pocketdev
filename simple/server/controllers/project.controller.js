@@ -506,6 +506,14 @@ export async function pullBaseBranch(req, res, next) {
     );
     
     if (!result.success) {
+      // Check if it's an authentication error
+      if (result.error && (result.error.includes('could not read Password') || result.error.includes('Authentication failed'))) {
+        return res.status(401).json({ 
+          error: 'GitHub authentication failed. Please ensure GITHUB_TOKEN environment variable is set.',
+          details: result.error,
+          hint: 'Set GITHUB_TOKEN environment variable and restart the containers with: make down && make dev'
+        });
+      }
       return res.status(500).json({ 
         error: result.error || 'Pull failed',
         output: result.output 
