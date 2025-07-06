@@ -108,6 +108,17 @@ export const Projects: React.FC = () => {
               </div>
             </Link>
           ))}
+          
+          {/* Create New Project Card */}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="block bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors h-full min-h-[180px]"
+          >
+            <div className="p-6 h-full flex flex-col items-center justify-center">
+              <Plus className="w-10 h-10 text-gray-400 mb-3" />
+              <span className="text-gray-600 font-medium">Create New Project</span>
+            </div>
+          </button>
         </div>
 
         {projects.length === 0 && (
@@ -133,6 +144,12 @@ export const Projects: React.FC = () => {
           setShowAddModal(false);
           loadProjects();
         }}
+      />
+      
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </div>
   );
