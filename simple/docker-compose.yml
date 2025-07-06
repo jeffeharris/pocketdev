@@ -51,7 +51,7 @@ services:
       - ./projects:/projects
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev
-      - pocketdev-data:/app/data  # SQLite database persistence
+      - ./data:/app/data  # SQLite database persistence
     ports:
       - "3005:3005"
     environment:
@@ -122,6 +122,7 @@ volumes:
   pocketdev-workspace:
   pocketdev-settings:
   pocketdev-data:
+    external: true
 
 networks:
   default:
