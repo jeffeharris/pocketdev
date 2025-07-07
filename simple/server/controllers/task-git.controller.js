@@ -260,9 +260,34 @@ export class TaskGitController {
         const statusResult = await this.gitService.getStatus(task.worktree_path);
         const lines = statusResult.output.split('\n').filter(line => line.trim());
         
+        // Get numstat for accurate line counts
+        const stagedNumstatResult = await this.gitService.command(task.worktree_path, 
+          'git diff --numstat --cached');
+        const unstagedNumstatResult = await this.gitService.command(task.worktree_path, 
+          'git diff --numstat');
+        
+        // Parse numstat into maps
+        const stagedStats = new Map();
+        const unstagedStats = new Map();
+        
+        stagedNumstatResult.output.split('\n').filter(line => line.trim()).forEach(line => {
+          const [add, del, ...pathParts] = line.split('\t');
+          const path = pathParts.join('\t');
+          if (path) stagedStats.set(path, { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 });
+        });
+        
+        unstagedNumstatResult.output.split('\n').filter(line => line.trim()).forEach(line => {
+          const [add, del, ...pathParts] = line.split('\t');
+          const path = pathParts.join('\t');
+          if (path) unstagedStats.set(path, { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 });
+        });
+        
         for (const line of lines) {
-          const [status, ...pathParts] = line.trim().split(/\s+/);
-          const filePath = pathParts.join(' ');
+          if (!line.trim()) continue;
+          
+          // Git status format: "XY filename" where XY is exactly 2 characters
+          const status = line.substring(0, 2);
+          const filePath = line.substring(3).trim(); // Skip the status and space
           
           if (!filePath) continue;
           
@@ -289,15 +314,34 @@ export class TaskGitController {
               additions = lines.length;
             } else {
               // Get standard diff
-              const diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${filePath}"`);
+              // Git status format: XY where X = staged status, Y = unstaged status
+              // If X is not space, file has staged changes
+              // If Y is not space, file has unstaged changes
+              const hasStagedChanges = status[0] !== ' ' && status[0] !== '?';
+              const hasUnstagedChanges = status[1] !== ' ' && status[1] !== '?';
+              
+              // For now, show unstaged changes if they exist, otherwise show staged
+              const showStaged = hasStagedChanges && !hasUnstagedChanges;
+              const diffArgs = showStaged ? `--cached -- "${filePath}"` : `-- "${filePath}"`;
+              const diffResult = await this.gitService.getDiff(task.worktree_path, diffArgs);
               diff = diffResult.output;
               
-              // Count additions/deletions
-              const diffLines = diff.split('\n');
-              diffLines.forEach(line => {
-                if (line.startsWith('+') && !line.startsWith('+++')) additions++;
-                else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
-              });
+              // Get accurate line counts from numstat
+              if (showStaged) {
+                const stats = stagedStats.get(filePath) || { additions: 0, deletions: 0 };
+                additions = stats.additions;
+                deletions = stats.deletions;
+              } else {
+                const stats = unstagedStats.get(filePath) || { additions: 0, deletions: 0 };
+                additions = stats.additions;
+                deletions = stats.deletions;
+                
+                // Debug: log if we couldn't find stats
+                if (!stats || (stats.additions === 0 && stats.deletions === 0 && diff.trim())) {
+                  console.log(`No unstaged stats found for: "${filePath}"`);
+                  console.log('Available paths in unstagedStats:', Array.from(unstagedStats.keys()));
+                }
+              }
             }
           } catch (error) {
             console.warn('Could not get diff for:', filePath, error);
@@ -347,7 +391,18 @@ export class TaskGitController {
         diffResult = await this.gitService.command(task.worktree_path,
           `git diff origin/${project.base_branch}...HEAD -- "${file}"`);
       } else {
-        diffResult = await this.gitService.getDiff(task.worktree_path, `-- "${file}"`);
+        // Check if file is staged
+        const statusResult = await this.gitService.getStatus(task.worktree_path);
+        const fileStatus = statusResult.output.split('\n').find(line => {
+          const parts = line.trim().split(/\s+/);
+          const filePath = parts.slice(1).join(' ');
+          return filePath === file;
+        });
+        
+        // If file is staged (first character is not space or ?), use --cached
+        const isStaged = fileStatus && fileStatus[0] !== ' ' && fileStatus[0] !== '?';
+        const diffArgs = isStaged ? `--cached -- "${file}"` : `-- "${file}"`;
+        diffResult = await this.gitService.getDiff(task.worktree_path, diffArgs);
       }
       
       res.json({

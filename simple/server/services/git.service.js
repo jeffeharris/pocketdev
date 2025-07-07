@@ -17,10 +17,15 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     
     // Handle git clone commands with authentication
     if (githubToken && command.includes('git clone') && command.includes('github.com')) {
+      console.log('[Git Service] Attempting authenticated clone');
+      console.log(`[Git Service] GitHub token present: ${!!githubToken} (length: ${githubToken ? githubToken.length : 0})`);
+      
       // Extract the URL from the clone command
       const urlMatch = command.match(/git clone\s+(https?:\/\/[^\s]+)/);
       if (urlMatch) {
         const originalUrl = urlMatch[1];
+        console.log(`[Git Service] Original URL: ${originalUrl}`);
+        
         // Replace the URL with authenticated version
         const authUrl = originalUrl.replace(
           /https:\/\/github\.com/,
@@ -28,6 +33,9 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
         );
         // Replace the URL in the command
         command = command.replace(originalUrl, authUrl);
+        console.log(`[Git Service] Clone command updated with authentication`);
+      } else {
+        console.log('[Git Service] Failed to extract URL from clone command');
       }
     }
     
@@ -69,6 +77,10 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     }
     
     // For non-auth commands or non-GitHub repos, just run normally
+    if (command.includes('git clone')) {
+      console.log(`[Git Service] Clone without auth - Token: ${!!githubToken}, GitHub: ${command.includes('github.com')}`);
+    }
+    
     const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
       env,
@@ -77,6 +89,19 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
+    console.error('[Git Service] Command failed:', error.message);
+    
+    // Check for authentication errors
+    if (error.message.includes('could not read Username') || 
+        error.message.includes('Authentication failed') ||
+        error.message.includes('Repository not found')) {
+      const authError = `Authentication failed. Please check:
+1. Your GitHub token has access to this repository
+2. The repository URL is correct
+3. For private repos, ensure your token has 'repo' scope`;
+      return { success: false, output: '', error: authError, originalError: error.message };
+    }
+    
     return { success: false, output: '', error: error.message };
   }
 }

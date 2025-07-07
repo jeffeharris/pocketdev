@@ -19,6 +19,7 @@ import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
+import { getGitHubTokenService } from './services/github-token.service.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -88,6 +89,10 @@ async function initializeDatabase() {
   app.locals.models = models;
   app.locals.db = db;
   app.locals.projectsDir = config.projectsDir;
+  
+  // Initialize GitHub token service
+  const githubTokenService = getGitHubTokenService(db);
+  app.locals.githubTokenService = githubTokenService;
   
   // Run cleanup on startup
   await cleanupOrphanedWorktrees(models);
