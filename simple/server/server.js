@@ -2,6 +2,8 @@ import 'dotenv/config';
 import { createServer } from 'http';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import fetch from 'node-fetch';
 import WebSocket, { WebSocketServer } from 'ws';
 import config from './config/index.js';
@@ -17,6 +19,10 @@ import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
+
+// ES Module compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Global instances
 let db = null;
@@ -58,6 +64,24 @@ async function initializeDatabase() {
     }
   } catch (error) {
     console.error('Migration check failed:', error);
+  }
+  
+  // Check if lifecycle migration needs to run
+  try {
+    const needsLifecycleMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
+       WHERE name='task_chain_id'`
+    );
+    
+    if (needsLifecycleMigration.count === 0) {
+      console.log('Running task lifecycle migration...');
+      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/001_task_lifecycle.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Task lifecycle migration completed');
+    }
+  } catch (error) {
+    console.error('Lifecycle migration check failed:', error);
   }
   
   // Store models in app locals for access in routes

@@ -13,7 +13,8 @@ import {
   GitMerge,
   RefreshCw,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Settings
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,6 +23,7 @@ import type { Task, CreateTaskDTO } from '../types/task';
 import { TaskListItem } from '../components/task/TaskListItem';
 import { CreateTaskModal } from '../components/task/CreateTaskModal';
 import { PlanningEditor } from '../components/planning/PlanningEditor';
+import { SettingsModal } from '../components/settings/SettingsModal';
 import { api } from '../services/api';
 
 interface AttentionItem {
@@ -45,6 +47,7 @@ export const ProjectDashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPlanningEditor, setShowPlanningEditor] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -342,24 +345,33 @@ export const ProjectDashboard: React.FC = () => {
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 h-16">
-            <Link
-              to="/projects"
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Back to Projects
-            </Link>
-            <div className="h-4 w-px bg-gray-300" />
-            <div className="flex items-center gap-3 flex-1">
-              <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
-                <GitBranch className="w-4 h-4 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
-                <p className="text-sm text-gray-500">Base: {project.baseBranch}</p>
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              <Link
+                to="/projects"
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back to Projects
+              </Link>
+              <div className="h-4 w-px bg-gray-300" />
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
+                  <GitBranch className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-900">{project.name}</h1>
+                  <p className="text-sm text-gray-500">Base: {project.baseBranch}</p>
+                </div>
               </div>
             </div>
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
           </div>
         </div>
       </div>
@@ -596,6 +608,12 @@ export const ProjectDashboard: React.FC = () => {
           onSave={handleSavePlanning}
         />
       )}
+      
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </div>
   );
 };

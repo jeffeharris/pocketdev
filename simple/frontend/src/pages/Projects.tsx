@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GitBranch, Plus, Activity } from 'lucide-react';
+import { GitBranch, Plus, Activity, Settings } from 'lucide-react';
 import type { Project } from '../types/project';
 import { api } from '../services/api';
 import { CreateProjectModal } from '../components/project/CreateProjectModal';
+import { SettingsModal } from '../components/settings/SettingsModal';
 
 export const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     loadProjects();
@@ -62,11 +64,11 @@ export const Projects: React.FC = () => {
           <div className="flex items-center justify-between h-16">
             <h1 className="text-xl font-semibold text-gray-900">PocketDev Projects</h1>
             <button 
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              New Project
+              <Settings className="w-4 h-4" />
+              <span className="hidden sm:inline">Settings</span>
             </button>
           </div>
         </div>
@@ -106,6 +108,17 @@ export const Projects: React.FC = () => {
               </div>
             </Link>
           ))}
+          
+          {/* Create New Project Card */}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="block bg-white rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors h-full min-h-[180px]"
+          >
+            <div className="p-6 h-full flex flex-col items-center justify-center">
+              <Plus className="w-10 h-10 text-gray-400 mb-3" />
+              <span className="text-gray-600 font-medium">Create New Project</span>
+            </div>
+          </button>
         </div>
 
         {projects.length === 0 && (
@@ -131,6 +144,12 @@ export const Projects: React.FC = () => {
           setShowAddModal(false);
           loadProjects();
         }}
+      />
+      
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </div>
   );
