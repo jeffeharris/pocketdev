@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Image, Paperclip } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
 import { TaskStatus } from '../task/TaskStatus';
 import { DiffViewerModal } from '../diff/DiffViewerModal';
 import { CommitModal } from '../git/CommitModal';
+import { ImageUpload } from '../common/ImageUpload';
+import { useImageUpload } from '../../hooks/useImageUpload';
 import { api } from '../../services/api';
 
 interface SidebarProps {
@@ -38,9 +40,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [commits, setCommits] = useState<any[]>([]);
   const [selectedCommit, setSelectedCommit] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showAttachments, setShowAttachments] = useState(false);
   const commitOptionsRef = useRef<HTMLDivElement>(null);
   const updateOptionsRef = useRef<HTMLDivElement>(null);
   const taskActionsRef = useRef<HTMLDivElement>(null);
+  
+  // Image upload hook
+  const {
+    images,
+    isUploading,
+    uploadProgress,
+    loadImages,
+    uploadImage,
+    deleteImage,
+    isLoadingImages
+  } = useImageUpload(projectId, currentTask.id);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -66,6 +80,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       loadCommitHistory();
     }
   }, [showResetModal]);
+
+  // Load images when task changes
+  useEffect(() => {
+    if (currentTask?.id) {
+      loadImages();
+    }
+  }, [currentTask?.id, loadImages]);
 
   const loadCommitHistory = async () => {
     try {
@@ -626,6 +647,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })()}
           </div>
         </div>
+      </div>
+
+      {/* Attachments Section */}
+      <div className="border-b border-gray-200">
+        <button
+          onClick={() => setShowAttachments(!showAttachments)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Attachments</span>
+            {images.length > 0 && (
+              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                {images.length}
+              </span>
+            )}
+          </div>
+          <ChevronDown 
+            className={`w-4 h-4 text-gray-400 transition-transform ${
+              showAttachments ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {showAttachments && (
+          <div className="p-4 pt-0">
+            <ImageUpload
+              projectId={projectId}
+              taskId={currentTask.id}
+              images={images}
+              onUpload={uploadImage}
+              onDelete={deleteImage}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              compact={true}
+            />
+          </div>
+        )}
       </div>
 
       {/* All Tasks List */}

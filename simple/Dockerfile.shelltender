@@ -7,9 +7,13 @@ USER root
 
 WORKDIR /app
 
-# Install Shelltender server package globally as root
-# (npm global packages need system permissions)
-RUN npm install -g @shelltender/server@^0.3.0
+# Copy server files first
+COPY server/package*.json /app/server/
+
+# Install dependencies and rebuild node-pty for current platform
+WORKDIR /app/server
+RUN npm install && \
+    npm rebuild node-pty
 
 # Copy wrapper scripts
 COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell

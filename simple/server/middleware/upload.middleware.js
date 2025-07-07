@@ -27,19 +27,68 @@ const storage = multer.diskStorage({
 
 // File filter
 const fileFilter = (req, file, cb) => {
-  // Accept images only
+  // Accept images and common developer files
   const allowedMimes = [
+    // Images
     'image/jpeg',
     'image/png',
     'image/gif',
     'image/webp',
-    'image/svg+xml'
+    'image/svg+xml',
+    // Documents
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    // Data files
+    'application/json',
+    'text/csv',
+    'application/xml',
+    'text/xml',
+    'text/yaml',
+    'application/x-yaml',
+    // Code files
+    'text/javascript',
+    'application/javascript',
+    'text/x-python',
+    'text/x-typescript',
+    'text/x-java',
+    'text/x-c',
+    'text/x-c++',
+    'text/x-csharp',
+    'text/x-go',
+    'text/x-rust',
+    'text/x-ruby',
+    'text/x-php',
+    'text/html',
+    'text/css',
+    // Archives
+    'application/zip',
+    'application/x-tar',
+    'application/gzip',
+    // Shell scripts
+    'text/x-shellscript',
+    'application/x-sh'
   ];
   
-  if (allowedMimes.includes(file.mimetype)) {
+  // Also allow by extension for common code files that might not have correct mime types
+  const allowedExtensions = [
+    '.py', '.js', '.ts', '.tsx', '.jsx', '.java', '.c', '.cpp', '.cc', '.h', '.hpp',
+    '.cs', '.go', '.rs', '.rb', '.php', '.swift', '.kt', '.scala', '.r', '.m',
+    '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
+    '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+    '.sql', '.graphql', '.proto',
+    '.dockerfile', '.dockerignore', '.gitignore', '.env', '.editorconfig',
+    '.html', '.css', '.scss', '.sass', '.less',
+    '.vue', '.svelte', '.astro'
+  ];
+  
+  const ext = file.originalname.toLowerCase().match(/\.[^.]+$/);
+  const hasAllowedExtension = ext && allowedExtensions.includes(ext[0]);
+  
+  if (allowedMimes.includes(file.mimetype) || hasAllowedExtension) {
     cb(null, true);
   } else {
-    cb(new Error(`Invalid file type. Allowed types: ${allowedMimes.join(', ')}`), false);
+    cb(new Error(`Invalid file type. Allowed: images, PDFs, documents, code files (.py, .js, .ts, etc), config files (.yaml, .json, etc), and archives`), false);
   }
 };
 

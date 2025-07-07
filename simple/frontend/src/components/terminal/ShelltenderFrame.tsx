@@ -16,6 +16,7 @@ const ShelltenderFrameComponent: React.FC<ShelltenderFrameProps> = ({
   worktreePath,
   isVisible = true
 }) => {
+  console.log(`[ShelltenderFrame] Rendering for task ${taskId}, isVisible: ${isVisible}`);
   const [isInitializing, setIsInitializing] = useState(true);
   // Always use the standard session ID format for consistency
   const terminalSessionId = `task-${taskId}`;

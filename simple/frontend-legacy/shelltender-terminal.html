@@ -76,11 +76,14 @@
     const sessionId = urlParams.get('session');
     const taskId = urlParams.get('task');
     
+    // Make term accessible globally for debugging
+    let term = null;
+    
     if (!sessionId) {
       document.getElementById('terminal').innerHTML = '<p style="padding: 20px;">No session ID provided</p>';
     } else {
       // Initialize xterm.js
-      const term = new Terminal({
+      term = new Terminal({
         cursorBlink: true,
         fontSize: 14,
         fontFamily: 'Menlo, Monaco, "Courier New", monospace',
@@ -229,6 +232,18 @@
       
       // Focus terminal
       term.focus();
+      
+      // Listen for focus messages from parent window
+      window.addEventListener('message', (event) => {
+        console.log('[shelltender-terminal] Received message:', event.data, 'from origin:', event.origin);
+        if (event.data && event.data.type === 'focus-terminal') {
+          console.log('[shelltender-terminal] Received focus-terminal message for session:', sessionId);
+          console.log('[shelltender-terminal] Terminal object exists:', !!term);
+          console.log('[shelltender-terminal] Terminal element:', term.element);
+          term.focus();
+          console.log('[shelltender-terminal] Terminal focused - activeElement:', document.activeElement);
+        }
+      });
     }
   </script>
 </body>

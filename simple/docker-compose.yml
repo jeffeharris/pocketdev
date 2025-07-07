@@ -11,11 +11,11 @@ services:
       - ./data:/app/data
       - ./projects:/projects
     ports:
-      - "8080:8080"  # WebSocket port
-      - "8081:8081"  # HTTP API port
+      - "8080:8080"  # HTTP API port (swapped)
+      - "8081:8081"  # WebSocket port (swapped)
     environment:
-      - SHELLTENDER_PORT=8080
-      - SHELLTENDER_API_PORT=8081
+      - SHELLTENDER_PORT=8081
+      - SHELLTENDER_API_PORT=8080
       - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       # AI service credentials (passed through from host)
@@ -25,7 +25,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     command: >
-      sh -c "cd server && node shelltender-service.js"
+      sh -c "cd /app/server && node shelltender-service.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
@@ -56,8 +56,8 @@ services:
       - PROJECTS_DIR=/projects
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - HOME=/home/pocketdev
-      - SHELLTENDER_API_URL=http://shelltender:8081
-      - SHELLTENDER_WS_URL=ws://shelltender:8080
+      - SHELLTENDER_API_URL=http://shelltender:8080
+      - SHELLTENDER_WS_URL=ws://shelltender:8081
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     command: >

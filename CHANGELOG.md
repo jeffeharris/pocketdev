@@ -19,11 +19,37 @@ All notable changes to the PocketDev project will be documented in this file.
   - Proper fullscreen event handling and UI synchronization
   - Meta tags for web app capability on mobile devices
 
+- **Terminal Integration with @shelltender/client**
+  - Replaced iframe-based terminal with native @shelltender/client Terminal component
+  - Direct WebSocket connection through Vite proxy
+  - Improved focus management with React refs
+  - Session persistence with task-specific session IDs
+  - Fixed port configuration (WebSocket on 8081, API on 8080)
+
+- **File Upload System**
+  - Support for images, documents, code files, config files, and archives
+  - Drag & drop, clipboard paste, and file browser upload methods
+  - File size limit: 10MB per file
+  - Storage limit: 100MB per task, max 50 files
+  - Files stored in `.pocketdev/attachments/` within task worktree
+  - Reference path copying for easy use in AI conversations
+  - Compact horizontal layout for narrow sidebar
+  - Visual feedback for copy actions and hover states
+  - Icon-based file type indicators
+
 ### Changed
 - Button and control sizing now relative and touch-optimized
 - Project cards stack vertically on mobile devices
 - Terminal container height adjusted for mobile viewing
 - Form inputs prevent zoom on iOS with 16px font size
+- Upload system now supports multiple file types beyond images
+- Terminal focus automatically set when switching tasks
+
+### Fixed
+- Terminal resize issues (awaiting @shelltender/client update)
+- Cross-filesystem file upload errors with Docker volumes
+- WebSocket connection issues with port configuration
+- node-pty version mismatch in containers
 
 ## [0.3.0] - 2025-06-07 - Phase 1: Database Foundation & Task Persistence
 

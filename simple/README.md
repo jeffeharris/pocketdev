@@ -64,7 +64,7 @@ simple/server/
 │   ├── settings.controller.js  # Settings & GitHub token
 │   ├── monitoring.controller.js # AI monitoring endpoints
 │   ├── terminal.controller.js  # Terminal session management
-│   └── upload.controller.js    # Image upload handling
+│   └── upload.controller.js    # File upload handling
 ├── services/                    # Business logic layer
 │   ├── git.service.js          # Git operations
 │   ├── cleanup.service.js      # Orphaned resource cleanup
@@ -136,6 +136,15 @@ simple/server/
 - Native fullscreen API support for terminal viewing
 - Optimized for iPhone and other mobile browsers
 
+### File Attachments
+- Upload files directly to task workspaces
+- Support for images, documents, code files, config files, and archives
+- Drag & drop, clipboard paste, and file browser upload
+- File size limit: 10MB per file
+- Storage limit: 100MB per task, max 50 files
+- Files stored in `.pocketdev/attachments/` within task worktree
+- Copy file reference paths for easy use in AI conversations
+
 ## API Endpoints
 
 ### Projects
@@ -161,6 +170,12 @@ simple/server/
 - `GET /api/sessions` - List all terminal sessions
 - `POST /api/projects/:projectId/tasks/:taskId/terminal` - Create terminal session
 - `POST /api/sessions/:sessionId/execute` - Execute command in session
+
+### File Uploads
+- `POST /api/projects/:projectId/tasks/:taskId/upload` - Upload file to task
+- `GET /api/projects/:projectId/tasks/:taskId/images` - List uploaded files
+- `GET /api/projects/:projectId/tasks/:taskId/images/:filename` - Get file
+- `DELETE /api/projects/:projectId/tasks/:taskId/images/:filename` - Delete file
 
 ## Documentation
 

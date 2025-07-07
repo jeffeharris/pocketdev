@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MainHeader } from '../layout/MainHeader';
 import { Sidebar } from '../layout/Sidebar';
-import { TerminalPanel } from '../terminal/TerminalPanel';
+import { TerminalPanel, type TerminalPanelHandle } from '../terminal/TerminalPanel';
 import { LensSlider } from '../common/LensSlider';
 import { CreateTaskModal } from './CreateTaskModal';
 import type { Task, CreateTaskDTO } from '../../types/task';
@@ -28,6 +28,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   
   // Track which terminals have been initialized
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
+  
+  // Track terminal refs for focus management
+  const terminalRefs = useRef<Map<string, TerminalPanelHandle>>(new Map());
   
   // WebSocket for real-time updates
   const { subscribe, unsubscribe } = useWebSocketContext();
@@ -91,12 +94,25 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   
   // Update active task when taskId prop changes
   useEffect(() => {
+    console.log('[TaskWorkspace] taskId prop changed to:', taskId);
     setActiveTaskId(taskId);
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
+    
+    // Focus the terminal using ref
+    setTimeout(() => {
+      const terminalRef = terminalRefs.current.get(taskId);
+      if (terminalRef) {
+        console.log('[TaskWorkspace] Focusing terminal for task:', taskId);
+        terminalRef.focus();
+      } else {
+        console.log('[TaskWorkspace] Terminal ref not found for task:', taskId);
+      }
+    }, 100);
   }, [taskId]);
 
   const handleTaskSelect = (newTaskId: string) => {
+    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId);
     setActiveTaskId(newTaskId);
     // Reset validation mode when switching tasks
     setValidationMode(false);
@@ -104,11 +120,14 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(newTaskId));
     
-    // Focus the terminal iframe after a short delay to ensure it's visible
+    // Focus the terminal using ref
     setTimeout(() => {
-      const iframe = document.querySelector(`iframe[title="Terminal - Task ${newTaskId}"]`) as HTMLIFrameElement;
-      if (iframe) {
-        iframe.focus();
+      const terminalRef = terminalRefs.current.get(newTaskId);
+      if (terminalRef) {
+        console.log('[TaskWorkspace] Focusing terminal for task:', newTaskId);
+        terminalRef.focus();
+      } else {
+        console.log('[TaskWorkspace] Terminal ref not found for task:', newTaskId);
       }
     }, 100);
   };
@@ -204,7 +223,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             const isInitialized = initializedTerminals.has(task.id);
             
             // Only render if this is the active task or it has been initialized before
-            if (!isActive && !isInitialized) return null;
+            if (!isActive && !isInitialized) {
+              return null;
+            }
             
             return (
               <div
@@ -213,6 +234,13 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                 className="flex-1 flex flex-col"
               >
                 <TerminalPanel
+                  ref={(ref) => {
+                    if (ref) {
+                      terminalRefs.current.set(task.id, ref);
+                    } else {
+                      terminalRefs.current.delete(task.id);
+                    }
+                  }}
                   task={task}
                   validationMode={validationMode}
                   onToggleValidation={() => setValidationMode(!validationMode)}

@@ -638,6 +638,50 @@ index abc123..def456 100644
     }
     return this.fetch('/settings/system-info');
   }
+
+  // Image upload endpoints
+  async getTaskImages(projectId: string, taskId: string): Promise<{ images: Array<{
+    filename: string;
+    size: number;
+    sizeFormatted: string;
+    referencePath: string;
+    url?: string;
+  }> }> {
+    if (USE_MOCKS) {
+      return { images: [] };
+    }
+    return this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/images`);
+  }
+
+  async uploadTaskImage(projectId: string, taskId: string, formData: FormData): Promise<any> {
+    if (USE_MOCKS) {
+      return {
+        success: true,
+        filename: 'mock-image.png',
+        size: 1024,
+        sizeFormatted: '1 KB',
+        referencePath: '@.pocketdev/tmp/images/mock-image.png'
+      };
+    }
+    const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/upload`, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async deleteTaskImage(projectId: string, taskId: string, filename: string): Promise<void> {
+    if (USE_MOCKS) return;
+    await this.fetch<void>(`/projects/${projectId}/tasks/${taskId}/images/${filename}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiService();
