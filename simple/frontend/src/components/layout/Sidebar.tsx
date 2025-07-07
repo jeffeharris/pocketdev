@@ -406,8 +406,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               // Total uncommitted = staged + unstaged + untracked
               const uncommittedCount = staged + unstaged + untracked;
               const hasUncommitted = uncommittedCount > 0;
-              const isBehind = (currentTask.gitStatus?.behind || 0) > 0;
-              const isAhead = (currentTask.gitStatus?.ahead || 0) > 0;
+              const behindCount = currentTask.gitStatus?.behind || 0;
+              const aheadCount = currentTask.gitStatus?.ahead || 0;
+              const isBehind = behindCount > 0;
+              const isAhead = aheadCount > 0;
               
               // Priority order: conflicts > uncommitted > behind > ahead (clean)
               if (hasConflicts) {
@@ -525,8 +527,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <Upload className="w-4 h-4" />
                       {hasRemoteTracking === false
-                        ? `Push Branch (${isAhead} commits)`
-                        : `Push ${isAhead} commit${isAhead > 1 ? 's' : ''}`
+                        ? `Push Branch (${aheadCount} commits)`
+                        : `Push ${aheadCount} commit${aheadCount > 1 ? 's' : ''}`
                       }
                     </button>
                   );
