@@ -15,8 +15,24 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
   try {
     const env = { ...process.env };
     
+    // Handle git clone commands with authentication
+    if (githubToken && command.includes('git clone') && command.includes('github.com')) {
+      // Extract the URL from the clone command
+      const urlMatch = command.match(/git clone\s+(https?:\/\/[^\s]+)/);
+      if (urlMatch) {
+        const originalUrl = urlMatch[1];
+        // Replace the URL with authenticated version
+        const authUrl = originalUrl.replace(
+          /https:\/\/github\.com/,
+          `https://x-access-token:${githubToken}@github.com`
+        );
+        // Replace the URL in the command
+        command = command.replace(originalUrl, authUrl);
+      }
+    }
+    
     // If we have a GitHub token and this is a command that needs auth
-    if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
+    else if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
       // Get the current remote URL
       const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
       
@@ -30,8 +46,6 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
           'https://github.com',
           `https://${username}:${githubToken}@github.com`
         );
-        
-        console.log(`Setting up auth for ${username} with token (${githubToken.substring(0, 10)}...)`);
         
         // Use the authenticated URL for this command
         const tempRemote = `temp-auth-${Date.now()}`;

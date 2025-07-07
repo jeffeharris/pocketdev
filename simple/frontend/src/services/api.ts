@@ -106,12 +106,14 @@ class ApiService {
       body: JSON.stringify(data)
     });
     // Map backend format to our Project type
+    // The backend returns { success: true, project: {...} }
+    const project = response.project || response;
     return {
-      id: response.project.id,
-      name: response.project.name,
-      repository: response.project.repo_url,
-      baseBranch: response.project.base_branch,
-      created: response.project.created_at,
+      id: project.id,
+      name: project.name,
+      repository: project.repo_url,
+      baseBranch: project.base_branch,
+      created: project.created_at,
       tasksCount: 0
     };
   }
