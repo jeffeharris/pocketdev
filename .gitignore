@@ -385,11 +385,7 @@ cython_debug/
 workspaces/
 local-backend/.env
 web/.env
-*.log
-.DS_Store
 node_modules/
-build/
-dist/
 *.swp
 *.swo
 *~
@@ -397,6 +393,10 @@ dist/
 *.sublime-*
 .claude/*local*
 .claude-prompt
+/projects
+/data
+/frontend/
+/shelltender-client/
 
 # SQLite databases
 *.db
