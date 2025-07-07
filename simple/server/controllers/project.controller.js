@@ -5,6 +5,16 @@ import config from '../config/index.js';
 import * as gitService from '../services/git.service.js';
 
 /**
+ * Helper to get GitHub token from request context
+ * @param {Request} req - Express request object
+ * @returns {Promise<string>} GitHub token
+ */
+async function getGitHubToken(req) {
+  const githubTokenService = req.app.locals.githubTokenService;
+  return await githubTokenService.getToken();
+}
+
+/**
  * List all projects
  */
 export async function listProjects(req, res, next) {
@@ -37,12 +47,15 @@ export async function createProject(req, res, next) {
     // Extract project name from URL if not provided
     const finalProjectName = projectName || repoUrl.split('/').pop().replace('.git', '');
     
+    // Get GitHub token
+    const githubToken = await getGitHubToken(req);
+    
     // Clone repository
     console.log(`Cloning ${repoUrl} to ${projectPath}...`);
     const cloneResult = await gitService.executeGitCommand(
       config.projectsDir,
       `git clone ${repoUrl} ${projectId}`,
-      config.githubToken
+      githubToken
     );
     
     if (!cloneResult.success) {
@@ -50,14 +63,14 @@ export async function createProject(req, res, next) {
     }
     
     // Configure git credentials
-    await gitService.configureGitCredentials(projectPath, config.githubToken);
+    await gitService.configureGitCredentials(projectPath, githubToken);
     
     // Checkout branch if different from default
     if (branch && branch !== 'main') {
       const checkoutResult = await gitService.executeGitCommand(
         projectPath,
         `git checkout ${branch}`,
-        config.githubToken
+        githubToken
       );
       
       if (!checkoutResult.success) {
@@ -265,11 +278,14 @@ export async function createBranch(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Get GitHub token
+    const githubToken = await getGitHubToken(req);
+    
     // Create branch
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git checkout -b ${branchName} ${fromBranch}`,
-      config.githubToken
+      githubToken
     );
     
     if (!result.success) {
@@ -481,34 +497,8 @@ export async function pullBaseBranch(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Try to get GitHub token from various sources
-    let githubToken = config.githubToken;
-    
-    // If no env token, try to get from database
-    if (!githubToken) {
-      try {
-        const { decrypt } = await import('../utils/crypto.js');
-        const githubTokenSetting = await models.db.get(
-          'SELECT value FROM settings WHERE key = ?',
-          ['github_token']
-        );
-        
-        if (githubTokenSetting) {
-          // Try to decrypt the token
-          const decryptedToken = decrypt(githubTokenSetting.value);
-          if (decryptedToken) {
-            githubToken = decryptedToken;
-            console.log('Using GitHub token from database');
-          } else {
-            // Handle case where token might not be encrypted (legacy)
-            githubToken = githubTokenSetting.value;
-            console.log('Using GitHub token from database (unencrypted)');
-          }
-        }
-      } catch (e) {
-        console.error('Failed to retrieve GitHub token from database:', e);
-      }
-    }
+    // Get GitHub token
+    const githubToken = await getGitHubToken(req);
     
     
     // Ensure git credentials are configured
