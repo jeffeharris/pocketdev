@@ -103,6 +103,14 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(newTaskId));
+    
+    // Focus the terminal iframe after a short delay to ensure it's visible
+    setTimeout(() => {
+      const iframe = document.querySelector(`iframe[title="Terminal - Task ${newTaskId}"]`) as HTMLIFrameElement;
+      if (iframe) {
+        iframe.focus();
+      }
+    }, 100);
   };
 
   const handleTaskChange = (task: Task) => {
