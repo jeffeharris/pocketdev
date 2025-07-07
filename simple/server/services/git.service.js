@@ -38,9 +38,8 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
         console.log('[Git Service] Failed to extract URL from clone command');
       }
     }
-    
-    // If we have a GitHub token and this is a command that needs auth
-    else if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
+    // Separate check for push/pull/fetch commands that need auth
+    if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
       // Get the current remote URL
       const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
       
@@ -342,6 +341,193 @@ export class GitService {
     return this.command(projectPath, `git diff ${args}`);
   }
 
+  /**
+   * Get comprehensive diff information for files
+   * @param {string} projectPath - Path to the project
+   * @param {string} compareTarget - What to compare against ('working' or a ref like 'origin/main')
+   * @returns {Promise<{files: Array, stats: Map}>}
+   */
+  async getComprehensiveDiff(projectPath, compareTarget = 'working') {
+    const files = new Map(); // path -> file info
+    
+    if (compareTarget === 'working') {
+      // Get all file statuses
+      const statusResult = await this.getDetailedStatus(projectPath);
+      
+      // Get numstat for staged and unstaged
+      const stagedNumstat = await this.command(projectPath, 'git diff --numstat --cached');
+      const unstagedNumstat = await this.command(projectPath, 'git diff --numstat');
+      
+      // Parse numstats
+      const parseNumstat = (output) => {
+        const stats = new Map();
+        output.split('\n').filter(line => line.trim()).forEach(line => {
+          const [add, del, ...pathParts] = line.split('\t');
+          const path = pathParts.join('\t');
+          if (path) stats.set(path, { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 });
+        });
+        return stats;
+      };
+      
+      const stagedStats = parseNumstat(stagedNumstat.output);
+      const unstagedStats = parseNumstat(unstagedNumstat.output);
+      
+      // Process each file from status
+      for (const file of statusResult.files) {
+        const fileInfo = {
+          path: file.path,
+          status: file.status,
+          staged: file.staged,
+          unstaged: file.unstaged,
+          untracked: file.untracked,
+          additions: 0,
+          deletions: 0,
+          type: 'modified'
+        };
+        
+        // Determine type
+        if (file.status === '??') fileInfo.type = 'added';
+        else if (file.status[0] === 'A' || file.status[1] === 'A') fileInfo.type = 'added';
+        else if (file.status[0] === 'D' || file.status[1] === 'D') fileInfo.type = 'deleted';
+        else if (file.status[0] === 'R' || file.status[1] === 'R') fileInfo.type = 'renamed';
+        
+        // Get stats based on file state
+        if (file.staged && !file.unstaged) {
+          // Only staged changes
+          const stats = stagedStats.get(file.path) || { additions: 0, deletions: 0 };
+          fileInfo.additions = stats.additions;
+          fileInfo.deletions = stats.deletions;
+          fileInfo.diffType = 'staged';
+        } else if (!file.staged && file.unstaged) {
+          // Only unstaged changes
+          const stats = unstagedStats.get(file.path) || { additions: 0, deletions: 0 };
+          fileInfo.additions = stats.additions;
+          fileInfo.deletions = stats.deletions;
+          fileInfo.diffType = 'unstaged';
+        } else if (file.staged && file.unstaged) {
+          // Both staged and unstaged - show unstaged by default
+          const stats = unstagedStats.get(file.path) || { additions: 0, deletions: 0 };
+          fileInfo.additions = stats.additions;
+          fileInfo.deletions = stats.deletions;
+          fileInfo.diffType = 'unstaged';
+          fileInfo.hasBothChanges = true;
+        } else if (file.untracked) {
+          // Untracked file - count lines
+          fileInfo.diffType = 'untracked';
+          // Will be calculated when getting diff
+        }
+        
+        files.set(file.path, fileInfo);
+      }
+    } else {
+      // Compare against a ref (like origin/main)
+      const diffNumstatResult = await this.command(projectPath, 
+        `git diff --numstat ${compareTarget}...HEAD`);
+      const diffStatusResult = await this.command(projectPath, 
+        `git diff --name-status ${compareTarget}...HEAD`);
+      
+      // Parse numstat
+      const stats = new Map();
+      diffNumstatResult.output.split('\n').filter(line => line.trim()).forEach(line => {
+        const [add, del, ...pathParts] = line.split('\t');
+        const path = pathParts.join('\t');
+        if (path) stats.set(path, { 
+          additions: parseInt(add) || 0, 
+          deletions: parseInt(del) || 0 
+        });
+      });
+      
+      // Parse status
+      diffStatusResult.output.split('\n').filter(line => line.trim()).forEach(line => {
+        const [status, ...pathParts] = line.split('\t');
+        const path = pathParts.join('\t');
+        if (!path) return;
+        
+        let type = 'modified';
+        if (status.includes('A')) type = 'added';
+        else if (status.includes('D')) type = 'deleted';
+        else if (status.includes('R')) type = 'renamed';
+        
+        const fileStats = stats.get(path) || { additions: 0, deletions: 0 };
+        files.set(path, {
+          path,
+          type,
+          additions: fileStats.additions,
+          deletions: fileStats.deletions,
+          diffType: 'committed',
+          status: status
+        });
+      });
+    }
+    
+    return { files };
+  }
+
+  /**
+   * Get diff content for a specific file
+   * @param {string} projectPath - Path to the project
+   * @param {string} filePath - Path to the file
+   * @param {string} compareTarget - What to compare against
+   * @param {object} fileInfo - Optional file info from getComprehensiveDiff
+   */
+  async getFileDiffContent(projectPath, filePath, compareTarget = 'working', fileInfo = null) {
+    let diff = '';
+    
+    if (compareTarget === 'working') {
+      // Use file info to determine how to get diff
+      if (fileInfo) {
+        if (fileInfo.diffType === 'staged') {
+          const result = await this.getDiff(projectPath, `--cached -- "${filePath}"`);
+          diff = result.output;
+        } else if (fileInfo.diffType === 'unstaged') {
+          const result = await this.getDiff(projectPath, `-- "${filePath}"`);
+          diff = result.output;
+        } else if (fileInfo.diffType === 'untracked') {
+          // Generate diff for untracked file
+          const content = await this.command(projectPath, `cat "${filePath}"`);
+          const lines = content.output.split('\n');
+          diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
+          lines.forEach(line => {
+            diff += `+${line}\n`;
+          });
+        }
+      } else {
+        // Fallback: try both staged and unstaged
+        const stagedResult = await this.getDiff(projectPath, `--cached -- "${filePath}"`);
+        if (stagedResult.output.trim()) {
+          diff = stagedResult.output;
+        } else {
+          const unstagedResult = await this.getDiff(projectPath, `-- "${filePath}"`);
+          diff = unstagedResult.output;
+        }
+      }
+    } else {
+      // Compare against ref
+      const result = await this.command(projectPath, 
+        `git diff ${compareTarget}...HEAD -- "${filePath}"`);
+      diff = result.output;
+      
+      // If no diff found and file exists (might be a new file)
+      if (!diff && fileInfo && fileInfo.type === 'added') {
+        // For new files, show the entire file content as additions
+        try {
+          const content = await this.command(projectPath, `cat "${filePath}"`);
+          if (content.success) {
+            const lines = content.output.split('\n');
+            diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
+            lines.forEach(line => {
+              diff += `+${line}\n`;
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to get content for new file ${filePath}:`, e);
+        }
+      }
+    }
+    
+    return diff;
+  }
+
   async add(projectPath, files = '.') {
     return this.command(projectPath, `git add ${files}`);
   }
@@ -354,7 +540,11 @@ export class GitService {
 
   async push(projectPath, branch, options = {}) {
     const flags = options.setUpstream ? '-u' : '';
-    return this.command(projectPath, `git push ${flags} origin ${branch}`);
+    const pushCommand = `git push ${flags} origin ${branch}`;
+    console.log(`[GitService.push] Executing: ${pushCommand} in ${projectPath}`);
+    const result = await this.command(projectPath, pushCommand);
+    console.log(`[GitService.push] Result:`, result);
+    return result;
   }
 
   async pull(projectPath, remote, branch) {
@@ -393,11 +583,18 @@ export class GitService {
   }
 
   async checkMergeConflicts(projectPath, targetBranch) {
-    // Save current state
-    await this.command(projectPath, 'git add -A');
-    await this.command(projectPath, 'git stash');
+    // First check if there are any changes to stash
+    const statusBefore = await this.command(projectPath, 'git status --porcelain');
+    const hasChanges = statusBefore.output.trim().length > 0;
+    let stashed = false;
     
     try {
+      // Only stash if there are changes
+      if (hasChanges) {
+        await this.command(projectPath, 'git stash push -m "merge-conflict-check"');
+        stashed = true;
+      }
+      
       // Attempt a dry-run merge
       const mergeResult = await this.command(projectPath, 
         `git merge --no-commit --no-ff ${targetBranch}`);
@@ -417,9 +614,35 @@ export class GitService {
         conflicts: conflicts,
         canMerge: conflicts.length === 0
       };
+    } catch (error) {
+      // If merge fails, try to abort it
+      try {
+        await this.command(projectPath, 'git merge --abort');
+      } catch (abortError) {
+        // Ignore abort errors
+      }
+      
+      // Return safe defaults
+      return {
+        hasConflicts: false,
+        conflicts: [],
+        canMerge: true
+      };
     } finally {
-      // Restore original state
-      await this.command(projectPath, 'git stash pop');
+      // Restore original state only if we stashed
+      if (stashed) {
+        try {
+          await this.command(projectPath, 'git stash pop');
+        } catch (popError) {
+          console.error('Failed to restore stashed changes:', popError.message);
+          // Try to at least drop the stash to clean up
+          try {
+            await this.command(projectPath, 'git stash drop');
+          } catch (dropError) {
+            // Ignore
+          }
+        }
+      }
     }
   }
 
@@ -440,6 +663,25 @@ export class GitService {
         `git rev-list --count HEAD..${baseBranch}`);
       const behind = parseInt(behindResult.output.trim(), 10) || 0;
       
+      // Check for unpushed commits (commits not in origin/currentBranch)
+      let unpushed = 0;
+      let hasRemoteTracking = false;
+      try {
+        // Check if remote tracking branch exists
+        const remoteCheck = await this.command(projectPath, 
+          `git rev-parse --verify origin/${currentBranch} 2>/dev/null`);
+        if (remoteCheck.success) {
+          hasRemoteTracking = true;
+          // Count unpushed commits
+          const unpushedResult = await this.command(projectPath, 
+            `git rev-list --count origin/${currentBranch}..HEAD`);
+          unpushed = parseInt(unpushedResult.output.trim(), 10) || 0;
+        }
+      } catch (error) {
+        // Remote tracking branch doesn't exist, all commits are unpushed
+        unpushed = ahead;
+      }
+      
       // Check for conflicts by attempting a merge
       let hasConflicts = false;
       if (behind > 0) {
@@ -456,7 +698,9 @@ export class GitService {
         hasConflicts,
         staged: detailedStatus.staged,
         unstaged: detailedStatus.unstaged,
-        untracked: detailedStatus.untracked
+        untracked: detailedStatus.untracked,
+        unpushed,
+        hasRemoteTracking
       };
     } catch (error) {
       console.error('Error getting branch status:', error);
@@ -466,7 +710,9 @@ export class GitService {
         hasConflicts: false,
         staged: 0,
         unstaged: 0,
-        untracked: 0
+        untracked: 0,
+        unpushed: 0,
+        hasRemoteTracking: false
       };
     }
   }

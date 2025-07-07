@@ -664,6 +664,18 @@ Original task: ${task.name}`;
         const mergeCommitResult = await this.gitService.getHeadCommit(project.local_path);
         const mergeCommitSha = mergeCommitResult.output.trim();
         
+        // Push the merged changes to origin
+        console.log(`Pushing merged changes in ${project.base_branch} to origin...`);
+        const pushBaseResult = await this.gitService.push(project.local_path, project.base_branch);
+        if (!pushBaseResult.success) {
+          // If push fails, we need to reset the merge
+          await this.gitService.command(project.local_path, `git reset --hard HEAD~1`);
+          return res.status(500).json({ 
+            error: 'Failed to push merged changes to origin', 
+            details: pushBaseResult.error 
+          });
+        }
+        
         // Update task with merge information
         await this.models.tasks.update(task.id, { 
           status: 'merged',
@@ -678,6 +690,11 @@ Original task: ${task.name}`;
         
         // Trigger status update for the task
         await this.triggerStatusUpdate(taskId, req);
+        
+        // Send task state change via WebSocket
+        if (req.app.locals.websocketService) {
+          req.app.locals.websocketService.sendTaskStateChange(taskId, 'merged');
+        }
         
         res.json({
           success: true,

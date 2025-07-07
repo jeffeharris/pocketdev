@@ -210,6 +210,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   
   const processFiles = (files: DiffFile[]) => {
     if (files.length > 0) {
+      console.log('[DiffViewer] Processing files, compareWith:', compareWith);
+      console.log('[DiffViewer] First file has diff?', !!files[0]?.diff);
+      
       // First, set all files without their diff content (for quick sidebar display)
       const filesWithoutDiff = files.map(file => ({
         ...file,
@@ -497,8 +500,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                         setSelectedFile(file);
                         setSelectedFileIndex(fileIndex);
                         
-                        // If file hasn't loaded yet, load it immediately
-                        if (file.loading && !file.diff) {
+                        // Load diff if not already loaded
+                        if (!file.diff) {
                           loadFileDiff(file.path, fileIndex);
                         }
                       }}

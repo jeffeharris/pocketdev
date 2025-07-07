@@ -47,7 +47,6 @@ export class GitStatusMonitor {
         // Get active tasks for this project
         const tasks = await this.models.tasks.findByProjectId(project.id);
         const activeTasks = tasks.filter(task => 
-          task.taskState === 'active' && 
           task.worktree_path && 
           fsSync.existsSync(task.worktree_path)
         );
@@ -64,6 +63,12 @@ export class GitStatusMonitor {
   async checkTaskGitStatus(task, project) {
     try {
       const baseBranch = `origin/${project.base_branch || 'main'}`;
+      
+      // Debug logging for merged tasks
+      if (task.status === 'merged' || task.merged_at) {
+        console.log(`[GitStatusMonitor] Checking merged task ${task.id}, branch: ${task.branch}, base: ${baseBranch}`);
+      }
+      
       const status = await this.gitService.getBranchStatus(
         task.worktree_path,
         task.branch,

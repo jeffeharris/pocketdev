@@ -12,6 +12,24 @@ const PrototypeMergeConflict: React.FC = () => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
   const decorationsRef = useRef<string[]>([]);
+  
+  // Load conflict data from sessionStorage
+  const [conflictData, setConflictData] = useState<any>(null);
+  
+  useEffect(() => {
+    const data = sessionStorage.getItem('mergeConflictData');
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        setConflictData(parsed);
+        console.log('Loaded conflict data:', parsed);
+        // Clean up after reading
+        sessionStorage.removeItem('mergeConflictData');
+      } catch (e) {
+        console.error('Failed to parse conflict data:', e);
+      }
+    }
+  }, []);
 
   // Sample file with merge conflicts
   const conflictedFile = `import React from 'react';
@@ -598,6 +616,19 @@ export function ShoppingCart() {
         <h1 className="text-3xl font-bold text-gray-900 mb-8">
           Monaco Merge Conflict Resolution
         </h1>
+        
+        {/* Show task info if loaded from TaskWorkspace */}
+        {conflictData && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h2 className="text-lg font-semibold text-blue-900 mb-2">
+              Task: {conflictData.taskName}
+            </h2>
+            <div className="text-sm text-blue-700">
+              <p>Branch: <code className="bg-blue-100 px-2 py-0.5 rounded">{conflictData.branch}</code></p>
+              <p>Files with potential conflicts: {conflictData.files?.length || 0}</p>
+            </div>
+          </div>
+        )}
 
         {/* Conflict Status */}
         {viewMode === 'inline' && (

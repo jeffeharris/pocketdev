@@ -136,16 +136,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handlePushBranch = async () => {
+    console.log('handlePushBranch called');
     setIsProcessing(true);
 
     try {
+      console.log(`Calling api.gitOperation with projectId: ${projectId}, taskId: ${currentTask.id}`);
       const result = await api.gitOperation(projectId, currentTask.id, 'push');
+      console.log('Git operation result:', result);
+      
       if (!result.success) {
         alert(`Failed to push: ${result.error || 'Unknown error'}`);
+      } else {
+        // Show success feedback
+        console.log('Push successful:', result.output);
+        if (result.error && result.error.includes('Everything up-to-date')) {
+          alert('Already up to date - nothing to push');
+        } else if (result.output || result.error) {
+          alert(`Push successful! ${result.output || result.error || ''}`);
+        } else {
+          alert('Push completed successfully!');
+        }
       }
       // Git status will update automatically via WebSocket
     } catch (error: any) {
-      alert(`Failed to push: ${error.message}`);
+      console.error('Push error:', error);
+      // Check if it's an authentication error
+      if (error.message.includes('Authentication') || error.message.includes('403')) {
+        alert('Push failed: GitHub authentication error. Please check your GitHub token in Settings.');
+      } else {
+        alert(`Failed to push: ${error.message}`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -162,14 +182,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
+      console.log('Merging task:', currentTask.id, 'Current state:', currentTask.taskState);
       const result = await api.mergeToBase(projectId, currentTask.id);
+      console.log('Merge result:', result);
+      
       if (result.success) {
         alert('Branch merged successfully!');
         // The task state will update via WebSocket to show it's merged
+        console.log('Waiting for WebSocket update to change task state to merged...');
+        
+        // Manually refresh the task status after a short delay if WebSocket doesn't update
+        setTimeout(async () => {
+          try {
+            console.log('Manually fetching updated task status...');
+            const updatedTask = await api.getTask(currentTask.id);
+            console.log('Updated task:', updatedTask);
+            if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
+              onTaskUpdate(currentTask.id, updatedTask);
+            }
+          } catch (error) {
+            console.error('Failed to fetch updated task:', error);
+          }
+        }, 2000);
       } else {
         alert(`Failed to merge: ${result.error || 'Unknown error'}`);
       }
     } catch (error: any) {
+      console.error('Merge error:', error);
       alert(`Failed to merge: ${error.message}`);
     } finally {
       setIsProcessing(false);
@@ -414,9 +453,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
               // Priority order: conflicts > uncommitted > behind > ahead (clean)
               if (hasConflicts) {
                 return (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer">
+                  <button 
+                    onClick={async () => {
+                      setIsProcessing(true);
+                      try {
+                        // First, get the actual conflict data
+                        const conflictData = await api.getTaskDiff(projectId, currentTask.id, 'base');
+                        
+                        // Store in sessionStorage for the prototype page to access
+                        sessionStorage.setItem('mergeConflictData', JSON.stringify({
+                          taskId: currentTask.id,
+                          taskName: currentTask.name,
+                          branch: currentTask.branch,
+                          projectId: projectId,
+                          files: conflictData.files,
+                          timestamp: Date.now()
+                        }));
+                        
+                        // Open the merge conflict prototype
+                        window.open('/prototype/merge-conflict', '_blank');
+                      } catch (error: any) {
+                        alert(`Failed to load conflict data: ${error.message}`);
+                      } finally {
+                        setIsProcessing(false);
+                      }
+                    }}
+                    disabled={isProcessing}
+                    className="w-full flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 hover:scale-[1.02] transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer disabled:opacity-50">
                     <AlertCircle className="w-4 h-4" />
-                    Resolve Conflicts
+                    {isProcessing ? 'Loading...' : 'Resolve Conflicts'}
                   </button>
                 );
               }
@@ -516,9 +581,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (isAhead && !hasUncommitted) {
                 // Check if we need to push first
                 const hasRemoteTracking = currentTask.gitStatus?.hasRemoteTracking;
+                const unpushedCount = currentTask.gitStatus?.unpushed || 0;
 
-                if (hasRemoteTracking === false || (isAhead && hasRemoteTracking !== true)) {
-                  // Branch hasn't been pushed yet or has unpushed commits
+                if (unpushedCount > 0) {
+                  // There are unpushed commits
                   return (
                     <button
                       onClick={handlePushBranch}
@@ -527,8 +593,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <Upload className="w-4 h-4" />
                       {hasRemoteTracking === false
-                        ? `Push Branch (${aheadCount} commits)`
-                        : `Push ${aheadCount} commit${aheadCount > 1 ? 's' : ''}`
+                        ? `Push Branch (${unpushedCount} commits)`
+                        : `Push ${unpushedCount} commit${unpushedCount > 1 ? 's' : ''}`
                       }
                     </button>
                   );

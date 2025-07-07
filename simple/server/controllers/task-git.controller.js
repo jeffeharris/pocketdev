@@ -38,6 +38,17 @@ export class TaskGitController {
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
+      
+      // Debug logging for merged tasks with changes
+      if (task.status === 'merged' || task.merged_at) {
+        console.log(`[GitStatus] Checking merged task ${taskId} on branch ${task.branch}`);
+        const statusResult = await this.gitService.command(task.worktree_path, 'git status --porcelain');
+        if (statusResult.output.trim()) {
+          console.log(`[GitStatus] Merged task has changes:`, statusResult.output);
+          const branchResult = await this.gitService.command(task.worktree_path, 'git branch --show-current');
+          console.log(`[GitStatus] Task worktree is on branch:`, branchResult.output.trim());
+        }
+      }
 
       const project = await this.models.projects.findById(projectId);
       
@@ -204,160 +215,36 @@ export class TaskGitController {
       }
 
       const project = await this.models.projects.findById(projectId);
+      
+      // Use unified diff method
+      const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
+      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+      
+      // Convert Map to array and include diffs for working directory comparisons
       const files = [];
-
-      if (compareWith === 'base') {
-        // Compare task branch with base branch
-        // First get all file stats in one command for performance
-        const diffStatsResult = await this.gitService.command(task.worktree_path, 
-          `git diff --numstat origin/${project.base_branch}...HEAD`);
+      for (const [path, fileInfo] of diffResult.files) {
+        const file = {
+          path: fileInfo.path,
+          type: fileInfo.type,
+          additions: fileInfo.additions,
+          deletions: fileInfo.deletions
+        };
         
-        const diffStatusResult = await this.gitService.command(task.worktree_path, 
-          `git diff --name-status origin/${project.base_branch}...HEAD`);
-        
-        // Parse stats into a map
-        const statsMap = new Map();
-        const statsLines = diffStatsResult.output.split('\n').filter(line => line.trim());
-        for (const line of statsLines) {
-          const [additions, deletions, ...pathParts] = line.split('\t');
-          const filePath = pathParts.join('\t');
-          if (filePath) {
-            statsMap.set(filePath, {
-              additions: parseInt(additions) || 0,
-              deletions: parseInt(deletions) || 0
-            });
-          }
+        // For working directory comparisons, include diff content
+        // For base comparisons, let frontend load on demand for performance
+        if (compareWith === 'working') {
+          file.diff = await this.gitService.getFileDiffContent(
+            task.worktree_path, 
+            fileInfo.path, 
+            compareTarget, 
+            fileInfo
+          );
         }
         
-        // Parse status
-        const statusLines = diffStatusResult.output.split('\n').filter(line => line.trim());
-        
-        for (const line of statusLines) {
-          const [status, ...pathParts] = line.trim().split(/\s+/);
-          const filePath = pathParts.join(' ');
-          
-          if (!filePath) continue;
-          
-          let type = 'modified';
-          if (status.includes('A')) type = 'added';
-          else if (status.includes('D')) type = 'deleted';
-          else if (status.includes('M')) type = 'modified';
-          else if (status.includes('R')) type = 'renamed';
-          
-          const stats = statsMap.get(filePath) || { additions: 0, deletions: 0 };
-          
-          // DON'T load the full diff here - let frontend load it on demand
-          files.push({
-            path: filePath,
-            type,
-            additions: stats.additions,
-            deletions: stats.deletions
-            // No diff property - will be loaded on demand
-          });
-        }
-      } else {
-        // Compare working directory (default behavior)
-        const statusResult = await this.gitService.getStatus(task.worktree_path);
-        const lines = statusResult.output.split('\n').filter(line => line.trim());
-        
-        // Get numstat for accurate line counts
-        const stagedNumstatResult = await this.gitService.command(task.worktree_path, 
-          'git diff --numstat --cached');
-        const unstagedNumstatResult = await this.gitService.command(task.worktree_path, 
-          'git diff --numstat');
-        
-        // Parse numstat into maps
-        const stagedStats = new Map();
-        const unstagedStats = new Map();
-        
-        stagedNumstatResult.output.split('\n').filter(line => line.trim()).forEach(line => {
-          const [add, del, ...pathParts] = line.split('\t');
-          const path = pathParts.join('\t');
-          if (path) stagedStats.set(path, { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 });
-        });
-        
-        unstagedNumstatResult.output.split('\n').filter(line => line.trim()).forEach(line => {
-          const [add, del, ...pathParts] = line.split('\t');
-          const path = pathParts.join('\t');
-          if (path) unstagedStats.set(path, { additions: parseInt(add) || 0, deletions: parseInt(del) || 0 });
-        });
-        
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          
-          // Git status format: "XY filename" where XY is exactly 2 characters
-          const status = line.substring(0, 2);
-          const filePath = line.substring(3).trim(); // Skip the status and space
-          
-          if (!filePath) continue;
-          
-          let type = 'modified';
-          if (status.includes('A') || status === '??') type = 'added';
-          else if (status.includes('D')) type = 'deleted';
-          else if (status.includes('M')) type = 'modified';
-          else if (status.includes('R')) type = 'renamed';
-          
-          // Get diff for this file
-          let diff = '';
-          let additions = 0;
-          let deletions = 0;
-          
-          try {
-            // For untracked files, show as new file
-            if (status === '??') {
-              const content = await this.gitService.command(task.worktree_path, `cat "${filePath}"`);
-              const lines = content.output.split('\n');
-              diff = `diff --git a/${filePath} b/${filePath}\nnew file mode 100644\nindex 0000000..1234567\n--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-              lines.forEach(line => {
-                diff += `+${line}\n`;
-              });
-              additions = lines.length;
-            } else {
-              // Get standard diff
-              // Git status format: XY where X = staged status, Y = unstaged status
-              // If X is not space, file has staged changes
-              // If Y is not space, file has unstaged changes
-              const hasStagedChanges = status[0] !== ' ' && status[0] !== '?';
-              const hasUnstagedChanges = status[1] !== ' ' && status[1] !== '?';
-              
-              // For now, show unstaged changes if they exist, otherwise show staged
-              const showStaged = hasStagedChanges && !hasUnstagedChanges;
-              const diffArgs = showStaged ? `--cached -- "${filePath}"` : `-- "${filePath}"`;
-              const diffResult = await this.gitService.getDiff(task.worktree_path, diffArgs);
-              diff = diffResult.output;
-              
-              // Get accurate line counts from numstat
-              if (showStaged) {
-                const stats = stagedStats.get(filePath) || { additions: 0, deletions: 0 };
-                additions = stats.additions;
-                deletions = stats.deletions;
-              } else {
-                const stats = unstagedStats.get(filePath) || { additions: 0, deletions: 0 };
-                additions = stats.additions;
-                deletions = stats.deletions;
-                
-                // Debug: log if we couldn't find stats
-                if (!stats || (stats.additions === 0 && stats.deletions === 0 && diff.trim())) {
-                  console.log(`No unstaged stats found for: "${filePath}"`);
-                  console.log('Available paths in unstagedStats:', Array.from(unstagedStats.keys()));
-                }
-              }
-            }
-          } catch (error) {
-            console.warn('Could not get diff for:', filePath, error);
-          }
-          
-          files.push({
-            path: filePath,
-            type,
-            additions,
-            deletions,
-            diff
-          });
-        }
+        files.push(file);
       }
       
-      // Check if working directory is clean to inform default comparison mode
+      // Check if working directory is clean
       const statusResult = await this.gitService.getStatus(task.worktree_path);
       const hasWorkingChanges = statusResult.output.trim().length > 0;
       
@@ -370,6 +257,7 @@ export class TaskGitController {
       res.status(500).json({ error: error.message });
     }
   }
+
 
   /**
    * Get diff for a specific file
@@ -384,31 +272,33 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      let diffResult;
+      const project = await this.models.projects.findById(projectId);
       
-      if (compareWith === 'base') {
-        const project = await this.models.projects.findById(projectId);
-        diffResult = await this.gitService.command(task.worktree_path,
-          `git diff origin/${project.base_branch}...HEAD -- "${file}"`);
-      } else {
-        // Check if file is staged
-        const statusResult = await this.gitService.getStatus(task.worktree_path);
-        const fileStatus = statusResult.output.split('\n').find(line => {
-          const parts = line.trim().split(/\s+/);
-          const filePath = parts.slice(1).join(' ');
-          return filePath === file;
-        });
-        
-        // If file is staged (first character is not space or ?), use --cached
-        const isStaged = fileStatus && fileStatus[0] !== ' ' && fileStatus[0] !== '?';
-        const diffArgs = isStaged ? `--cached -- "${file}"` : `-- "${file}"`;
-        diffResult = await this.gitService.getDiff(task.worktree_path, diffArgs);
-      }
+      // Use unified diff method
+      const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
+      
+      console.log(`[getFileDiff] Getting diff for file: ${file}, compareWith: ${compareWith}, compareTarget: ${compareTarget}`);
+      
+      // Get file info first to know its state
+      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+      const fileInfo = diffResult.files.get(file);
+      
+      console.log(`[getFileDiff] File info:`, fileInfo);
+      
+      // Get the diff content
+      const diff = await this.gitService.getFileDiffContent(
+        task.worktree_path, 
+        file, 
+        compareTarget, 
+        fileInfo
+      );
+      
+      console.log(`[getFileDiff] Got diff length: ${diff?.length || 0}`);
       
       res.json({
         path: file,
-        diff: diffResult.output,
-        hasDiff: diffResult.output.trim().length > 0
+        diff: diff,
+        hasDiff: diff.trim().length > 0
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -544,7 +434,43 @@ export class TaskGitController {
           break;
           
         case 'push':
-          result = await gitService.push(task.worktree_path, task.branch);
+          console.log(`[gitOperation] Push operation for task ${taskId} on branch ${task.branch}`);
+          
+          // First, let's check the actual branch status
+          const statusCheck = await gitService.command(
+            task.worktree_path,
+            `git status -sb`
+          );
+          console.log(`[gitOperation] Current branch status: ${statusCheck.output}`);
+          
+          // Check what commits are ahead
+          const aheadCheck = await gitService.command(
+            task.worktree_path,
+            `git log origin/${task.branch}..HEAD --oneline`
+          );
+          console.log(`[gitOperation] Commits ahead of origin: ${aheadCheck.output || 'none'}`);
+          
+          // Check if branch has remote tracking
+          let hasRemoteTracking = false;
+          try {
+            const remoteCheckResult = await gitService.command(
+              task.worktree_path,
+              `git rev-parse --verify origin/${task.branch} 2>/dev/null`
+            );
+            hasRemoteTracking = remoteCheckResult.success;
+            console.log(`[gitOperation] Remote tracking check: ${hasRemoteTracking}`);
+          } catch (error) {
+            hasRemoteTracking = false;
+            console.log(`[gitOperation] Remote tracking check error:`, error.message);
+          }
+          
+          // Use -u flag if no remote tracking exists
+          console.log(`[gitOperation] Pushing branch '${task.branch}' with setUpstream: ${!hasRemoteTracking}`);
+          console.log(`[gitOperation] Task worktree path: ${task.worktree_path}`);
+          result = await gitService.push(task.worktree_path, task.branch, {
+            setUpstream: !hasRemoteTracking
+          });
+          console.log(`[gitOperation] Push result:`, result);
           break;
           
         case 'pr':
