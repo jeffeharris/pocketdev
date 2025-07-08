@@ -2,6 +2,7 @@
 FROM node:20-slim
 
 # Install basic system dependencies only
+# Note: Git 2.38+ is required for merge conflict detection
 RUN apt-get update && apt-get install -y \
     git \
     curl \

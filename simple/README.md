@@ -47,6 +47,7 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - **Frontend**: Vanilla JavaScript with modern ES6+
 - **Terminal**: Shelltender for web-based terminal access with AI monitoring
 - **Container**: Docker with Docker Compose
+- **Git**: Requires Git 2.38+ for merge conflict detection
 
 ## Server Architecture (New Modular Design)
 

@@ -738,6 +738,39 @@ export class GitService {
     }
   }
 
+  /**
+   * Check if a merge is currently in progress
+   * @param {string} projectPath - Path to the project
+   * @returns {Promise<boolean>}
+   */
+  async isMergeInProgress(projectPath) {
+    try {
+      // Check for MERGE_HEAD which exists during an incomplete merge
+      await this.command(projectPath, 'git rev-parse --verify MERGE_HEAD');
+      return true;
+    } catch {
+      // MERGE_HEAD doesn't exist, no merge in progress
+      return false;
+    }
+  }
+
+  /**
+   * Check if a rebase is currently in progress
+   * @param {string} projectPath - Path to the project
+   * @returns {Promise<boolean>}
+   */
+  async isRebaseInProgress(projectPath) {
+    try {
+      // Check for rebase-merge or rebase-apply directories
+      const { stdout } = await execAsync('ls .git/rebase-merge .git/rebase-apply 2>/dev/null', { 
+        cwd: projectPath 
+      });
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
   async getBranchStatus(projectPath, currentBranch, baseBranch = 'origin/main', options = {}) {
     try {
       // Only fetch if explicitly requested (default: false for performance)
