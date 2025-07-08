@@ -105,7 +105,11 @@ simple/server/
 - Task-level isolation
 - Branch management
 - Automatic detection of uncommitted changes
-- Merge conflict detection and resolution
+- **Non-destructive merge conflict detection**
+  - Uses `git merge-tree --write-tree` for fast conflict checking
+  - Working tree is never modified during status checks
+  - Temporary worktrees for detailed conflict analysis
+  - No stashing operations that could corrupt worktrees
 
 ### AI Session Monitoring (New)
 - Real-time Claude thinking pattern detection

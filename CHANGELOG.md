@@ -4,6 +4,15 @@ All notable changes to the PocketDev project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Critical Git Stashing Issues**
+  - Removed dangerous nested stashing from git conflict checking operations
+  - Replaced stash-based conflict detection with `git merge-tree --write-tree` (non-destructive)
+  - Fixed race conditions caused by background git status monitoring creating stashes every 30 seconds
+  - Added proper stdout handling for git commands that exit with non-zero codes
+  - Implemented temporary worktree approach for detailed conflict analysis when needed
+  - Prevents corruption of git worktrees from concurrent stashing operations
+
 ### Added
 - **Mobile-Responsive UI**
   - Complete responsive design for projects.html and project-page.html

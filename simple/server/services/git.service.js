@@ -98,10 +98,15 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
 1. Your GitHub token has access to this repository
 2. The repository URL is correct
 3. For private repos, ensure your token has 'repo' scope`;
-      return { success: false, output: '', error: authError, originalError: error.message };
+      return { success: false, output: error.stdout || '', error: authError, originalError: error.message };
     }
     
-    return { success: false, output: '', error: error.message };
+    // For commands like git merge-tree, we need stdout even on non-zero exit
+    return { 
+      success: false, 
+      output: error.stdout || '', 
+      error: error.stderr || error.message 
+    };
   }
 }
 
@@ -583,64 +588,151 @@ export class GitService {
   }
 
   async checkMergeConflicts(projectPath, targetBranch) {
-    // First check if there are any changes to stash
-    const statusBefore = await this.command(projectPath, 'git status --porcelain');
-    const hasChanges = statusBefore.output.trim().length > 0;
-    let stashed = false;
-    
     try {
-      // Only stash if there are changes
-      if (hasChanges) {
-        await this.command(projectPath, 'git stash push -m "merge-conflict-check"');
-        stashed = true;
+      // Fast conflict check using git merge-tree (available in git 2.38+)
+      // This doesn't modify the working tree at all
+      const mergeTreeResult = await this.command(projectPath,
+        `git merge-tree --write-tree --name-only HEAD ${targetBranch} 2>&1`);
+      
+      if (mergeTreeResult.success) {
+        // Exit code 0 means clean merge is possible
+        return {
+          hasConflicts: false,
+          conflicts: [],
+          canMerge: true
+        };
       }
       
-      // Attempt a dry-run merge
-      const mergeResult = await this.command(projectPath, 
-        `git merge --no-commit --no-ff ${targetBranch}`);
+      // Exit code 1 means there are conflicts
+      // Parse the output to get conflicted files
+      // Note: conflict info might be in stderr (error) rather than stdout
+      const output = (mergeTreeResult.output || '') + (mergeTreeResult.error || '');
+      const conflicts = [];
       
-      // Check for conflicts
-      const statusResult = await this.command(projectPath, 'git status --porcelain');
-      const conflicts = statusResult.output
-        .split('\n')
-        .filter(line => line.startsWith('UU ') || line.startsWith('AA '))
-        .map(line => line.substring(3).trim());
+      // Parse conflict information from merge-tree output
+      // Format: "CONFLICT (content): Merge conflict in <filename>"
+      const conflictRegex = /CONFLICT.*:\s+.*?\s+in\s+(.+)/g;
+      let match;
+      while ((match = conflictRegex.exec(output)) !== null) {
+        conflicts.push(match[1]);
+      }
       
-      // Abort the merge
-      await this.command(projectPath, 'git merge --abort');
+      // Alternative parsing for different output format
+      if (conflicts.length === 0) {
+        // Look for lines with conflict markers (file status lines)
+        const lines = output.split('\n');
+        lines.forEach(line => {
+          // Format: "100644 <hash> 1\t<filename>" (stage 1, 2, or 3 indicates conflict)
+          if (line.match(/^\d{6}\s+\w{40}\s+[123]\t/)) {
+            const parts = line.split('\t');
+            if (parts[1] && !conflicts.includes(parts[1])) {
+              conflicts.push(parts[1]);
+            }
+          }
+        });
+      }
       
       return {
-        hasConflicts: conflicts.length > 0,
-        conflicts: conflicts,
-        canMerge: conflicts.length === 0
+        hasConflicts: true,
+        conflicts: [...new Set(conflicts)], // Remove duplicates
+        canMerge: false
       };
     } catch (error) {
-      // If merge fails, try to abort it
-      try {
-        await this.command(projectPath, 'git merge --abort');
-      } catch (abortError) {
-        // Ignore abort errors
-      }
+      // If merge-tree fails (old git version or other error), 
+      // fall back to safe defaults - assume merge is possible to not block operations
+      console.error('[Git] checkMergeConflicts error:', error.message);
       
-      // Return safe defaults
+      // Could implement fallback to old merge-tree syntax here if needed
       return {
         hasConflicts: false,
         conflicts: [],
-        canMerge: true
+        canMerge: true,
+        error: 'Unable to check for conflicts'
+      };
+    }
+  }
+
+  /**
+   * Get detailed merge conflict information using a temporary worktree
+   * This is used when we need to actually analyze conflicts, not just check if they exist
+   * @param {string} projectPath - Path to the project
+   * @param {string} targetBranch - Branch to merge from
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Detailed conflict information
+   */
+  async getDetailedMergeConflicts(projectPath, targetBranch, options = {}) {
+    const tempWorktreePath = `/tmp/merge-check-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    try {
+      // Get current branch
+      const currentBranchResult = await this.command(projectPath, 'git branch --show-current');
+      const currentBranch = currentBranchResult.output.trim();
+      
+      // Create temporary worktree
+      await this.command(projectPath, 
+        `git worktree add -q "${tempWorktreePath}" HEAD`);
+      
+      // Attempt merge in temporary worktree
+      const mergeResult = await this.command(tempWorktreePath,
+        `git merge --no-commit --no-ff ${targetBranch}`);
+      
+      const conflictDetails = {
+        hasConflicts: false,
+        conflicts: [],
+        conflictedFiles: [],
+        canMerge: true,
+        mergeMessage: mergeResult.output
+      };
+      
+      if (!mergeResult.success) {
+        // Get detailed conflict information
+        const statusResult = await this.command(tempWorktreePath, 'git status --porcelain');
+        const diffResult = await this.command(tempWorktreePath, 'git diff --name-only --diff-filter=U');
+        
+        // Parse conflicted files
+        conflictDetails.hasConflicts = true;
+        conflictDetails.canMerge = false;
+        conflictDetails.conflictedFiles = diffResult.output
+          .split('\n')
+          .filter(file => file.trim())
+          .map(file => file.trim());
+        
+        // Get conflict details for each file
+        for (const file of conflictDetails.conflictedFiles) {
+          const diffDetail = await this.command(tempWorktreePath, `git diff "${file}"`);
+          conflictDetails.conflicts.push({
+            file,
+            diff: diffDetail.output,
+            status: 'unmerged'
+          });
+        }
+        
+        // Abort the merge
+        await this.command(tempWorktreePath, 'git merge --abort');
+      }
+      
+      return conflictDetails;
+    } catch (error) {
+      console.error('[Git] getDetailedMergeConflicts error:', error.message);
+      return {
+        hasConflicts: false,
+        conflicts: [],
+        conflictedFiles: [],
+        canMerge: false,
+        error: error.message
       };
     } finally {
-      // Restore original state only if we stashed
-      if (stashed) {
+      // Clean up temporary worktree
+      try {
+        await this.command(projectPath, `git worktree remove --force "${tempWorktreePath}"`);
+      } catch (cleanupError) {
+        console.error('[Git] Failed to clean up temporary worktree:', cleanupError.message);
+        // Try alternative cleanup
         try {
-          await this.command(projectPath, 'git stash pop');
-        } catch (popError) {
-          console.error('Failed to restore stashed changes:', popError.message);
-          // Try to at least drop the stash to clean up
-          try {
-            await this.command(projectPath, 'git stash drop');
-          } catch (dropError) {
-            // Ignore
-          }
+          await execAsync(`rm -rf "${tempWorktreePath}"`);
+          await this.command(projectPath, 'git worktree prune');
+        } catch (e) {
+          // Ignore cleanup errors
         }
       }
     }
