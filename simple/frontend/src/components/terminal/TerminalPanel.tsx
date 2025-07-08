@@ -119,7 +119,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       </div>
 
       {/* Shelltender Content */}
-      <div className="flex-1 bg-gray-900 relative overflow-hidden">
+      <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
         <DirectTerminal 
           ref={terminalRef}
           taskId={task.id} 
