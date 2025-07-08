@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Terminal } from '@shelltender/client';
+import React, { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { Terminal, WebSocketProvider as ShelltenderWSProvider } from '@shelltender/client';
 import type { TerminalHandle } from '@shelltender/client';
 
-export type DirectTerminalHandle = {
+export interface DirectTerminalHandle {
   focus: () => void;
   fit: () => void;
-};
+}
 
 interface DirectTerminalProps {
   taskId: string;
@@ -24,91 +24,79 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
 }, ref) => {
   const terminalSessionId = sessionId || `task-${taskId}`;
   const terminalRef = useRef<TerminalHandle>(null);
+  
+  // Container ref for DOM-based fallback
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Configure WebSocket URL
+  const wsConfig = {
+    url: '/shelltender-ws'
+  };
 
-  // Expose both focus and fit methods to parent components
+  // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({
     focus: () => {
-      console.log('[DirectTerminal] Focus called for task:', taskId, { hasRef: !!terminalRef.current });
-      terminalRef.current?.focus();
+      if (terminalRef.current?.focus) {
+        terminalRef.current.focus();
+      } else {
+        // TODO: Remove this workaround when upgrading to @shelltender/client v0.4.4+
+        // v0.4.3 has a bug where forwardRef is stripped by Vite's bundler optimization
+        // The Shelltender team has fixed this using Object.assign() to prevent optimization
+        // See: simple/docs/shelltender/ for investigation details
+        const xtermTextarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+        if (xtermTextarea) {
+          xtermTextarea.focus();
+        }
+      }
     },
     fit: () => {
-      console.log('[DirectTerminal] Fit called for task:', taskId, { hasRef: !!terminalRef.current });
-      terminalRef.current?.fit();
+      if (terminalRef.current?.fit) {
+        terminalRef.current.fit();
+      } else {
+        // Fallback: trigger window resize event
+        window.dispatchEvent(new Event('resize'));
+      }
     }
-  }), []); // Empty deps - methods are stable
-
+  }), []); // Empty deps array for stable reference
 
   // Auto-fit when becoming visible
   useEffect(() => {
-    if (isVisible) {
-      // Try multiple times to get the ref
-      const attempts = [50, 200, 500, 1000];
-      const timers: NodeJS.Timeout[] = [];
-      
-      attempts.forEach(delay => {
-        const timer = setTimeout(() => {
-          console.log(`[DirectTerminal] Checking ref after ${delay}ms:`, {
-            taskId,
-            hasRef: !!terminalRef.current,
-            hasFocus: !!terminalRef.current?.focus,
-            hasFit: !!terminalRef.current?.fit
-          });
-          if (terminalRef.current) {
-            console.log('[DirectTerminal] Auto-fitting terminal for task:', taskId);
-            terminalRef.current.fit();
-            // Clear remaining timers
-            timers.forEach(t => clearTimeout(t));
-          }
-        }, delay);
-        timers.push(timer);
-      });
-      
-      return () => timers.forEach(timer => clearTimeout(timer));
+    if (isVisible && terminalRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        terminalRef.current?.fit();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [isVisible, taskId]);
 
-  console.log('[DirectTerminal] Rendering terminal for task:', taskId, 'sessionId:', terminalSessionId);
-
   return (
-    <div className={`w-full h-full overflow-hidden ${className}`} style={{ display: isVisible ? 'block' : 'none' }}>
-      <Terminal
-        ref={(el) => {
-          console.log('[DirectTerminal] Terminal ref callback:', { 
-            taskId, 
-            el, 
-            hasRef: !!el,
-            hasFocus: !!el?.focus,
-            hasFit: !!el?.fit
-          });
-          terminalRef.current = el;
-        }}
-        sessionId={terminalSessionId}
-        onSessionCreated={(newSessionId: string) => {
-          console.log('[DirectTerminal] Session created:', newSessionId);
-          // Auto-focus new terminals
-          setTimeout(() => {
-            console.log('[DirectTerminal] Attempting focus after session created', {
-              hasRef: !!terminalRef.current,
-              hasFocus: !!terminalRef.current?.focus
-            });
-            terminalRef.current?.focus();
-          }, 100);
-        }}
-        // New v0.4.0+ customization options
-        fontSize={14}
-        fontFamily="'JetBrains Mono', 'Cascadia Code', Consolas, Monaco, monospace"
-        theme={{ 
-          background: '#1e1e1e',
-          foreground: '#d4d4d4',
-          cursor: '#ffffff',
-          selection: '#3a3d41'
-        }}
-        padding={{ left: 12, right: 4 }}
-        cursorStyle="block"
-        cursorBlink={true}
-        scrollback={10000}
-        debug={true}
-      />
+    <div ref={containerRef} className={`w-full h-full overflow-hidden ${className}`} style={{ display: isVisible ? 'block' : 'none' }}>
+      <ShelltenderWSProvider config={wsConfig}>
+        <Terminal
+          ref={terminalRef}
+          sessionId={terminalSessionId}
+          onSessionCreated={(newSessionId: string) => {
+            // Auto-focus new terminals after a delay
+            setTimeout(() => {
+              terminalRef.current?.focus();
+            }, 200);
+          }}
+          // Terminal customization
+          fontSize={14}
+          fontFamily="'JetBrains Mono', 'Cascadia Code', Consolas, Monaco, monospace"
+          theme={{ 
+            background: '#1e1e1e',
+            foreground: '#d4d4d4',
+            cursor: '#ffffff',
+            selection: '#3a3d41'
+          }}
+          padding={{ left: 12, right: 4 }}
+          cursorStyle="block"
+          cursorBlink={true}
+          scrollback={10000}
+        />
+      </ShelltenderWSProvider>
     </div>
   );
 });

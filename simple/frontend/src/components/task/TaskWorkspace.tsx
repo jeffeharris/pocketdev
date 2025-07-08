@@ -110,6 +110,51 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       }
     }, 100);
   }, [taskId]);
+  
+  // Focus terminal when page becomes visible (tab switch, modal close, etc)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && activeTaskId) {
+        focusActiveTerminal('visibility change');
+      }
+    };
+    
+    const handleFocus = () => {
+      if (activeTaskId) {
+        focusActiveTerminal('window focus');
+      }
+    };
+    
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
+    // Focus on mount
+    if (activeTaskId) {
+      focusActiveTerminal('component mount');
+    }
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeTaskId]);
+
+  // Helper function to focus the active terminal
+  const focusActiveTerminal = (reason: string) => {
+    const taskId = activeTaskId;
+    if (!taskId) return;
+    
+    setTimeout(() => {
+      const terminalRef = terminalRefs.current.get(taskId);
+      if (terminalRef) {
+        console.log(`[TaskWorkspace] Focusing terminal for task: ${taskId} (reason: ${reason})`);
+        terminalRef.focus();
+      } else {
+        console.log(`[TaskWorkspace] Terminal ref not found for task: ${taskId} (reason: ${reason})`);
+      }
+    }, 200); // Slightly longer delay for modal close animations
+  };
 
   const handleTaskSelect = (newTaskId: string) => {
     console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId);
@@ -272,7 +317,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       {/* Create Task Modal */}
       <CreateTaskModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false);
+          // Focus terminal after modal closes
+          focusActiveTerminal('create task modal closed');
+        }}
         onSubmit={handleCreateTask}
         projectId={projectId}
         baseBranch={project?.baseBranch}
