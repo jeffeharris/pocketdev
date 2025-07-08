@@ -8,6 +8,8 @@ import { MergeStatesDiagram } from './components/prototype/MergeStatesDiagram';
 import PrototypeDiffViewers from './pages/PrototypeDiffViewers';
 import PrototypeMergeConflict from './pages/PrototypeMergeConflict';
 import PrototypeMonacoMerge from './pages/PrototypeMonacoMerge';
+import { TestTerminalRef } from './components/terminal/TestTerminalRef';
+import { TestTerminalImport } from './components/terminal/TestTerminalImport';
 
 function App() {
   return (
@@ -23,6 +25,8 @@ function App() {
           <Route path="/prototype/diff-viewers" element={<PrototypeDiffViewers />} />
           <Route path="/prototype/merge-conflict" element={<PrototypeMergeConflict />} />
           <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
+          <Route path="/test-terminal-ref" element={<TestTerminalRef />} />
+          <Route path="/test-terminal-import" element={<TestTerminalImport />} />
         </Routes>
       </Router>
     </WebSocketProvider>
