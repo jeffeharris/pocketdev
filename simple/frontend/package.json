@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@shelltender/client": "^0.3.0",
+    "@shelltender/client": "^0.4.0",
     "@tailwindcss/typography": "^0.5.16",
     "clsx": "^2.1.1",
     "diff": "^8.0.2",
