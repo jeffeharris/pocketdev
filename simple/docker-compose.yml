@@ -69,22 +69,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Legacy frontend (React app in shelltender-client)
-  frontend-legacy:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    container_name: pocketdev-frontend-legacy
-    working_dir: /app/shelltender-client
-    depends_on:
-      - backend
-    volumes:
-      - ./shelltender-client:/app/shelltender-client
-    ports:
-      - "3008:3008"
-    command: >
-      sh -c "npm install && npm run dev"
-    restart: unless-stopped
 
 
   # Optional: Original simple server (if you still need it)

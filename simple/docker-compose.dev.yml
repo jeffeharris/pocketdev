@@ -33,10 +33,3 @@ services:
     volumes:
       - ./:/app
   
-  frontend-legacy:
-    environment:
-      - NODE_ENV=development
-    user: root
-    command: sh -c "npm install && npm run dev"
-    volumes:
-      - ./shelltender-client:/app/shelltender-client

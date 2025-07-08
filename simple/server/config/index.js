@@ -11,8 +11,6 @@ export default {
   
   // Directory paths
   projectsDir: process.env.PROJECTS_DIR || path.join(__dirname, '../../projects'),
-  frontendPath: path.join(__dirname, '../../frontend-legacy'),
-  xtermPath: path.join(__dirname, '../../xterm-direct/public'),
   dataDir: path.join(__dirname, '../../data'),
   
   // Database

@@ -51,6 +51,12 @@ All notable changes to the PocketDev project will be documented in this file.
 - WebSocket connection issues with port configuration
 - node-pty version mismatch in containers
 
+### Removed
+- Legacy HTML-based frontend (frontend-legacy directory)
+- Static file serving from backend server
+- Docker services for legacy frontend
+- References to xterm-direct
+
 ## [0.3.0] - 2025-06-07 - Phase 1: Database Foundation & Task Persistence
 
 ### Added
