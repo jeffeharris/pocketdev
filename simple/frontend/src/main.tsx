@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+// import { StrictMode } from 'react' // Temporarily disabled - see comment below
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/terminal.css'
@@ -10,8 +10,10 @@ if (!root) {
   console.error('Root element not found!');
 } else {
   createRoot(root).render(
-    <StrictMode>
+    // Temporarily disabled StrictMode due to Shelltender WebSocket race condition
+    // Will re-enable once Shelltender client fix is released
+    // <StrictMode>
       <App />
-    </StrictMode>,
+    // </StrictMode>,
   );
 }
