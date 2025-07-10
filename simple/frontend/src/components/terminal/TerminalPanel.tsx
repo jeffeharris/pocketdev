@@ -29,7 +29,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Expose focus method to parent components
   useImperativeHandle(ref, () => ({
     focus: () => {
-      console.log('[TerminalPanel] Forwarding focus to terminal for task:', task.id);
+      // Forwarding focus to terminal
       terminalRef.current?.focus();
     }
   }), [task.id]);
@@ -40,7 +40,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // TODO: Call shelltender API to reset the session
       // For now, we'll just show the animation
     } catch (error) {
-      console.error('Error resetting session:', error);
+      // Error resetting session
     } finally {
       setTimeout(() => setIsResetting(false), 1000);
     }

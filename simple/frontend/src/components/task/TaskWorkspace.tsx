@@ -49,7 +49,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         setProject(projectData);
         setTasks(tasksData);
       } catch (error) {
-        console.error('Failed to load data:', error);
+        // Failed to load data
         // Don't use mock data - show error state instead
         setProject(null);
         setTasks([]);
@@ -94,7 +94,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   
   // Update active task when taskId prop changes
   useEffect(() => {
-    console.log('[TaskWorkspace] taskId prop changed to:', taskId);
+    // taskId prop changed
     setActiveTaskId(taskId);
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
