@@ -342,7 +342,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-pocketdev-studio/.env
+.env
 .venv
 env/
 venv/
@@ -390,7 +390,7 @@ node_modules/
 .vscode/
 *.sublime-*
 /projects
-/data
+/pocketdev-studio/data
 
 # PocketDev temporary files
 .pocketdev/tmp/

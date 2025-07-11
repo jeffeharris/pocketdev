@@ -2,6 +2,7 @@
 
 # Data directories
 projects/
+../projects
 backups/
 data-snapshot/
 .archived/
@@ -25,3 +26,8 @@ server/node_modules/
 # Vite cache
 .vite/
 */.vite/
+
+*.db
+../*.db
+*.sqlite
+../*.sqlite
