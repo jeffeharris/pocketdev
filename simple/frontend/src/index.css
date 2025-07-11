@@ -5,6 +5,8 @@
 @source "./src/**/*.{js,ts,jsx,tsx}";
 @source "./index.html";
 
+/* Import xterm CSS directly */
+@import "@xterm/xterm/css/xterm.css";
 @import "./styles/terminal.css";
 
 /* Temporary fix: Add hover styles manually until we figure out why Tailwind v4 isn't generating them */

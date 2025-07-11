@@ -1,0 +1,23 @@
+# Minimal base image for all PocketDev services
+FROM node:22-slim
+
+# Only the absolute essentials that EVERY service needs
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create pocketdev user (check if user already exists)
+RUN id -u pocketdev 2>/dev/null || useradd -m -s /bin/bash pocketdev
+
+# Create app directory
+RUN mkdir -p /app && chown -R pocketdev:pocketdev /app
+
+# Switch to pocketdev user by default
+USER pocketdev
+WORKDIR /app
+
+# Labels
+LABEL maintainer="PocketDev Team"
+LABEL version="1.0"
+LABEL description="Minimal base image for PocketDev services"

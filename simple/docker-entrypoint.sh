@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# TODO: Remove this once we have a better way to handle file ownership
 # Fix permissions for directories that pocketdev needs to write to
 # This ensures volume-mounted directories are writable
 if [ -d "/projects" ] && [ ! -w "/projects" ]; then
@@ -8,6 +9,7 @@ if [ -d "/projects" ] && [ ! -w "/projects" ]; then
     chown pocketdev:pocketdev /projects 2>/dev/null || true
 fi
 
+# TODO: Remove this once we have a better way to handle file ownership
 if [ -d "/app/data" ]; then
     # Ensure data directory structure exists with correct permissions
     mkdir -p /app/data/shelltender-sessions
@@ -15,6 +17,7 @@ if [ -d "/app/data" ]; then
     chown pocketdev:pocketdev /app/data /app/data/shelltender-sessions 2>/dev/null || true
 fi
 
+# TODO: Remove this once we have a better way to handle .gitconfig
 # Clean up bloated .gitconfig if it exists
 GITCONFIG="$HOME/.gitconfig"
 if [ -f "$GITCONFIG" ]; then

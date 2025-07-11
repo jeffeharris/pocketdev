@@ -1,7 +1,10 @@
-# PocketDev Base Image with Claude and GitHub CLI
+# PocketDev AI Base Image with AI Tools and Development Utilities
 FROM ubuntu:22.04
 
-# Install system dependencies
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install comprehensive system dependencies for AI development environment
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -17,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     psmisc \
     lsof \
     locales \
+    ca-certificates \
     && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
     && update-locale LANG=en_US.UTF-8 \
@@ -27,12 +31,12 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV LC_CTYPE=en_US.UTF-8
 
-# Install Node.js 22 (required for @openai/codex) - must be installed as root
+# Install Node.js 22 (required for npm packages)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install GitHub CLI - must be installed as root
+# Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
     chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
@@ -49,6 +53,7 @@ RUN useradd -m -s /bin/bash pocketdev && \
 ENV NPM_CONFIG_PREFIX=/home/pocketdev/.npm-global
 ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
 
+# TODO: Consolidate user switching and installations to avoid multiple USER commands
 # Switch to pocketdev user for all subsequent installations
 USER pocketdev
 WORKDIR /home/pocketdev
@@ -79,6 +84,7 @@ RUN pip3 install --user \
 # Add Python user bin to PATH
 ENV PATH=/home/pocketdev/.local/bin:$PATH
 
+# TODO: Install systems as the correct user - who should that be?
 # Switch back to root for remaining system installations
 USER root
 
@@ -116,6 +122,7 @@ RUN npm install -g \
 # Switch back to root for final configurations
 USER root
 
+# TODO: remove the global git config, this should be handled in a better way
 # Configure git to trust all directories (fixes ownership issues)
 RUN git config --global --add safe.directory '*'
 
@@ -126,6 +133,7 @@ ENV GOOGLE_API_KEY=""
 ENV GEMINI_API_KEY=""
 ENV GITHUB_TOKEN=""
 
+# TODO: We should install these as a non root user
 # Create workspace directories
 RUN mkdir -p /workspace /projects && \
     chmod 755 /workspace /projects && \
@@ -136,13 +144,15 @@ RUN mkdir -p /home/pocketdev/.aider && \
     chown -R pocketdev:pocketdev /home/pocketdev/.aider
 
 # Labels for tracking
-LABEL maintainer="PocketDev Team"
-LABEL description="Base image for PocketDev services with Claude CLI and GitHub CLI"
+LABEL maintainer="Pocketdev Team"
+LABEL description="Base image for Pocketdev services. Includes development tools and configurations for AI coding agents."
 LABEL version="1.0"
 
+# TODO: remove this, this is a workaround for the current issue with git ownership
 # Configure git safe directories for pocketdev user
 USER pocketdev
 RUN git config --global --add safe.directory '*'
 
+# TODO: check the actual working directrory we should be in
 # Default to non-root user (services can override with USER root if needed)
 WORKDIR /workspace

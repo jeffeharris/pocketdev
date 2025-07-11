@@ -21,7 +21,7 @@ services:
     environment:
       - NODE_ENV=development
     user: root
-    command: sh -c "cd /app/server && npm install && node shelltender-unified.js"
+    command: sh -c "cd /app/server && npm install && node shelltender-service.js"
     volumes:
       - ./:/app
   

@@ -289,7 +289,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+pocketdev-studio/docs/_build/
 
 # PyBuilder
 .pybuilder/
@@ -342,7 +342,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+pocketdev-studio/.env
 .venv
 env/
 venv/
@@ -382,21 +382,25 @@ cython_debug/
 .idea/
 
 # PocketDev specific
-workspaces/
-local-backend/.env
-web/.env
+*.env
 node_modules/
 *.swp
 *.swo
 *~
 .vscode/
 *.sublime-*
-.claude/*local*
-.claude-prompt
 /projects
 /data
-/frontend/
-/shelltender-client/
+
+# PocketDev temporary files
+.pocketdev/tmp/
+simple/data/
+../logs/
+*.tmp
+*.temp
+*-backup.*
+*-old.*
+
 
 # SQLite databases
 *.db
@@ -407,14 +411,8 @@ node_modules/
 coverage/
 *.test.js.snap
 
-# Temporary files
-*.tmp
-*.temp
-*-backup.*
-*-old.*
-
 # Docker volumes
-docker/volumes/
+pocketdev-studio/docker/volumes/
 
 # Zone identifiers (Windows)
 *:Zone.Identifier
@@ -437,7 +435,3 @@ simple/*dockerfile
 simple/Dockerfile.pty
 simple/package.json
 
-# PocketDev temporary files
-.pocketdev/tmp/
-simple/data/
-../logs/

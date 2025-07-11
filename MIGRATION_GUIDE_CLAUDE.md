@@ -12,6 +12,40 @@ Before starting, Claude should output:
 - Estimated time: ~20-30 minutes
 - Known risks: Path updates, permission issues, Docker configurations
 
+## File Organization Clarity
+
+**Before migration:**
+```
+pocketdev/
+├── simple/                    # ← This is the working implementation
+│   ├── Makefile              # ← Use this one!
+│   ├── docker-compose.yml    # ← Use this one!
+│   ├── server/               # Backend code
+│   ├── frontend/             # React frontend
+│   └── data/                 # SQLite database
+├── local-backend/            # Containerized version (ignore)
+├── web/                      # Containerized version (ignore)
+├── docker/                   # Containerized version (ignore)
+├── Makefile                  # ← Old version (ignore)
+└── docker-compose.yml        # ← Old version (ignore)
+```
+
+**After migration:**
+```
+pocketdev/                    # Simple promoted to root
+├── Makefile                  # From simple/
+├── docker-compose.yml        # From simple/
+├── server/                   # From simple/
+├── frontend/                 # From simple/
+└── data/                     # From simple/
+
+pocketdev-studio/             # Containerized version moved here
+├── local-backend/
+├── web/
+├── docker/
+└── docker-compose.yml        # Multi-container orchestration
+```
+
 ## Claude Tool Usage Pattern
 
 Execute this migration using these specific tool patterns:
@@ -77,30 +111,70 @@ Execute this migration using these specific tool patterns:
    # Reading multiple files for analysis
    ```
 
-## Pre-Migration Environment Check
+## Step 0: Pre-Migration Validation (CRITICAL)
 
-Before starting any migration, Claude should verify:
+**This step prevents immediate failures. Do NOT skip.**
 
 ```bash
-# Check all prerequisites in parallel
-pwd  # Should show /home/jeffh/projects/pocketdev
-git branch --show-current  # Should be dev or main
-git status --short  # Should be empty (no uncommitted changes)
-git fetch origin  # Update remote tracking
-git status -uno  # Check if local is up to date with remote
-ls -la | grep -E "simple|local-backend|web|docker"  # Should show all directories
-ls -la ../pocketdev-studio  # Should exist and be accessible
+# TodoWrite: Add Step 0 - Pre-migration validation
+
+# Verify simple/ is working BEFORE any migration
+cd simple/
+if test -f Makefile; then
+  make down >/dev/null 2>&1
+  make dev
+  # Wait for services to start
+  sleep 10
+  
+  # Test all services are healthy
+  HEALTH_CHECK=$(curl -s http://localhost:3005/api/health)
+  if [ -z "$HEALTH_CHECK" ]; then
+    echo "ERROR: Simple backend not responding. Fix before proceeding."
+    # Claude: STOP - simple/ must be working before migration
+  fi
+  
+  # Stop services cleanly
+  make down
+fi
+cd ..
+
+# File structure verification
+STRUCTURE_OK=true
+test -f simple/Makefile || { echo "Missing: simple/Makefile"; STRUCTURE_OK=false; }
+test -f simple/docker-compose.yml || { echo "Missing: simple/docker-compose.yml"; STRUCTURE_OK=false; }
+test -d simple/server || { echo "Missing: simple/server/"; STRUCTURE_OK=false; }
+test -d simple/frontend || { echo "Missing: simple/frontend/"; STRUCTURE_OK=false; }
+
+[ "$STRUCTURE_OK" = false ] && echo "STOP: Expected files missing in simple/"
+
+# Disk space check for filter-branch
+DISK_FREE=$(df -h . | awk 'NR==2 {print $4}' | sed 's/G//')
+if (( $(echo "$DISK_FREE < 5" | bc -l) )); then
+  echo "WARNING: Less than 5GB free disk space. Git filter-branch needs space."
+fi
 ```
 
-**Environment Checklist:**
-- [ ] Current working directory is /home/jeffh/projects/pocketdev
-- [ ] Git is on dev/main branch (or explicitly note if not)
-- [ ] No uncommitted changes exist
-- [ ] All local branches are up to date with remote
-- [ ] Key directories exist: simple/, local-backend/, web/, docker/
-- [ ] pocketdev-studio directory is accessible at ../pocketdev-studio
+## Pre-Migration Environment Check
 
-If any check fails, resolve before proceeding.
+```bash
+# Silent prerequisite checks with result capture
+PWD_OK=$(pwd | grep -q "/home/jeffh/projects/pocketdev$" && echo "true" || echo "false")
+BRANCH=$(git branch --show-current)
+CHANGES=$(git status --porcelain | wc -l)
+STUDIO_EXISTS=$(test -d ../pocketdev-studio && echo "true" || echo "false")
+
+# Report only issues
+[ "$PWD_OK" = "false" ] && echo "Wrong directory: $(pwd)"
+[ "$CHANGES" -gt 0 ] && echo "Uncommitted changes: $CHANGES files"
+[ "$STUDIO_EXISTS" = "false" ] && echo "Missing: ../pocketdev-studio"
+```
+
+**Pre-Flight Checklist:**
+- [ ] Simple/ working on current branch (tested with make dev)
+- [ ] Service ports documented: 3005 (backend), 5173 (frontend), 8080/8081 (shelltender)
+- [ ] At least 5GB free disk space
+- [ ] No uncommitted changes
+- [ ] Studio directory exists
 
 ## Claude Must NEVER
 
@@ -126,6 +200,31 @@ These are absolute prohibitions with no exceptions:
 
 7. **NEVER remove a directory without verifying it's empty**
    - Use `ls -la` before any `rm -rf` command
+
+## Rollback Strategy
+
+### Checkpoint Commits
+Create checkpoint commits at key stages:
+- After Step 2: Empty commit before changes
+- After Step 6: Before promoting simple
+- After Step 8: Before cleanup
+
+### Quick Rollback Commands
+```bash
+# If migration fails at any point:
+
+# Option 1: Reset to last checkpoint
+git reset --hard HEAD
+
+# Option 2: Return to specific checkpoint
+git log --oneline | grep "Checkpoint:"  # Find checkpoint
+git reset --hard <commit-hash>
+
+# Option 3: Complete abort
+git checkout dev
+git branch -D $(git branch --show-current)
+rm -rf ../pocketdev-studio/{local-backend,web,docker,data}
+```
 
 ## Migration Decision Matrix
 
@@ -162,18 +261,14 @@ docker-compose ps 2>/dev/null || echo "No services running"
 ```bash
 # TodoWrite: Mark Step 1 as in_progress
 
-# Quick state check
-echo "=== MIGRATION STATE CHECK ==="
-echo "Current directory: $(pwd)"
-echo "Current branch: $(git branch --show-current)"
-echo "Uncommitted changes: $(git status --porcelain | wc -l)"
-echo "Simple exists: $(test -d simple && echo 'YES' || echo 'NO')"
-echo "Studio accessible: $(test -d ../pocketdev-studio && echo 'YES' || echo 'NO')"
-
-# Verify all components exist
+# Silent state checks
+MISSING_DIRS=""
 for dir in simple local-backend web docker data; do
-  test -d "$dir" && echo "✓ $dir exists" || echo "✗ $dir missing"
+  test -d "$dir" || MISSING_DIRS="$MISSING_DIRS $dir"
 done
+
+# Report only if issues found
+[ -n "$MISSING_DIRS" ] && echo "Missing directories:$MISSING_DIRS"
 ```
 
 ### Step 2: Create Working Branch
@@ -182,11 +277,10 @@ done
 # TodoWrite: Mark Step 2 as in_progress
 
 git checkout -b separation/migration-$(date +%Y%m%d)
-echo "Created branch: $(git branch --show-current)"
-
-# Set migration state
 MIGRATION_BRANCH=$(git branch --show-current)
-echo "Migration branch: $MIGRATION_BRANCH"
+
+# Create checkpoint commit
+git commit --allow-empty -m "Checkpoint: Before migration start"
 ```
 
 ### Step 3: Map All Service Dependencies (Critical)
@@ -196,42 +290,27 @@ This is the most important step based on lessons learned.
 ```bash
 # TodoWrite: Mark Step 3 as in_progress
 
-# Create dependency report
-echo "=== DEPENDENCY MAPPING REPORT ===" > /tmp/migration_deps.txt
-echo "Generated: $(date)" >> /tmp/migration_deps.txt
-echo "" >> /tmp/migration_deps.txt
+# Silent dependency mapping
+{
+  echo "DEPENDENCY MAPPING - $(date)"
+  echo ""
+  echo "PORT MAPPINGS:"
+  grep -r "port\|PORT" docker-compose*.yml */docker-compose*.yml 2>/dev/null | grep -E "[0-9]{4}"
+  echo ""
+  echo "PROXY CONFIGS:"
+  find . -name "vite.config.*" -exec grep -l "proxy" {} \; 2>/dev/null
+  echo ""
+  echo "HARDCODED PATHS:"
+  grep -rE "\.\./simple/|\.\./" --include="*.js" --include="*.json" --include="*.yml" . | grep -v node_modules | cut -d: -f1 | sort -u
+} > /tmp/migration_deps.txt
 
-# 1. Port mappings
-echo "=== PORT MAPPINGS ===" >> /tmp/migration_deps.txt
-grep -r "port\|PORT" docker-compose*.yml */docker-compose*.yml 2>/dev/null | grep -E "[0-9]{4}" >> /tmp/migration_deps.txt
+# Check critical issues
+CRITICAL_PATHS=$(grep -rE "\.\./simple/|\.\./" --include="*.js" --include="*.json" --include="*.yml" . | grep -v node_modules | wc -l)
+PROXY_COUNT=$(find . -name "vite.config.*" -exec grep -l "proxy" {} \; 2>/dev/null | wc -l)
 
-# 2. Service dependencies
-echo -e "\n=== SERVICE DEPENDENCIES ===" >> /tmp/migration_deps.txt
-grep -r "depends_on\|links" docker-compose*.yml */docker-compose*.yml 2>/dev/null >> /tmp/migration_deps.txt
-
-# 3. Proxy configurations (Critical for simple/PocketDev)
-echo -e "\n=== PROXY CONFIGURATIONS ===" >> /tmp/migration_deps.txt
-find . -name "vite.config.*" -exec grep -l "proxy" {} \; -exec grep -A 10 "proxy" {} \; >> /tmp/migration_deps.txt
-
-# 4. Static file serving (Critical - backend serves frontend-legacy)
-echo -e "\n=== STATIC FILE SERVING ===" >> /tmp/migration_deps.txt
-grep -r "static\|public\|frontend-legacy" */server.js */app.js */index.js */server/*.js 2>/dev/null >> /tmp/migration_deps.txt
-
-# 5. Hardcoded paths that need updating
-echo -e "\n=== HARDCODED PATHS TO UPDATE ===" >> /tmp/migration_deps.txt
-grep -rE "\.\./simple/|\.\./" --include="*.js" --include="*.json" --include="*.yml" . | grep -v node_modules >> /tmp/migration_deps.txt
-
-# 6. WebSocket connections
-echo -e "\n=== WEBSOCKET CONNECTIONS ===" >> /tmp/migration_deps.txt
-grep -r "ws:\|wss:\|WebSocket\|8080\|8081" --include="*.js" --include="*.ts" . | grep -v node_modules | head -20 >> /tmp/migration_deps.txt
-
-# Display critical findings
-echo "=== CRITICAL FINDINGS ==="
-cat /tmp/migration_deps.txt | grep -E "proxy|static|frontend-legacy|../simple" | head -10
-
-# Save critical paths
-CRITICAL_PATHS=$(grep -rE "\.\./simple/|\.\./" --include="*.js" --include="*.json" --include="*.yml" . | grep -v node_modules | cut -d: -f1 | sort -u)
-echo "Files with path dependencies: $(echo "$CRITICAL_PATHS" | wc -l)"
+# Report only if concerning
+[ "$CRITICAL_PATHS" -gt 10 ] && echo "WARNING: $CRITICAL_PATHS files with hardcoded paths (high risk)"
+[ "$PROXY_COUNT" -gt 0 ] && echo "NOTE: $PROXY_COUNT proxy configurations found - verify after move"
 ```
 
 **Claude Decision Point:**
@@ -244,26 +323,20 @@ echo "Files with path dependencies: $(echo "$CRITICAL_PATHS" | wc -l)"
 ```bash
 # TodoWrite: Mark Step 4 as in_progress
 
-# Check permissions first
-echo "=== Checking Directory Permissions ==="
+# Silent permission check
+NEED_FIX=""
 for dir in data projects workspaces simple/data simple/projects; do
   if test -d "$dir"; then
     owner=$(ls -ld "$dir" | awk '{print $3}')
-    if [ "$owner" != "$(whoami)" ]; then
-      echo "⚠️  $dir owned by $owner (not you)"
-      NEED_PERMISSION_FIX=true
-    else
-      echo "✓ $dir owned by $(whoami)"
-    fi
+    [ "$owner" != "$(whoami)" ] && NEED_FIX="$NEED_FIX $dir"
   fi
 done
 
-# If permissions need fixing
-if [ "$NEED_PERMISSION_FIX" = true ]; then
-  echo "Some directories need permission fixes. This requires sudo."
-  echo "Run: sudo chown -R $(whoami):$(whoami) data projects workspaces simple/data simple/projects"
-  echo "Should I proceed? (User must confirm)"
-  # Claude: STOP here and wait for user confirmation
+# Report and stop if needed
+if [ -n "$NEED_FIX" ]; then
+  echo "Permission fix needed for:$NEED_FIX"
+  echo "Run: sudo chown -R $(whoami):$(whoami)$NEED_FIX"
+  # Claude: STOP and wait for user to fix permissions
 fi
 ```
 
@@ -274,20 +347,16 @@ fi
 
 cd ../pocketdev-studio
 
-# Check what's there first
-echo "=== Current pocketdev-studio contents ==="
-ls -la
-
-# Remove existing directories (they only contain node_modules)
-if test -d local-backend || test -d web; then
-  echo "Removing old directories with only node_modules..."
-  rm -rf local-backend web
-fi
+# Silent cleanup
+test -d local-backend && rm -rf local-backend
+test -d web && rm -rf web
 
 # Verify clean
-ls -la | grep -E "local-backend|web" && echo "✗ Cleanup failed" || echo "✓ Studio cleaned"
+if ls -la | grep -qE "local-backend|web"; then
+  echo "ERROR: Studio cleanup failed"
+  # Claude: STOP if cleanup failed
+fi
 
-# Return to main directory
 cd ../pocketdev
 ```
 
@@ -296,62 +365,37 @@ cd ../pocketdev
 ```bash
 # TodoWrite: Mark Step 6 as in_progress
 
-echo "=== Moving containerized components to pocketdev-studio ==="
+# Silent copy operations
+COPY_ERRORS=""
 
-# Copy main containerized components
+# Copy components
 for component in local-backend web docker; do
-  if test -d "$component"; then
-    echo "Copying $component..."
-    cp -r "$component" ../pocketdev-studio/
-    echo "✓ $component copied"
-  else
-    echo "✗ $component not found"
-  fi
+  test -d "$component" && cp -r "$component" ../pocketdev-studio/ || COPY_ERRORS="$COPY_ERRORS $component"
 done
 
-# Copy Docker compose files
+# Copy Docker files
 for file in docker-compose.yml docker-compose.dev.yml; do
-  if test -f "$file"; then
-    echo "Copying $file..."
-    cp "$file" ../pocketdev-studio/
-    echo "✓ $file copied"
-  fi
+  test -f "$file" && cp "$file" ../pocketdev-studio/
 done
 
-# Copy workspaces if they exist
-if test -d workspaces; then
-  echo "Copying workspaces..."
-  cp -r workspaces ../pocketdev-studio/
-  echo "✓ workspaces copied"
-fi
-
-# Copy data directory (for studio database)
-if test -d data && test -f data/pocketdev.db; then
-  echo "Copying studio database..."
+# Copy optional directories
+test -d workspaces && cp -r workspaces ../pocketdev-studio/
+test -d data && test -f data/pocketdev.db && {
   mkdir -p ../pocketdev-studio/data
   cp data/pocketdev.db ../pocketdev-studio/data/
-  echo "✓ studio database copied"
-fi
+}
 
-# Copy relevant documentation
-cp CLAUDE.md ../pocketdev-studio/
-if test -f README.md && grep -q "container\|orchestrat" README.md; then
-  cp README.md ../pocketdev-studio/
-fi
+# Copy docs
+cp CLAUDE.md ../pocketdev-studio/ 2>/dev/null || true
+test -f README.md && grep -q "container\|orchestrat" README.md && cp README.md ../pocketdev-studio/
 
-# Verify copy succeeded
-echo -e "\n=== Verifying studio population ==="
+# Verify critical components
 cd ../pocketdev-studio
-ls -la | grep -E "local-backend|web|docker|data"
-STUDIO_POPULATED=$?
+VERIFY_OK=$(ls -la | grep -qE "local-backend.*web.*docker" && echo "true" || echo "false")
 cd ../pocketdev
 
-if [ $STUDIO_POPULATED -eq 0 ]; then
-  echo "✓ Studio successfully populated"
-else
-  echo "✗ Studio population failed - STOP"
-  # Claude: STOP here if verification failed
-fi
+[ "$VERIFY_OK" = "false" ] && echo "ERROR: Studio population failed"
+[ -n "$COPY_ERRORS" ] && echo "Failed to copy:$COPY_ERRORS"
 ```
 
 ### Step 7: Update Paths in Simple
@@ -510,59 +554,46 @@ ls -la | grep -E "server|frontend|docs|data|docker-compose" | head -10
 
 This is critical - test incrementally as lessons learned showed.
 
-#### 10.1 Test PocketDev (Simple) Step by Step
+#### 10.1 Test PocketDev (Simple) - Complete Testing
 
 ```bash
 # TodoWrite: Mark Step 10 as in_progress
 
-echo "=== Testing PocketDev Configuration ==="
+# Verify docker-compose exists
+test -f docker-compose.yml || { echo "ERROR: No docker-compose.yml in root"; exit 1; }
 
-# First check if docker-compose exists
-if ! test -f docker-compose.yml; then
-  echo "✗ No docker-compose.yml found in root"
-  echo "This is expected - the simple version's docker-compose should now be here"
-  # Claude: STOP if this is unexpected
-fi
-
-# Verify Docker compose syntax
-docker-compose config > /dev/null 2>&1 && echo "✓ Docker compose valid" || echo "✗ Invalid docker-compose.yml"
-
-# Check which services are defined
-echo -e "\n=== Services defined ==="
-docker-compose config --services
-
-# Test services one by one
-echo -e "\n=== Starting services incrementally ==="
-
-# 1. Start Shelltender first
-echo "Starting Shelltender..."
+# Start services incrementally
 docker-compose up -d shelltender
 sleep 5
-docker-compose ps shelltender | grep -q "Up" && echo "✓ Shelltender running" || echo "✗ Shelltender failed"
-
-# 2. Start Backend
-echo -e "\nStarting Backend..."
 docker-compose up -d backend
 sleep 5
-docker-compose ps backend | grep -q "Up" && echo "✓ Backend running" || echo "✗ Backend failed"
 
-# 3. Check critical endpoints
-echo -e "\n=== Testing endpoints ==="
-curl -s http://localhost:3005/api/health | grep -q "ok" && echo "✓ Backend API responding" || echo "✗ Backend API not responding"
+# Test specific endpoints
+TEST_RESULTS=""
 
-# 4. Check static file serving (critical from lessons)
-curl -s http://localhost:3005/ -o /dev/null && echo "✓ Backend serving static files" || echo "✗ Static file serving issue"
+# Backend health
+curl -s http://localhost:3005/api/health | grep -q "ok" || TEST_RESULTS="$TEST_RESULTS backend-health"
 
-# 5. Test Shelltender access
-curl -s http://localhost:8080/ -o /dev/null && echo "✓ Shelltender web accessible" || echo "✗ Shelltender web issue"
+# Frontend loading
+curl -s http://localhost:5173 > /dev/null || TEST_RESULTS="$TEST_RESULTS frontend"
 
-# 6. Check for any errors in logs
-echo -e "\n=== Checking logs for errors ==="
-docker-compose logs --tail=20 | grep -i "error\|fail" | head -5
+# WebSocket connection test
+curl -s http://localhost:8080/socket.io/ | grep -q "0" || TEST_RESULTS="$TEST_RESULTS websocket"
 
-# Keep running for further testing
-echo -e "\n✓ Services running. Run 'docker-compose down' when done testing."
-POCKETDEV_TESTS="passed"  # Update state
+# Check docker logs for specific errors
+docker logs pocketdev-shelltender 2>&1 | grep -i "error" && TEST_RESULTS="$TEST_RESULTS shelltender-errors"
+docker logs pocketdev-backend 2>&1 | grep -i "error" && TEST_RESULTS="$TEST_RESULTS backend-errors"
+
+# Native module check
+docker exec pocketdev-backend node -e "require('sqlite3')" 2>/dev/null || TEST_RESULTS="$TEST_RESULTS sqlite3-module"
+
+# Report results
+if [ -n "$TEST_RESULTS" ]; then
+  echo "Test failures:$TEST_RESULTS"
+  echo "Check logs: docker-compose logs [service-name]"
+else
+  POCKETDEV_TESTS="passed"
+fi
 ```
 
 #### 10.2 Verify PocketDev-Studio Structure
@@ -787,6 +818,55 @@ This could be due to:
 Please check and let me know how to proceed.
 ```
 
+## Common Issues and Solutions
+
+### Native Module Errors
+```
+Error: "Module compiled for wrong Node version"
+```
+**Solution**: `docker exec pocketdev-backend npm rebuild`
+
+### Missing ToastProvider
+```
+Error: "useToast must be used within ToastProvider"
+```
+**Solution**: Frontend component missing - check React imports
+
+### WebSocket Connection Failed
+```
+Error: WebSocket connection to 'ws://localhost:8080' failed
+```
+**Solution**: Check @shelltender/client and @shelltender/server versions match
+
+### SQLite3 Module Not Found
+```
+Error: Cannot find module 'sqlite3'
+```
+**Solution**: 
+```bash
+docker exec pocketdev-backend npm install sqlite3
+docker exec pocketdev-backend npm rebuild sqlite3
+```
+
+### Port Already in Use
+```
+Error: bind: address already in use
+```
+**Solution**: `docker-compose down` or `lsof -i :PORT` to find process
+
+## Dependency Warnings
+
+### Critical Dependencies to Verify:
+- **@shelltender/client** version must match **@shelltender/server**
+- **node-pty** requires native rebuild after Node version changes
+- **sqlite3** requires native rebuild in container
+- **React** components need ToastProvider wrapper
+
+### File References to Check:
+- Root Makefile vs simple/Makefile (use simple's version)
+- Root docker-compose.yml vs simple/docker-compose.yml (use simple's)
+- Vite proxy configurations must point to correct backend port
+
 ## Quick Troubleshooting Tree
 
 If something fails:
@@ -795,3 +875,5 @@ If something fails:
 3. Path errors? → Review Step 3 dependency mapping results
 4. Git issues? → Ensure clean working directory first
 5. Studio issues? → Verify it was cleaned before copying
+6. Native module error? → Run npm rebuild in container
+7. WebSocket fails? → Check shelltender version compatibility

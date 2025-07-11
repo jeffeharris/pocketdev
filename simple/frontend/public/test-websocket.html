@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shelltender WebSocket Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+        #log {
+            background: #000;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f44747; }
+        .info { color: #3794ff; }
+    </style>
+</head>
+<body>
+    <h1>Shelltender WebSocket Test</h1>
+    <p>This page tests WebSocket connectivity directly without React.</p>
+    
+    <div>
+        <button onclick="testDirect()">Test Direct Connection (ws://localhost:8080)</button>
+        <button onclick="testProxy()">Test Proxy Connection (/shelltender-ws)</button>
+        <button onclick="createSession()">Create Session</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div id="log"></div>
+    
+    <script>
+        let ws = null;
+        let sessionId = null;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function testDirect() {
+            log('Testing direct WebSocket connection to ws://localhost:8080...');
+            testWebSocket('ws://localhost:8080');
+        }
+        
+        function testProxy() {
+            log('Testing proxied WebSocket connection to /shelltender-ws...');
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host;
+            testWebSocket(`${protocol}//${host}/shelltender-ws`);
+        }
+        
+        function testWebSocket(url) {
+            if (ws) {
+                ws.close();
+            }
+            
+            try {
+                log(`Connecting to ${url}...`);
+                ws = new WebSocket(url);
+                
+                ws.onopen = () => {
+                    log('WebSocket connected!', 'success');
+                    log('Connection state: ' + ws.readyState);
+                };
+                
+                ws.onmessage = (event) => {
+                    log('Received: ' + event.data, 'success');
+                    
+                    // Parse message and check type
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'connected' && data.clientId) {
+                            log(`Client ID: ${data.clientId}`, 'info');
+                        }
+                        if (data.type === 'created' && data.sessionId) {
+                            sessionId = data.sessionId;
+                            log(`Session created: ${sessionId}`, 'success');
+                        }
+                    } catch (e) {
+                        // Not JSON, just log raw data
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    log('WebSocket error!', 'error');
+                    console.error('WebSocket error:', error);
+                };
+                
+                ws.onclose = (event) => {
+                    log(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`, 'error');
+                };
+                
+            } catch (error) {
+                log(`Failed to create WebSocket: ${error.message}`, 'error');
+            }
+        }
+        
+        function createSession() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected. Connect first!', 'error');
+                return;
+            }
+            
+            const message = {
+                type: 'create',
+                options: {
+                    id: 'test-session-' + Date.now(),
+                    name: 'Test Session',
+                    cols: 80,
+                    rows: 24
+                }
+            };
+            
+            log('Sending create session message: ' + JSON.stringify(message));
+            ws.send(JSON.stringify(message));
+        }
+        
+        // Auto-test on load
+        window.onload = () => {
+            log('Page loaded. Click a button to test WebSocket connection.');
+            
+            // Also test HTTP endpoint
+            fetch('/shelltender-api/health')
+                .then(r => r.json())
+                .then(data => log('HTTP health check: ' + JSON.stringify(data), 'success'))
+                .catch(err => log('HTTP health check failed: ' + err.message, 'error'));
+        };
+    </script>
+</body>
+</html>

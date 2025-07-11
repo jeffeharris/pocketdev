@@ -7,8 +7,8 @@ interface ShelltenderConfig {
 }
 
 const ShelltenderContext = createContext<ShelltenderConfig>({
-  websocketUrl: 'ws://localhost:8080',
-  apiUrl: 'http://localhost:8081',
+  websocketUrl: '/shelltender-ws',  // Use proxy path, will be rewritten to ws://shelltender:8080/ws
+  apiUrl: '/shelltender-api',        // Use proxy path, will be rewritten to http://shelltender:8080
   authKey: 'pocketdev-monitor-key-2024'
 });
 
@@ -26,8 +26,8 @@ export const ShelltenderProvider: React.FC<ShelltenderProviderProps> = ({
   config = {} 
 }) => {
   const defaultConfig: ShelltenderConfig = {
-    websocketUrl: 'ws://localhost:8080',
-    apiUrl: 'http://localhost:8081',
+    websocketUrl: '/shelltender-ws',  // Use proxy path
+    apiUrl: '/shelltender-api',        // Use proxy path
     authKey: 'pocketdev-monitor-key-2024',
     ...config
   };

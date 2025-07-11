@@ -2,6 +2,7 @@
 # Build AI base first: docker build -f Dockerfile.ai-base -t pocketdev/ai-base:latest .
 FROM pocketdev/ai-base:latest
 
+# TODO: Should we be root here? Or should we switch to pocketdev user earlier?
 # Start as root for initial setup
 USER root
 
@@ -13,7 +14,7 @@ COPY server/package*.json /app/server/
 # Install dependencies and rebuild node-pty for current platform
 WORKDIR /app/server
 RUN npm install && \
-    npm rebuild node-pty
+    npm rebuild node-pty  # TODO: do we need to rebuild for the current platform? or can we just use the prebuilt binaries?
 
 # Copy wrapper scripts
 COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell

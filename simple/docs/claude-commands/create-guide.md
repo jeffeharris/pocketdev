@@ -1,4 +1,15 @@
-# /create-guide
+# /create-guide (Deprecated)
+
+> **⚠️ This command has been split into two specialized commands:**
+> - **`/create-claude-guide`** - For Claude-executable process guides with TodoWrite integration
+> - **`/create-human-guide`** - For human-readable documentation with explanations
+> 
+> The split provides better focus and clearer defaults for each audience.
+> Please use the appropriate specialized command for your needs.
+
+---
+
+_Original documentation preserved below for reference._
 
 Generate comprehensive documentation, implementation guides, and instructions optimized for clarity and actionability. Creates guides that can be effectively used by both human developers and Claude instances.
 

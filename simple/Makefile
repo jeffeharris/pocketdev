@@ -1,5 +1,5 @@
 # PocketDev Makefile
-.PHONY: help dev prod up down restart logs shell clean migrate build build-ai-base build-all status test
+.PHONY: help dev prod up down restart logs shell clean migrate build build-ai-base build-all status test secure
 
 # Default target
 help:
@@ -14,23 +14,26 @@ help:
 	@echo "  make clean      - Clean up containers, volumes, and data"
 	@echo "  make migrate    - Run shelltender migration for tasks"
 	@echo "  make build        - Rebuild service containers"
+	@echo "  make build-base   - Build minimal base image"
 	@echo "  make build-ai-base - Build AI base image with all development tools"
-	@echo "  make build-all    - Build AI base image and all service containers"
+	@echo "  make build-all    - Build all images in correct order"
 	@echo "  make status     - Show container status"
 	@echo "  make test       - Run tests"
+	@echo "  make secure     - Start in secure mode with UID/GID mapping"
 
 # Development mode with BOTH frontends
 dev:
-	@echo "Starting PocketDev with both frontends..."
+	@echo "Starting PocketDev in dev mode..."
 	@docker-compose down
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d shelltender backend frontend
 	@echo "\n✓ Starting services (this may take a moment for dependencies to install)..."
-	@echo "\nFrontends:"
-	@echo "  Legacy:        http://localhost:3008"
-	@echo "  New (React):   http://localhost:5173"
+	@echo "\nFrontend:"
+	@echo "  React:   http://localhost:5173"
 	@echo "\nBackend:"
 	@echo "  API:           http://localhost:3005"
-	@echo "  Shelltender:   ws://localhost:8080"
+	@echo "\nShelltender:"
+	@echo "   API:			ws://localhost:8080"
+	@echo "   Websocket:	ws://localhost:8081"
 	@echo "\nView logs: make logs"
 	@echo "\nNote: Services may take 30-60 seconds to be fully ready on first run."
 
@@ -84,8 +87,14 @@ build:
 	@docker-compose build
 	@echo "✓ Build complete"
 
+# Build base image first
+build-base:
+	@echo "Building PocketDev base image..."
+	@docker build -f Dockerfile.base -t pocketdev/base:latest .
+	@echo "✓ Base image built with Node.js 22 and minimal dependencies"
+
 # Build AI base image with all AI tools
-build-ai-base:
+build-ai-base: build-base
 	@echo "Building PocketDev AI base image with all development tools..."
 	@docker build -f Dockerfile.ai-base -t pocketdev/ai-base:latest -t pocketdev/ai-base:1.0 .
 	@echo "✓ AI base image built with:"
@@ -96,7 +105,7 @@ build-ai-base:
 	@echo "  - Databases: PostgreSQL/MySQL/Redis clients"
 
 # Build all images including base
-build-all: build-ai-base build
+build-all: build-base build-ai-base build
 	@echo "✓ All images built successfully"
 
 # Show status
@@ -139,3 +148,23 @@ commit:
 
 push:
 	@git push origin $(shell git branch --show-current)
+
+# Secure mode with UID/GID mapping
+secure:
+	@echo "Starting PocketDev in secure mode..."
+	@./scripts/start-secure.sh
+
+secure-build:
+	@echo "Building secure images..."
+	@./scripts/start-secure.sh --build
+
+secure-down:
+	@echo "Stopping secure containers..."
+	@docker-compose -f docker-compose-secure.yml down
+
+secure-logs:
+	@docker-compose -f docker-compose-secure.yml logs -f
+
+secure-status:
+	@echo "Secure Container Status:"
+	@docker-compose -f docker-compose-secure.yml ps

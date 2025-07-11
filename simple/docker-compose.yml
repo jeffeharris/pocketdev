@@ -4,18 +4,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.shelltender
-    container_name: pocketdev-shelltender
+    container_name: shelltender
     working_dir: /app
     volumes:
       - ./:/app
       - ./data:/app/data
       - ./projects:/projects
     ports:
-      - "8080:8080"  # HTTP API port (swapped)
-      - "8081:8081"  # WebSocket port (swapped)
+      - "8080:8080"  # Unified HTTP and WebSocket port
     environment:
-      - SHELLTENDER_PORT=8081
-      - SHELLTENDER_API_PORT=8080
+      - SHELLTENDER_PORT=8080
       - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       # AI service credentials (passed through from host)
@@ -28,7 +26,7 @@ services:
       sh -c "cd /app/server && node shelltender-service.js"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -38,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    container_name: pocketdev-backend
+    container_name: backend
     working_dir: /app
     user: pocketdev
     depends_on:
@@ -57,7 +55,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - HOME=/home/pocketdev
       - SHELLTENDER_API_URL=http://shelltender:8080
-      - SHELLTENDER_WS_URL=ws://shelltender:8081
+      - SHELLTENDER_WS_URL=ws://shelltender:8080/ws
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     command: >
@@ -68,37 +66,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-
-
-  # Optional: Original simple server (if you still need it)
-  server:
-    build: .
-    container_name: pocketdev-simple-server
-    ports:
-      - "3001:3001"
-      - "3003:3003"
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GIT_REPO=/workspace
-      - WORKTREE_DIR=/tmp/pocketdev-worktrees
-    volumes:
-      - pocketdev-workspace:/workspace
-      - ./frontend:/frontend
-      - ~/.pocketdev:/root/.pocketdev
-    profiles:
-      - simple  # Only starts when explicitly requested
     
-  # Optional: Original frontend
-  frontend-nginx:
-    image: nginx:alpine
-    container_name: pocketdev-frontend-nginx
-    ports:
-      - "2424:80"
+  # React frontend running in Docker
+  frontend:
+    image: node:22-alpine
+    container_name: frontend
+    working_dir: /app
     volumes:
-      - ./frontend:/usr/share/nginx/html
-    profiles:
-      - simple  # Only starts when explicitly requested
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3005
+      - VITE_USE_MOCKS=false
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    networks:
+      - default
 
 volumes:
   pocketdev-workspace:

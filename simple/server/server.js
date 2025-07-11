@@ -11,8 +11,7 @@ import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
 import GitHubAPI from './github.js';
-import ShelltenderWebSocketClient from './shelltender-ws-client.js';
-import { ShelltenderMonitorAdapter } from './shelltender-monitor-adapter.js';
+// Shelltender v0.5.0 - WebSocket client functionality is now provided by the service
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import createRoutes from './routes/index.js';
@@ -305,8 +304,8 @@ async function start() {
       ws.send(JSON.stringify({ type: 'connected', clientId: ws.clientId }));
     });
     
-    // Initialize monitoring
-    await initializeMonitoring(server, wsEventService, models);
+    // Initialize monitoring - temporarily disabled due to shelltender v0.5.0 migration
+    // await initializeMonitoring(server, wsEventService, models);
     
     // Start listening
     server.listen(config.port, () => {
@@ -331,15 +330,7 @@ process.on('SIGINT', async () => {
     console.log('Database connection closed');
   }
   
-  if (app.locals.wsClient) {
-    app.locals.wsClient.close();
-    console.log('WebSocket client closed');
-  }
-  
-  if (app.locals.wsAdapter) {
-    app.locals.wsAdapter.close();
-    console.log('WebSocket adapter closed');
-  }
+  // WebSocket cleanup removed - handled by shelltender service
   
   process.exit(0);
 });

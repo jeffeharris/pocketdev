@@ -29,13 +29,13 @@ export default defineConfig({
         target: 'ws://shelltender:8080',
         changeOrigin: true,
         ws: true,
-        rewrite: (path) => path.replace(/^\/shelltender-ws/, ''),
+        rewrite: (path) => path.replace(/^\/shelltender-ws/, '/ws'),  // v0.5.0 uses /ws path
       },
       '/shelltender-api': {
         target: 'http://shelltender:8080',
         changeOrigin: true,
         ws: false, // Explicitly disable WebSocket for API endpoint
-        rewrite: (path) => path.replace(/^\/shelltender-api/, ''),
+        rewrite: (path) => path.replace(/^\/shelltender-api/, '/api'),
       },
     },
   },
