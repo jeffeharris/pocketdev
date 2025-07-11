@@ -1,0 +1,23 @@
+{
+  "name": "pocketdev-backend",
+  "version": "1.0.0",
+  "description": "PocketDev Backend API Service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.7",
+    "ws": "^8.18.0",
+    "node-fetch": "^2.7.0",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@shelltender/client": "^0.5.0",
+    "@shelltender/server": "^0.5.0"
+  }
+}

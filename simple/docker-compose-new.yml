@@ -1,29 +1,24 @@
 services:
-  # Standalone Shelltender service
+  # Shelltender Terminal Service
   shelltender:
     build:
       context: .
-      dockerfile: Dockerfile.shelltender
+      dockerfile: Dockerfile.shelltender-new
     container_name: shelltender
-    working_dir: /app
     volumes:
-      - ./:/app
       - ${POCKETDEV_HOME:-~/.pocketdev}/data:/app/data
       - ${POCKETDEV_HOME:-~/.pocketdev}/projects:/projects
     ports:
-      - "8080:8080"  # Unified HTTP and WebSocket port
+      - "8080:8080"
     environment:
       - SHELLTENDER_PORT=8080
       - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
-      # AI service credentials (passed through from host)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-    command: >
-      sh -c "cd /app/server && node shelltender-service.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -31,23 +26,21 @@ services:
       timeout: 10s
       retries: 3
 
-  # Backend API server
+  # Backend API Service
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: Dockerfile.backend-new
     container_name: backend
-    working_dir: /app
     user: pocketdev
     depends_on:
       - shelltender
     volumes:
-      - ./:/app
       - /var/run/docker.sock:/var/run/docker.sock
       - ${POCKETDEV_HOME:-~/.pocketdev}/projects:/projects
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev
-      - ${POCKETDEV_HOME:-~/.pocketdev}/data:/app/data  # SQLite database persistence
+      - ${POCKETDEV_HOME:-~/.pocketdev}/data:/app/data
     ports:
       - "3005:3005"
     environment:
@@ -58,8 +51,6 @@ services:
       - SHELLTENDER_WS_URL=ws://shelltender:8080/ws
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
-    command: >
-      sh -c "cd server && node server.js"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]
@@ -67,7 +58,7 @@ services:
       timeout: 10s
       retries: 3
     
-  # React frontend running in Docker
+  # React Frontend
   frontend:
     image: node:22-alpine
     container_name: frontend

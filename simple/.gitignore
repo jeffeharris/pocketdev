@@ -1,8 +1,8 @@
 # .gitignore for simple directory
 
 # Data directories
+data/
 projects/
-../projects
 backups/
 data-snapshot/
 .archived/
@@ -28,6 +28,4 @@ server/node_modules/
 */.vite/
 
 *.db
-../*.db
 *.sqlite
-../*.sqlite
