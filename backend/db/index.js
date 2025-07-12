@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 class Database {
   constructor() {
     this.db = null;
-    this.dbPath = path.join(__dirname, '../../data/pocketdev.db');
+    this.dbPath = process.env.DATABASE_PATH || path.join('/app/data', 'pocketdev.db');
   }
 
   async initialize() {

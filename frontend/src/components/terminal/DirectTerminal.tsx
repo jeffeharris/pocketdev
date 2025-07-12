@@ -33,10 +33,11 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   // Log connection state
   useEffect(() => {
     console.log('[DirectTerminal] WebSocket connected:', isConnected);
+    console.log('[DirectTerminal] Terminal mounted for session:', terminalSessionId);
     if (isConnected) {
       setIsReady(true);
     }
-  }, [isConnected]);
+  }, [isConnected, terminalSessionId]);
 
   // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({

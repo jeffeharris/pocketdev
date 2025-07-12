@@ -1,14 +1,13 @@
 import fetch from 'node-fetch';
-import config from './config/index.js';
 
-const SHELLTENDER_API_URL = config.shelltenderApiUrl || `http://localhost:${config.shelltenderPort || 8080}`;
+const SHELLTENDER_API_URL = process.env.SHELLTENDER_API_URL || 'http://localhost:8080';
 
 /**
  * List all sessions
  */
 export async function listSessions() {
   try {
-    const response = await fetch(`${SHELLTENDER_API_URL}/sessions`);
+    const response = await fetch(`${SHELLTENDER_API_URL}/api/sessions`);
     if (!response.ok) {
       throw new Error(`Failed to list sessions: ${response.statusText}`);
     }
@@ -24,7 +23,7 @@ export async function listSessions() {
  */
 export async function getSessionInfo(sessionId) {
   try {
-    const response = await fetch(`${SHELLTENDER_API_URL}/sessions/${sessionId}`);
+    const response = await fetch(`${SHELLTENDER_API_URL}/api/sessions/${sessionId}`);
     if (!response.ok) {
       if (response.status === 404) {
         return null;
@@ -43,7 +42,7 @@ export async function getSessionInfo(sessionId) {
  */
 export async function createTaskSession(sessionId, taskTitle) {
   try {
-    const response = await fetch(`${SHELLTENDER_API_URL}/sessions`, {
+    const response = await fetch(`${SHELLTENDER_API_URL}/api/sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,7 +72,7 @@ export async function createTaskSession(sessionId, taskTitle) {
  */
 export async function executeCommand(sessionId, command) {
   try {
-    const response = await fetch(`${SHELLTENDER_API_URL}/sessions/${sessionId}/execute`, {
+    const response = await fetch(`${SHELLTENDER_API_URL}/api/sessions/${sessionId}/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

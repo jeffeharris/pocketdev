@@ -4,24 +4,20 @@ RUN apk add --no-cache git openssh-client curl
 FROM base AS backend
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -g 1001 -S pocketdev && \
-    adduser -S pocketdev -u 1001 -G pocketdev
-
 # Copy package files
 COPY backend/package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy application code
 COPY backend/ ./
 COPY shared/ ./shared/
+COPY backend-entrypoint.sh /entrypoint.sh
 
 # Create necessary directories
 RUN mkdir -p /projects /app/data && \
-    chown -R pocketdev:pocketdev /app /projects
-
-USER pocketdev
+    chmod +x /entrypoint.sh
 
 EXPOSE 3005
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "server.js"]

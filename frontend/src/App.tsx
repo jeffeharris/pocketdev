@@ -16,35 +16,25 @@ function App() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // Check server mode like the demo does
-    fetch('/shelltender-api/health')
-      .then(res => res.json())
-      .then(health => {
-        console.log('[App] Shelltender health:', health);
-        
-        // In single-port mode, use the proxied WebSocket path
-        if (health.mode === 'single-port') {
-          setShelltenderConfig({ url: '/shelltender-ws' });
-        } else {
-          // Dual port mode would use different config
-          setShelltenderConfig({ port: '8081' });
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('[App] Failed to check health, using default config:', err);
-        setShelltenderConfig({ url: '/shelltender-ws' });
-        setLoading(false);
-      });
+    // For v0.6.0, we just need to point to the WebSocket endpoint
+    // The proxy rewrites /shelltender-ws to /ws
+    const config = { 
+      url: '/shelltender-ws'
+    };
+    console.log('[App] Setting shelltender v0.6.0 config:', config);
+    setShelltenderConfig(config);
+    setLoading(false);
   }, []);
 
-  if (loading) {
-    return <div>Loading...</div>;
+  if (loading || !shelltenderConfig) {
+    return <div>Loading Shelltender configuration...</div>;
   }
 
   return (
     <ToastProvider>
-      <ShelltenderWSProvider config={shelltenderConfig}>
+      <ShelltenderWSProvider config={shelltenderConfig} debug={true}>
+        {/* Add debug output */}
+        {console.log('[App] ShelltenderWSProvider rendered with config:', shelltenderConfig)}
         <WebSocketProvider>
           <Router>
             <Routes>

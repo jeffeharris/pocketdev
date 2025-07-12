@@ -15,7 +15,7 @@ export const useShelltenderSession = (taskId: string, worktreePath: string) => {
   useEffect(() => {
     const createSession = async () => {
       try {
-        const response = await fetch('http://localhost:8081/sessions', {
+        const response = await fetch('/shelltender-api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -43,7 +43,7 @@ export const useShelltenderSession = (taskId: string, worktreePath: string) => {
         setSessionInfo({
           id: data.id,
           status: 'active',
-          websocketUrl: data.websocketUrl || `ws://localhost:8080?session=task-${taskId}`
+          websocketUrl: data.websocketUrl || '/shelltender-ws'
         });
       } catch (error) {
         console.error('Failed to create Shelltender session:', error);
@@ -51,7 +51,7 @@ export const useShelltenderSession = (taskId: string, worktreePath: string) => {
         setSessionInfo({
           id: `task-${taskId}`,
           status: 'active',
-          websocketUrl: `ws://localhost:8080?session=task-${taskId}`
+          websocketUrl: '/shelltender-ws'
         });
       }
     };

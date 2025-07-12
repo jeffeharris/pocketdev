@@ -29,7 +29,7 @@ export default defineConfig({
         target: 'ws://shelltender:8080',
         changeOrigin: true,
         ws: true,
-        rewrite: (path) => path.replace(/^\/shelltender-ws/, '/ws'),  // v0.5.0 uses /ws path
+        rewrite: (path) => path.replace(/^\/shelltender-ws/, '/ws'),
       },
       '/shelltender-api': {
         target: 'http://shelltender:8080',

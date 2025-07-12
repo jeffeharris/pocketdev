@@ -172,21 +172,22 @@ function handleWebSocketMessage(ws, data) {
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server, wsEventService, models) {
   try {
-    console.log('Initializing AI monitoring with Shelltender Monitor Mode...');
+    console.log('Initializing AI monitoring...');
     
-    // Create the monitor adapter for terminal data monitoring
-    // Uses Shelltender v0.3.0's monitor mode for efficient all-session monitoring
-    const authKey = process.env.SHELLTENDER_MONITOR_AUTH_KEY || 'pocketdev-monitor-key-2024';
-    const wsAdapter = new ShelltenderMonitorAdapter(config.shelltenderWsUrl, authKey);
-    
-    // Create WebSocket client for events and notifications
-    const wsClient = new ShelltenderWebSocketClient(config.shelltenderWsUrl);
-    wsClient.connect();
+    // TODO: Update monitoring to work with Shelltender v0.5.0
+    // The old ShelltenderMonitorAdapter and ShelltenderWebSocketClient were removed
+    // For now, create a dummy WebSocket client for the notification service
+    const wsClient = { 
+      send: () => {}, 
+      on: () => {},
+      connect: () => {}
+    };
     
     // Initialize notification service
     notificationService = new NotificationService(wsClient);
     
-    // Create AI monitor with the WebSocket adapter, event service, and models
+    // Create AI monitor without the WebSocket adapter for now
+    const wsAdapter = null;
     aiMonitor = new AISessionMonitor(wsAdapter, wsClient, notificationService, wsEventService, models);
     
     // Register AI patterns

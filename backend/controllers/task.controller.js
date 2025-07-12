@@ -66,7 +66,7 @@ export class TaskController {
       
       // Create shelltender session for this task
       try {
-        const { createTaskSession } = await import('../shelltender-client.js');
+        const { createTaskSession } = await import('../shared/shelltender-client.js');
         await createTaskSession(taskId, worktreePath);
       } catch (error) {
         console.warn('Failed to create shelltender session:', error.message);
