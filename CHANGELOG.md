@@ -4,6 +4,26 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Changed
+- **Docker Architecture Reorganization**
+  - Moved service-specific Dockerfiles to their respective directories:
+    - `backend/Dockerfile` (previously Dockerfile.backend-new)
+    - `frontend/Dockerfile` (new production build)
+    - `shelltender/Dockerfile` (previously Dockerfile.shelltender-new)
+  - Updated docker-compose.yml to use new Dockerfile paths
+  - Added .dockerignore files to each service directory
+  - Updated Makefile container references (pocketdev-project-manager → backend)
+  - Preserved secure Dockerfiles for future production use
+
+### Documentation
+- Updated CLAUDE.md with comprehensive development guidance:
+  - Added common development commands
+  - Documented three-service architecture
+  - Added key technical patterns (git worktrees, AI state tracking)
+  - Included database schema relationships
+  - Added WebSocket events documentation
+  - Emphasized critical frontend import rules for Vite
+
 ### Added
 - Upgraded @shelltender/client from v0.4.0 to v0.4.3 for terminal focus/fit API support
 - Implemented automatic terminal focus when:
