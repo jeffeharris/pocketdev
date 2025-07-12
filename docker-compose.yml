@@ -3,7 +3,7 @@ services:
   shelltender:
     build:
       context: .
-      dockerfile: Dockerfile.shelltender-new
+      dockerfile: shelltender/Dockerfile
     container_name: shelltender
     volumes:
       - ${POCKETDEV_HOME:-~/.pocketdev}/data:/app/data
@@ -31,7 +31,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend-new
+      dockerfile: backend/Dockerfile
     container_name: backend
     depends_on:
       - shelltender
@@ -60,7 +60,10 @@ services:
     
   # React Frontend
   frontend:
-    image: node:22-alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
     container_name: frontend
     working_dir: /app
     volumes:

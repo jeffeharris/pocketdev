@@ -66,7 +66,7 @@ logs:
 
 # Open shell in container
 shell:
-	@docker exec -it pocketdev-project-manager bash
+	@docker exec -it backend bash
 
 # Clean everything
 clean:
@@ -118,7 +118,7 @@ status:
 # Run tests
 test:
 	@echo "Running tests..."
-	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm test"
+	@docker exec backend bash -c "cd /app && npm test"
 
 # Test the new API endpoints
 test-api:
@@ -126,19 +126,19 @@ test-api:
 
 # Development shortcuts
 logs-backend:
-	@docker exec pocketdev-project-manager bash -c "cd /app/server && npm run dev"
+	@docker exec backend bash -c "cd /app && npm run dev"
 
 logs-frontend:
-	@docker exec pocketdev-project-manager bash -c "cd /app/shelltender-client && npm run dev"
+	@docker exec frontend bash -c "cd /app && npm run dev"
 
 # Database operations
 db-shell:
-	@docker exec -it pocketdev-project-manager sqlite3 /app/data/pocketdev.db
+	@docker exec -it backend sqlite3 /app/data/pocketdev.db
 
 db-backup:
 	@mkdir -p backups
-	@docker exec pocketdev-project-manager sqlite3 /app/data/pocketdev.db ".backup /tmp/backup.db"
-	@docker cp pocketdev-project-manager:/tmp/backup.db ./backups/pocketdev-$(shell date +%Y%m%d-%H%M%S).db
+	@docker exec backend sqlite3 /app/data/pocketdev.db ".backup /tmp/backup.db"
+	@docker cp backend:/tmp/backup.db ./backups/pocketdev-$(shell date +%Y%m%d-%H%M%S).db
 	@echo "✓ Database backed up to ./backups/"
 
 # Git operations (for convenience)
