@@ -21,7 +21,6 @@ function App() {
     const config = { 
       url: '/shelltender-ws'
     };
-    console.log('[App] Setting shelltender v0.6.0 config:', config);
     setShelltenderConfig(config);
     setLoading(false);
   }, []);
@@ -33,8 +32,6 @@ function App() {
   return (
     <ToastProvider>
       <ShelltenderWSProvider config={shelltenderConfig} debug={true}>
-        {/* Add debug output */}
-        {console.log('[App] ShelltenderWSProvider rendered with config:', shelltenderConfig)}
         <WebSocketProvider>
           <Router>
             <Routes>

@@ -157,19 +157,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handlePushBranch = async () => {
-    console.log('handlePushBranch called');
     setIsProcessing(true);
 
     try {
-      console.log(`Calling api.gitOperation with projectId: ${projectId}, taskId: ${currentTask.id}`);
       const result = await api.gitOperation(projectId, currentTask.id, 'push');
-      console.log('Git operation result:', result);
       
       if (!result.success) {
         alert(`Failed to push: ${result.error || 'Unknown error'}`);
       } else {
         // Show success feedback
-        console.log('Push successful:', result.output);
         if (result.error && result.error.includes('Everything up-to-date')) {
           alert('Already up to date - nothing to push');
         } else if (result.output || result.error) {
@@ -203,21 +199,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
-      console.log('Merging task:', currentTask.id, 'Current state:', currentTask.taskState);
       const result = await api.mergeToBase(projectId, currentTask.id);
-      console.log('Merge result:', result);
       
       if (result.success) {
         alert('Branch merged successfully!');
         // The task state will update via WebSocket to show it's merged
-        console.log('Waiting for WebSocket update to change task state to merged...');
         
         // Manually refresh the task status after a short delay if WebSocket doesn't update
         setTimeout(async () => {
           try {
-            console.log('Manually fetching updated task status...');
             const updatedTask = await api.getTask(currentTask.id);
-            console.log('Updated task:', updatedTask);
             if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
               onTaskUpdate(currentTask.id, updatedTask);
             }

@@ -166,7 +166,7 @@ export const ProjectDashboard: React.FC = () => {
           break;
         
         default:
-          console.log('Unhandled action:', action);
+          // Unhandled action
       }
     } catch (error: any) {
       console.error(`Failed to ${action}:`, error);

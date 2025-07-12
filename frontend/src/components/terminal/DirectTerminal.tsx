@@ -30,10 +30,8 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   // Container ref for DOM-based fallback
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Log connection state
+  // Update ready state when connected
   useEffect(() => {
-    console.log('[DirectTerminal] WebSocket connected:', isConnected);
-    console.log('[DirectTerminal] Terminal mounted for session:', terminalSessionId);
     if (isConnected) {
       setIsReady(true);
     }
@@ -93,7 +91,6 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         ref={terminalRef}
         sessionId={terminalSessionId}
         onSessionCreated={(newSessionId: string) => {
-          console.log(`[DirectTerminal] Session created: ${newSessionId}`);
           // Auto-focus new terminals after a delay
           setTimeout(() => {
             terminalRef.current?.focus();
@@ -103,7 +100,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
           console.error('[DirectTerminal] Terminal error:', error);
         }}
         onReady={() => {
-          console.log('[DirectTerminal] Terminal ready');
+          // Terminal is ready
         }}
         // Terminal customization
         fontSize={14}

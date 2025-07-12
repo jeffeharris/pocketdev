@@ -523,8 +523,6 @@ index abc123..def456 100644
     
     const url = `/projects/${projectId}/tasks/${taskId}/git`;
     const body = JSON.stringify({ operation, ...options });
-    console.log(`[gitOperation] Making request to: ${API_BASE}${url}`);
-    console.log(`[gitOperation] Request body:`, { operation, ...options });
     
     return this.fetch<{ success: boolean; output: string; error?: string }>(
       url,
