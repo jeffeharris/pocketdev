@@ -9,7 +9,6 @@ import {
   CheckCircle,
   ExternalLink,
   Archive,
-  GitPullRequest,
   GitMerge,
   RefreshCw,
   ArrowUp,
@@ -547,7 +546,7 @@ export const ProjectDashboard: React.FC = () => {
                 ...tasks.filter(t => t.taskState === 'merged').map(t => ({ ...t, activityType: 'merged' })),
                 ...tasks.filter(t => t.taskState === 'active' && t.has_uncommitted_changes).map(t => ({ ...t, activityType: 'active' }))
               ]
-                .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                 .slice(0, 5)
                 .map(task => (
                   <div key={task.id} className="p-3">

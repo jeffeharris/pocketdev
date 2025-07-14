@@ -66,7 +66,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  projectId,
+  projectId: _projectId, // Part of component API but handled by parent
   existingBranches = [],
   baseBranch = 'main',
   occupiedBranches = []

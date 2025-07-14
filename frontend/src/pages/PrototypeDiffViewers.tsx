@@ -6,7 +6,7 @@ import { parse, html } from 'diff2html';
 import 'diff2html/bundles/css/diff2html.min.css';
 
 // React Diff View imports
-import { parseDiff, Diff as DiffView, Hunk } from 'react-diff-view';
+import { parseDiff, Diff as DiffView } from 'react-diff-view';
 import 'react-diff-view/style/index.css';
 
 // Monaco Editor imports
@@ -29,7 +29,9 @@ const PrototypeDiffViewers: React.FC = () => {
 
   // Mock diff data for testing
   const createMockDiff = () => {
-    const oldCode = `import React from 'react';
+    // TODO: These variables were prefixed with _ to fix TS6133 (unused variable) errors
+    // They represent the before/after states for the diff but are embedded directly in the diff string below
+    const _oldCode = `import React from 'react';
 import { useState } from 'react';
 
 export function Component() {
@@ -51,7 +53,7 @@ export function Component() {
   );
 }`;
 
-    const newCode = `import React from 'react';
+    const _newCode = `import React from 'react';
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from './Button';
 import { logger } from '../utils/logger';
@@ -191,7 +193,7 @@ index 1234567..abcdefg 100644
           const tasks = await api.getTasks(projects[0].id);
           
           // Find a task with a feature branch
-          const taskWithBranch = tasks.find(t => t.git_branch && t.git_branch !== 'main');
+          const taskWithBranch = tasks.find(t => t.branch && t.branch !== 'main');
           
           if (taskWithBranch) {
             const diffData = await api.getTaskDiff(projects[0].id, taskWithBranch.id);
@@ -224,7 +226,9 @@ index 1234567..abcdefg 100644
       outputFormat: viewMode === 'split' ? 'side-by-side' : 'line-by-line',
       matching: 'lines',
       drawFileList: false,
-      highlight: true,
+      // TODO: 'highlight' was commented out to fix TS2353 error
+      // Check diff2html documentation for v0.6.0 supported options
+      // highlight: true,
     });
 
     return (
@@ -242,7 +246,7 @@ index 1234567..abcdefg 100644
       if (!files || files.length === 0) return <div>No diff to display</div>;
 
       const renderFile = files[0];
-      const { oldRevision, newRevision, type, hunks } = renderFile;
+      const { oldRevision: _oldRevision, newRevision: _newRevision, type, hunks } = renderFile;
 
       return (
         <div>

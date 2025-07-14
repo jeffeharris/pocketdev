@@ -1,12 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import type { WorkerStatus } from '../types/task';
 import { WorkerStatus, TaskState } from '../types/task';
-
-interface SessionState {
-  status: WorkerStatus;
-  lastStateChange: string | null;
-}
+import type { SessionState } from '../types/task';
 
 interface TaskStatusData {
   sessionState: SessionState;
@@ -97,6 +92,10 @@ export function useTaskStatus(taskId: string | undefined) {
     }
 
     const updateIdleTime = () => {
+      if (!taskStatus.sessionState.lastStateChange) {
+        setIdleTime('');
+        return;
+      }
       const lastChange = new Date(taskStatus.sessionState.lastStateChange).getTime();
       const now = Date.now();
       const diffMs = now - lastChange;

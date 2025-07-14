@@ -31,7 +31,7 @@ function App() {
 
   return (
     <ToastProvider>
-      <ShelltenderWSProvider config={shelltenderConfig} debug={true}>
+      <ShelltenderWSProvider config={shelltenderConfig}>
         <WebSocketProvider>
           <Router>
             <Routes>

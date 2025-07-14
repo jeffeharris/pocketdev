@@ -10,18 +10,22 @@
  * 
  * State flow: NotStarted -> Idle <-> Working <-> Waiting -> NotStarted
  */
-export enum WorkerStatus {
-  NotStarted = 'not-started',
-  Idle = 'idle',
-  Working = 'working',
-  Waiting = 'waiting'
-}
+export const WorkerStatus = {
+  NotStarted: 'not-started',
+  Idle: 'idle',
+  Working: 'working',
+  Waiting: 'waiting'
+} as const satisfies Record<string, string>;
 
-export enum TaskState {
-  Active = 'active',
-  Merged = 'merged',
-  Archived = 'archived'
-}
+export type WorkerStatus = typeof WorkerStatus[keyof typeof WorkerStatus];
+
+export const TaskState = {
+  Active: 'active',
+  Merged: 'merged',
+  Archived: 'archived'
+} as const satisfies Record<string, string>;
+
+export type TaskState = typeof TaskState[keyof typeof TaskState];
 
 export type TaskPhase = 'generate' | 'validate' | 'merge';
 

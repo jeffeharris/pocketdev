@@ -42,7 +42,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   const [selectedBranch, setSelectedBranch] = useState('');
   
   // Selection state
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('');
+  const [_selectedRepoId, setSelectedRepoId] = useState<string>('');
   
   // Search/filter state (needed for the UI)
   const [repoSearch, setRepoSearch] = useState('');

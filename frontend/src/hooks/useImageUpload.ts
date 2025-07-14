@@ -30,8 +30,10 @@ export function useImageUpload(projectId: string, taskId: string) {
     }
   }, [projectId, taskId]);
 
-  const uploadImage = useCallback(async (file: File) => {
-    if (!projectId || !taskId) return;
+  const uploadImage = useCallback(async (file: File): Promise<ImageData> => {
+    if (!projectId || !taskId) {
+      throw new Error('Project ID and Task ID are required');
+    }
     
     setIsUploading(true);
     setUploadProgress(0);

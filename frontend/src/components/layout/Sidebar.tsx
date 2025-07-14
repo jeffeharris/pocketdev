@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Image, Paperclip } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Paperclip } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -52,8 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     uploadProgress,
     loadImages,
     uploadImage,
-    deleteImage,
-    isLoadingImages
+    deleteImage
   } = useImageUpload(projectId, currentTask.id);
 
   // Close dropdowns when clicking outside
@@ -790,7 +789,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {commits.map((commit, index) => (
+                  {commits.map((commit) => (
                     <div key={commit.hash} className="relative">
                       <button
                         onClick={() => setSelectedCommit(commit.hash)}
@@ -859,7 +858,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     setIsProcessing(true);
                     try {
                       await api.gitOperation(projectId, currentTask.id, 'reset-to-commit', {
-                        commit: selectedCommit
+                        args: selectedCommit
                       });
                       setShowResetModal(false);
                       setSelectedCommit('');

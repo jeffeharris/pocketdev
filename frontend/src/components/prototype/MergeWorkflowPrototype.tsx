@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GitBranch, CheckCircle, AlertCircle, Clock, Activity, User, FileCheck, Loader2, ArrowRight, GitMerge, GitPullRequest, XCircle, FileText, RefreshCw, MessageSquare, FileEdit, Edit3, Sparkles, FolderSync, RotateCcw, AlertTriangle, Copy, Archive, ChevronDown } from 'lucide-react';
+import { GitBranch, CheckCircle, AlertCircle, Clock, Activity, User, FileCheck, ArrowRight, GitMerge, GitPullRequest, FileText, RefreshCw, MessageSquare, FileEdit, Edit3, Sparkles, FolderSync, RotateCcw, AlertTriangle, Copy, Archive, ChevronDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TaskStatus } from '../task/TaskStatus';
 import { WorkerStatus } from '../../types/task';
@@ -75,7 +75,10 @@ const TaskStatusPrototype: React.FC<TaskStatusProps> = ({
   const needsUserInput = workerStatus === 'waiting';
   
   // Job 2: Is my task out of sync?
-  const isOutOfSync = gitStatus && (gitStatus.behind > 0 || gitStatus.hasConflicts);
+  // TODO: isOutOfSync was commented out to fix TS6133 (unused variable) error
+  // This logic may need to be re-incorporated when implementing the full UI
+  // It checks if a task is behind the main branch or has conflicts
+  // const isOutOfSync = gitStatus && (gitStatus.behind > 0 || gitStatus.hasConflicts);
   
   // Job 3: Are there merge issues?
   const hasMergeIssues = gitStatus?.hasConflicts;
@@ -87,7 +90,7 @@ const TaskStatusPrototype: React.FC<TaskStatusProps> = ({
     'waiting': { icon: User, label: 'Needs Input', color: 'purple', animate: true },
   };
 
-  const worker = workerConfig[workerStatus] || workerConfig['not-started'];
+  const worker = workerConfig[workerStatus as keyof typeof workerConfig] || workerConfig['not-started'];
 
   // Merged status overrides everything
   if (isMerged) {
@@ -359,16 +362,17 @@ export const MergeWorkflowPrototype: React.FC = () => {
     }
   }, [selectedTask]);
 
-  // Map string status to WorkerStatus enum for current component
-  const getWorkerStatus = (status: string): WorkerStatus => {
-    const mapping: Record<string, WorkerStatus> = {
-      'not-started': WorkerStatus.NotStarted,
-      'idle': WorkerStatus.Idle,
-      'working': WorkerStatus.Working,
-      'waiting': WorkerStatus.Waiting,
-    };
-    return mapping[status] || WorkerStatus.NotStarted;
-  };
+  // TODO: getWorkerStatus was commented out to fix TS6133 (unused variable) error
+  // This mapping function may be needed if string statuses need to be converted to WorkerStatus enums
+  // const getWorkerStatus = (status: string): WorkerStatus => {
+  //   const mapping: Record<string, WorkerStatus> = {
+  //     'not-started': WorkerStatus.NotStarted,
+  //     'idle': WorkerStatus.Idle,
+  //     'working': WorkerStatus.Working,
+  //     'waiting': WorkerStatus.Waiting,
+  //   };
+  //   return mapping[status] || WorkerStatus.NotStarted;
+  // };
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -486,13 +490,12 @@ export const MergeWorkflowPrototype: React.FC = () => {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <TaskStatusPrototype
                       workerStatus={selectedTask.workerStatus}
-                      phase={selectedTask.phase}
                       gitStatus={selectedTask.gitStatus}
                       variant={statusVariant}
                     />
                   </div>
                 ) : (
-                  <TaskStatus status={getWorkerStatus(selectedTask.workerStatus)} />
+                  <TaskStatus workerStatus={selectedTask.workerStatus} />
                 )}
               </div>
             </div>
@@ -511,12 +514,11 @@ export const MergeWorkflowPrototype: React.FC = () => {
                 {useEnhancedStatus ? (
                   <TaskStatusPrototype
                     workerStatus="working"
-                    phase="validate"
                     gitStatus={{ ahead: 2, behind: 0, hasConflicts: false }}
                     variant="inline"
                   />
                 ) : (
-                  <TaskStatus status={WorkerStatus.Working} />
+                  <TaskStatus workerStatus={WorkerStatus.Working} />
                 )}
               </div>
             </div>
@@ -530,15 +532,13 @@ export const MergeWorkflowPrototype: React.FC = () => {
               {useEnhancedStatus ? (
                 <TaskStatusPrototype
                   workerStatus={selectedTask.workerStatus}
-                  phase={selectedTask.phase}
                   gitStatus={selectedTask.gitStatus}
-                  validationStatus={selectedTask.validationStatus}
                   variant="detailed"
                 />
               ) : (
                 <div>
                   <span className="text-sm text-gray-600">Status: </span>
-                  <TaskStatus status={getWorkerStatus(selectedTask.workerStatus)} />
+                  <TaskStatus workerStatus={selectedTask.workerStatus} />
                 </div>
               )}
             </div>
@@ -634,7 +634,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
                 {mockTasks.map(task => (
                   <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                     <span className="text-sm text-gray-700">{task.name}</span>
-                    <TaskStatus status={getWorkerStatus(task.workerStatus)} />
+                    <TaskStatus workerStatus={task.workerStatus} />
                   </div>
                 ))}
               </div>
@@ -647,9 +647,7 @@ export const MergeWorkflowPrototype: React.FC = () => {
                     <span className="text-sm text-gray-700">{task.name}</span>
                     <TaskStatusPrototype
                       workerStatus={task.workerStatus}
-                      phase={task.phase}
                       gitStatus={task.gitStatus}
-                      validationStatus={task.validationStatus}
                       variant={statusVariant}
                     />
                   </div>
@@ -671,15 +669,13 @@ export const MergeWorkflowPrototype: React.FC = () => {
             {useEnhancedStatus ? (
               <TaskStatusPrototype
                 workerStatus={selectedTask.workerStatus}
-                phase={selectedTask.phase}
                 gitStatus={selectedTask.gitStatus}
-                validationStatus={selectedTask.validationStatus}
                 variant="detailed"
               />
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Worker Status:</span>
-                <TaskStatus status={getWorkerStatus(selectedTask.workerStatus)} />
+                <TaskStatus workerStatus={selectedTask.workerStatus} />
               </div>
             )}
 
@@ -828,12 +824,11 @@ export const MergeWorkflowPrototype: React.FC = () => {
                       {useEnhancedStatus ? (
                         <TaskStatusPrototype
                           workerStatus={selectedTask.workerStatus}
-                          phase={selectedTask.phase}
-                          gitStatus={selectedTask.gitStatus}
+                              gitStatus={selectedTask.gitStatus}
                           variant={statusVariant}
                         />
                       ) : (
-                        <TaskStatus status={getWorkerStatus(selectedTask.workerStatus)} />
+                        <TaskStatus workerStatus={selectedTask.workerStatus} />
                       )}
                     </div>
                   </div>
@@ -1117,12 +1112,11 @@ export const MergeWorkflowPrototype: React.FC = () => {
                           {useEnhancedStatus ? (
                             <TaskStatusPrototype
                               workerStatus={task.workerStatus}
-                              phase={task.phase}
-                              gitStatus={task.gitStatus}
+                                      gitStatus={task.gitStatus}
                               variant="inline"
                             />
                           ) : (
-                            <TaskStatus status={getWorkerStatus(task.workerStatus)} />
+                            <TaskStatus workerStatus={task.workerStatus} />
                           )}
                         </div>
                       </div>
