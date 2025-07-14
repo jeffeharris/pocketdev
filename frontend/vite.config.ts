@@ -26,7 +26,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/shelltender-ws': {
-        target: 'ws://shelltender:8080',
+        target: 'http://shelltender:8080',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/shelltender-ws/, '/ws'),
