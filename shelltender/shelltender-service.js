@@ -2,7 +2,7 @@
 
 /**
  * Shelltender v0.6.0 Implementation
- * Uses the new simplified APIs with automatic pipeline setup
+ * Uses the new simplified createShelltender API with automatic pipeline setup
  * Includes HTTP endpoints for backend service integration
  */
 
@@ -35,8 +35,11 @@ async function start() {
     console.log('Initializing Shelltender v0.6.0 with automatic pipeline setup...');
     console.log(`Port: ${PORT}`);
     console.log(`Data directory: ${DATA_DIR}`);
+    console.log(`Current working directory: ${process.cwd()}`);
+    console.log(`User: ${process.getuid ? process.getuid() : 'N/A'}`);
+    console.log(`Group: ${process.getgid ? process.getgid() : 'N/A'}`);
     
-    // Create Shelltender with v0.6.0 benefits
+    // Create Shelltender with v0.6.0 benefits - follow the team's exact pattern
     const shelltender = await createShelltender(app, {
       port: PORT,
       wsPath: '/ws',
@@ -50,8 +53,19 @@ async function start() {
       dataDir: DATA_DIR,
       enableSecurity: true
     });
+    
+    // Debug: Check what methods are available
+    console.log('Shelltender instance:', {
+      hasSessionManager: !!shelltender.sessionManager,
+      hasCreateSession: typeof shelltender.createSession === 'function',
+      hasKillSession: typeof shelltender.killSession === 'function',
+      // Note: These methods are on sessionManager, not the main instance
+      hasGetSession: typeof shelltender.sessionManager?.getSession === 'function',
+      hasGetAllSessions: typeof shelltender.sessionManager?.getAllSessions === 'function',
+      hasResizeSession: typeof shelltender.sessionManager?.resizeSession === 'function'
+    });
 
-    // Add backend's required endpoints
+    // Add backend's required endpoints using the shelltender object
     app.post('/api/sessions', async (req, res) => {
       console.log('[API] Create session request:', req.body);
       try {
@@ -61,22 +75,52 @@ async function start() {
           return res.status(400).json({ error: 'sessionId required' });
         }
         
-        // In v0.6.0 with dataDir configured:
-        // - Sessions are automatically created when WebSocket connects
-        // - Sessions persist to disk and survive disconnects
-        // - Reconnecting with same sessionId resumes the session
-        console.log(`[API] Session ${sessionId} registered for connection`);
+        // Add this check
+        if (!shelltender || !shelltender.sessionManager) {
+          console.error('[API] Shelltender not initialized');
+          return res.status(503).json({ error: 'Service not ready' });
+        }
         
-        res.json({
-          sessionId: sessionId,
-          status: 'ready',
-          wsUrl: `ws://localhost:${PORT}/ws`,
-          note: 'Session will be created/resumed on WebSocket connection'
-        });
+        // Create session with error handling
+        try {
+          const session = shelltender.createSession({
+            id: sessionId,
+            cols: req.body.cols || 80,
+            rows: req.body.rows || 24,
+            command: req.body.command,
+            args: req.body.args,
+            cwd: req.body.cwd || req.body.workdir,
+            env: req.body.env
+          });
+          
+          console.log(`[API] Session created:`, session);
+          console.log(`[API] Session ${session.id} created successfully`);
+          
+          res.json({
+            id: session.id,
+            sessionId: session.id,
+            status: 'active',
+            createdAt: session.createdAt,
+            cols: session.cols,
+            rows: session.rows,
+            wsUrl: `ws://localhost:${PORT}/ws`
+          });
+          
+        } catch (sessionError) {
+          console.error('[API] Session creation failed:', sessionError);
+          return res.status(500).json({ 
+            error: 'Session creation failed',
+            details: sessionError.message,
+            stack: process.env.NODE_ENV === 'development' ? sessionError.stack : undefined
+          });
+        }
         
       } catch (error) {
-        console.error('[API] Error creating session:', error);
-        res.status(500).json({ error: error.message });
+        console.error('[API] Unexpected error:', error);
+        res.status(500).json({ 
+          error: 'Internal server error',
+          details: error.message 
+        });
       }
     });
 
@@ -84,32 +128,49 @@ async function start() {
     app.get('/api/sessions/:sessionId', (req, res) => {
       const { sessionId } = req.params;
       
-      // In v0.6.0, we assume session exists if requested
-      res.json({
-        id: sessionId,
-        status: 'active',
-        cols: 80,
-        rows: 24,
-        clients: 0
-      });
+      // Use sessionManager directly since getSession isn't exposed
+      const session = shelltender.sessionManager.getSession(sessionId);
+      if (session) {
+        res.json({
+          id: sessionId,
+          status: 'active',
+          cols: session.cols,
+          rows: session.rows,
+          createdAt: session.createdAt,
+          lastAccessedAt: session.lastAccessedAt
+        });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
     });
 
     // List all sessions
     app.get('/api/sessions', (req, res) => {
-      // In v0.6.0, sessions are managed automatically
-      res.json([]);
+      // Use sessionManager directly since getAllSessions isn't exposed
+      const sessions = shelltender.sessionManager.getAllSessions();
+      res.json(sessions.map(s => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        lastAccessedAt: s.lastAccessedAt,
+        cols: s.cols,
+        rows: s.rows
+      })));
     });
 
     // Delete session
     app.delete('/api/sessions/:sessionId', (req, res) => {
       const { sessionId } = req.params;
       
-      // In v0.6.0, sessions are cleaned up automatically when WebSocket disconnects
-      console.log(`[API] Session ${sessionId} marked for cleanup`);
-      res.json({ success: true });
+      const killed = shelltender.killSession(sessionId);
+      if (killed) {
+        console.log(`[API] Session ${sessionId} terminated`);
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
     });
 
-    // Resize session (optional endpoint for explicit resize)
+    // Resize session
     app.post('/api/sessions/:sessionId/resize', (req, res) => {
       const { sessionId } = req.params;
       const { cols, rows } = req.body;
@@ -118,20 +179,26 @@ async function start() {
         return res.status(400).json({ error: 'cols and rows required' });
       }
       
-      // In v0.6.0, resize is handled via WebSocket
-      console.log(`[API] Resize request for session ${sessionId} to ${cols}x${rows}`);
-      res.json({ success: true });
+      // Use sessionManager directly since resizeSession isn't exposed
+      const resized = shelltender.sessionManager.resizeSession(sessionId, cols, rows);
+      if (resized) {
+        console.log(`[API] Resized session ${sessionId} to ${cols}x${rows}`);
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
     });
 
     // Start the server
     app.listen(PORT, '0.0.0.0', () => {
       console.log('\n' + '='.repeat(50));
-      console.log('Shelltender v0.6.0 Service Started');
+      console.log('Shelltender v0.6.1 Service Started');
       console.log('='.repeat(50));
       console.log(`Mode:      Single-port`);
       console.log(`Port:      ${PORT}`);
       console.log(`HTTP API:  http://localhost:${PORT}`);
       console.log(`WebSocket: ws://localhost:${PORT}/ws`);
+      console.log(`Health:    http://localhost:${PORT}/api/health`);
       console.log(`Doctor:    http://localhost:${PORT}/api/shelltender/doctor`);
       console.log('='.repeat(50) + '\n');
       console.log('✨ Automatic pipeline setup enabled - no more black screens!');
@@ -160,6 +227,18 @@ async function start() {
     process.exit(1);
   }
 }
+
+// Add global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
 
 // Start the service
 start().catch(error => {

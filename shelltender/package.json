@@ -9,7 +9,7 @@
     "dev": "nodemon shelltender-service.js"
   },
   "dependencies": {
-    "@shelltender/server": "^0.6.0",
+    "@shelltender/server": "^0.6.1",
     "cors": "^2.8.5",
     "express": "^4.21.2"
   },
