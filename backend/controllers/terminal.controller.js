@@ -1,4 +1,4 @@
-import { createTaskSession, executeCommand, getSessionInfo, listSessions } from '../shared/shelltender-client.js';
+import { createTaskSession, executeCommand, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
 
 /**
  * Get all terminal sessions

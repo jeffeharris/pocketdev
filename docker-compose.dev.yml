@@ -21,7 +21,7 @@ services:
     environment:
       - NODE_ENV=development
     user: root
-    command: sh -c "cd /app/server && npm install && node shelltender-service.js"
+    command: sh -c "cd /app/shelltender && npm install && node shelltender-service.js"
     volumes:
       - ./:/app
   
@@ -29,7 +29,7 @@ services:
     environment:
       - NODE_ENV=development
     user: root
-    command: sh -c "cd /app/server && npm install && npm run dev"
+    command: sh -c "cd /app/backend && npm install && npm run dev"
     volumes:
       - ./:/app
   
