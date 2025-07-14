@@ -11,6 +11,8 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Added support for all convenience API methods (createSession, getSession, etc.)
   - Improved session environment handling to include AI tools
   - Sessions now use login shell to properly load PATH
+  - Implemented workaround for admin UI - downloads from GitHub on first access
+  - Admin UI now available at http://localhost:8080/admin with bulk session management
 
 ### Fixed
 - **Container Segmentation Fault**
