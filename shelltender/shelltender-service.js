@@ -11,6 +11,7 @@ import { createShelltender } from '@shelltender/server';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import fs from 'fs/promises';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +30,38 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve admin UI (workaround for v0.6.1 missing HTML file)
+// Note: In v0.6.1, the admin UI HTML file exists in the source but isn't included 
+// in the npm package due to a build configuration issue. The Shelltender team is
+// aware and will fix in a future release. This downloads the actual admin UI from GitHub.
+app.get('/admin', async (req, res) => {
+  const adminHtmlPath = path.join(__dirname, 'admin.html');
+  
+  try {
+    // Check if we already have the admin HTML cached
+    await fs.access(adminHtmlPath);
+  } catch {
+    // Download the admin UI from GitHub if we don't have it
+    console.log('Downloading Shelltender admin UI from GitHub...');
+    try {
+      const response = await fetch('https://raw.githubusercontent.com/jeffeharris/shelltender/v0.6.1/packages/server/src/admin/index.html');
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.statusText}`);
+      }
+      const html = await response.text();
+      await fs.writeFile(adminHtmlPath, html);
+      console.log('Admin UI downloaded successfully');
+    } catch (error) {
+      console.error('Failed to download admin UI:', error);
+      // Fallback to simple error message
+      return res.status(500).send('Failed to load admin UI. The file will be included in Shelltender v0.6.2.');
+    }
+  }
+  
+  // Serve the admin HTML file
+  res.sendFile(adminHtmlPath);
+});
+
 // Start the server
 async function start() {
   try {
@@ -40,6 +73,7 @@ async function start() {
     const shelltender = await createShelltender(app, {
       port: PORT,
       wsPath: '/ws',
+      apiRoutes: true,  // Enable admin UI routes (default is true)
       sessionOptions: {
         defaultCwd: process.cwd(),
         defaultEnv: {
@@ -51,7 +85,6 @@ async function start() {
       enableSecurity: true
     });
     
-
     // Add backend's required endpoints using the shelltender object
     app.post('/api/sessions', async (req, res) => {
       console.log('[API] Create session request:', req.body);
@@ -186,9 +219,11 @@ async function start() {
       console.log(`WebSocket: ws://localhost:${PORT}/ws`);
       console.log(`Health:    http://localhost:${PORT}/api/health`);
       console.log(`Doctor:    http://localhost:${PORT}/api/shelltender/doctor`);
+      console.log(`Admin UI:  http://localhost:${PORT}/admin`);
       console.log('='.repeat(50) + '\n');
       console.log('✨ Automatic pipeline setup enabled - no more black screens!');
       console.log('✅ HTTP session management endpoints added for backend integration');
+      console.log('🎛️  Admin dashboard available for session monitoring');
     });
     
     // Handle graceful shutdown
