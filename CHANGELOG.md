@@ -4,6 +4,20 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Added
+- **Shelltender v0.6.1 Upgrade**
+  - Upgraded @shelltender/server from v0.5.0 to v0.6.1
+  - Fixed WebSocket 404 issues with deferred setup
+  - Added support for all convenience API methods (createSession, getSession, etc.)
+  - Improved session environment handling to include AI tools
+  - Sessions now use login shell to properly load PATH
+
+### Fixed
+- **Container Segmentation Fault**
+  - Switched Shelltender from Alpine to Ubuntu-based image (pocketdev/ai-base)
+  - Fixed node-pty compatibility issues causing exit code 139
+  - Removed node-fetch import (using built-in fetch in Node.js 22)
+  
 ### Changed
 - **Docker Architecture Reorganization**
   - Moved service-specific Dockerfiles to their respective directories:
