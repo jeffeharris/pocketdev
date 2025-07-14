@@ -35,9 +35,6 @@ async function start() {
     console.log('Initializing Shelltender v0.6.0 with automatic pipeline setup...');
     console.log(`Port: ${PORT}`);
     console.log(`Data directory: ${DATA_DIR}`);
-    console.log(`Current working directory: ${process.cwd()}`);
-    console.log(`User: ${process.getuid ? process.getuid() : 'N/A'}`);
-    console.log(`Group: ${process.getgid ? process.getgid() : 'N/A'}`);
     
     // Create Shelltender with v0.6.0 benefits - follow the team's exact pattern
     const shelltender = await createShelltender(app, {
@@ -54,16 +51,6 @@ async function start() {
       enableSecurity: true
     });
     
-    // Debug: Check what methods are available
-    console.log('Shelltender instance:', {
-      hasSessionManager: !!shelltender.sessionManager,
-      hasCreateSession: typeof shelltender.createSession === 'function',
-      hasKillSession: typeof shelltender.killSession === 'function',
-      // Note: These methods are on sessionManager, not the main instance
-      hasGetSession: typeof shelltender.sessionManager?.getSession === 'function',
-      hasGetAllSessions: typeof shelltender.sessionManager?.getAllSessions === 'function',
-      hasResizeSession: typeof shelltender.sessionManager?.resizeSession === 'function'
-    });
 
     // Add backend's required endpoints using the shelltender object
     app.post('/api/sessions', async (req, res) => {
@@ -87,13 +74,12 @@ async function start() {
             id: sessionId,
             cols: req.body.cols || 80,
             rows: req.body.rows || 24,
-            command: req.body.command,
-            args: req.body.args,
+            command: req.body.command || '/bin/bash',
+            args: req.body.args || ['--login'],  // Use login shell to load profile
             cwd: req.body.cwd || req.body.workdir,
-            env: req.body.env
+            env: req.body.env ? { ...process.env, ...req.body.env } : undefined
           });
           
-          console.log(`[API] Session created:`, session);
           console.log(`[API] Session ${session.id} created successfully`);
           
           res.json({
@@ -231,7 +217,6 @@ async function start() {
 // Add global error handlers
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  console.error('Stack:', error.stack);
   process.exit(1);
 });
 
