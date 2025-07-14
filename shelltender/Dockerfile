@@ -1,12 +1,13 @@
-FROM node:22
+FROM pocketdev/ai-base:latest
 
-# Install build dependencies for node-pty
+# Switch to root for package installation
+USER root
+
+# Only need to ensure build tools for node-pty
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    git \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,14 +31,14 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 
 EXPOSE 8080
 
-# Ensure proper ownership for the existing node user
-RUN chown -R node:node /app
+# Ensure proper ownership for the pocketdev user
+RUN chown -R pocketdev:pocketdev /app
 
 # Create sessions directory and data directory
 RUN mkdir -p /app/.sessions && chmod 777 /app/.sessions && \
     mkdir -p /app/data/shelltender-sessions && chmod 777 /app/data/shelltender-sessions
 
-# Run as non-root user
-# USER node  # Temporarily disabled to debug segfault
+# Run as pocketdev user
+USER pocketdev
 
 CMD ["node", "shelltender-service.js"]
