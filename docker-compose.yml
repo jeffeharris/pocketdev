@@ -43,6 +43,7 @@ services:
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev
       - ${POCKETDEV_HOME:-~/.pocketdev}/data:/app/data
+      - ./shared:/shared:ro
     ports:
       - "3005:3005"
     environment:
