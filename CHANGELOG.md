@@ -19,6 +19,15 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Switched Shelltender from Alpine to Ubuntu-based image (pocketdev/ai-base)
   - Fixed node-pty compatibility issues causing exit code 139
   - Removed node-fetch import (using built-in fetch in Node.js 22)
+- **GitHub API Key Saving Error**
+  - Fixed encryption key validation causing 500 errors when saving settings
+  - Added proper hex string to buffer conversion for encryption keys
+  - Improved error messages with clear instructions for key generation
+  - Backend now properly validates 32-byte encryption key requirement
+- **Terminal Cursor Display Issues**
+  - Fixed duplicate cursor display in terminal
+  - Set cursor to non-blinking block style for better visibility
+  - Added CSS rules to hide xterm's native cursor element
   
 ### Changed
 - **Docker Architecture Reorganization**
