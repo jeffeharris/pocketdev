@@ -15,16 +15,13 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
   try {
     const env = { ...process.env };
     
+    
     // Handle git clone commands with authentication
     if (githubToken && command.includes('git clone') && command.includes('github.com')) {
-      console.log('[Git Service] Attempting authenticated clone');
-      console.log(`[Git Service] GitHub token present: ${!!githubToken} (length: ${githubToken ? githubToken.length : 0})`);
-      
       // Extract the URL from the clone command
       const urlMatch = command.match(/git clone\s+(https?:\/\/[^\s]+)/);
       if (urlMatch) {
         const originalUrl = urlMatch[1];
-        console.log(`[Git Service] Original URL: ${originalUrl}`);
         
         // Replace the URL with authenticated version
         const authUrl = originalUrl.replace(
@@ -33,52 +30,27 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
         );
         // Replace the URL in the command
         command = command.replace(originalUrl, authUrl);
-        console.log(`[Git Service] Clone command updated with authentication`);
-      } else {
-        console.log('[Git Service] Failed to extract URL from clone command');
       }
     }
     // Separate check for push/pull/fetch commands that need auth
     if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
-      // Get the current remote URL
-      const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
+      // Set GitHub token in environment for gh CLI
+      env.GH_TOKEN = githubToken;
+      env.GITHUB_TOKEN = githubToken;
       
-      if (remoteUrl && remoteUrl.includes('github.com')) {
-        // Extract username from URL
-        const urlMatch = remoteUrl.trim().match(/github\.com[/:]([\w-]+)\//);
-        const username = urlMatch ? urlMatch[1] : 'git';
-        
-        // Create a temporary remote with embedded credentials
-        const authUrl = remoteUrl.trim().replace(
-          'https://github.com',
-          `https://${username}:${githubToken}@github.com`
-        );
-        
-        // Use the authenticated URL for this command
-        const tempRemote = `temp-auth-${Date.now()}`;
-        await execAsync(`git remote add ${tempRemote} "${authUrl}"`, { cwd: projectPath });
-        
-        // Replace origin with temp remote in the command
-        command = command.replace(' origin ', ` ${tempRemote} `);
-        
-        // Execute the command
-        const { stdout, stderr } = await execAsync(command, { 
-          cwd: projectPath,
-          env,
-          shell: '/bin/sh'
-        });
-        
-        // Clean up temp remote
-        await execAsync(`git remote remove ${tempRemote}`, { cwd: projectPath });
-        
-        return { success: true, output: stdout, error: stderr };
+      // Check if credential helper is configured
+      try {
+        const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
+        if (!credHelper || !credHelper.includes('gh auth')) {
+          await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+        }
+      } catch (e) {
+        // No credential helper set, configure it
+        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
       }
     }
     
     // For non-auth commands or non-GitHub repos, just run normally
-    if (command.includes('git clone')) {
-      console.log(`[Git Service] Clone without auth - Token: ${!!githubToken}, GitHub: ${command.includes('github.com')}`);
-    }
     
     const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
