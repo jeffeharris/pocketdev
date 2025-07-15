@@ -22,6 +22,13 @@ export const PlanningEditor: React.FC<PlanningEditorProps> = ({
   const [isPreview, setIsPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Update editContent when content prop changes or modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setEditContent(content);
+    }
+  }, [isOpen, content]);
+
   if (!isOpen) return null;
 
   const handleSave = async () => {
@@ -41,7 +48,7 @@ export const PlanningEditor: React.FC<PlanningEditorProps> = ({
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
       
-      <div className="absolute inset-4 sm:inset-8 lg:inset-12 bg-white rounded-lg shadow-xl flex flex-col">
+      <div className="absolute inset-4 sm:inset-6 lg:inset-8 bg-white rounded-lg shadow-xl flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-4rem)]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-xl font-semibold text-gray-900">
@@ -76,7 +83,7 @@ export const PlanningEditor: React.FC<PlanningEditorProps> = ({
         {/* Content */}
         <div className="flex-1 overflow-hidden">
           {isPreview ? (
-            <div className="h-full overflow-y-auto p-6">
+            <div className="h-full overflow-y-auto p-6 planning-scrollbar">
               <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-ul:list-disc prose-li:marker:text-gray-600 prose-strong:text-gray-900">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{editContent}</ReactMarkdown>
               </div>
@@ -85,7 +92,7 @@ export const PlanningEditor: React.FC<PlanningEditorProps> = ({
             <textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full h-full p-6 font-mono text-sm text-gray-900 bg-gray-50 border-0 resize-none focus:outline-none focus:ring-0"
+              className="w-full h-full p-6 font-mono text-sm text-gray-900 bg-gray-50 border-0 resize-none focus:outline-none focus:ring-0 planning-scrollbar"
               placeholder="# Project Planning"
               spellCheck={false}
             />
