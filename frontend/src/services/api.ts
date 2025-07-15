@@ -122,8 +122,28 @@ class ApiService {
     if (USE_MOCKS) {
       return ['main', 'develop', 'feature/user-auth', 'feature/api-refactor', 'fix/memory-leak'];
     }
-    const response = await this.fetch<string[]>(`/projects/${projectId}/branches`);
-    return response;
+    const response = await this.fetch<Array<{ name: string; isRemote: boolean; fullName: string }>>(`/projects/${projectId}/branches`);
+    
+    // Get unique branch names, preferring local over remote
+    const branchMap = new Map<string, boolean>();
+    
+    // First add local branches
+    response
+      .filter(branch => !branch.isRemote)
+      .forEach(branch => branchMap.set(branch.name, true));
+    
+    // Then add remote branches (cleaning up the name)
+    response
+      .filter(branch => branch.isRemote && !branch.name.includes('HEAD'))
+      .forEach(branch => {
+        // Extract clean branch name from remote (e.g., "main" from "remotes/origin/main")
+        const cleanName = branch.fullName.replace(/^remotes\/origin\//, '');
+        if (!branchMap.has(cleanName)) {
+          branchMap.set(cleanName, false);
+        }
+      });
+    
+    return Array.from(branchMap.keys());
   }
 
   async getProjectPlanning(projectId: string): Promise<{ exists: boolean; content: string | null }> {

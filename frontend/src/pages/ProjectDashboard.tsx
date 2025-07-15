@@ -77,17 +77,35 @@ export const ProjectDashboard: React.FC = () => {
       setNeedsAttention(cachedDashboard.needsAttention);
       setLastUpdated(cachedDashboard.lastUpdated);
       
-      // Load other data in parallel
-      const [branchesData, planningData, fullTasksData] = await Promise.all([
+      // Load other data in parallel, but handle failures individually
+      const results = await Promise.allSettled([
         api.getProjectBranches(projectId!),
         api.getProjectPlanning(projectId!),
         api.getTasks(projectId!) // Full task data with git status
       ]);
       
-      setBranches(branchesData);
-      setPlanning(planningData);
-      // Update tasks with full git status
-      setTasks(fullTasksData);
+      // Handle branches
+      if (results[0].status === 'fulfilled') {
+        setBranches(results[0].value);
+      } else {
+        console.error('Failed to load branches:', results[0].reason);
+      }
+      
+      // Handle planning
+      if (results[1].status === 'fulfilled') {
+        setPlanning(results[1].value);
+      } else {
+        console.error('Failed to load planning:', results[1].reason);
+        // Set default planning state
+        setPlanning({ exists: false, content: null });
+      }
+      
+      // Handle tasks
+      if (results[2].status === 'fulfilled') {
+        setTasks(results[2].value);
+      } else {
+        console.error('Failed to load tasks:', results[2].reason);
+      }
       
       // Trigger background refresh for next time
       api.refreshProjectStatus(projectId!).catch(console.error);
