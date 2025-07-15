@@ -207,7 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // Manually refresh the task status after a short delay if WebSocket doesn't update
         setTimeout(async () => {
           try {
-            const updatedTask = await api.getTask(currentTask.id);
+            const updatedTask = await api.getTask(projectId, currentTask.id);
             if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
               onTaskUpdate(currentTask.id, updatedTask);
             }

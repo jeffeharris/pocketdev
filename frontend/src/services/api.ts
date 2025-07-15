@@ -300,13 +300,13 @@ class ApiService {
     }));
   }
 
-  async getTask(taskId: string): Promise<Task> {
+  async getTask(projectId: string, taskId: string): Promise<Task> {
     if (USE_MOCKS) {
       const task = mockTasks.find(t => t.id === taskId);
       if (!task) throw new Error('Task not found');
       return task;
     }
-    return this.fetch<Task>(`/tasks/${taskId}`);
+    return this.fetch<Task>(`/projects/${projectId}/tasks/${taskId}`);
   }
 
   async createTask(projectId: string, task: CreateTaskDTO): Promise<Task> {
@@ -402,14 +402,54 @@ class ApiService {
   }
 
   // Git endpoints
-  async getGitStatus(taskId: string): Promise<GitStatus> {
+  async getGitStatus(projectId: string, taskId: string): Promise<GitStatus> {
     if (USE_MOCKS) return mockGitStatus;
-    return this.fetch<GitStatus>(`/tasks/${taskId}/git/status`);
+    return this.fetch<GitStatus>(`/projects/${projectId}/tasks/${taskId}/git/status`);
   }
 
-  async getChangedFiles(taskId: string): Promise<ChangedFile[]> {
+  async getChangedFiles(projectId: string, taskId: string): Promise<ChangedFile[]> {
     if (USE_MOCKS) return mockChangedFiles;
-    return this.fetch<ChangedFile[]>(`/tasks/${taskId}/files/changed`);
+    return this.fetch<ChangedFile[]>(`/projects/${projectId}/tasks/${taskId}/files/changed`);
+  }
+
+  async getAllChanges(projectId: string, taskId: string): Promise<{
+    files: Array<{
+      path: string;
+      type: 'added' | 'modified' | 'deleted' | 'renamed';
+      additions: number;
+      deletions: number;
+      category: 'staged' | 'unstaged' | 'untracked' | 'committed';
+      status?: string;
+      staged?: boolean;
+      unstaged?: boolean;
+      untracked?: boolean;
+      committed?: boolean;
+    }>;
+    summary: {
+      staged: number;
+      unstaged: number;
+      untracked: number;
+      committed: number;
+      total: number;
+      unpushedCommits: number;
+    };
+    unpushedCommits: Array<{ hash: string; message: string }>;
+  }> {
+    if (USE_MOCKS) {
+      return {
+        files: [],
+        summary: {
+          staged: 0,
+          unstaged: 0,
+          untracked: 0,
+          committed: 0,
+          total: 0,
+          unpushedCommits: 0
+        },
+        unpushedCommits: []
+      };
+    }
+    return this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/git/all-changes`);
   }
 
   async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<{ 

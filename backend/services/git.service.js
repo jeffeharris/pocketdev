@@ -292,7 +292,8 @@ export class GitService {
    * @returns {Promise<{staged: number, unstaged: number, untracked: number, files: Array, raw: string}>}
    */
   async getDetailedStatus(projectPath) {
-    const result = await this.command(projectPath, 'git status --porcelain');
+    // Use --untracked-files=all to get individual files instead of directory summaries
+    const result = await this.command(projectPath, 'git status --porcelain --untracked-files=all');
     
     let staged = 0;
     let unstaged = 0;
@@ -419,7 +420,16 @@ export class GitService {
         } else if (file.untracked) {
           // Untracked file - count lines
           fileInfo.diffType = 'untracked';
-          // Will be calculated when getting diff
+          // Count all lines as additions for untracked files
+          try {
+            const content = await this.command(projectPath, `wc -l "${file.path}"`);
+            const lineCount = parseInt(content.output.trim().split(' ')[0]) || 0;
+            fileInfo.additions = lineCount;
+            fileInfo.deletions = 0;
+          } catch (error) {
+            // If we can't count lines, leave as 0
+            console.warn(`Could not count lines for untracked file ${file.path}:`, error);
+          }
         }
         
         files.set(file.path, fileInfo);
@@ -839,6 +849,127 @@ export class GitService {
         unpushed: 0,
         hasRemoteTracking: false
       };
+    }
+  }
+
+  /**
+   * Get all changes including working tree and committed changes not in base branch
+   * @param {string} projectPath - Path to the project
+   * @param {string} baseBranch - Base branch to compare against (default: origin/main)
+   * @returns {Promise<{files: Array, summary: Object}>}
+   */
+  async getAllChanges(projectPath, baseBranch = 'origin/main') {
+    const allFiles = new Map(); // path -> file info
+    
+    // Get working tree changes (staged, unstaged, untracked)
+    const workingTreeDiff = await this.getComprehensiveDiff(projectPath, 'working');
+    
+    // Add all working tree files
+    for (const [path, fileInfo] of workingTreeDiff.files) {
+      allFiles.set(path, {
+        ...fileInfo,
+        category: fileInfo.untracked ? 'untracked' : 
+                 fileInfo.staged && !fileInfo.unstaged ? 'staged' :
+                 'unstaged'
+      });
+    }
+    
+    // Get committed changes not in base branch
+    const committedDiff = await this.getComprehensiveDiff(projectPath, baseBranch);
+    
+    // Add committed files that aren't already in working tree
+    for (const [path, fileInfo] of committedDiff.files) {
+      if (!allFiles.has(path)) {
+        allFiles.set(path, {
+          ...fileInfo,
+          category: 'committed'
+        });
+      }
+    }
+    
+    // Convert to array and categorize
+    const fileArray = Array.from(allFiles.values());
+    const summary = {
+      staged: fileArray.filter(f => f.category === 'staged').length,
+      unstaged: fileArray.filter(f => f.category === 'unstaged').length,
+      untracked: fileArray.filter(f => f.category === 'untracked').length,
+      committed: fileArray.filter(f => f.category === 'committed').length,
+      total: fileArray.length
+    };
+    
+    return {
+      files: fileArray,
+      summary
+    };
+  }
+
+  /**
+   * Stage a specific file
+   * @param {string} projectPath - Path to the project
+   * @param {string} filePath - Path to the file to stage
+   * @returns {Promise<{success: boolean, output: string, error: string}>}
+   */
+  async stageFile(projectPath, filePath) {
+    return this.command(projectPath, `git add "${filePath}"`);
+  }
+
+  /**
+   * Unstage a specific file
+   * @param {string} projectPath - Path to the project
+   * @param {string} filePath - Path to the file to unstage
+   * @returns {Promise<{success: boolean, output: string, error: string}>}
+   */
+  async unstageFile(projectPath, filePath) {
+    return this.command(projectPath, `git reset HEAD "${filePath}"`);
+  }
+
+  /**
+   * Check if there are unpushed commits
+   * @param {string} projectPath - Path to the project
+   * @param {string} currentBranch - Current branch name
+   * @returns {Promise<{count: number, commits: Array}>}
+   */
+  async getUnpushedCommitsInfo(projectPath, currentBranch) {
+    try {
+      // Check if remote tracking branch exists
+      const remoteCheck = await this.command(projectPath, 
+        `git rev-parse --verify origin/${currentBranch} 2>/dev/null`);
+      
+      if (!remoteCheck.success) {
+        // No remote tracking branch, all commits are unpushed
+        const allCommits = await this.command(projectPath, 
+          'git log --oneline --pretty=format:"%h %s"');
+        const commits = allCommits.output.trim().split('\n').filter(line => line);
+        return {
+          count: commits.length,
+          commits: commits.map(line => {
+            const [hash, ...messageParts] = line.split(' ');
+            return { hash, message: messageParts.join(' ') };
+          })
+        };
+      }
+      
+      // Count unpushed commits
+      const countResult = await this.command(projectPath, 
+        `git rev-list --count origin/${currentBranch}..HEAD`);
+      const count = parseInt(countResult.output.trim(), 10) || 0;
+      
+      if (count === 0) {
+        return { count: 0, commits: [] };
+      }
+      
+      // Get unpushed commit details
+      const logResult = await this.command(projectPath, 
+        `git log origin/${currentBranch}..HEAD --oneline --pretty=format:"%h %s"`);
+      const commits = logResult.output.trim().split('\n').filter(line => line).map(line => {
+        const [hash, ...messageParts] = line.split(' ');
+        return { hash, message: messageParts.join(' ') };
+      });
+      
+      return { count, commits };
+    } catch (error) {
+      console.error('Error getting unpushed commits:', error);
+      return { count: 0, commits: [] };
     }
   }
 }

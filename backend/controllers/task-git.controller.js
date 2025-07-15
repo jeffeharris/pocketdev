@@ -113,6 +113,7 @@ export class TaskGitController {
    */
   async getChangedFiles(req, res) {
     const { projectId, taskId } = req.params;
+    const { compareWith = 'working' } = req.query;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -120,82 +121,81 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Get list of changed files
-      const statusResult = await this.gitService.getStatus(task.worktree_path);
-      const changedFiles = [];
+      const project = await this.models.projects.findById(projectId);
       
-      // Parse git status output
-      const lines = statusResult.output.split('\n').filter(line => line.trim());
-      for (const line of lines) {
-        const [status, ...pathParts] = line.trim().split(/\s+/);
-        const filePath = pathParts.join(' ');
-        
-        if (!filePath) continue;
-        
-        // Get diff stats for the file
-        let additions = 0;
-        let deletions = 0;
-        let type = 'modified';
-        
-        if (status.includes('A')) type = 'added';
-        else if (status.includes('D')) type = 'deleted';
-        else if (status.includes('M')) type = 'modified';
-        else if (status.includes('R')) type = 'renamed';
-        
-        // Get detailed diff stats
-        try {
-          const diffResult = await this.gitService.command(task.worktree_path,
-            `git diff --numstat -- "${filePath}"`);
-          const stats = diffResult.output.trim().split('\t');
-          if (stats.length >= 2) {
-            additions = parseInt(stats[0]) || 0;
-            deletions = parseInt(stats[1]) || 0;
-          }
-        } catch (error) {
-          console.warn('Could not get diff stats for:', filePath);
-        }
-        
+      // Use comprehensive diff method to get proper line counts
+      const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
+      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+      
+      // Convert Map to array
+      const changedFiles = [];
+      for (const [path, fileInfo] of diffResult.files) {
         changedFiles.push({
-          path: filePath,
-          type,
-          additions,
-          deletions
+          path: fileInfo.path,
+          type: fileInfo.type,
+          additions: fileInfo.additions,
+          deletions: fileInfo.deletions,
+          staged: fileInfo.staged || false,
+          unstaged: fileInfo.unstaged || false,
+          untracked: fileInfo.untracked || false,
+          committed: fileInfo.diffType === 'committed'
         });
       }
       
-      // Also get committed but unpushed changes
-      try {
-        const unpushedResult = await this.gitService.command(task.worktree_path,
-          `git diff --name-status origin/${task.branch}..HEAD`);
-        const unpushedLines = unpushedResult.output.split('\n').filter(line => line.trim());
-        
-        for (const line of unpushedLines) {
-          const [status, ...pathParts] = line.trim().split(/\s+/);
-          const filePath = pathParts.join(' ');
-          
-          if (!filePath) continue;
-          
-          // Check if already in changed files
-          if (!changedFiles.some(f => f.path === filePath)) {
-            let type = 'modified';
-            if (status === 'A') type = 'added';
-            else if (status === 'D') type = 'deleted';
-            else if (status === 'M') type = 'modified';
-            
-            changedFiles.push({
-              path: filePath,
-              type,
-              additions: 0,
-              deletions: 0,
-              committed: true
-            });
-          }
-        }
-      } catch (error) {
-        console.warn('Could not get unpushed changes:', error);
+      res.json(changedFiles);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Get all changes including working tree and committed changes not in base branch
+   */
+  async getAllChanges(req, res) {
+    const { projectId, taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task || task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found' });
       }
       
-      res.json(changedFiles);
+      const project = await this.models.projects.findById(projectId);
+      
+      // Get all changes using the new git service method
+      const allChanges = await this.gitService.getAllChanges(
+        task.worktree_path,
+        `origin/${project.base_branch}`
+      );
+      
+      // Get unpushed commits info
+      const unpushedInfo = await this.gitService.getUnpushedCommitsInfo(
+        task.worktree_path,
+        task.branch
+      );
+      
+      // Format response with categorized files
+      const response = {
+        files: allChanges.files.map(file => ({
+          path: file.path,
+          type: file.type,
+          additions: file.additions,
+          deletions: file.deletions,
+          category: file.category,
+          status: file.status,
+          staged: file.staged || false,
+          unstaged: file.unstaged || false,
+          untracked: file.untracked || false,
+          committed: file.category === 'committed'
+        })),
+        summary: {
+          ...allChanges.summary,
+          unpushedCommits: unpushedInfo.count
+        },
+        unpushedCommits: unpushedInfo.commits
+      };
+      
+      res.json(response);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -403,7 +403,7 @@ export class TaskGitController {
       let result;
       
       // Operations that should trigger status update
-      const statusUpdateOperations = ['add', 'commit', 'push', 'pull', 'merge', 'rebase', 'reset', 'checkout'];
+      const statusUpdateOperations = ['add', 'unstage', 'commit', 'push', 'pull', 'merge', 'rebase', 'reset', 'checkout'];
       
       switch (operation) {
         case 'status':
@@ -417,6 +417,13 @@ export class TaskGitController {
         case 'add':
           const filesToAdd = files || '.';
           result = await gitService.add(task.worktree_path, filesToAdd);
+          break;
+          
+        case 'unstage':
+          if (!files) {
+            return res.status(400).json({ error: 'File path required for unstage operation' });
+          }
+          result = await gitService.unstageFile(task.worktree_path, files);
           break;
           
         case 'commit':
