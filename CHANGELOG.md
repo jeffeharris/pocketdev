@@ -13,8 +13,18 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Sessions now use login shell to properly load PATH
   - Implemented workaround for admin UI - downloads from GitHub on first access
   - Admin UI now available at http://localhost:8080/admin with bulk session management
+- **Branch Autocomplete in Task Creation**
+  - Added reusable BranchSelector component with search and filtering
+  - Implemented keyboard navigation (arrow keys, enter, escape)
+  - Shows branch status labels (Protected, In use, Base branch)
+  - Prevents selection of occupied or protected branches
+  - Includes both local and remote branches in suggestions
 
 ### Fixed
+- **Branch Loading in Task Creation**
+  - Fixed API response parsing for branch endpoint
+  - Changed from Promise.all to Promise.allSettled to handle partial API failures
+  - Task creation modal now properly loads branches even when planning API fails
 - **Container Segmentation Fault**
   - Switched Shelltender from Alpine to Ubuntu-based image (pocketdev/ai-base)
   - Fixed node-pty compatibility issues causing exit code 139
