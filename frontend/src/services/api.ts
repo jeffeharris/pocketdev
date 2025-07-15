@@ -4,6 +4,7 @@ import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
+import type { AllChangesResponse, DiffFile, FileStatus, DiffViewerResponse, FileDiffResponse } from '../types/diff';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
 
 const API_BASE = '/api';
@@ -412,29 +413,7 @@ class ApiService {
     return this.fetch<ChangedFile[]>(`/projects/${projectId}/tasks/${taskId}/files/changed`);
   }
 
-  async getAllChanges(projectId: string, taskId: string): Promise<{
-    files: Array<{
-      path: string;
-      type: 'added' | 'modified' | 'deleted' | 'renamed';
-      additions: number;
-      deletions: number;
-      category: 'staged' | 'unstaged' | 'untracked' | 'committed';
-      status?: string;
-      staged?: boolean;
-      unstaged?: boolean;
-      untracked?: boolean;
-      committed?: boolean;
-    }>;
-    summary: {
-      staged: number;
-      unstaged: number;
-      untracked: number;
-      committed: number;
-      total: number;
-      unpushedCommits: number;
-    };
-    unpushedCommits: Array<{ hash: string; message: string }>;
-  }> {
+  async getAllChanges(projectId: string, taskId: string): Promise<AllChangesResponse> {
     if (USE_MOCKS) {
       return {
         files: [],
@@ -449,20 +428,29 @@ class ApiService {
         unpushedCommits: []
       };
     }
-    return this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/git/all-changes`);
+    
+    const response = await this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/git/all-changes`);
+    
+    // Map backend response to our typed format
+    return {
+      files: response.files.map((file: any) => ({
+        path: file.path,
+        type: file.type,
+        additions: file.additions,
+        deletions: file.deletions,
+        status: file.category as FileStatus,
+        category: file.category,
+        staged: file.staged,
+        unstaged: file.unstaged,
+        untracked: file.untracked,
+        committed: file.committed
+      })),
+      summary: response.summary,
+      unpushedCommits: response.unpushedCommits || []
+    };
   }
 
-  async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<{ 
-    files: Array<{
-      path: string;
-      type: 'added' | 'modified' | 'deleted' | 'renamed';
-      additions: number;
-      deletions: number;
-      diff: string;
-    }>;
-    compareWith: string;
-    hasWorkingChanges: boolean;
-  }> {
+  async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<DiffViewerResponse> {
     if (USE_MOCKS) {
       // Return mock diff data for testing
       return {
@@ -493,16 +481,26 @@ index abc123..def456 100644
         hasWorkingChanges: true
       };
     }
-    return this.fetch<{ files: any[]; compareWith: string; hasWorkingChanges: boolean }>(
+    
+    const response = await this.fetch<any>(
       `/projects/${projectId}/tasks/${taskId}/git/diff${compareWith === 'base' ? '?compareWith=base' : ''}`
     );
+    
+    // Map backend response to our typed format
+    return {
+      files: response.files.map((file: any) => ({
+        path: file.path,
+        type: file.type,
+        additions: file.additions,
+        deletions: file.deletions,
+        diff: file.diff
+      })),
+      compareWith: response.compareWith,
+      hasWorkingChanges: response.hasWorkingChanges
+    };
   }
 
-  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' = 'working'): Promise<{
-    path: string;
-    diff: string;
-    hasDiff: boolean;
-  }> {
+  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' = 'working'): Promise<FileDiffResponse> {
     if (USE_MOCKS) {
       return {
         path: filePath,
@@ -518,7 +516,7 @@ index abc123..def456 100644
     }
     // Encode the file path to handle special characters and slashes
     const encodedPath = encodeURIComponent(filePath);
-    return this.fetch<{ path: string; diff: string; hasDiff: boolean }>(
+    return this.fetch<FileDiffResponse>(
       `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${compareWith === 'base' ? '?compareWith=base' : ''}`
     );
   }
@@ -591,6 +589,14 @@ index abc123..def456 100644
         body: body,
       }
     );
+  }
+
+  async stageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
+    return this.gitOperation(projectId, taskId, 'add', { files: filePath });
+  }
+
+  async unstageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
+    return this.gitOperation(projectId, taskId, 'unstage', { files: filePath });
   }
 
   async stageAndCommit(projectId: string, taskId: string, message: string, files?: string | string[]): Promise<{ success: boolean; output: string; error?: string }> {
