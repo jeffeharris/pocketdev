@@ -35,6 +35,18 @@
   z-index: 4;
 }
 
+/* Hide xterm cursor to prevent duplicate cursor issue */
+.terminal-container .xterm-cursor,
+.xterm-cursor,
+span.xterm-cursor {
+  display: none !important;
+}
+
+/* Alternative: Make cursor transparent */
+/* .terminal-container .xterm-cursor-layer {
+  opacity: 0;
+} */
+
 .terminal-wrapper {
   height: 100%;
   width: 100%;

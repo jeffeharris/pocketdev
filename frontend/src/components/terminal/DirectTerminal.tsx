@@ -116,8 +116,8 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         //   selection: '#3a3d41'
         // }}
         // padding={{ left: 12, right: 4 }}
-        // cursorStyle="block"
-        // cursorBlink={true}
+        cursorStyle="block"
+        cursorBlink={false}
         // scrollback={10000}
       />
     </div>
