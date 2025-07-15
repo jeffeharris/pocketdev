@@ -19,8 +19,19 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Shows branch status labels (Protected, In use, Base branch)
   - Prevents selection of occupied or protected branches
   - Includes both local and remote branches in suggestions
+- **Git Diff Viewer Backend Infrastructure (Phase 1)**
+  - Added getAllChanges endpoint to get combined view of working tree and committed changes
+  - Implemented individual file staging/unstaging operations via gitOperation endpoint
+  - Enhanced git service with methods for unpushed commit detection
+  - Added proper file categorization (staged, unstaged, untracked, committed)
+  - Improved line count accuracy for all file types including untracked files
 
 ### Fixed
+- **Git Status API Refactoring**
+  - Fixed all frontend API methods to include projectId parameter for proper scoping
+  - Updated backend to use getComprehensiveDiff for accurate line counts
+  - Changed git status to use --untracked-files=all for individual file listing
+  - Resolved 0/0 line count display issues in diff viewer
 - **Branch Loading in Task Creation**
   - Fixed API response parsing for branch endpoint
   - Changed from Promise.all to Promise.allSettled to handle partial API failures
