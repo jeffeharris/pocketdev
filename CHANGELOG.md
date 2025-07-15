@@ -5,6 +5,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- **GitHub Token Middleware**
+  - Implemented centralized middleware for GitHub token injection
+  - Reduced database queries from 65+ per request to just 1
+  - All routes now use consistent `req.githubToken` pattern
+  - Improved performance and maintainability
+- **GitHub CLI Integration**
+  - Added gh CLI v2.40.1 to backend container
+  - Switched from temporary remotes to gh credential helper
+  - Git operations now use `GH_TOKEN` environment variable
+  - Proper authentication for fetch, pull, and push operations
 - **Shelltender v0.6.1 Upgrade**
   - Upgraded @shelltender/server from v0.5.0 to v0.6.1
   - Fixed WebSocket 404 issues with deferred setup
@@ -27,6 +37,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Improved line count accuracy for all file types including untracked files
 
 ### Fixed
+- **Git Authentication Errors**
+  - Fixed "could not read Username" errors during git fetch operations
+  - Corrected PLANNING.md path to use .pocketdev/PLANNING.md consistently
+  - Fixed git service authentication for fetch/pull/push commands
+  - Resolved issue where refresh button triggered different checks than initial load
+- **Planning Editor Modal**
+  - Fixed content not showing when modal opens
+  - Added useEffect to sync content when modal state changes
+  - Planning container on dashboard now has fixed height with scrollable content
+  - Added minimal scrollbar styling for better UX
 - **Git Status API Refactoring**
   - Fixed all frontend API methods to include projectId parameter for proper scoping
   - Updated backend to use getComprehensiveDiff for accurate line counts
