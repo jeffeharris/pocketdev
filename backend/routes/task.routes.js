@@ -3,6 +3,7 @@ import { TaskController } from '../controllers/task.controller.js';
 import { TaskGitController } from '../controllers/task-git.controller.js';
 import { TaskPullRequestController } from '../controllers/task-pr.controller.js';
 import { TaskContainerController } from '../controllers/task-container.controller.js';
+import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
 
 /**
  * Task routes
@@ -10,6 +11,9 @@ import { TaskContainerController } from '../controllers/task-container.controlle
  */
 export default function createTaskRoutes(models, projectsDir) {
   const router = Router({ mergeParams: true }); // mergeParams to get projectId from parent router
+  
+  // Apply GitHub token middleware to all task routes
+  router.use(githubTokenMiddleware);
   
   // Initialize controllers
   const taskController = new TaskController(models, projectsDir);
