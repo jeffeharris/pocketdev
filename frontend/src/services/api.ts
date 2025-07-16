@@ -4,7 +4,7 @@ import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
-import type { AllChangesResponse, FileStatus, DiffViewerResponse, FileDiffResponse } from '../types/diff';
+import type { AllChangesResponse, FileCategory, DiffViewerResponse, FileDiffResponse } from '../types/diff';
 import { FileChangeType as FileChangeTypeValues } from '../types/diff';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
 
@@ -439,7 +439,7 @@ class ApiService {
         type: file.type,
         additions: file.additions,
         deletions: file.deletions,
-        status: file.category as FileStatus,
+        status: file.status,
         category: file.category,
         staged: file.staged,
         unstaged: file.unstaged,
@@ -501,7 +501,7 @@ index abc123..def456 100644
     };
   }
 
-  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' = 'working'): Promise<FileDiffResponse> {
+  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' | 'all' = 'working'): Promise<FileDiffResponse> {
     if (USE_MOCKS) {
       return {
         path: filePath,
@@ -517,8 +517,9 @@ index abc123..def456 100644
     }
     // Encode the file path to handle special characters and slashes
     const encodedPath = encodeURIComponent(filePath);
+    const queryParams = compareWith !== 'working' ? `?compareWith=${compareWith}` : '';
     return this.fetch<FileDiffResponse>(
-      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${compareWith === 'base' ? '?compareWith=base' : ''}`
+      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${queryParams}`
     );
   }
 

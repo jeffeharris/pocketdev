@@ -1,13 +1,13 @@
 // Types for the enhanced Git Diff Viewer
 
-export const FileStatus = {
+export const FileCategory = {
   Staged: 'staged',
   Unstaged: 'unstaged',
   Untracked: 'untracked',
   Committed: 'committed'
 } as const;
 
-export type FileStatus = typeof FileStatus[keyof typeof FileStatus];
+export type FileCategory = typeof FileCategory[keyof typeof FileCategory];
 
 export const FileChangeType = {
   Added: 'added',
@@ -20,26 +20,26 @@ export type FileChangeType = typeof FileChangeType[keyof typeof FileChangeType];
 
 // Color palette for file status indicators
 export const FILE_STATUS_COLORS = {
-  [FileStatus.Staged]: 'text-green-600',
-  [FileStatus.Unstaged]: 'text-orange-600',
-  [FileStatus.Untracked]: 'text-gray-500',
-  [FileStatus.Committed]: 'text-blue-600'
+  [FileCategory.Staged]: 'text-green-600',
+  [FileCategory.Unstaged]: 'text-orange-600',
+  [FileCategory.Untracked]: 'text-gray-500',
+  [FileCategory.Committed]: 'text-blue-600'
 } as const;
 
 // Background colors for badges
 export const FILE_STATUS_BG_COLORS = {
-  [FileStatus.Staged]: 'bg-green-100',
-  [FileStatus.Unstaged]: 'bg-orange-100',
-  [FileStatus.Untracked]: 'bg-gray-100',
-  [FileStatus.Committed]: 'bg-blue-100'
+  [FileCategory.Staged]: 'bg-green-100',
+  [FileCategory.Unstaged]: 'bg-orange-100',
+  [FileCategory.Untracked]: 'bg-gray-100',
+  [FileCategory.Committed]: 'bg-blue-100'
 } as const;
 
 // Labels for status badges
 export const FILE_STATUS_LABELS = {
-  [FileStatus.Staged]: 'S',
-  [FileStatus.Unstaged]: 'M',
-  [FileStatus.Untracked]: 'U',
-  [FileStatus.Committed]: 'C'
+  [FileCategory.Staged]: 'S',
+  [FileCategory.Unstaged]: 'M',
+  [FileCategory.Untracked]: 'U',
+  [FileCategory.Committed]: 'C'
 } as const;
 
 export interface DiffFile {
@@ -47,8 +47,8 @@ export interface DiffFile {
   type: FileChangeType;
   additions: number;
   deletions: number;
-  status?: FileStatus;
-  category?: FileStatus; // Backend compatibility
+  status?: string; // Git status code like 'A ', ' M', '??'
+  category?: FileCategory; // Backend compatibility - 'staged', 'unstaged', etc.
   diff?: string;
   loading?: boolean;
   // Boolean flags for backward compatibility and multiple states

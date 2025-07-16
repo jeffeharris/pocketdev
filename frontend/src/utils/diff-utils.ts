@@ -1,12 +1,12 @@
-import type { DiffFile, FileStatus } from '../types/diff';
-import { FileStatus as FileStatusValues } from '../types/diff';
+import type { DiffFile, FileCategory } from '../types/diff';
+import { FileCategory as FileCategoryValues } from '../types/diff';
 
 /**
  * Determines which status badges should be shown for a file
  * A file can have multiple statuses (e.g., both staged and unstaged changes)
  */
-export function getFileStatuses(file: DiffFile): FileStatus[] {
-  const statuses: FileStatus[] = [];
+export function getFileStatuses(file: DiffFile): FileCategory[] {
+  const statuses: FileCategory[] = [];
   
   // Use the primary status if available
   if (file.status) {
@@ -16,10 +16,10 @@ export function getFileStatuses(file: DiffFile): FileStatus[] {
     statuses.push(file.category);
   } else {
     // Determine from boolean flags
-    if (file.staged) statuses.push(FileStatusValues.Staged);
-    if (file.unstaged) statuses.push(FileStatusValues.Unstaged);
-    if (file.untracked) statuses.push(FileStatusValues.Untracked);
-    if (file.committed) statuses.push(FileStatusValues.Committed);
+    if (file.staged) statuses.push(FileCategoryValues.Staged);
+    if (file.unstaged) statuses.push(FileCategoryValues.Unstaged);
+    if (file.untracked) statuses.push(FileCategoryValues.Untracked);
+    if (file.committed) statuses.push(FileCategoryValues.Committed);
   }
   
   return statuses;
@@ -29,11 +29,11 @@ export function getFileStatuses(file: DiffFile): FileStatus[] {
  * Get the primary status for a file (for single badge display)
  * Priority: untracked > unstaged > staged > committed
  */
-export function getPrimaryFileStatus(file: DiffFile): FileStatus | null {
-  if (file.untracked) return FileStatusValues.Untracked;
-  if (file.unstaged) return FileStatusValues.Unstaged;
-  if (file.staged) return FileStatusValues.Staged;
-  if (file.committed) return FileStatusValues.Committed;
+export function getPrimaryFileStatus(file: DiffFile): FileCategory | null {
+  if (file.untracked) return FileCategoryValues.Untracked;
+  if (file.unstaged) return FileCategoryValues.Unstaged;
+  if (file.staged) return FileCategoryValues.Staged;
+  if (file.committed) return FileCategoryValues.Committed;
   
   // Fallback to status or category field
   return file.status || file.category || null;
@@ -42,12 +42,12 @@ export function getPrimaryFileStatus(file: DiffFile): FileStatus | null {
 /**
  * Group files by their status category
  */
-export function groupFilesByStatus(files: DiffFile[]): Record<FileStatus, DiffFile[]> {
-  const grouped: Record<FileStatus, DiffFile[]> = {
-    [FileStatusValues.Staged]: [],
-    [FileStatusValues.Unstaged]: [],
-    [FileStatusValues.Untracked]: [],
-    [FileStatusValues.Committed]: []
+export function groupFilesByStatus(files: DiffFile[]): Record<FileCategory, DiffFile[]> {
+  const grouped: Record<FileCategory, DiffFile[]> = {
+    [FileCategoryValues.Staged]: [],
+    [FileCategoryValues.Unstaged]: [],
+    [FileCategoryValues.Untracked]: [],
+    [FileCategoryValues.Committed]: []
   };
   
   files.forEach(file => {
@@ -63,19 +63,19 @@ export function groupFilesByStatus(files: DiffFile[]): Record<FileStatus, DiffFi
 /**
  * Count files by status category
  */
-export function countFilesByStatus(files: DiffFile[]): Record<FileStatus, number> {
-  const counts: Record<FileStatus, number> = {
-    [FileStatusValues.Staged]: 0,
-    [FileStatusValues.Unstaged]: 0,
-    [FileStatusValues.Untracked]: 0,
-    [FileStatusValues.Committed]: 0
+export function countFilesByStatus(files: DiffFile[]): Record<FileCategory, number> {
+  const counts: Record<FileCategory, number> = {
+    [FileCategoryValues.Staged]: 0,
+    [FileCategoryValues.Unstaged]: 0,
+    [FileCategoryValues.Untracked]: 0,
+    [FileCategoryValues.Committed]: 0
   };
   
   files.forEach(file => {
-    if (file.staged) counts[FileStatusValues.Staged]++;
-    if (file.unstaged) counts[FileStatusValues.Unstaged]++;
-    if (file.untracked) counts[FileStatusValues.Untracked]++;
-    if (file.committed) counts[FileStatusValues.Committed]++;
+    if (file.staged) counts[FileCategoryValues.Staged]++;
+    if (file.unstaged) counts[FileCategoryValues.Unstaged]++;
+    if (file.untracked) counts[FileCategoryValues.Untracked]++;
+    if (file.committed) counts[FileCategoryValues.Committed]++;
   });
   
   return counts;
