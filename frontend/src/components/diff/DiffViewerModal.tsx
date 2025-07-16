@@ -18,7 +18,6 @@ interface DiffFile {
   category?: 'staged' | 'unstaged' | 'untracked' | 'committed';
 }
 
-type FileFilterOption = 'all' | 'staged' | 'unstaged';
 
 interface DiffViewerModalProps {
   isOpen: boolean;
@@ -65,7 +64,6 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [compareWith, setCompareWith] = useState<ToggleOption>('working');
   const [hasWorkingChanges, setHasWorkingChanges] = useState(true);
-  const [fileFilter, setFileFilter] = useState<FileFilterOption>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   
@@ -238,18 +236,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     }
   }, [selectedFile?.path, selectedFile?.diff, selectedFile?.loading]);
 
-  // Filter and search files
-  const filteredFiles = useMemo(() => {
+  // Group files by category
+  const groupedFiles = useMemo(() => {
     let result = files;
-    
-    // Apply file filter
-    if (fileFilter !== 'all' && (compareWith === 'working' || compareWith === 'all')) {
-      result = result.filter(file => {
-        if (fileFilter === 'staged' && file.category === 'staged') return true;
-        if (fileFilter === 'unstaged' && (file.category === 'unstaged' || file.category === 'untracked')) return true;
-        return false;
-      });
-    }
     
     // Apply search filter
     if (searchTerm) {
@@ -259,8 +248,30 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       );
     }
     
-    return result;
-  }, [files, fileFilter, searchTerm, compareWith]);
+    // Group by category for working/all modes
+    if (compareWith === 'working' || compareWith === 'all') {
+      const staged = result.filter(f => f.category === 'staged');
+      const unstaged = result.filter(f => f.category === 'unstaged' || f.category === 'untracked');
+      const committed = result.filter(f => f.category === 'committed');
+      
+      return {
+        staged,
+        unstaged,
+        committed,
+        hasGroups: staged.length > 0 && unstaged.length > 0
+      };
+    }
+    
+    // For base mode, just return all files as one group
+    return {
+      staged: [],
+      unstaged: [],
+      committed: result,
+      hasGroups: false
+    };
+  }, [files, searchTerm, compareWith]);
+  
+  const filteredFiles = [...groupedFiles.staged, ...groupedFiles.unstaged, ...groupedFiles.committed];
 
   // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
@@ -587,24 +598,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               <div className="flex-1 p-4">
                 <div className="mb-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                        Changes ({filteredFiles.length})
-                      </h3>
-                      <div className="flex-shrink-0">
-                        <ThreeStateToggle
-                          value={compareWith}
-                          onChange={(value) => {
-                            setCompareWith(value);
-                            // Reset file filter when changing to base mode
-                            if (value === 'base') {
-                              setFileFilter('all');
-                            }
-                          }}
-                          disabledOptions={!hasWorkingChanges ? ['working'] : []}
-                        />
-                      </div>
-                    </div>
+                    <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                      Changes ({filteredFiles.length})
+                    </h3>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
@@ -627,41 +623,16 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       </button>
                     </div>
                   </div>
-                  {/* Inline staged/unstaged filter for working/all modes */}
-                  {(compareWith === 'working' || compareWith === 'all') && files.some(f => f.category === 'staged') && (
-                    <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-                      <button
-                        onClick={() => setFileFilter('all')}
-                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                          fileFilter === 'all'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setFileFilter('staged')}
-                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                          fileFilter === 'staged'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Staged
-                      </button>
-                      <button
-                        onClick={() => setFileFilter('unstaged')}
-                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                          fileFilter === 'unstaged'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Unstaged
-                      </button>
-                    </div>
-                  )}
+                  {/* Three-state toggle in its own row */}
+                  <div className="mb-3">
+                    <ThreeStateToggle
+                      value={compareWith}
+                      onChange={(value) => {
+                        setCompareWith(value);
+                      }}
+                      disabledOptions={!hasWorkingChanges ? ['working'] : []}
+                    />
+                  </div>
                 </div>
                 
                 {/* Search input */}
@@ -709,60 +680,194 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                 )}
                 
                 <div className="space-y-1">
-                  {filteredFiles.map((file) => (
-                    <button
-                      key={file.path}
-                      onClick={() => {
-                        const fileIndex = filteredFiles.indexOf(file);
-                        setSelectedFile(file);
-                        setSelectedFileIndex(fileIndex);
-                        
-                        // Load diff if not already loaded
-                        if (!file.diff && file.loading !== false) {
-                                          loadFileDiff(file.path, fileIndex);
-                        }
-                      }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
-                        selectedFile?.path === file.path
-                          ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
-                          : 'hover:bg-white hover:shadow-sm text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <StatusIcon 
-                            gitStatus={file.status || '  '} 
-                            size="sm"
-                            category={file.category}
-                            onClick={
-                              (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
-                              && (compareWith === 'working' || compareWith === 'all')
-                                ? () => handleStageToggle(file)
-                                : undefined
+                  {/* Staged files */}
+                  {groupedFiles.staged.length > 0 && (
+                    <>
+                      {groupedFiles.hasGroups && (
+                        <div className="text-xs text-gray-500 font-medium px-3 py-1">Staged</div>
+                      )}
+                      {groupedFiles.staged.map((file) => (
+                        <button
+                          key={file.path}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
                             }
-                            isLoading={pendingOperations.has(file.path)}
-                            disabled={pendingOperations.has(file.path)}
-                          />
-                          {searchTerm ? (
-                            <HighlightedPath 
-                              path={file.path} 
-                              searchTerm={searchTerm}
-                              className="truncate"
-                              maxLength={40}
-                            />
-                          ) : (
-                            <span className="truncate">{file.path}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          <>
-                            <span className="text-green-600">+{file.additions}</span>
-                            <span className="text-red-600">-{file.deletions}</span>
-                          </>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                                onClick={
+                                  (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
+                                  && (compareWith === 'working' || compareWith === 'all')
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        handleStageToggle(file);
+                                      }
+                                    : undefined
+                                }
+                                isLoading={pendingOperations.has(file.path)}
+                                disabled={pendingOperations.has(file.path)}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate">{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Divider between staged and unstaged */}
+                  {groupedFiles.hasGroups && groupedFiles.unstaged.length > 0 && (
+                    <div className="my-2 border-t border-gray-200"></div>
+                  )}
+                  
+                  {/* Unstaged files */}
+                  {groupedFiles.unstaged.length > 0 && (
+                    <>
+                      {groupedFiles.hasGroups && (
+                        <div className="text-xs text-gray-500 font-medium px-3 py-1">Unstaged</div>
+                      )}
+                      {groupedFiles.unstaged.map((file) => (
+                        <button
+                          key={file.path}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                                onClick={
+                                  (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
+                                  && (compareWith === 'working' || compareWith === 'all')
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        handleStageToggle(file);
+                                      }
+                                    : undefined
+                                }
+                                isLoading={pendingOperations.has(file.path)}
+                                disabled={pendingOperations.has(file.path)}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate">{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Committed files (for 'all' mode) */}
+                  {groupedFiles.committed.length > 0 && compareWith === 'all' && (
+                    <>
+                      {(groupedFiles.staged.length > 0 || groupedFiles.unstaged.length > 0) && (
+                        <>
+                          <div className="my-2 border-t border-gray-200"></div>
+                          <div className="text-xs text-gray-500 font-medium px-3 py-1">Committed</div>
+                        </>
+                      )}
+                      {groupedFiles.committed.map((file) => (
+                        <button
+                          key={file.path}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate">{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             ) : (

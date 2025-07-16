@@ -91,8 +91,8 @@ const STATUS_CONFIG = {
   },
   new: {
     icon: Plus,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
+    color: 'text-red-600',    // Changed to red for untracked
+    bgColor: 'bg-red-50',
     label: 'New file'
   },
   modified: {
@@ -119,14 +119,29 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   isLoading,
   category
 }) => {
-  const status = getPriorityStatus(gitStatus);
-  if (!status) return null;
+  // Use category for consistent coloring if available
+  let status = getPriorityStatus(gitStatus);
+  let config = status ? STATUS_CONFIG[status] : null;
   
-  const config = STATUS_CONFIG[status];
+  // Override with category-based styling for consistency
+  if (category && (category === 'staged' || category === 'unstaged' || category === 'untracked')) {
+    if (category === 'staged') {
+      config = STATUS_CONFIG.staged;
+    } else if (category === 'unstaged') {
+      // For unstaged, check if it's a deleted file
+      if (gitStatus.includes('D')) {
+        config = STATUS_CONFIG.deleted;
+      } else {
+        config = STATUS_CONFIG.modified; // Yellow for unstaged
+      }
+    } else if (category === 'untracked') {
+      config = STATUS_CONFIG.new; // Red for untracked
+    }
+  }
+  
+  if (!config) return null;
+  
   const Icon = config.icon;
-  const hasStaged = hasStagedChanges(gitStatus);
-  const showStagedDot = hasStaged && status !== 'staged' && status !== 'conflict';
-  
   const sizeClasses = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
   
   // Build tooltip text
@@ -134,8 +149,8 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   if (gitStatus.length === 1) {
     tooltipText += ' (committed)';
   }
-  if (showStagedDot) {
-    tooltipText += ' (has staged changes)';
+  if (category) {
+    tooltipText = `${category.charAt(0).toUpperCase() + category.slice(1)} • ${tooltipText}`;
   }
   tooltipText += ` • ${gitStatus}`;
   
@@ -146,21 +161,13 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   }
   
   const iconContent = (
-    <>
-      <div className={`rounded p-1 ${config.bgColor}`}>
-        {isLoading ? (
-          <Loader2 className={`${sizeClasses} animate-spin text-gray-500`} />
-        ) : (
-          <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
-        )}
-      </div>
-      {showStagedDot && !isLoading && (
-        <div 
-          className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white"
-          title="Has staged changes"
-        />
+    <div className={`rounded p-1 ${config.bgColor}`}>
+      {isLoading ? (
+        <Loader2 className={`${sizeClasses} animate-spin text-gray-500`} />
+      ) : (
+        <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
       )}
-    </>
+    </div>
   );
   
   // If clickable, wrap in button
