@@ -95,6 +95,15 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 3. **Transitions**: Smooth animations when files move between groups after staging
 4. **Responsive**: Ensure search box and controls adapt to modal width
 
+## Implementation Decisions
+
+### Phase 3 Design Choices
+1. **StatusIcon over StatusBadge**: Chose single priority-based icon approach for clarity and space efficiency
+2. **Green dot indicator**: Shows files with both staged and unstaged changes without confusion
+3. **Three-state toggle design**: Matches existing modal buttons instead of custom sliding indicator
+4. **Light theme only**: Removed dark mode to match existing application
+5. **Archived prototypes**: ComponentPlayground saved in `/frontend/src/pages/archive/` for reference
+
 ## Tasks
 
 ### Phase 1: Backend Infrastructure ✅
@@ -153,32 +162,34 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 - Ensure TypeScript compilation passes
 - _Validates data flow for Requirements: 1.2, 1.3_
 
-### Phase 3: UI Components Foundation
+### Phase 3: UI Components Foundation ✅
 
-[ ] 3. Build reusable UI components
-- [ ] 3.1 Create StatusBadge component
-  - Build badge component with proper styling
-  - Support all four states with correct colors
-  - Add accessibility attributes
-  - Create component playground page for testing
+[x] 3. Build reusable UI components
+- [x] 3.1 Create StatusBadge component
+  - Built StatusIcon with priority-based single icon approach
+  - Supports all states with proper colors and green dot for mixed states
+  - Added accessibility attributes and tooltips
+  - Created component playground page for testing (archived)
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 3.2 Create ThreeStateToggle component
-  - Extend current toggle to support three states
-  - Add smooth transitions between states
-  - Make it reusable with proper props interface
+- [x] 3.2 Create ThreeStateToggle component
+  - Extended current toggle to support three states
+  - Matches existing modal button style perfectly
+  - Smooth transitions without sliding indicator issues
+  - Fully reusable with proper TypeScript interface
   - _Requirements: 1.1_
 
-- [ ] 3.3 Create SearchInput component
-  - Build reusable search component with clear button
-  - Add debouncing for performance
-  - Support placeholder and auto-focus props
+- [x] 3.3 Create SearchInput component
+  - Built diff-specific search with path highlighting
+  - Added 150ms debouncing for performance
+  - Supports all required props plus smart truncation
+  - Shows only when file count > threshold
   - _Requirements: 4.1, 4.2_
 
-**Checkpoint 3: Component Library Testing**
-- Test all components in isolation
-- Verify accessibility with screen reader
-- Check responsive behavior
+**Checkpoint 3: Component Library Testing** ✅
+- Tested all components in playground
+- Verified keyboard navigation and tooltips
+- Checked responsive behavior (responsive badge spacing)
 - _Validates UI building blocks for Requirements: 1.1, 2.1-2.4, 4.1_
 
 ### Phase 4: Core Feature Implementation
