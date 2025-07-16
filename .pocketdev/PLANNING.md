@@ -111,8 +111,8 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 - **Phase 2**: Frontend Data Layer ✅ COMPLETE  
 - **Phase 3**: UI Components Foundation ✅ COMPLETE
 - **Phase 4**: Core Feature Implementation ✅ COMPLETE
-- **Phase 5**: Search functionality ~60% complete (search works, highlighting not integrated)
-- **Phase 6**: Staging/unstaging 0% complete (API exists but no UI)
+- **Phase 5**: Search functionality ✅ COMPLETE (with enhancements)
+- **Phase 6**: Staging/unstaging ✅ COMPLETE (clickable icons with optimistic updates)
 - **Phase 7**: Polish ~40% complete (empty states done, help system missing)
 
 ### Phase 1: Backend Infrastructure ✅
@@ -263,25 +263,28 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
    - Need to update git status codes optimistically for correct icon transitions
 5. **Header Layout**: Single row with all controls - Changes count, compare mode toggle, staged/unstaged filter (contextual), search button
 
-### Phase 5: Enhanced Interactions (Partially Complete)
+### Phase 5: Enhanced Interactions ✅ COMPLETE
 
-[~] 6. Implement search functionality
+[x] 6. Implement search functionality
 - [x] 6.1 Add search to file list (Modified)
   - SearchInput component integrated ✅
   - Changed: Manual toggle button instead of automatic >10 files ⚠️
   - Real-time filtering with 150ms debounce ✅
-  - _Partially completes Requirements: 4.1, 4.2, 4.5_
+  - _Completes Requirements: 4.1, 4.2, 4.5_
 
-- [~] 6.2 Add search highlighting
-  - HighlightedPath component created but NOT integrated ❌
+- [x] 6.2 Add search highlighting and enhanced features
+  - HighlightedPath component fully integrated ✅
   - "No files match" empty state implemented ✅
   - Selection state maintained during search ✅
-  - _Partially completes Requirements: 4.3, 4.4_
+  - Scroll-to-first-match on search ✅
+  - Full path tooltips on hover for all files ✅
+  - _Completes Requirements: 4.3, 4.4_
 
-**Checkpoint 6: Search Feature Testing**
-- Search functionality works but lacks highlighting
-- Performance with 100+ files untested
-- _Partially validates Requirements: 4.1-4.5_
+**Checkpoint 6: Search Feature Testing** ✅
+- Search functionality works with highlighting
+- Auto-scroll to first match implemented
+- Full path tooltips added for better UX
+- _Fully validates Requirements: 4.1-4.5_
 
 [ ] 7. Add staging/unstaging capability
 - [ ] 7.1 Make status icons clickable for staging

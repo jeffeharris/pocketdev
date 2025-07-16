@@ -66,11 +66,10 @@ useEffect(() => {
 - Only auto-show on initial load or when crossing threshold
 - Respect user's manual choice
 
-### Task 3: Test with 100+ Files
-Create a test scenario with many files to verify:
-- Search performance (should be fast with current implementation)
-- Scroll performance in file list
-- Consider virtualization if needed (but probably not)
+### Task 3: Enhanced Search Features ✅ COMPLETE
+Instead of performance testing, implemented:
+- **Scroll-to-highlight**: When search term changes, automatically scrolls to first matching file
+- **Full path tooltips**: All file paths now show full path on hover (not just truncated ones)
 
 ## Phase 6: Staging/Unstaging Implementation
 

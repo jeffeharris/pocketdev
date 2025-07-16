@@ -185,43 +185,41 @@ export const HighlightedPath: React.FC<HighlightedPathProps> = ({
         ))}
       </span>
       
-      {/* Full path tooltip on hover */}
-      {path.length > maxLength && (
-        <div className="
-          absolute left-0 bottom-full mb-2 
-          invisible group-hover:visible
-          z-50 w-max max-w-md
-          px-3 py-2 
-          bg-gray-900
-          text-white text-sm
-          rounded-lg shadow-lg
-          opacity-0 group-hover:opacity-100
-          transition-opacity duration-200
-          pointer-events-none
-        ">
-          <div className="break-all">
-            {segments.map((segment, index) => (
-              <span
-                key={index}
-                className={
-                  segment.isMatch
-                    ? 'bg-yellow-600/50 px-0.5 rounded'
-                    : ''
-                }
-              >
-                {segment.text}
-              </span>
-            ))}
-          </div>
-          <div className="
-            absolute top-full left-4 
-            w-0 h-0 
-            border-l-[6px] border-l-transparent
-            border-r-[6px] border-r-transparent
-            border-t-[6px] border-t-gray-900
-          " />
+      {/* Full path tooltip on hover - always show */}
+      <div className="
+        absolute left-0 bottom-full mb-2 
+        invisible group-hover:visible
+        z-50 w-max max-w-md
+        px-3 py-2 
+        bg-gray-900
+        text-white text-sm
+        rounded-lg shadow-lg
+        opacity-0 group-hover:opacity-100
+        transition-opacity duration-200
+        pointer-events-none
+      ">
+        <div className="break-all">
+          {segments.map((segment, index) => (
+            <span
+              key={index}
+              className={
+                segment.isMatch
+                  ? 'bg-yellow-600/50 px-0.5 rounded'
+                  : ''
+              }
+            >
+              {segment.text}
+            </span>
+          ))}
         </div>
-      )}
+        <div className="
+          absolute top-full left-4 
+          w-0 h-0 
+          border-l-[6px] border-l-transparent
+          border-r-[6px] border-r-transparent
+          border-t-[6px] border-t-gray-900
+        " />
+      </div>
     </span>
   );
 };

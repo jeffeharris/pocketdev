@@ -73,6 +73,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   // Track pending staging operations per file
   const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
   
+  // Refs for file buttons to enable scroll-to functionality
+  const fileButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  
   // Toast state
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
@@ -271,7 +274,10 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     };
   }, [files, searchTerm, compareWith]);
   
-  const filteredFiles = [...groupedFiles.staged, ...groupedFiles.unstaged, ...groupedFiles.committed];
+  const filteredFiles = useMemo(() => 
+    [...groupedFiles.staged, ...groupedFiles.unstaged, ...groupedFiles.committed],
+    [groupedFiles]
+  );
 
   // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
@@ -279,6 +285,26 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setShowSearch(true);
     }
   }, [files.length, showSearch]); // Now safe to include showSearch
+  
+  // Scroll to first matching file when search term changes
+  useEffect(() => {
+    if (searchTerm && filteredFiles.length > 0) {
+      // Find the first matching file
+      const firstMatch = filteredFiles.find(file => 
+        file.path.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      if (firstMatch && fileButtonRefs.current[firstMatch.path]) {
+        // Slight delay to ensure DOM is updated
+        setTimeout(() => {
+          fileButtonRefs.current[firstMatch.path]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }, 100);
+      }
+    }
+  }, [searchTerm, filteredFiles]);
 
   // Apply filters based on current view mode
   const applyFilters = useCallback((allData: { files: DiffFile[]; hasWorkingChanges: boolean; summary?: Record<string, unknown> }) => {
@@ -692,6 +718,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       {groupedFiles.staged.map((file) => (
                         <button
                           key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
                           onClick={() => {
                             const fileIndex = filteredFiles.indexOf(file);
                             setSelectedFile(file);
@@ -734,7 +761,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                                   maxLength={40}
                                 />
                               ) : (
-                                <span className="truncate">{file.path}</span>
+                                <span className="truncate" title={file.path}>{file.path}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs">
@@ -761,6 +788,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       {groupedFiles.unstaged.map((file) => (
                         <button
                           key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
                           onClick={() => {
                             const fileIndex = filteredFiles.indexOf(file);
                             setSelectedFile(file);
@@ -803,7 +831,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                                   maxLength={40}
                                 />
                               ) : (
-                                <span className="truncate">{file.path}</span>
+                                <span className="truncate" title={file.path}>{file.path}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs">
@@ -828,6 +856,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       {groupedFiles.committed.map((file) => (
                         <button
                           key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
                           onClick={() => {
                             const fileIndex = filteredFiles.indexOf(file);
                             setSelectedFile(file);
@@ -859,7 +888,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                                   maxLength={40}
                                 />
                               ) : (
-                                <span className="truncate">{file.path}</span>
+                                <span className="truncate" title={file.path}>{file.path}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs">
