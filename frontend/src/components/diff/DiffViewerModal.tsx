@@ -816,8 +816,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                     </>
                   )}
                   
-                  {/* Committed files (for 'all' mode) */}
-                  {groupedFiles.committed.length > 0 && compareWith === 'all' && (
+                  {/* Committed files (for 'all' and 'base' modes) */}
+                  {groupedFiles.committed.length > 0 && (compareWith === 'all' || compareWith === 'base') && (
                     <>
                       {(groupedFiles.staged.length > 0 || groupedFiles.unstaged.length > 0) && (
                         <>

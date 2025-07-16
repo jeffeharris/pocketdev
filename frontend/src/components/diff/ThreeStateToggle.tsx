@@ -19,7 +19,7 @@ interface OptionConfig {
 const OPTIONS: OptionConfig[] = [
   {
     value: 'working',
-    label: 'Working',
+    label: 'Uncommitted',
     tooltip: 'Show uncommitted changes in your working directory'
   },
   {
@@ -29,7 +29,7 @@ const OPTIONS: OptionConfig[] = [
   },
   {
     value: 'base',
-    label: 'Branch',
+    label: 'Committed',
     tooltip: 'Show what this branch adds compared to the base branch'
   }
 ];
@@ -45,7 +45,7 @@ export const ThreeStateToggle: React.FC<ThreeStateToggleProps> = ({
   const itemWidth = 100 / OPTIONS.length;
   
   return (
-    <div className={`flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5 ${className}`}>
+    <div className={`flex items-center bg-gray-100 rounded-lg p-0.5 ${className}`}>
       {OPTIONS.map((option) => {
         const isActive = value === option.value;
         const isDisabled = disabled || disabledOptions.includes(option.value);
@@ -56,7 +56,7 @@ export const ThreeStateToggle: React.FC<ThreeStateToggleProps> = ({
             onClick={() => !isDisabled && onChange(option.value)}
             disabled={isDisabled}
             className={`
-              flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap
+              flex-1 flex items-center justify-center px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap
               transition-all duration-200
               ${isActive
                 ? 'bg-white text-gray-900 shadow-sm'
