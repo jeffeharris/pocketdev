@@ -227,7 +227,11 @@ export class TaskGitController {
           path: fileInfo.path,
           type: fileInfo.type,
           additions: fileInfo.additions,
-          deletions: fileInfo.deletions
+          deletions: fileInfo.deletions,
+          status: fileInfo.status, // Git status code
+          staged: fileInfo.staged,
+          unstaged: fileInfo.unstaged,
+          untracked: fileInfo.untracked
         };
         
         // For working directory comparisons, include diff content
@@ -264,7 +268,7 @@ export class TaskGitController {
    */
   async getFileDiff(req, res) {
     const { projectId, taskId, file } = req.params;
-    const { compareWith = 'working' } = req.query; // 'working' or 'base'
+    const { compareWith = 'working' } = req.query; // 'working', 'base', or 'all'
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -275,25 +279,29 @@ export class TaskGitController {
       const project = await this.models.projects.findById(projectId);
       
       // Use unified diff method
-      const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
+      let compareTarget;
+      if (compareWith === 'base') {
+        compareTarget = `origin/${project.base_branch}`;
+      } else if (compareWith === 'all') {
+        // For 'all', we want the total diff from base branch to working tree
+        compareTarget = `origin/${project.base_branch}`;
+      } else {
+        compareTarget = 'working';
+      }
       
-      console.log(`[getFileDiff] Getting diff for file: ${file}, compareWith: ${compareWith}, compareTarget: ${compareTarget}`);
       
       // Get file info first to know its state
       const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
       const fileInfo = diffResult.files.get(file);
-      
-      console.log(`[getFileDiff] File info:`, fileInfo);
       
       // Get the diff content
       const diff = await this.gitService.getFileDiffContent(
         task.worktree_path, 
         file, 
         compareTarget, 
-        fileInfo
+        fileInfo,
+        compareWith === 'all' // Pass flag to indicate we want complete diff
       );
-      
-      console.log(`[getFileDiff] Got diff length: ${diff?.length || 0}`);
       
       res.json({
         path: file,

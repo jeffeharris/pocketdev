@@ -436,13 +436,21 @@ export class GitService {
         else if (status.includes('R')) type = 'renamed';
         
         const fileStats = stats.get(path) || { additions: 0, deletions: 0 };
+        // For committed files, use the single-letter status codes from git diff
+        // These are different from the two-letter working tree status codes
+        let gitStatus = status; // Keep the original single-letter status (A, M, D, R)
+        
         files.set(path, {
           path,
           type,
           additions: fileStats.additions,
           deletions: fileStats.deletions,
           diffType: 'committed',
-          status: status
+          status: gitStatus,
+          staged: false,
+          unstaged: false,
+          untracked: false,
+          committed: true
         });
       });
     }
@@ -457,8 +465,15 @@ export class GitService {
    * @param {string} compareTarget - What to compare against
    * @param {object} fileInfo - Optional file info from getComprehensiveDiff
    */
-  async getFileDiffContent(projectPath, filePath, compareTarget = 'working', fileInfo = null) {
+  async getFileDiffContent(projectPath, filePath, compareTarget = 'working', fileInfo = null, showCompleteDiff = false) {
     let diff = '';
+    
+    // For 'all' mode, always show complete diff from base to working tree
+    if (showCompleteDiff && compareTarget !== 'working') {
+      const result = await this.command(projectPath, 
+        `git diff ${compareTarget} -- "${filePath}"`);
+      return result.output;
+    }
     
     if (compareTarget === 'working') {
       // Use file info to determine how to get diff
