@@ -26,6 +26,7 @@ interface DiffViewerModalProps {
   taskId: string;
   taskTitle: string;
   branch: string;
+  baseBranch?: string;
 }
 
 /**
@@ -50,7 +51,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   projectId,
   taskId,
   taskTitle,
-  branch
+  branch,
+  baseBranch = 'main'
 }) => {
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<DiffFile | null>(null);
@@ -75,6 +77,39 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   
   // Refs for file buttons to enable scroll-to functionality
   const fileButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  
+  // Get comparison labels based on current view mode
+  const getComparisonLabels = () => {
+    const currentBranch = branch.split('/').pop() || branch;
+    const base = `origin/${baseBranch}`;
+    
+    switch (compareWith) {
+      case 'working':
+        return {
+          left: 'HEAD',
+          right: 'Working Tree',
+          description: 'Uncommitted changes'
+        };
+      case 'all':
+        return {
+          left: base,
+          right: 'Working Tree',
+          description: `All changes from ${baseBranch} to your working tree`
+        };
+      case 'base':
+        return {
+          left: base,
+          right: currentBranch,
+          description: `Committed changes not in ${baseBranch}`
+        };
+      default:
+        return {
+          left: '',
+          right: '',
+          description: ''
+        };
+    }
+  };
   
   // Toast state
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -179,48 +214,6 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     }
   }, [selectedFile?.path, files.length]); // Intentionally not including loadFileDiff to avoid issues
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      
-      // Skip shortcuts if user is typing in an input field
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
-      }
-      
-      // Toggle view mode with 'v' key (only if split view is available)
-      if (e.key === 'v' && !e.ctrlKey && !e.metaKey && canUseSplitView) {
-        setViewMode(prev => prev === 'split' ? 'unified' : 'split');
-      }
-      
-      // Toggle sidebar with 's' key
-      if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
-        setSidebarCollapsed(prev => !prev);
-      }
-      
-      // Navigate files with arrow keys
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const direction = e.key === 'ArrowUp' ? -1 : 1;
-        const newIndex = Math.max(0, Math.min(files.length - 1, selectedFileIndex + direction));
-        if (newIndex !== selectedFileIndex && files[newIndex]) {
-          setSelectedFile(files[newIndex]);
-          setSelectedFileIndex(newIndex);
-        }
-      }
-      
-      // Close modal with Escape
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, canUseSplitView, files, selectedFileIndex]);
-
   // Process diff when file is selected
   useEffect(() => {
     if (selectedFile?.diff) {
@@ -240,6 +233,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   }, [selectedFile?.path, selectedFile?.diff, selectedFile?.loading]);
 
   // Group files by category
+  // This must be defined before filteredFiles since filteredFiles depends on groupedFiles
   const groupedFiles = useMemo(() => {
     let result = files;
     
@@ -279,6 +273,54 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     [groupedFiles]
   );
 
+  // Keyboard shortcuts
+  // Note: This effect must be defined AFTER filteredFiles to avoid "Cannot access before initialization" error.
+  // The keyboard handler uses filteredFiles for arrow key navigation, so it needs to be in scope.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      
+      // Skip shortcuts if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      // Toggle view mode with 'v' key (only if split view is available)
+      if (e.key === 'v' && !e.ctrlKey && !e.metaKey && canUseSplitView) {
+        setViewMode(prev => prev === 'split' ? 'unified' : 'split');
+      }
+      
+      // Toggle sidebar with 's' key
+      if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
+        setSidebarCollapsed(prev => !prev);
+      }
+      
+      // Navigate files with arrow keys
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const direction = e.key === 'ArrowUp' ? -1 : 1;
+        const newIndex = Math.max(0, Math.min(filteredFiles.length - 1, selectedFileIndex + direction));
+        if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
+          setSelectedFile(filteredFiles[newIndex]);
+          setSelectedFileIndex(newIndex);
+          // Load diff if not already loaded
+          if (!filteredFiles[newIndex].diff && filteredFiles[newIndex].loading !== false) {
+            loadFileDiff(filteredFiles[newIndex].path, newIndex);
+          }
+        }
+      }
+      
+      // Close modal with Escape
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, canUseSplitView, filteredFiles, selectedFileIndex, loadFileDiff]);
+
   // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
     if (!hasManuallyToggledSearch.current && files.length > 10 && !showSearch) {
@@ -286,25 +328,70 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     }
   }, [files.length, showSearch]); // Now safe to include showSearch
   
-  // Scroll to first matching file when search term changes
+  // Scroll to selected file or first matching file when search term changes
   useEffect(() => {
     if (searchTerm && filteredFiles.length > 0) {
-      // Find the first matching file
-      const firstMatch = filteredFiles.find(file => 
-        file.path.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      let fileToScrollTo = null;
       
-      if (firstMatch && fileButtonRefs.current[firstMatch.path]) {
+      // If selected file matches search, scroll to it
+      if (selectedFile && selectedFile.path.toLowerCase().includes(searchTerm.toLowerCase())) {
+        fileToScrollTo = selectedFile;
+      } else {
+        // Otherwise, find the first matching file
+        fileToScrollTo = filteredFiles.find(file => 
+          file.path.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      
+      if (fileToScrollTo && fileButtonRefs.current[fileToScrollTo.path]) {
         // Slight delay to ensure DOM is updated
         setTimeout(() => {
-          fileButtonRefs.current[firstMatch.path]?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-          });
+          const button = fileButtonRefs.current[fileToScrollTo.path];
+          if (button) {
+            const container = button.closest('.overflow-y-auto');
+            if (container) {
+              const buttonRect = button.getBoundingClientRect();
+              const containerRect = container.getBoundingClientRect();
+              
+              // Calculate the position to scroll to center the button
+              const scrollTop = button.offsetTop - container.offsetTop - (containerRect.height / 2) + (buttonRect.height / 2);
+              
+              container.scrollTo({
+                top: scrollTop,
+                behavior: 'smooth'
+              });
+            }
+          }
         }, 100);
       }
     }
-  }, [searchTerm, filteredFiles]);
+  }, [searchTerm, filteredFiles, selectedFile]);
+  
+  // Scroll to selected file when it changes
+  useEffect(() => {
+    if (selectedFile && fileButtonRefs.current[selectedFile.path]) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        const button = fileButtonRefs.current[selectedFile.path];
+        if (button) {
+          // Get the scrollable container - it has overflow-y-auto class
+          const container = button.closest('.overflow-y-auto');
+          if (container) {
+            const buttonRect = button.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            
+            // Calculate the position to scroll to center the button
+            const scrollTop = button.offsetTop - container.offsetTop - (containerRect.height / 2) + (buttonRect.height / 2);
+            
+            container.scrollTo({
+              top: scrollTop,
+              behavior: 'smooth'
+            });
+          }
+        }
+      }, 50);
+    }
+  }, [selectedFile]);
 
   // Apply filters based on current view mode
   const applyFilters = useCallback((allData: { files: DiffFile[]; hasWorkingChanges: boolean; summary?: Record<string, unknown> }) => {
@@ -972,38 +1059,47 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               </div>
             ) : selectedFile ? (
               <div className="flex flex-col h-full">
-                <div className="px-4 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
-                  <h3 className="font-mono text-sm text-gray-700">{selectedFile.path}</h3>
-                  {canUseSplitView ? (
-                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                      <button
-                        onClick={() => setViewMode('split')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                          viewMode === 'split'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                        title="Split view - Side by side comparison"
-                      >
-                        <Columns2 className="w-3.5 h-3.5" />
-                        <span>Split</span>
-                      </button>
-                      <button
-                        onClick={() => setViewMode('unified')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                          viewMode === 'unified'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                        title="Unified view - Inline diff"
-                      >
-                        <FileCode className="w-3.5 h-3.5" />
-                        <span>Unified</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-500">Unified view</span>
-                  )}
+                <div className="px-4 py-3 border-b border-gray-200 bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-mono text-sm text-gray-700">{selectedFile.path}</h3>
+                      {canUseSplitView ? (
+                      <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                        <button
+                          onClick={() => setViewMode('split')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                            viewMode === 'split'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                          title="Split view - Side by side comparison"
+                        >
+                          <Columns2 className="w-3.5 h-3.5" />
+                          <span>Split</span>
+                        </button>
+                        <button
+                          onClick={() => setViewMode('unified')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                            viewMode === 'unified'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                          title="Unified view - Inline diff"
+                        >
+                          <FileCode className="w-3.5 h-3.5" />
+                          <span>Unified</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-500">Unified view</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="font-medium text-gray-700">{getComparisonLabels().left}</span>
+                    <span>→</span>
+                    <span className="font-medium text-gray-700">{getComparisonLabels().right}</span>
+                    <span className="text-gray-400">·</span>
+                    <span>{getComparisonLabels().description}</span>
+                  </div>
                 </div>
                 <div className="flex-1 relative">
                   {/* Loading overlay for smooth transitions */}

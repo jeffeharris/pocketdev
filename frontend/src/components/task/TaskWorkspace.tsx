@@ -258,6 +258,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
           collapsed={sidebarCollapsed}
           onCreateTask={() => setShowCreateModal(true)}
           onTaskUpdate={handleTaskUpdate}
+          baseBranch={project?.baseBranch}
         />
 
         {/* Main Terminal Area - Split Layout */}

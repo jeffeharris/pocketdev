@@ -18,6 +18,7 @@ interface SidebarProps {
   collapsed?: boolean;
   onCreateTask?: () => void;
   onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
+  baseBranch?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,7 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTaskSelect,
   collapsed = false,
   onCreateTask,
-  onTaskUpdate
+  onTaskUpdate,
+  baseBranch
 }) => {
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
@@ -717,6 +719,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         taskId={currentTask.id}
         taskTitle={currentTask.name}
         branch={currentTask.branch}
+        baseBranch={baseBranch}
       />
 
       {/* Commit Modal */}
