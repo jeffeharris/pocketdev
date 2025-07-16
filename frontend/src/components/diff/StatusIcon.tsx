@@ -91,8 +91,8 @@ const STATUS_CONFIG = {
   },
   new: {
     icon: Plus,
-    color: 'text-red-600',    // Changed to red for untracked
-    bgColor: 'bg-red-50',
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50',
     label: 'New file'
   },
   modified: {
@@ -119,30 +119,32 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   isLoading,
   category
 }) => {
-  // Use category for consistent coloring if available
-  let status = getPriorityStatus(gitStatus);
-  let config = status ? STATUS_CONFIG[status] : null;
+  // Get the base status from git status code (for icon type)
+  const status = getPriorityStatus(gitStatus);
+  if (!status) return null;
   
-  // Override with category-based styling for consistency
-  if (category && (category === 'staged' || category === 'unstaged' || category === 'untracked')) {
-    if (category === 'staged') {
-      config = STATUS_CONFIG.staged;
-    } else if (category === 'unstaged') {
-      // For unstaged, check if it's a deleted file
-      if (gitStatus.includes('D')) {
-        config = STATUS_CONFIG.deleted;
-      } else {
-        config = STATUS_CONFIG.modified; // Yellow for unstaged
-      }
-    } else if (category === 'untracked') {
-      config = STATUS_CONFIG.new; // Red for untracked
-    }
-  }
-  
-  if (!config) return null;
-  
+  const config = STATUS_CONFIG[status];
   const Icon = config.icon;
   const sizeClasses = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
+  
+  // Determine if we should show a status dot based on category
+  let showStatusDot = false;
+  let dotColor = '';
+  let dotTitle = '';
+  
+  if (category && category !== 'committed') {
+    showStatusDot = true;
+    if (category === 'staged') {
+      dotColor = 'bg-green-500';
+      dotTitle = 'Staged';
+    } else if (category === 'unstaged') {
+      dotColor = 'bg-yellow-500';
+      dotTitle = 'Unstaged';
+    } else if (category === 'untracked') {
+      dotColor = 'bg-red-500';
+      dotTitle = 'Untracked';
+    }
+  }
   
   // Build tooltip text
   let tooltipText = config.label;
@@ -161,13 +163,21 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   }
   
   const iconContent = (
-    <div className={`rounded p-1 ${config.bgColor}`}>
-      {isLoading ? (
-        <Loader2 className={`${sizeClasses} animate-spin text-gray-500`} />
-      ) : (
-        <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
+    <>
+      <div className={`rounded p-1 ${config.bgColor}`}>
+        {isLoading ? (
+          <Loader2 className={`${sizeClasses} animate-spin text-gray-500`} />
+        ) : (
+          <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
+        )}
+      </div>
+      {showStatusDot && !isLoading && (
+        <div 
+          className={`absolute -top-0.5 -right-0.5 w-2 h-2 ${dotColor} rounded-full border border-white`}
+          title={dotTitle}
+        />
       )}
-    </div>
+    </>
   );
   
   // If clickable, wrap in button
