@@ -57,9 +57,9 @@ function getPriorityStatus(gitStatus: string): FileStatus | null {
     return 'new';
   }
   
-  // Modified in index (staged)
+  // Modified in index (staged) - still show as modified
   if (index === 'M') {
-    return 'staged';
+    return 'modified';
   }
   
   return null;
