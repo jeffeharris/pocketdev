@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, FileText, GitBranch, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2, Filter, Search } from 'lucide-react';
+import { X, FileText, GitBranch, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 import { api } from '../../services/api';
 import { DiffEditor } from '@monaco-editor/react';
 import { ThreeStateToggle, type ToggleOption } from './ThreeStateToggle';
 import { StatusIcon } from './StatusIcon';
-import { SearchInput } from './SearchInput';
+import { SearchInput, HighlightedPath } from './SearchInput';
 
 interface DiffFile {
   path: string;
@@ -68,7 +68,15 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [fileFilter, setFileFilter] = useState<FileFilterOption>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [showFileFilter, setShowFileFilter] = useState(false);
+  
+  // Track if user has manually toggled search
+  const hasManuallyToggledSearch = useRef(false);
+  
+  // Track pending staging operations per file
+  const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
+  
+  // Toast state
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
   // Cache for diff data
   const diffCache = useRef<{
@@ -105,6 +113,14 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     return () => window.removeEventListener('resize', checkViewportWidth);
   }, [viewMode]);
 
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Load diff data when modal opens
   useEffect(() => {
     if (isOpen && taskId) {
@@ -118,6 +134,14 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setError(null);
       // Reset comparison mode to working
       setCompareWith('working');
+      // Reset search state
+      setSearchTerm('');
+      setShowSearch(false);
+      hasManuallyToggledSearch.current = false;
+      // Clear pending operations
+      setPendingOperations(new Set());
+      // Clear toast
+      setToast(null);
       // Clear caches when modal closes
       diffCache.current = {};
       fileDiffCache.current = {};
@@ -238,12 +262,12 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     return result;
   }, [files, fileFilter, searchTerm, compareWith]);
 
-  // Auto-show search when many files
+  // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
-    if (files.length > 5 && !showSearch) {
+    if (!hasManuallyToggledSearch.current && files.length > 10 && !showSearch) {
       setShowSearch(true);
     }
-  }, [files.length]); // showSearch is intentionally omitted to prevent infinite loops
+  }, [files.length, showSearch]); // Now safe to include showSearch
 
   // Apply filters based on current view mode
   const applyFilters = useCallback((allData: { files: DiffFile[]; hasWorkingChanges: boolean; summary?: Record<string, unknown> }) => {
@@ -279,6 +303,74 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setSelectedFileIndex(0);
     }
   }, [compareWith]);
+
+  // Helper to update git status codes for icon changes
+  const getUpdatedGitStatus = (currentStatus: string, action: 'stage' | 'unstage'): string => {
+    if (action === 'stage') {
+      switch (currentStatus) {
+        case '??': return 'A ';  // Untracked → Staged new file
+        case ' M': return 'M ';  // Modified → Staged modified
+        case ' D': return 'D ';  // Deleted → Staged deleted
+        case 'MM': return 'M ';  // Modified staged+unstaged → All staged
+        default: return currentStatus;
+      }
+    } else { // unstage
+      switch (currentStatus) {
+        case 'A ': return '??';  // Staged new → Untracked
+        case 'M ': return ' M';  // Staged modified → Unstaged modified
+        case 'D ': return ' D';  // Staged deleted → Unstaged deleted
+        default: return currentStatus;
+      }
+    }
+  };
+
+  // Handle staging/unstaging files
+  const handleStageToggle = async (file: DiffFile) => {
+    const filePath = file.path;
+    
+    // Only prevent clicks on THIS file
+    if (pendingOperations.has(filePath)) return;
+    
+    setPendingOperations(prev => new Set(prev).add(filePath));
+    
+    // Optimistically update git status (StatusIcon will auto-update)
+    const action = file.category === 'staged' ? 'unstage' : 'stage';
+    const newStatus = getUpdatedGitStatus(file.status || '', action);
+    const newCategory: 'staged' | 'unstaged' | 'untracked' = action === 'stage' ? 'staged' : 
+                       (file.status === 'A ' ? 'untracked' : 'unstaged');
+    
+    const optimisticFiles = files.map(f => 
+      f.path === filePath 
+        ? { ...f, status: newStatus, category: newCategory }
+        : f
+    );
+    setFiles(optimisticFiles);
+    
+    try {
+      const result = action === 'unstage'
+        ? await api.unstageFile(projectId, taskId, filePath)
+        : await api.stageFile(projectId, taskId, filePath);
+        
+      if (result.success) {
+        // Success - reload for consistency
+        await loadDiffData(true);
+        // No success toast - visual feedback is enough
+      } else {
+        // Revert on error
+        setFiles(files);
+        setToast({ message: result.error || `Failed to ${action} file`, type: 'error' });
+      }
+    } catch {
+      setFiles(files);
+      setToast({ message: 'Network error while staging file', type: 'error' });
+    } finally {
+      setPendingOperations(prev => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+    }
+  };
 
   const loadDiffData = useCallback(async (forceReload = false) => {
     // Always get all changes and filter client-side
@@ -468,37 +560,24 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-          
-          {/* Comparison mode toggle */}
-          <div className="mt-4 flex items-center gap-4">
-            <span className="text-sm text-gray-600">Compare:</span>
-            <div className="flex-shrink-0">
-              <ThreeStateToggle
-                value={compareWith}
-                onChange={(value) => {
-                  setCompareWith(value);
-                  // Filters will be applied automatically via useEffect
-                }}
-                disabledOptions={!hasWorkingChanges ? ['working'] : []}
-              />
-            </div>
-            {compareWith === 'base' && (
-              <span className="text-xs text-gray-500">
-                Comparing with base branch
-              </span>
-            )}
-            {compareWith === 'all' && (
-              <span className="text-xs text-gray-500">
-                All changes (working + commits)
-              </span>
-            )}
-            {compareWith === 'working' && !hasWorkingChanges && (
-              <span className="text-xs text-gray-500">
-                Working tree is clean
-              </span>
-            )}
-          </div>
         </div>
+
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`mx-6 mt-2 px-4 py-2 rounded-md flex items-center justify-between ${
+            toast.type === 'error' 
+              ? 'bg-red-50 text-red-800 border border-red-200' 
+              : 'bg-green-50 text-green-800 border border-green-200'
+          }`}>
+            <span className="text-sm">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
@@ -506,76 +585,84 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
           <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}>
             {!sidebarCollapsed ? (
               <div className="flex-1 p-4">
-                <div className="flex items-center justify-between mb-3 min-w-0">
-                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                    Changes ({filteredFiles.length} {filteredFiles.length === 1 ? 'file' : 'files'})
-                  </h3>
-                  <div className="flex items-center gap-1">
-                    {(compareWith === 'working' || compareWith === 'all') && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                        Changes ({filteredFiles.length})
+                      </h3>
+                      <div className="flex-shrink-0">
+                        <ThreeStateToggle
+                          value={compareWith}
+                          onChange={(value) => {
+                            setCompareWith(value);
+                            // Reset file filter when changing to base mode
+                            if (value === 'base') {
+                              setFileFilter('all');
+                            }
+                          }}
+                          disabledOptions={!hasWorkingChanges ? ['working'] : []}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setShowFileFilter(!showFileFilter)}
+                        onClick={() => {
+                          hasManuallyToggledSearch.current = true;
+                          setShowSearch(!showSearch);
+                        }}
                         className={`p-1 hover:bg-gray-200 rounded transition-colors ${
-                          showFileFilter ? 'bg-gray-200' : ''
+                          showSearch ? 'bg-gray-200' : ''
                         }`}
-                        title="Filter files"
+                        title="Search files"
                       >
-                        <Filter className="w-4 h-4 text-gray-500" />
+                        <Search className="w-4 h-4 text-gray-500" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => setShowSearch(!showSearch)}
-                      className={`p-1 hover:bg-gray-200 rounded transition-colors ${
-                        showSearch ? 'bg-gray-200' : ''
-                      }`}
-                      title="Search files"
-                    >
-                      <Search className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <button
-                      onClick={() => setSidebarCollapsed(true)}
-                      className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
-                      title="Collapse sidebar"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-gray-500" />
-                    </button>
+                      <button
+                        onClick={() => setSidebarCollapsed(true)}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title="Collapse sidebar"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
                   </div>
+                  {/* Inline staged/unstaged filter for working/all modes */}
+                  {(compareWith === 'working' || compareWith === 'all') && files.some(f => f.category === 'staged') && (
+                    <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+                      <button
+                        onClick={() => setFileFilter('all')}
+                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                          fileFilter === 'all'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => setFileFilter('staged')}
+                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                          fileFilter === 'staged'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Staged
+                      </button>
+                      <button
+                        onClick={() => setFileFilter('unstaged')}
+                        className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
+                          fileFilter === 'unstaged'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Unstaged
+                      </button>
+                    </div>
+                  )}
                 </div>
-                
-                {/* File filter toggle */}
-                {showFileFilter && (compareWith === 'working' || compareWith === 'all') && (
-                  <div className="mb-3 flex gap-1 bg-gray-100 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setFileFilter('all')}
-                      className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                        fileFilter === 'all'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setFileFilter('staged')}
-                      className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                        fileFilter === 'staged'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Staged
-                    </button>
-                    <button
-                      onClick={() => setFileFilter('unstaged')}
-                      className={`flex-1 px-2 py-1 text-xs font-medium rounded transition-all ${
-                        fileFilter === 'unstaged'
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Unstaged
-                    </button>
-                  </div>
-                )}
                 
                 {/* Search input */}
                 {showSearch && (
@@ -643,8 +730,29 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <StatusIcon gitStatus={file.status || '  '} size="sm" />
-                          <span className="truncate">{file.path}</span>
+                          <StatusIcon 
+                            gitStatus={file.status || '  '} 
+                            size="sm"
+                            category={file.category}
+                            onClick={
+                              (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
+                              && (compareWith === 'working' || compareWith === 'all')
+                                ? () => handleStageToggle(file)
+                                : undefined
+                            }
+                            isLoading={pendingOperations.has(file.path)}
+                            disabled={pendingOperations.has(file.path)}
+                          />
+                          {searchTerm ? (
+                            <HighlightedPath 
+                              path={file.path} 
+                              searchTerm={searchTerm}
+                              className="truncate"
+                              maxLength={40}
+                            />
+                          ) : (
+                            <span className="truncate">{file.path}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <>

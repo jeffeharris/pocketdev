@@ -250,10 +250,17 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 5. **API Enhancement**: Backend now properly supports 'all' mode for complete diffs from base to working tree
 
 ### Phase 5 & 6 Implementation Decisions
-1. **Full Reload Strategy**: Stick with full data reload after staging operations for reliability (not optimistic updates)
+1. **Hybrid Update Strategy**: Optimistic UI updates with backend confirmation for smooth UX
+   - Immediate icon change on click with loading state
+   - Per-file operation tracking (allows parallel staging)
+   - Full data reload on success for consistency
+   - Revert icon on failure with error toast
 2. **Search Threshold**: Increased from >5 to >10 files to reduce UI noise
 3. **Toast Notifications**: Simple inline toast component at modal top (3-second auto-dismiss)
+   - Only show on errors (success is visually obvious)
 4. **Staging UI**: Clickable status icons instead of header buttons for better discoverability
+   - StatusIcon component uses gitStatus prop to auto-determine icon
+   - Need to update git status codes optimistically for correct icon transitions
 5. **Header Layout**: Single row with all controls - Changes count, compare mode toggle, staged/unstaged filter (contextual), search button
 
 ### Phase 5: Enhanced Interactions (Partially Complete)

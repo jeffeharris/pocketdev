@@ -90,46 +90,33 @@ Update StatusIcon component to be clickable for staging/unstaging files.
 
 1. **Update StatusIcon component** (StatusIcon.tsx):
 ```tsx
+// Note: StatusIcon uses gitStatus prop, not category!
 interface StatusIconProps {
-  status: string;
-  category?: FileCategory;
+  gitStatus: string;  // Existing prop
+  size?: 'sm' | 'md';
+  showTooltip?: boolean;
   className?: string;
-  onClick?: () => void;  // Add this
-  disabled?: boolean;    // Add this
+  onClick?: () => void;     // Add this
+  disabled?: boolean;       // Add this
+  isLoading?: boolean;      // Add this
 }
 
-// In the component, wrap icon with button or make clickable:
-const isClickable = onClick && (category === 'staged' || category === 'unstaged' || category === 'untracked');
-
-return (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={cn(
-      'inline-flex items-center',
-      isClickable && 'cursor-pointer hover:opacity-80 transition-opacity',
-      disabled && 'cursor-not-allowed opacity-50',
-      className
-    )}
-    title={isClickable ? `Click to ${category === 'staged' ? 'unstage' : 'stage'}` : undefined}
-  >
-    {/* existing icon logic */}
-  </button>
-);
+// The component will need to conditionally wrap its render in a button
+// See Task 3 below for full implementation details
 ```
 
 2. **Update file list in DiffViewerModal** (around line 645):
 ```tsx
 <StatusIcon 
-  status={file.status || ''} 
-  category={file.category}
+  gitStatus={file.status || ''}  // Note: gitStatus, not status
   onClick={
     (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
     && (compareWith === 'working' || compareWith === 'all')
       ? () => handleStageToggle(file)
       : undefined
   }
-  disabled={stagingInProgress}
+  isLoading={pendingOperations.has(file.path)}  // Per-file loading state
+  disabled={pendingOperations.has(file.path)}
 />
 ```
 
@@ -172,47 +159,121 @@ return (
 </div>
 ```
 
-### Task 2: Implement Handlers
+### Task 2: Implement Handlers with Optimistic Updates
 ```typescript
-const [stagingInProgress, setStagingInProgress] = useState(false);
+// Track per-file operations (not global state)
+const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
 
-const handleStageFile = async (filePath: string) => {
-  setStagingInProgress(true);
-  try {
-    const result = await api.stageFile(projectId, taskId, filePath);
-    if (result.success) {
-      // Reload data to get updated status
-      await loadDiffData(true); // force reload
-      // Show success toast/notification
-    } else {
-      // Show error
-      console.error('Failed to stage file:', result.error);
+// Helper to update git status codes for icon changes
+function getUpdatedGitStatus(currentStatus: string, action: 'stage' | 'unstage'): string {
+  if (action === 'stage') {
+    switch (currentStatus) {
+      case '??': return 'A ';  // Untracked → Staged new file
+      case ' M': return 'M ';  // Modified → Staged modified
+      case ' D': return 'D ';  // Deleted → Staged deleted
+      case 'MM': return 'M ';  // Modified staged+unstaged → All staged
+      default: return currentStatus;
     }
-  } finally {
-    setStagingInProgress(false);
+  } else { // unstage
+    switch (currentStatus) {
+      case 'A ': return '??';  // Staged new → Untracked
+      case 'M ': return ' M';  // Staged modified → Unstaged modified
+      case 'D ': return ' D';  // Staged deleted → Unstaged deleted
+      default: return currentStatus;
+    }
   }
-};
+}
 
-const handleUnstageFile = async (filePath: string) => {
-  // Similar to handleStageFile but calls unstageFile
+const handleStageToggle = async (file: DiffFile) => {
+  const filePath = file.path;
+  
+  // Only prevent clicks on THIS file
+  if (pendingOperations.has(filePath)) return;
+  
+  setPendingOperations(prev => new Set(prev).add(filePath));
+  
+  // Optimistically update git status (StatusIcon will auto-update)
+  const action = file.category === 'staged' ? 'unstage' : 'stage';
+  const newStatus = getUpdatedGitStatus(file.status || '', action);
+  const newCategory = action === 'stage' ? 'staged' : 
+                     (file.status === 'A ' ? 'untracked' : 'unstaged');
+  
+  const optimisticFiles = files.map(f => 
+    f.path === filePath 
+      ? { ...f, status: newStatus, category: newCategory }
+      : f
+  );
+  setFiles(optimisticFiles);
+  
+  try {
+    const result = action === 'unstage'
+      ? await api.unstageFile(projectId, taskId, filePath)
+      : await api.stageFile(projectId, taskId, filePath);
+      
+    if (result.success) {
+      // Success - reload for consistency
+      await loadDiffData(true);
+      // No success toast - visual feedback is enough
+    } else {
+      // Revert on error
+      setFiles(files);
+      setToast({ message: result.error || `Failed to ${action} file`, type: 'error' });
+    }
+  } catch (error) {
+    setFiles(files);
+    setToast({ message: 'Network error', type: 'error' });
+  } finally {
+    setPendingOperations(prev => {
+      const next = new Set(prev);
+      next.delete(filePath);
+      return next;
+    });
+  }
 };
 ```
 
-### Task 3: Optimistic Updates (Optional Enhancement)
-Instead of reloading all data, update the file status optimistically:
-1. Update local state immediately
-2. Make API call
-3. If fails, revert the change
-4. This provides instant feedback
+### Task 3: Update StatusIcon for Loading State
+The StatusIcon component needs minor updates to show loading state:
 
-**Note**: The current architecture with `getAllChanges` makes this complex. Full reload might be simpler and more reliable.
+```tsx
+// In StatusIcon props interface:
+interface StatusIconProps {
+  gitStatus: string;
+  size?: 'sm' | 'md';
+  showTooltip?: boolean;
+  className?: string;
+  onClick?: () => void;     // Add this
+  disabled?: boolean;       // Add this
+  isLoading?: boolean;      // Add this
+}
+
+// Wrap the icon render with conditional button/loading:
+if (onClick) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative inline-flex items-center justify-center ${className}`}
+      title={showTooltip ? tooltipText : undefined}
+    >
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+      ) : (
+        // existing icon render
+      )}
+    </button>
+  );
+}
+// else return existing non-clickable render
+```
 
 ## Important Architecture Notes
 
 ### 1. Status Codes vs Categories
 - **status**: Git status codes like "MM", " M", "??", "A", "M" (for committed)
 - **category**: Backend-assigned categories like "staged", "unstaged", "committed"
-- StatusIcon component uses the status codes, not categories
+- StatusIcon component uses the `gitStatus` prop (status codes), not categories
+- Optimistic updates must update both status and category for correct behavior
 
 ### 2. Compare Modes
 - **working**: Shows uncommitted changes only

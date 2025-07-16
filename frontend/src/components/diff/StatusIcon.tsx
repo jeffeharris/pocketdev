@@ -1,14 +1,19 @@
 import React from 'react';
-import { Check, Circle, AlertCircle, Plus, X, GitBranch } from 'lucide-react';
+import { Check, Circle, AlertCircle, Plus, X, Loader2 } from 'lucide-react';
 
 // Priority-based status - only show the most important one
 export type FileStatus = 'conflict' | 'deleted' | 'new' | 'modified' | 'staged';
+export type FileCategory = 'staged' | 'unstaged' | 'untracked' | 'committed';
 
 interface StatusIconProps {
   gitStatus: string; // The two-letter git status code
   size?: 'sm' | 'md';
   showTooltip?: boolean;
   className?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  isLoading?: boolean;
+  category?: FileCategory; // Used to determine if clickable
 }
 
 // Priority order: conflict > deleted > new > modified > staged
@@ -108,7 +113,11 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   gitStatus, 
   size = 'sm',
   showTooltip = true,
-  className = '' 
+  className = '',
+  onClick,
+  disabled,
+  isLoading,
+  category
 }) => {
   const status = getPriorityStatus(gitStatus);
   if (!status) return null;
@@ -118,9 +127,7 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   const hasStaged = hasStagedChanges(gitStatus);
   const showStagedDot = hasStaged && status !== 'staged' && status !== 'conflict';
   
-  
   const sizeClasses = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
-  const iconSize = size === 'sm' ? 14 : 16;
   
   // Build tooltip text
   let tooltipText = config.label;
@@ -132,20 +139,53 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   }
   tooltipText += ` • ${gitStatus}`;
   
-  return (
-    <div 
-      className={`relative inline-flex items-center justify-center ${className}`}
-      title={showTooltip ? tooltipText : undefined}
-    >
+  // Add click hint to tooltip if clickable
+  if (onClick && !disabled && !isLoading && category && category !== 'committed') {
+    const action = category === 'staged' ? 'unstage' : 'stage';
+    tooltipText = `Click to ${action} • ${tooltipText}`;
+  }
+  
+  const iconContent = (
+    <>
       <div className={`rounded p-1 ${config.bgColor}`}>
-        <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
+        {isLoading ? (
+          <Loader2 className={`${sizeClasses} animate-spin text-gray-500`} />
+        ) : (
+          <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
+        )}
       </div>
-      {showStagedDot && (
+      {showStagedDot && !isLoading && (
         <div 
           className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white"
           title="Has staged changes"
         />
       )}
+    </>
+  );
+  
+  // If clickable, wrap in button
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        disabled={disabled || isLoading}
+        className={`relative inline-flex items-center justify-center ${className} ${
+          disabled || isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80 transition-opacity'
+        }`}
+        title={showTooltip ? tooltipText : undefined}
+      >
+        {iconContent}
+      </button>
+    );
+  }
+  
+  // Otherwise, return as div
+  return (
+    <div 
+      className={`relative inline-flex items-center justify-center ${className}`}
+      title={showTooltip ? tooltipText : undefined}
+    >
+      {iconContent}
     </div>
   );
 };
