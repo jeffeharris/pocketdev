@@ -46,7 +46,7 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 
 #### Acceptance Criteria
 
-1. WHEN the file list contains more than 5 files THEN the system SHALL display a search input above the file list
+1. WHEN the file list contains more than 10 files THEN the system SHALL display a search input above the file list
 2. WHEN typing in the search box THEN the system SHALL filter files in real-time matching any part of the file path
 3. WHEN searching THEN the system SHALL highlight the matching portion of the file path
 4. IF no files match the search THEN the system SHALL display "No files match '[search term]'"
@@ -105,6 +105,15 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 5. **Archived prototypes**: ComponentPlayground saved in `/frontend/src/pages/archive/` for reference
 
 ## Tasks
+
+### Implementation Summary
+- **Phase 1**: Backend Infrastructure ✅ COMPLETE
+- **Phase 2**: Frontend Data Layer ✅ COMPLETE  
+- **Phase 3**: UI Components Foundation ✅ COMPLETE
+- **Phase 4**: Core Feature Implementation ✅ COMPLETE
+- **Phase 5**: Search functionality ~60% complete (search works, highlighting not integrated)
+- **Phase 6**: Staging/unstaging 0% complete (API exists but no UI)
+- **Phase 7**: Polish ~40% complete (empty states done, help system missing)
 
 ### Phase 1: Backend Infrastructure ✅
 
@@ -240,39 +249,46 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 4. **Filter Placement**: Staged/unstaged filter now shows in Working and All Changes views (not Branch Diff)
 5. **API Enhancement**: Backend now properly supports 'all' mode for complete diffs from base to working tree
 
-### Phase 5: Enhanced Interactions
+### Phase 5 & 6 Implementation Decisions
+1. **Full Reload Strategy**: Stick with full data reload after staging operations for reliability (not optimistic updates)
+2. **Search Threshold**: Increased from >5 to >10 files to reduce UI noise
+3. **Toast Notifications**: Simple inline toast component at modal top (3-second auto-dismiss)
+4. **Staging UI**: Clickable status icons instead of header buttons for better discoverability
+5. **Header Layout**: Single row with all controls - Changes count, compare mode toggle, staged/unstaged filter (contextual), search button
 
-[ ] 6. Implement search functionality
-- [ ] 6.1 Add search to file list
-  - Integrate SearchInput component
-  - Show only when file count > 5
-  - Implement real-time filtering
-  - _Requirements: 4.1, 4.2, 4.5_
+### Phase 5: Enhanced Interactions (Partially Complete)
 
-- [ ] 6.2 Add search highlighting
-  - Highlight matching text in file paths
-  - Show "No matches" empty state
-  - Maintain selection state during search
-  - _Requirements: 4.3, 4.4_
+[~] 6. Implement search functionality
+- [x] 6.1 Add search to file list (Modified)
+  - SearchInput component integrated ✅
+  - Changed: Manual toggle button instead of automatic >10 files ⚠️
+  - Real-time filtering with 150ms debounce ✅
+  - _Partially completes Requirements: 4.1, 4.2, 4.5_
+
+- [~] 6.2 Add search highlighting
+  - HighlightedPath component created but NOT integrated ❌
+  - "No files match" empty state implemented ✅
+  - Selection state maintained during search ✅
+  - _Partially completes Requirements: 4.3, 4.4_
 
 **Checkpoint 6: Search Feature Testing**
-- Test search with various queries
-- Verify highlighting works correctly
-- Confirm performance with 100+ files
-- _Fully validates Requirements: 4.1-4.5_
+- Search functionality works but lacks highlighting
+- Performance with 100+ files untested
+- _Partially validates Requirements: 4.1-4.5_
 
 [ ] 7. Add staging/unstaging capability
-- [ ] 7.1 Add stage/unstage buttons
-  - Add buttons to diff viewer header
-  - Show correct button based on file state
-  - Disable during operations
+- [ ] 7.1 Make status icons clickable for staging
+  - Update StatusIcon component to accept onClick handler
+  - Add hover states and cursor pointer for stageable states
+  - Show tooltips: "Click to stage" / "Click to unstage"
+  - Move compare toggle inline to save header space
   - _Requirements: 5.1, 5.3_
 
 - [ ] 7.2 Implement staging operations
-  - Wire buttons to API calls
-  - Update UI optimistically
-  - Handle errors gracefully
-  - Update file groups if active
+  - Wire icon clicks to API calls
+  - Add simple toast notifications for feedback
+  - Handle errors with toast messages
+  - Reload data after successful operations
   - _Requirements: 5.2, 5.4, 5.5_
 
 **Checkpoint 7: Staging Feature Testing**
@@ -282,27 +298,26 @@ The Git Diff Viewer Modal is a critical component of the PocketDev system that a
 - Confirm status updates work correctly
 - _Fully validates Requirements: 5.1-5.5_
 
-### Phase 6: Polish and Edge Cases
+### Phase 6: Polish and Edge Cases (Partially Complete)
 
-[ ] 8. Add help system and enhanced empty states
+[~] 8. Add help system and enhanced empty states
 - [ ] 8.1 Add git command help
-  - Add help icon to view toggle
-  - Create tooltip with git commands
-  - Include all commands for combined view
+  - Add help icon to view toggle ❌
+  - Create tooltip with git commands ❌
+  - Include all commands for combined view ❌
   - _Requirements: 3.2, 3.4_
 
-- [ ] 8.2 Enhance empty state messages
-  - Create contextual messages per view
-  - Add unpushed commit detection
-  - Include suggested actions
-  - Add visual checkmark icons
-  - _Requirements: 6.1-6.5_
+- [~] 8.2 Enhance empty state messages
+  - Contextual messages per view implemented ✅
+  - Add unpushed commit detection ❌
+  - Include suggested actions ❌
+  - Visual checkmark icons added ✅
+  - _Partially completes Requirements: 6.1-6.5_
 
 **Checkpoint 8: Final Polish Testing**
-- Test all help tooltips
-- Verify empty states in all scenarios
-- Check unpushed commit detection
-- _Fully validates Requirements: 3.2, 3.4, 6.1-6.5_
+- Empty states show but lack help system
+- No unpushed commit detection
+- _Partially validates Requirements: 3.2, 3.4, 6.1-6.5_
 
 ### Phase 7: Performance and Testing
 
