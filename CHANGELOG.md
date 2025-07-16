@@ -35,6 +35,15 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Enhanced git service with methods for unpushed commit detection
   - Added proper file categorization (staged, unstaged, untracked, committed)
   - Improved line count accuracy for all file types including untracked files
+- **Git Diff Viewer UI Enhancement (Phase 4)**
+  - Integrated three-state toggle (Working Tree/All Changes/Branch Diff) into DiffViewerModal
+  - Added StatusIcon component showing git status with appropriate icons for each file
+  - Implemented single data loading approach with client-side filtering for better performance
+  - Fixed caching to properly work across different comparison modes
+  - Enhanced backend to support 'all' mode showing complete diff from base to working tree
+  - Added staged/unstaged filter for Working Tree and All Changes views
+  - Fixed status code handling to support both working tree (2-letter) and committed (1-letter) formats
+  - Improved empty states with contextual messages for each view mode
 
 ### Fixed
 - **Git Authentication Errors**
