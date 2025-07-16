@@ -4,7 +4,8 @@ import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
-import type { AllChangesResponse, DiffFile, FileStatus, DiffViewerResponse, FileDiffResponse } from '../types/diff';
+import type { AllChangesResponse, FileStatus, DiffViewerResponse, FileDiffResponse } from '../types/diff';
+import { FileChangeType as FileChangeTypeValues } from '../types/diff';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
 
 const API_BASE = '/api';
@@ -456,7 +457,7 @@ class ApiService {
       return {
         files: [{
           path: 'src/components/Button.tsx',
-          type: 'modified',
+          type: FileChangeTypeValues.Modified,
           additions: 10,
           deletions: 2,
           diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx

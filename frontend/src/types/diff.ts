@@ -1,18 +1,22 @@
 // Types for the enhanced Git Diff Viewer
 
-export enum FileStatus {
-  Staged = 'staged',
-  Unstaged = 'unstaged',
-  Untracked = 'untracked',
-  Committed = 'committed'
-}
+export const FileStatus = {
+  Staged: 'staged',
+  Unstaged: 'unstaged',
+  Untracked: 'untracked',
+  Committed: 'committed'
+} as const;
 
-export enum FileChangeType {
-  Added = 'added',
-  Modified = 'modified',
-  Deleted = 'deleted',
-  Renamed = 'renamed'
-}
+export type FileStatus = typeof FileStatus[keyof typeof FileStatus];
+
+export const FileChangeType = {
+  Added: 'added',
+  Modified: 'modified',
+  Deleted: 'deleted',
+  Renamed: 'renamed'
+} as const;
+
+export type FileChangeType = typeof FileChangeType[keyof typeof FileChangeType];
 
 // Color palette for file status indicators
 export const FILE_STATUS_COLORS = {
@@ -83,11 +87,13 @@ export interface FileDiffResponse {
 }
 
 // View modes for the diff viewer
-export enum DiffViewMode {
-  Working = 'working',
-  AllChanges = 'all',
-  Base = 'base'
-}
+export const DiffViewMode = {
+  Working: 'working',
+  AllChanges: 'all',
+  Base: 'base'
+} as const;
+
+export type DiffViewMode = typeof DiffViewMode[keyof typeof DiffViewMode];
 
 // Helper type for view mode configuration
 export interface ViewModeConfig {

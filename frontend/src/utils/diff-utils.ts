@@ -1,4 +1,5 @@
-import { DiffFile, FileStatus, AllChangesResponse } from '../types/diff';
+import type { DiffFile, FileStatus } from '../types/diff';
+import { FileStatus as FileStatusValues } from '../types/diff';
 
 /**
  * Determines which status badges should be shown for a file
@@ -15,10 +16,10 @@ export function getFileStatuses(file: DiffFile): FileStatus[] {
     statuses.push(file.category);
   } else {
     // Determine from boolean flags
-    if (file.staged) statuses.push(FileStatus.Staged);
-    if (file.unstaged) statuses.push(FileStatus.Unstaged);
-    if (file.untracked) statuses.push(FileStatus.Untracked);
-    if (file.committed) statuses.push(FileStatus.Committed);
+    if (file.staged) statuses.push(FileStatusValues.Staged);
+    if (file.unstaged) statuses.push(FileStatusValues.Unstaged);
+    if (file.untracked) statuses.push(FileStatusValues.Untracked);
+    if (file.committed) statuses.push(FileStatusValues.Committed);
   }
   
   return statuses;
@@ -29,10 +30,10 @@ export function getFileStatuses(file: DiffFile): FileStatus[] {
  * Priority: untracked > unstaged > staged > committed
  */
 export function getPrimaryFileStatus(file: DiffFile): FileStatus | null {
-  if (file.untracked) return FileStatus.Untracked;
-  if (file.unstaged) return FileStatus.Unstaged;
-  if (file.staged) return FileStatus.Staged;
-  if (file.committed) return FileStatus.Committed;
+  if (file.untracked) return FileStatusValues.Untracked;
+  if (file.unstaged) return FileStatusValues.Unstaged;
+  if (file.staged) return FileStatusValues.Staged;
+  if (file.committed) return FileStatusValues.Committed;
   
   // Fallback to status or category field
   return file.status || file.category || null;
@@ -43,10 +44,10 @@ export function getPrimaryFileStatus(file: DiffFile): FileStatus | null {
  */
 export function groupFilesByStatus(files: DiffFile[]): Record<FileStatus, DiffFile[]> {
   const grouped: Record<FileStatus, DiffFile[]> = {
-    [FileStatus.Staged]: [],
-    [FileStatus.Unstaged]: [],
-    [FileStatus.Untracked]: [],
-    [FileStatus.Committed]: []
+    [FileStatusValues.Staged]: [],
+    [FileStatusValues.Unstaged]: [],
+    [FileStatusValues.Untracked]: [],
+    [FileStatusValues.Committed]: []
   };
   
   files.forEach(file => {
@@ -64,17 +65,17 @@ export function groupFilesByStatus(files: DiffFile[]): Record<FileStatus, DiffFi
  */
 export function countFilesByStatus(files: DiffFile[]): Record<FileStatus, number> {
   const counts: Record<FileStatus, number> = {
-    [FileStatus.Staged]: 0,
-    [FileStatus.Unstaged]: 0,
-    [FileStatus.Untracked]: 0,
-    [FileStatus.Committed]: 0
+    [FileStatusValues.Staged]: 0,
+    [FileStatusValues.Unstaged]: 0,
+    [FileStatusValues.Untracked]: 0,
+    [FileStatusValues.Committed]: 0
   };
   
   files.forEach(file => {
-    if (file.staged) counts[FileStatus.Staged]++;
-    if (file.unstaged) counts[FileStatus.Unstaged]++;
-    if (file.untracked) counts[FileStatus.Untracked]++;
-    if (file.committed) counts[FileStatus.Committed]++;
+    if (file.staged) counts[FileStatusValues.Staged]++;
+    if (file.unstaged) counts[FileStatusValues.Unstaged]++;
+    if (file.untracked) counts[FileStatusValues.Untracked]++;
+    if (file.committed) counts[FileStatusValues.Committed]++;
   });
   
   return counts;

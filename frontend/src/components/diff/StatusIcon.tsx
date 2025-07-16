@@ -1,0 +1,134 @@
+import React from 'react';
+import { Check, Circle, AlertCircle, Plus, X, GitBranch } from 'lucide-react';
+
+// Priority-based status - only show the most important one
+export type FileStatus = 'conflict' | 'deleted' | 'new' | 'modified' | 'staged';
+
+interface StatusIconProps {
+  gitStatus: string; // The two-letter git status code
+  size?: 'sm' | 'md';
+  showTooltip?: boolean;
+  className?: string;
+}
+
+// Priority order: conflict > deleted > new > modified > staged
+function getPriorityStatus(gitStatus: string): FileStatus | null {
+  const [index, workTree] = [gitStatus[0], gitStatus[1]];
+  
+  // Conflict states (highest priority)
+  if (gitStatus.includes('U') || gitStatus === 'AA' || gitStatus === 'DD') {
+    return 'conflict';
+  }
+  
+  // Deleted (high priority - important to know)
+  if (index === 'D' || workTree === 'D') {
+    return 'deleted';
+  }
+  
+  // New/Untracked (medium priority)
+  if (gitStatus === '??') {
+    return 'new';
+  }
+  
+  // Modified in working tree (medium priority)
+  if (workTree === 'M') {
+    return 'modified';
+  }
+  
+  // Only staged (lowest priority of visible states)
+  if (index !== ' ' && index !== '?') {
+    return 'staged';
+  }
+  
+  return null;
+}
+
+// Check if file has staged changes (for secondary indicator)
+function hasStagedChanges(gitStatus: string): boolean {
+  const index = gitStatus[0];
+  return index !== ' ' && index !== '?' && index !== 'U';
+}
+
+const STATUS_CONFIG = {
+  conflict: {
+    icon: AlertCircle,
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    label: 'Merge conflict'
+  },
+  deleted: {
+    icon: X,
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    label: 'Deleted'
+  },
+  new: {
+    icon: Plus,
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50',
+    label: 'New file'
+  },
+  modified: {
+    icon: Circle,
+    color: 'text-yellow-600',
+    bgColor: 'bg-yellow-50',
+    label: 'Modified'
+  },
+  staged: {
+    icon: Check,
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+    label: 'Staged'
+  }
+};
+
+export const StatusIcon: React.FC<StatusIconProps> = ({ 
+  gitStatus, 
+  size = 'sm',
+  showTooltip = true,
+  className = '' 
+}) => {
+  const status = getPriorityStatus(gitStatus);
+  if (!status) return null;
+  
+  const config = STATUS_CONFIG[status];
+  const Icon = config.icon;
+  const hasStaged = hasStagedChanges(gitStatus);
+  const showStagedDot = hasStaged && status !== 'staged' && status !== 'conflict';
+  
+  const sizeClasses = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
+  const iconSize = size === 'sm' ? 14 : 16;
+  
+  // Build tooltip text
+  let tooltipText = config.label;
+  if (showStagedDot) {
+    tooltipText += ' (has staged changes)';
+  }
+  tooltipText += ` • ${gitStatus}`;
+  
+  return (
+    <div 
+      className={`relative inline-flex items-center justify-center ${className}`}
+      title={showTooltip ? tooltipText : undefined}
+    >
+      <div className={`rounded p-1 ${config.bgColor}`}>
+        <Icon className={`${sizeClasses} ${config.color}`} strokeWidth={2} />
+      </div>
+      {showStagedDot && (
+        <div 
+          className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-white"
+          title="Has staged changes"
+        />
+      )}
+    </div>
+  );
+};
+
+// Export for documentation/testing
+export const STATUS_PRIORITY = [
+  { status: 'conflict', example: 'UU', description: 'Merge conflicts need immediate attention' },
+  { status: 'deleted', example: 'D ', description: 'Deleted files are important to notice' },
+  { status: 'new', example: '??', description: 'New untracked files' },
+  { status: 'modified', example: ' M', description: 'Unstaged modifications' },
+  { status: 'staged', example: 'M ', description: 'Staged and ready to commit' }
+];
