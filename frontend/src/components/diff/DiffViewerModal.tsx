@@ -276,6 +276,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   // Keyboard shortcuts
   // Note: This effect must be defined AFTER filteredFiles to avoid "Cannot access before initialization" error.
   // The keyboard handler uses filteredFiles for arrow key navigation, so it needs to be in scope.
+  // We don't call loadFileDiff here because it's defined later and would cause another initialization error.
+  // Instead, diff loading is handled by the existing useEffect that watches selectedFile changes.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
@@ -304,10 +306,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
           setSelectedFile(filteredFiles[newIndex]);
           setSelectedFileIndex(newIndex);
-          // Load diff if not already loaded
-          if (!filteredFiles[newIndex].diff && filteredFiles[newIndex].loading !== false) {
-            loadFileDiff(filteredFiles[newIndex].path, newIndex);
-          }
+          // Note: Diff loading is handled by the useEffect that watches selectedFile changes
         }
       }
       
@@ -319,7 +318,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, canUseSplitView, filteredFiles, selectedFileIndex, loadFileDiff]);
+  }, [isOpen, onClose, canUseSplitView, filteredFiles, selectedFileIndex]);
 
   // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
