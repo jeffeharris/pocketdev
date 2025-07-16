@@ -593,7 +593,10 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* File List Sidebar */}
-          <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}>
+          <div 
+            className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}
+            style={{ scrollbarGutter: 'stable' }}
+          >
             {!sidebarCollapsed ? (
               <div className="flex-1 p-4">
                 <div className="mb-3">

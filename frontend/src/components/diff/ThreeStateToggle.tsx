@@ -19,17 +19,17 @@ interface OptionConfig {
 const OPTIONS: OptionConfig[] = [
   {
     value: 'working',
-    label: 'Uncommitted',
+    label: 'Working',
     tooltip: 'Show uncommitted changes in your working directory'
   },
   {
     value: 'all',
-    label: 'All Changes',
+    label: 'All',
     tooltip: 'Show everything that would be merged (uncommitted + commits)'
   },
   {
     value: 'base',
-    label: 'Branch Diff',
+    label: 'Branch',
     tooltip: 'Show what this branch adds compared to the base branch'
   }
 ];
@@ -56,7 +56,7 @@ export const ThreeStateToggle: React.FC<ThreeStateToggleProps> = ({
             onClick={() => !isDisabled && onChange(option.value)}
             disabled={isDisabled}
             className={`
-              flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium 
+              flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap
               transition-all duration-200
               ${isActive
                 ? 'bg-white text-gray-900 shadow-sm'
