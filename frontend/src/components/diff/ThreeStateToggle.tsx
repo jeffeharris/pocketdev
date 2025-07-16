@@ -19,18 +19,18 @@ interface OptionConfig {
 const OPTIONS: OptionConfig[] = [
   {
     value: 'working',
-    label: 'Working Tree',
-    tooltip: 'Show uncommitted changes (staged, unstaged, and untracked files)'
+    label: 'Uncommitted',
+    tooltip: 'Show uncommitted changes in your working directory'
   },
   {
     value: 'all',
     label: 'All Changes',
-    tooltip: 'Show all changes including commits not yet in base branch'
+    tooltip: 'Show everything that would be merged (uncommitted + commits)'
   },
   {
     value: 'base',
-    label: 'Base Branch',
-    tooltip: 'Show only committed changes compared to base branch'
+    label: 'Branch Diff',
+    tooltip: 'Show what this branch adds compared to the base branch'
   }
 ];
 
@@ -73,9 +73,6 @@ export const ThreeStateToggle: React.FC<ThreeStateToggleProps> = ({
             aria-label={option.label}
           >
             <span>{option.label}</span>
-            {isDisabled && !disabled && (
-              <span className="text-xs text-gray-400">(disabled)</span>
-            )}
           </button>
         );
       })}

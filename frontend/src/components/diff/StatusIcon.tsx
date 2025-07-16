@@ -13,6 +13,18 @@ interface StatusIconProps {
 
 // Priority order: conflict > deleted > new > modified > staged
 function getPriorityStatus(gitStatus: string): FileStatus | null {
+  // Handle single-letter status codes from committed changes (git diff output)
+  if (gitStatus.length === 1) {
+    switch (gitStatus) {
+      case 'A': return 'new';      // Added in commits
+      case 'M': return 'modified';  // Modified in commits
+      case 'D': return 'deleted';   // Deleted in commits
+      case 'R': return 'modified';  // Renamed in commits
+      default: return null;
+    }
+  }
+  
+  // Handle two-letter status codes from working tree
   const [index, workTree] = [gitStatus[0], gitStatus[1]];
   
   // Conflict states (highest priority)
@@ -35,8 +47,13 @@ function getPriorityStatus(gitStatus: string): FileStatus | null {
     return 'modified';
   }
   
-  // Only staged (lowest priority of visible states)
-  if (index !== ' ' && index !== '?') {
+  // Added to index (staged)
+  if (index === 'A') {
+    return 'new';
+  }
+  
+  // Modified in index (staged)
+  if (index === 'M') {
     return 'staged';
   }
   
@@ -45,6 +62,11 @@ function getPriorityStatus(gitStatus: string): FileStatus | null {
 
 // Check if file has staged changes (for secondary indicator)
 function hasStagedChanges(gitStatus: string): boolean {
+  // Single-letter codes (committed changes) don't have separate staged state
+  if (gitStatus.length === 1) {
+    return false;
+  }
+  
   const index = gitStatus[0];
   return index !== ' ' && index !== '?' && index !== 'U';
 }
@@ -96,11 +118,15 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
   const hasStaged = hasStagedChanges(gitStatus);
   const showStagedDot = hasStaged && status !== 'staged' && status !== 'conflict';
   
+  
   const sizeClasses = size === 'sm' ? 'w-4 h-4' : 'w-5 h-5';
   const iconSize = size === 'sm' ? 14 : 16;
   
   // Build tooltip text
   let tooltipText = config.label;
+  if (gitStatus.length === 1) {
+    tooltipText += ' (committed)';
+  }
   if (showStagedDot) {
     tooltipText += ' (has staged changes)';
   }
