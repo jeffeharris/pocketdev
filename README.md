@@ -45,7 +45,7 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - **Backend**: Node.js with Express (ES modules) - Modular architecture
 - **Database**: SQLite with prepared statements
 - **Frontend**: Vanilla JavaScript with modern ES6+
-- **Terminal**: Shelltender for web-based terminal access with AI monitoring
+- **Terminal**: Shelltender v0.6.1 for web-based terminal access with AI monitoring
 - **Container**: Docker with Docker Compose
 - **Git**: Requires Git 2.38+ for merge conflict detection
 
@@ -112,11 +112,12 @@ simple/server/
   - Temporary worktrees for detailed conflict analysis
   - No stashing operations that could corrupt worktrees
 
-### AI Session Monitoring (New)
+### AI Session Monitoring
 - Real-time Claude thinking pattern detection
-- Session state tracking (thinking, awaiting input, etc.)
-- Notification system for AI events
-- Integration with Shelltender for enhanced terminal experience
+- Session state tracking (not-started, idle, working, waiting)
+- Individual WebSocket connections per task session (Shelltender v0.6.1)
+- Pattern-based state detection for AI activities
+- WebSocket broadcasting of state changes to frontend
 
 ### IDE Connectivity
 - SSH access for JetBrains

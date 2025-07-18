@@ -4,6 +4,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Fixed
+- **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
+  - Fixed TaskStatus not updating based on console activity detection
+  - Replaced removed `ShelltenderMonitorAdapter` with new `ShelltenderSessionMonitor`
+  - Implemented individual WebSocket connections per task session (v0.6.1 requirement)
+  - Updated WebSocket URLs to use correct `/ws` endpoint
+  - AI state detection now working properly (not-started, idle, working, waiting)
+  - Pattern matching for Claude thinking animations restored
+  - Real-time state broadcasting to frontend restored
+
 ### Added
 - **GitHub Token Middleware**
   - Implemented centralized middleware for GitHub token injection
