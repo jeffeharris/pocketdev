@@ -68,6 +68,16 @@ export class TaskController {
       try {
         const { createTaskSession } = await import('../../shared/shelltender-client.js');
         await createTaskSession(taskId, worktreePath);
+        
+        // Connect session monitor to the new task
+        const sessionMonitor = req.app.locals.wsAdapter;
+        const aiMonitor = req.app.locals.aiMonitor;
+        if (sessionMonitor && aiMonitor) {
+          const sessionId = `task-${taskId}`;
+          console.log('Connecting monitor to new task session:', sessionId);
+          await sessionMonitor.connectToSession(sessionId);
+          await aiMonitor.registerSessionPatterns(sessionId);
+        }
       } catch (error) {
         console.warn('Failed to create shelltender session:', error.message);
       }

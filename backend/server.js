@@ -14,6 +14,7 @@ import GitHubAPI from './github.js';
 // Shelltender v0.5.0 - WebSocket client functionality is now provided by the service
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
+import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
@@ -174,28 +175,33 @@ async function initializeMonitoring(server, wsEventService, models) {
   try {
     console.log('Initializing AI monitoring...');
     
-    // TODO: Update monitoring to work with Shelltender v0.5.0
-    // The old ShelltenderMonitorAdapter and ShelltenderWebSocketClient were removed
-    // For now, create a dummy WebSocket client for the notification service
+    // Create Shelltender session monitor for v0.6.1
+    const sessionMonitor = await createSessionMonitor({
+      wsUrl: config.shelltenderWsUrl,
+      apiUrl: config.shelltenderApiUrl
+    });
+    
+    console.log('Shelltender session monitor initialized');
+    
+    // For backward compatibility, create a wsClient that wraps the monitor
     const wsClient = { 
       send: () => {}, 
-      on: () => {},
-      connect: () => {}
+      on: (event, handler) => sessionMonitor.on(event, handler),
+      connect: () => Promise.resolve()
     };
     
     // Initialize notification service
     notificationService = new NotificationService(wsClient);
     
-    // Create AI monitor without the WebSocket adapter for now
-    const wsAdapter = null;
-    aiMonitor = new AISessionMonitor(wsAdapter, wsClient, notificationService, wsEventService, models);
+    // Create AI monitor with the session monitor as sessionManager
+    aiMonitor = new AISessionMonitor(sessionMonitor, wsClient, notificationService, wsEventService, models);
     
     // Register AI patterns
     aiMonitor.registerPatterns(wsClient);
     
     // Register existing sessions for pattern tracking (monitor mode receives all automatically)
     try {
-      const response = await fetch(`${config.shelltenderApiUrl}/sessions`);
+      const response = await fetch(`${config.shelltenderApiUrl}/api/sessions`);
       if (response.ok) {
         const existingSessions = await response.json();
         console.log(`Found ${existingSessions.length} existing sessions`);
@@ -213,14 +219,9 @@ async function initializeMonitoring(server, wsEventService, models) {
       console.error('Failed to register existing sessions:', error);
     }
     
-    // Listen for new session creation
-    wsClient.on('session-created', async (event) => {
-      if (event.id && event.id.startsWith('task-')) {
-        console.log('New session created, setting up pattern tracking:', event.id);
-        await aiMonitor.registerSessionPatterns(event.id);
-        // Monitor mode automatically receives data from new sessions
-      }
-    });
+    // Listen for new task sessions to monitor
+    // Note: We'll rely on the task creation endpoint to notify us
+    // since Shelltender v0.6.1 doesn't have a global session event system
     
     // Listen for session closure
     wsClient.on('session-closed', (sessionId) => {
@@ -235,7 +236,7 @@ async function initializeMonitoring(server, wsEventService, models) {
     app.locals.aiMonitor = aiMonitor;
     app.locals.notificationService = notificationService;
     app.locals.wsClient = wsClient;
-    app.locals.wsAdapter = wsAdapter;
+    app.locals.wsAdapter = sessionMonitor;
     
     console.log('AI monitoring initialized successfully');
     
@@ -305,8 +306,8 @@ async function start() {
       ws.send(JSON.stringify({ type: 'connected', clientId: ws.clientId }));
     });
     
-    // Initialize monitoring - temporarily disabled due to shelltender v0.5.0 migration
-    // await initializeMonitoring(server, wsEventService, models);
+    // Initialize monitoring with Shelltender v0.6.1 adapter
+    await initializeMonitoring(server, wsEventService, models);
     
     // Start listening
     server.listen(config.port, () => {
