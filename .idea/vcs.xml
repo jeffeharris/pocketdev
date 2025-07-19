@@ -2,10 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/projects/17db1cde" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/projects/5a932b4df76825a0" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/projects/79e1cf7b4bef8596" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/projects/a8e57fcf3f86580a" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../shelltender" vcs="Git" />
   </component>
 </project>

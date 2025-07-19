@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Image, Paperclip } from 'lucide-react';
+import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Paperclip } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { TaskState } from '../../types/task';
 import { TaskListItem } from '../task/TaskListItem';
@@ -18,6 +18,7 @@ interface SidebarProps {
   collapsed?: boolean;
   onCreateTask?: () => void;
   onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
+  baseBranch?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,7 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTaskSelect,
   collapsed = false,
   onCreateTask,
-  onTaskUpdate
+  onTaskUpdate,
+  baseBranch
 }) => {
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
@@ -52,8 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     uploadProgress,
     loadImages,
     uploadImage,
-    deleteImage,
-    isLoadingImages
+    deleteImage
   } = useImageUpload(projectId, currentTask.id);
 
   // Close dropdowns when clicking outside
@@ -208,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // Manually refresh the task status after a short delay if WebSocket doesn't update
         setTimeout(async () => {
           try {
-            const updatedTask = await api.getTask(currentTask.id);
+            const updatedTask = await api.getTask(projectId, currentTask.id);
             if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
               onTaskUpdate(currentTask.id, updatedTask);
             }
@@ -718,6 +719,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         taskId={currentTask.id}
         taskTitle={currentTask.name}
         branch={currentTask.branch}
+        baseBranch={baseBranch}
       />
 
       {/* Commit Modal */}
@@ -790,7 +792,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {commits.map((commit, index) => (
+                  {commits.map((commit) => (
                     <div key={commit.hash} className="relative">
                       <button
                         onClick={() => setSelectedCommit(commit.hash)}
@@ -859,7 +861,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     setIsProcessing(true);
                     try {
                       await api.gitOperation(projectId, currentTask.id, 'reset-to-commit', {
-                        commit: selectedCommit
+                        args: selectedCommit
                       });
                       setShowResetModal(false);
                       setSelectedCommit('');

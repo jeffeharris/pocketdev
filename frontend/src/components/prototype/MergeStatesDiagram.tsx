@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, GitBranch, AlertCircle, CheckCircle, GitMerge, GitPullRequest, RefreshCw, XCircle } from 'lucide-react';
+import { ArrowRight, GitBranch, AlertCircle, CheckCircle, GitMerge, GitPullRequest, RefreshCw } from 'lucide-react';
 
 export const MergeStatesDiagram: React.FC = () => {
   const states = [

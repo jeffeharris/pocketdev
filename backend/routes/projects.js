@@ -5,14 +5,18 @@ import path from 'path';
 import fsSync from 'fs';
 import config from '../config/index.js';
 import { gitCommand, configureGitCredentials } from '../utils/git.js';
+import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
 
 const exec = promisify(execCallback);
 const router = Router();
 
+// Apply GitHub token middleware to all routes
+router.use(githubTokenMiddleware);
+
 // Create new project from repo
 router.post('/', async (req, res) => {
   const { repoUrl, branch = 'main', projectName } = req.body;
-  const { models, githubToken } = req.app.locals;
+  const { models } = req.app.locals;
   
   try {
     // Check if project already exists
@@ -30,12 +34,12 @@ router.post('/', async (req, res) => {
     // Clone repository with authentication if GitHub token is available
     let cloneUrl = repoUrl;
     
-    if (githubToken && repoUrl.includes('github.com')) {
+    if (req.githubToken && repoUrl.includes('github.com')) {
       if (repoUrl.startsWith('https://github.com/')) {
-        cloneUrl = repoUrl.replace('https://github.com/', `https://${githubToken}@github.com/`);
+        cloneUrl = repoUrl.replace('https://github.com/', `https://${req.githubToken}@github.com/`);
       } else if (repoUrl.startsWith('git@github.com:')) {
         const repoPath = repoUrl.replace('git@github.com:', '').replace('.git', '');
-        cloneUrl = `https://${githubToken}@github.com/${repoPath}.git`;
+        cloneUrl = `https://${req.githubToken}@github.com/${repoPath}.git`;
       }
     }
     
@@ -46,7 +50,7 @@ router.post('/', async (req, res) => {
     }
     
     await exec(`git checkout ${branch}`, { cwd: projectPath });
-    await configureGitCredentials(projectPath, githubToken);
+    await configureGitCredentials(projectPath, req.githubToken);
     
     // Create project in database
     const project = await models.projects.create({
@@ -150,7 +154,7 @@ router.get('/:id/base-branch-status', async (req, res) => {
 
 // Pull base branch updates
 router.post('/:id/pull-base-branch', async (req, res) => {
-  const { models, githubToken } = req.app.locals;
+  const { models } = req.app.locals;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -159,7 +163,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, githubToken);
+    await configureGitCredentials(project.local_path, req.githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitCommand(project.local_path, 'git status --porcelain');
@@ -196,7 +200,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
 
 // Push base branch changes
 router.post('/:id/push-base-branch', async (req, res) => {
-  const { models, githubToken } = req.app.locals;
+  const { models } = req.app.locals;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -205,7 +209,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, githubToken);
+    await configureGitCredentials(project.local_path, req.githubToken);
     
     // Push base branch
     const result = await gitCommand(project.local_path, 
@@ -233,7 +237,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
 
 // Fetch remote updates for project
 router.post('/:id/fetch', async (req, res) => {
-  const { models, githubToken } = req.app.locals;
+  const { models } = req.app.locals;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -242,7 +246,7 @@ router.post('/:id/fetch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, githubToken);
+    await configureGitCredentials(project.local_path, req.githubToken);
     
     // Fetch with git (will use gh credential helper if configured)
     const result = await gitCommand(project.local_path, 'git fetch --all --prune --tags');

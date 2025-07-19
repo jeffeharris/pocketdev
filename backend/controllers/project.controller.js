@@ -4,15 +4,7 @@ import crypto from 'crypto';
 import config from '../config/index.js';
 import * as gitService from '../services/git.service.js';
 
-/**
- * Helper to get GitHub token from request context
- * @param {Request} req - Express request object
- * @returns {Promise<string>} GitHub token
- */
-async function getGitHubToken(req) {
-  const githubTokenService = req.app.locals.githubTokenService;
-  return await githubTokenService.getToken();
-}
+// GitHub token is now injected by middleware as req.req.githubToken
 
 /**
  * List all projects
@@ -47,15 +39,12 @@ export async function createProject(req, res, next) {
     // Extract project name from URL if not provided
     const finalProjectName = projectName || repoUrl.split('/').pop().replace('.git', '');
     
-    // Get GitHub token
-    const githubToken = await getGitHubToken(req);
-    
-    // Clone repository
+    // Clone repository using token from middleware
     console.log(`Cloning ${repoUrl} to ${projectPath}...`);
     const cloneResult = await gitService.executeGitCommand(
       config.projectsDir,
       `git clone ${repoUrl} ${projectId}`,
-      githubToken
+      req.req.githubToken
     );
     
     if (!cloneResult.success) {
@@ -63,14 +52,14 @@ export async function createProject(req, res, next) {
     }
     
     // Configure git credentials
-    await gitService.configureGitCredentials(projectPath, githubToken);
+    await gitService.configureGitCredentials(projectPath, req.req.githubToken);
     
     // Checkout branch if different from default
     if (branch && branch !== 'main') {
       const checkoutResult = await gitService.executeGitCommand(
         projectPath,
         `git checkout ${branch}`,
-        githubToken
+        req.req.githubToken
       );
       
       if (!checkoutResult.success) {
@@ -129,7 +118,7 @@ ${finalProjectName} - Created on ${new Date().toLocaleDateString()}
       await gitService.executeGitCommand(
         projectPath,
         'mkdir -p .pocketdev',
-        config.githubToken
+        req.githubToken
       );
       
       // Write the PLANNING.md file using a more robust method
@@ -140,13 +129,13 @@ ${finalProjectName} - Created on ${new Date().toLocaleDateString()}
       await gitService.executeGitCommand(
         projectPath,
         'git add .pocketdev/PLANNING.md',
-        config.githubToken
+        req.githubToken
       );
       
       await gitService.executeGitCommand(
         projectPath,
         'git commit -m "Add PocketDev project planning file"',
-        config.githubToken
+        req.githubToken
       );
       
       console.log('Created default PLANNING.md for project:', finalProjectName);
@@ -278,14 +267,12 @@ export async function createBranch(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Get GitHub token
-    const githubToken = await getGitHubToken(req);
     
     // Create branch
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git checkout -b ${branchName} ${fromBranch}`,
-      githubToken
+      req.githubToken
     );
     
     if (!result.success) {
@@ -319,7 +306,7 @@ export async function listBranches(req, res, next) {
     const result = await gitService.executeGitCommand(
       project.local_path,
       'git branch -a',
-      config.githubToken
+      req.githubToken
     );
     
     if (!result.success) {
@@ -366,7 +353,7 @@ export async function syncProject(req, res, next) {
     const fetchResult = await gitService.executeGitCommand(
       project.local_path,
       'git fetch --all --prune',
-      config.githubToken
+      req.githubToken
     );
     
     if (!fetchResult.success) {
@@ -377,7 +364,7 @@ export async function syncProject(req, res, next) {
     const pullResult = await gitService.executeGitCommand(
       project.local_path,
       'git pull',
-      config.githubToken
+      req.githubToken
     );
     
     res.json({
@@ -404,20 +391,20 @@ export async function fetchProject(req, res, next) {
     }
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken);
     
     // Fetch with git
     const result = await gitService.executeGitCommand(
       project.local_path,
       'git fetch --all --prune --tags',
-      config.githubToken
+      req.githubToken
     );
     
     // Get updated branch info
     const branchResult = await gitService.executeGitCommand(
       project.local_path,
       'git branch -r',
-      config.githubToken
+      req.githubToken
     );
     
     const branches = branchResult.output
@@ -456,13 +443,13 @@ export async function getBaseBranchStatus(req, res, next) {
     
     try {
       // Fetch latest from remote to get accurate status
-      await gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken);
+      await gitService.executeGitCommand(project.local_path, 'git fetch origin', req.githubToken);
       
       // Check if base branch is behind its remote
       const behindResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
@@ -470,7 +457,7 @@ export async function getBaseBranchStatus(req, res, next) {
       const aheadResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const ahead = parseInt(aheadResult.output.trim()) || 0;
       
@@ -497,18 +484,16 @@ export async function pullBaseBranch(req, res, next) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
-    // Get GitHub token
-    const githubToken = await getGitHubToken(req);
     
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitService.executeGitCommand(
       project.local_path,
       'git status --porcelain',
-      githubToken
+      req.githubToken
     );
     
     if (statusResult.output && statusResult.output.trim()) {
@@ -522,20 +507,20 @@ export async function pullBaseBranch(req, res, next) {
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git pull origin ${project.base_branch}`,
-      githubToken
+      req.githubToken
     );
     
     if (!result.success) {
       // Check if it's an authentication error
       if (result.error && (result.error.includes('could not read Password') || result.error.includes('Authentication failed'))) {
         // Check if we have a token configured
-        const hasToken = !!githubToken;
+        const hasToken = !!req.githubToken;
         
         return res.status(401).json({ 
           error: 'GitHub authentication failed',
           details: result.error,
           hasToken,
-          tokenLength: githubToken ? githubToken.length : 0,
+          tokenLength: req.githubToken ? req.githubToken.length : 0,
           settingsUrl: '/settings',
           helpText: hasToken 
             ? 'Your GitHub token appears to be invalid or expired. Please update it in the settings.'
@@ -595,13 +580,13 @@ export async function pushBaseBranch(req, res, next) {
     }
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, config.githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken);
     
     // Push base branch
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git push origin ${project.base_branch}`,
-      config.githubToken
+      req.githubToken
     );
     
     if (!result.success) {
@@ -647,7 +632,7 @@ export async function getUpdateStatus(req, res, next) {
         const behindResult = await gitService.executeGitCommand(
           task.worktree_path,
           `git rev-list --count HEAD..origin/${project.base_branch}`,
-          config.githubToken
+          req.githubToken
         );
         const behind = parseInt(behindResult.output.trim()) || 0;
         
@@ -658,7 +643,7 @@ export async function getUpdateStatus(req, res, next) {
           const remoteCheckResult = await gitService.executeGitCommand(
             task.worktree_path,
             `git rev-parse --verify origin/${task.branch} 2>/dev/null`,
-            config.githubToken
+            req.githubToken
           );
           
           if (remoteCheckResult.success) {
@@ -666,7 +651,7 @@ export async function getUpdateStatus(req, res, next) {
             const aheadResult = await gitService.executeGitCommand(
               task.worktree_path,
               `git rev-list --count origin/${task.branch}..HEAD`,
-              config.githubToken
+              req.githubToken
             );
             ahead = parseInt(aheadResult.output.trim()) || 0;
           } else {
@@ -674,7 +659,7 @@ export async function getUpdateStatus(req, res, next) {
             const aheadResult = await gitService.executeGitCommand(
               task.worktree_path,
               `git rev-list --count origin/${project.base_branch}..HEAD`,
-              config.githubToken
+              req.githubToken
             );
             ahead = parseInt(aheadResult.output.trim()) || 0;
           }
@@ -683,7 +668,7 @@ export async function getUpdateStatus(req, res, next) {
           const aheadResult = await gitService.executeGitCommand(
             task.worktree_path,
             `git rev-list --count origin/${project.base_branch}..HEAD`,
-            config.githubToken
+            req.githubToken
           );
           ahead = parseInt(aheadResult.output.trim()) || 0;
         }
@@ -692,7 +677,7 @@ export async function getUpdateStatus(req, res, next) {
         const statusResult = await gitService.executeGitCommand(
           task.worktree_path,
           'git status --porcelain',
-          config.githubToken
+          req.githubToken
         );
         const hasUncommitted = statusResult.output.trim().length > 0;
         
@@ -743,7 +728,7 @@ export async function getProjectPlanning(req, res, next) {
     const result = await gitService.executeGitCommand(
       project.local_path,
       `git show ${project.base_branch}:.pocketdev/PLANNING.md`,
-      config.githubToken
+      req.githubToken
     );
     
     if (result.success) {
@@ -788,14 +773,14 @@ export async function updateProjectPlanning(req, res, next) {
     await gitService.executeGitCommand(
       project.local_path,
       `git checkout ${project.base_branch}`,
-      config.githubToken
+      req.githubToken
     );
     
     // Create .pocketdev directory if it doesn't exist
     await gitService.executeGitCommand(
       project.local_path,
       'mkdir -p .pocketdev',
-      config.githubToken
+      req.githubToken
     );
     
     // Write the PLANNING.md file using fs instead of echo to handle content properly
@@ -810,13 +795,13 @@ export async function updateProjectPlanning(req, res, next) {
     await gitService.executeGitCommand(
       project.local_path,
       'git add .pocketdev/PLANNING.md',
-      config.githubToken
+      req.githubToken
     );
     
     const commitResult = await gitService.executeGitCommand(
       project.local_path,
       `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`,
-      config.githubToken
+      req.githubToken
     );
     
     res.json({ 
@@ -880,14 +865,14 @@ export async function getProjectDashboardCached(req, res, next) {
       const behindResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
       const aheadResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const ahead = parseInt(aheadResult.output.trim()) || 0;
       
@@ -945,7 +930,7 @@ export async function refreshProjectStatus(req, res, next) {
     }
     
     // Trigger git fetch in background (non-blocking)
-    gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken)
+    gitService.executeGitCommand(project.local_path, 'git fetch origin', req.githubToken)
       .then(() => console.log(`Background fetch completed for project ${projectId}`))
       .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
     
@@ -980,19 +965,19 @@ export async function getProjectDashboard(req, res, next) {
     
     // 1. Check base branch sync status
     try {
-      await gitService.executeGitCommand(project.local_path, 'git fetch origin', config.githubToken);
+      await gitService.executeGitCommand(project.local_path, 'git fetch origin', req.githubToken);
       
       const behindResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
       const aheadResult = await gitService.executeGitCommand(
         project.local_path,
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
-        config.githubToken
+        req.githubToken
       );
       const ahead = parseInt(aheadResult.output.trim()) || 0;
       
@@ -1043,7 +1028,7 @@ export async function getProjectDashboard(req, res, next) {
           const mergeResult = await gitService.executeGitCommand(
             task.worktree_path,
             `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`,
-            config.githubToken
+            req.githubToken
           );
           
           if (mergeResult.output && mergeResult.output.includes('<<<<<<< ')) {
@@ -1062,12 +1047,12 @@ export async function getProjectDashboard(req, res, next) {
     }
     
     // 4. Check for open PRs (using gh CLI)
-    if (config.githubToken) {
+    if (req.githubToken) {
       try {
         const prResult = await gitService.executeGitCommand(
           project.local_path,
           `gh pr list --state open --json number,title,url,author,createdAt`,
-          config.githubToken
+          req.githubToken
         );
         
         if (prResult.success && prResult.output) {

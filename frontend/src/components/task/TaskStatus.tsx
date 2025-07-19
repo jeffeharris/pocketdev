@@ -72,7 +72,7 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
     'waiting': { icon: User, label: 'Needs Input', color: 'purple', animate: true },
   };
 
-  const worker = workerConfig[workerStatus] || workerConfig['not-started'];
+  const worker = workerConfig[workerStatus as keyof typeof workerConfig] || workerConfig['not-started'];
 
   // Merged status overrides everything - once merged, nothing else matters
   // This provides closure and prevents confusion about what to do with a merged task
@@ -148,11 +148,11 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
             )}
             {hasUncommitted && (
               <div className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                {gitStatus.staged > 0 && (
+                {gitStatus.staged && gitStatus.staged > 0 && (
                   <>Staged: {gitStatus.staged}</>
                 )}
-                {gitStatus.staged > 0 && gitStatus.unstaged > 0 && ', '}
-                {gitStatus.unstaged > 0 && (
+                {gitStatus.staged && gitStatus.staged > 0 && gitStatus.unstaged && gitStatus.unstaged > 0 && ', '}
+                {gitStatus.unstaged && gitStatus.unstaged > 0 && (
                   <>Unstaged: {gitStatus.unstaged}</>
                 )}
               </div>

@@ -4,6 +4,8 @@ import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
+import type { AllChangesResponse, FileCategory, DiffViewerResponse, FileDiffResponse } from '../types/diff';
+import { FileChangeType as FileChangeTypeValues } from '../types/diff';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
 
 const API_BASE = '/api';
@@ -122,8 +124,28 @@ class ApiService {
     if (USE_MOCKS) {
       return ['main', 'develop', 'feature/user-auth', 'feature/api-refactor', 'fix/memory-leak'];
     }
-    const response = await this.fetch<string[]>(`/projects/${projectId}/branches`);
-    return response;
+    const response = await this.fetch<Array<{ name: string; isRemote: boolean; fullName: string }>>(`/projects/${projectId}/branches`);
+    
+    // Get unique branch names, preferring local over remote
+    const branchMap = new Map<string, boolean>();
+    
+    // First add local branches
+    response
+      .filter(branch => !branch.isRemote)
+      .forEach(branch => branchMap.set(branch.name, true));
+    
+    // Then add remote branches (cleaning up the name)
+    response
+      .filter(branch => branch.isRemote && !branch.name.includes('HEAD'))
+      .forEach(branch => {
+        // Extract clean branch name from remote (e.g., "main" from "remotes/origin/main")
+        const cleanName = branch.fullName.replace(/^remotes\/origin\//, '');
+        if (!branchMap.has(cleanName)) {
+          branchMap.set(cleanName, false);
+        }
+      });
+    
+    return Array.from(branchMap.keys());
   }
 
   async getProjectPlanning(projectId: string): Promise<{ exists: boolean; content: string | null }> {
@@ -280,13 +302,13 @@ class ApiService {
     }));
   }
 
-  async getTask(taskId: string): Promise<Task> {
+  async getTask(projectId: string, taskId: string): Promise<Task> {
     if (USE_MOCKS) {
       const task = mockTasks.find(t => t.id === taskId);
       if (!task) throw new Error('Task not found');
       return task;
     }
-    return this.fetch<Task>(`/tasks/${taskId}`);
+    return this.fetch<Task>(`/projects/${projectId}/tasks/${taskId}`);
   }
 
   async createTask(projectId: string, task: CreateTaskDTO): Promise<Task> {
@@ -382,33 +404,60 @@ class ApiService {
   }
 
   // Git endpoints
-  async getGitStatus(taskId: string): Promise<GitStatus> {
+  async getGitStatus(projectId: string, taskId: string): Promise<GitStatus> {
     if (USE_MOCKS) return mockGitStatus;
-    return this.fetch<GitStatus>(`/tasks/${taskId}/git/status`);
+    return this.fetch<GitStatus>(`/projects/${projectId}/tasks/${taskId}/git/status`);
   }
 
-  async getChangedFiles(taskId: string): Promise<ChangedFile[]> {
+  async getChangedFiles(projectId: string, taskId: string): Promise<ChangedFile[]> {
     if (USE_MOCKS) return mockChangedFiles;
-    return this.fetch<ChangedFile[]>(`/tasks/${taskId}/files/changed`);
+    return this.fetch<ChangedFile[]>(`/projects/${projectId}/tasks/${taskId}/files/changed`);
   }
 
-  async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<{ 
-    files: Array<{
-      path: string;
-      type: 'added' | 'modified' | 'deleted' | 'renamed';
-      additions: number;
-      deletions: number;
-      diff: string;
-    }>;
-    compareWith: string;
-    hasWorkingChanges: boolean;
-  }> {
+  async getAllChanges(projectId: string, taskId: string): Promise<AllChangesResponse> {
+    if (USE_MOCKS) {
+      return {
+        files: [],
+        summary: {
+          staged: 0,
+          unstaged: 0,
+          untracked: 0,
+          committed: 0,
+          total: 0,
+          unpushedCommits: 0
+        },
+        unpushedCommits: []
+      };
+    }
+    
+    const response = await this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/git/all-changes`);
+    
+    // Map backend response to our typed format
+    return {
+      files: response.files.map((file: any) => ({
+        path: file.path,
+        type: file.type,
+        additions: file.additions,
+        deletions: file.deletions,
+        status: file.status,
+        category: file.category,
+        staged: file.staged,
+        unstaged: file.unstaged,
+        untracked: file.untracked,
+        committed: file.committed
+      })),
+      summary: response.summary,
+      unpushedCommits: response.unpushedCommits || []
+    };
+  }
+
+  async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<DiffViewerResponse> {
     if (USE_MOCKS) {
       // Return mock diff data for testing
       return {
         files: [{
           path: 'src/components/Button.tsx',
-          type: 'modified',
+          type: FileChangeTypeValues.Modified,
           additions: 10,
           deletions: 2,
           diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
@@ -433,16 +482,26 @@ index abc123..def456 100644
         hasWorkingChanges: true
       };
     }
-    return this.fetch<{ files: any[]; compareWith: string; hasWorkingChanges: boolean }>(
+    
+    const response = await this.fetch<any>(
       `/projects/${projectId}/tasks/${taskId}/git/diff${compareWith === 'base' ? '?compareWith=base' : ''}`
     );
+    
+    // Map backend response to our typed format
+    return {
+      files: response.files.map((file: any) => ({
+        path: file.path,
+        type: file.type,
+        additions: file.additions,
+        deletions: file.deletions,
+        diff: file.diff
+      })),
+      compareWith: response.compareWith,
+      hasWorkingChanges: response.hasWorkingChanges
+    };
   }
 
-  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' = 'working'): Promise<{
-    path: string;
-    diff: string;
-    hasDiff: boolean;
-  }> {
+  async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' | 'all' = 'working'): Promise<FileDiffResponse> {
     if (USE_MOCKS) {
       return {
         path: filePath,
@@ -458,8 +517,9 @@ index abc123..def456 100644
     }
     // Encode the file path to handle special characters and slashes
     const encodedPath = encodeURIComponent(filePath);
-    return this.fetch<{ path: string; diff: string; hasDiff: boolean }>(
-      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${compareWith === 'base' ? '?compareWith=base' : ''}`
+    const queryParams = compareWith !== 'working' ? `?compareWith=${compareWith}` : '';
+    return this.fetch<FileDiffResponse>(
+      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${queryParams}`
     );
   }
 
@@ -531,6 +591,14 @@ index abc123..def456 100644
         body: body,
       }
     );
+  }
+
+  async stageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
+    return this.gitOperation(projectId, taskId, 'add', { files: filePath });
+  }
+
+  async unstageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
+    return this.gitOperation(projectId, taskId, 'unstage', { files: filePath });
   }
 
   async stageAndCommit(projectId: string, taskId: string, message: string, files?: string | string[]): Promise<{ success: boolean; output: string; error?: string }> {

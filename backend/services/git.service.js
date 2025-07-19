@@ -15,16 +15,13 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
   try {
     const env = { ...process.env };
     
+    
     // Handle git clone commands with authentication
     if (githubToken && command.includes('git clone') && command.includes('github.com')) {
-      console.log('[Git Service] Attempting authenticated clone');
-      console.log(`[Git Service] GitHub token present: ${!!githubToken} (length: ${githubToken ? githubToken.length : 0})`);
-      
       // Extract the URL from the clone command
       const urlMatch = command.match(/git clone\s+(https?:\/\/[^\s]+)/);
       if (urlMatch) {
         const originalUrl = urlMatch[1];
-        console.log(`[Git Service] Original URL: ${originalUrl}`);
         
         // Replace the URL with authenticated version
         const authUrl = originalUrl.replace(
@@ -33,52 +30,27 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
         );
         // Replace the URL in the command
         command = command.replace(originalUrl, authUrl);
-        console.log(`[Git Service] Clone command updated with authentication`);
-      } else {
-        console.log('[Git Service] Failed to extract URL from clone command');
       }
     }
     // Separate check for push/pull/fetch commands that need auth
     if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
-      // Get the current remote URL
-      const { stdout: remoteUrl } = await execAsync('git remote get-url origin', { cwd: projectPath });
+      // Set GitHub token in environment for gh CLI
+      env.GH_TOKEN = githubToken;
+      env.GITHUB_TOKEN = githubToken;
       
-      if (remoteUrl && remoteUrl.includes('github.com')) {
-        // Extract username from URL
-        const urlMatch = remoteUrl.trim().match(/github\.com[/:]([\w-]+)\//);
-        const username = urlMatch ? urlMatch[1] : 'git';
-        
-        // Create a temporary remote with embedded credentials
-        const authUrl = remoteUrl.trim().replace(
-          'https://github.com',
-          `https://${username}:${githubToken}@github.com`
-        );
-        
-        // Use the authenticated URL for this command
-        const tempRemote = `temp-auth-${Date.now()}`;
-        await execAsync(`git remote add ${tempRemote} "${authUrl}"`, { cwd: projectPath });
-        
-        // Replace origin with temp remote in the command
-        command = command.replace(' origin ', ` ${tempRemote} `);
-        
-        // Execute the command
-        const { stdout, stderr } = await execAsync(command, { 
-          cwd: projectPath,
-          env,
-          shell: '/bin/sh'
-        });
-        
-        // Clean up temp remote
-        await execAsync(`git remote remove ${tempRemote}`, { cwd: projectPath });
-        
-        return { success: true, output: stdout, error: stderr };
+      // Check if credential helper is configured
+      try {
+        const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
+        if (!credHelper || !credHelper.includes('gh auth')) {
+          await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+        }
+      } catch (e) {
+        // No credential helper set, configure it
+        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
       }
     }
     
     // For non-auth commands or non-GitHub repos, just run normally
-    if (command.includes('git clone')) {
-      console.log(`[Git Service] Clone without auth - Token: ${!!githubToken}, GitHub: ${command.includes('github.com')}`);
-    }
     
     const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
@@ -292,7 +264,8 @@ export class GitService {
    * @returns {Promise<{staged: number, unstaged: number, untracked: number, files: Array, raw: string}>}
    */
   async getDetailedStatus(projectPath) {
-    const result = await this.command(projectPath, 'git status --porcelain');
+    // Use --untracked-files=all to get individual files instead of directory summaries
+    const result = await this.command(projectPath, 'git status --porcelain --untracked-files=all');
     
     let staged = 0;
     let unstaged = 0;
@@ -419,7 +392,16 @@ export class GitService {
         } else if (file.untracked) {
           // Untracked file - count lines
           fileInfo.diffType = 'untracked';
-          // Will be calculated when getting diff
+          // Count all lines as additions for untracked files
+          try {
+            const content = await this.command(projectPath, `wc -l "${file.path}"`);
+            const lineCount = parseInt(content.output.trim().split(' ')[0]) || 0;
+            fileInfo.additions = lineCount;
+            fileInfo.deletions = 0;
+          } catch (error) {
+            // If we can't count lines, leave as 0
+            console.warn(`Could not count lines for untracked file ${file.path}:`, error);
+          }
         }
         
         files.set(file.path, fileInfo);
@@ -454,13 +436,21 @@ export class GitService {
         else if (status.includes('R')) type = 'renamed';
         
         const fileStats = stats.get(path) || { additions: 0, deletions: 0 };
+        // For committed files, use the single-letter status codes from git diff
+        // These are different from the two-letter working tree status codes
+        let gitStatus = status; // Keep the original single-letter status (A, M, D, R)
+        
         files.set(path, {
           path,
           type,
           additions: fileStats.additions,
           deletions: fileStats.deletions,
           diffType: 'committed',
-          status: status
+          status: gitStatus,
+          staged: false,
+          unstaged: false,
+          untracked: false,
+          committed: true
         });
       });
     }
@@ -475,8 +465,15 @@ export class GitService {
    * @param {string} compareTarget - What to compare against
    * @param {object} fileInfo - Optional file info from getComprehensiveDiff
    */
-  async getFileDiffContent(projectPath, filePath, compareTarget = 'working', fileInfo = null) {
+  async getFileDiffContent(projectPath, filePath, compareTarget = 'working', fileInfo = null, showCompleteDiff = false) {
     let diff = '';
+    
+    // For 'all' mode, always show complete diff from base to working tree
+    if (showCompleteDiff && compareTarget !== 'working') {
+      const result = await this.command(projectPath, 
+        `git diff ${compareTarget} -- "${filePath}"`);
+      return result.output;
+    }
     
     if (compareTarget === 'working') {
       // Use file info to determine how to get diff
@@ -839,6 +836,127 @@ export class GitService {
         unpushed: 0,
         hasRemoteTracking: false
       };
+    }
+  }
+
+  /**
+   * Get all changes including working tree and committed changes not in base branch
+   * @param {string} projectPath - Path to the project
+   * @param {string} baseBranch - Base branch to compare against (default: origin/main)
+   * @returns {Promise<{files: Array, summary: Object}>}
+   */
+  async getAllChanges(projectPath, baseBranch = 'origin/main') {
+    const allFiles = new Map(); // path -> file info
+    
+    // Get working tree changes (staged, unstaged, untracked)
+    const workingTreeDiff = await this.getComprehensiveDiff(projectPath, 'working');
+    
+    // Add all working tree files
+    for (const [path, fileInfo] of workingTreeDiff.files) {
+      allFiles.set(path, {
+        ...fileInfo,
+        category: fileInfo.untracked ? 'untracked' : 
+                 fileInfo.staged && !fileInfo.unstaged ? 'staged' :
+                 'unstaged'
+      });
+    }
+    
+    // Get committed changes not in base branch
+    const committedDiff = await this.getComprehensiveDiff(projectPath, baseBranch);
+    
+    // Add committed files that aren't already in working tree
+    for (const [path, fileInfo] of committedDiff.files) {
+      if (!allFiles.has(path)) {
+        allFiles.set(path, {
+          ...fileInfo,
+          category: 'committed'
+        });
+      }
+    }
+    
+    // Convert to array and categorize
+    const fileArray = Array.from(allFiles.values());
+    const summary = {
+      staged: fileArray.filter(f => f.category === 'staged').length,
+      unstaged: fileArray.filter(f => f.category === 'unstaged').length,
+      untracked: fileArray.filter(f => f.category === 'untracked').length,
+      committed: fileArray.filter(f => f.category === 'committed').length,
+      total: fileArray.length
+    };
+    
+    return {
+      files: fileArray,
+      summary
+    };
+  }
+
+  /**
+   * Stage a specific file
+   * @param {string} projectPath - Path to the project
+   * @param {string} filePath - Path to the file to stage
+   * @returns {Promise<{success: boolean, output: string, error: string}>}
+   */
+  async stageFile(projectPath, filePath) {
+    return this.command(projectPath, `git add "${filePath}"`);
+  }
+
+  /**
+   * Unstage a specific file
+   * @param {string} projectPath - Path to the project
+   * @param {string} filePath - Path to the file to unstage
+   * @returns {Promise<{success: boolean, output: string, error: string}>}
+   */
+  async unstageFile(projectPath, filePath) {
+    return this.command(projectPath, `git reset HEAD "${filePath}"`);
+  }
+
+  /**
+   * Check if there are unpushed commits
+   * @param {string} projectPath - Path to the project
+   * @param {string} currentBranch - Current branch name
+   * @returns {Promise<{count: number, commits: Array}>}
+   */
+  async getUnpushedCommitsInfo(projectPath, currentBranch) {
+    try {
+      // Check if remote tracking branch exists
+      const remoteCheck = await this.command(projectPath, 
+        `git rev-parse --verify origin/${currentBranch} 2>/dev/null`);
+      
+      if (!remoteCheck.success) {
+        // No remote tracking branch, all commits are unpushed
+        const allCommits = await this.command(projectPath, 
+          'git log --oneline --pretty=format:"%h %s"');
+        const commits = allCommits.output.trim().split('\n').filter(line => line);
+        return {
+          count: commits.length,
+          commits: commits.map(line => {
+            const [hash, ...messageParts] = line.split(' ');
+            return { hash, message: messageParts.join(' ') };
+          })
+        };
+      }
+      
+      // Count unpushed commits
+      const countResult = await this.command(projectPath, 
+        `git rev-list --count origin/${currentBranch}..HEAD`);
+      const count = parseInt(countResult.output.trim(), 10) || 0;
+      
+      if (count === 0) {
+        return { count: 0, commits: [] };
+      }
+      
+      // Get unpushed commit details
+      const logResult = await this.command(projectPath, 
+        `git log origin/${currentBranch}..HEAD --oneline --pretty=format:"%h %s"`);
+      const commits = logResult.output.trim().split('\n').filter(line => line).map(line => {
+        const [hash, ...messageParts] = line.split(' ');
+        return { hash, message: messageParts.join(' ') };
+      });
+      
+      return { count, commits };
+    } catch (error) {
+      console.error('Error getting unpushed commits:', error);
+      return { count: 0, commits: [] };
     }
   }
 }

@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, DragEvent } from 'react';
-import { Upload, X, Copy, Trash2, Image as ImageIcon, Check, FileText, FileJson, Archive, File, FileCode, FileType } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import type { DragEvent } from 'react';
+import { Upload, X, Copy, Trash2, Check, FileText, Archive, File, FileCode, FileType } from 'lucide-react';
 import { api } from '../../services/api';
 
 interface UploadedImage {

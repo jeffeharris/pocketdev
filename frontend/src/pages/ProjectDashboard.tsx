@@ -9,7 +9,6 @@ import {
   CheckCircle,
   ExternalLink,
   Archive,
-  GitPullRequest,
   GitMerge,
   RefreshCw,
   ArrowUp,
@@ -56,6 +55,48 @@ export const ProjectDashboard: React.FC = () => {
     }
   }, [projectId]);
 
+  useEffect(() => {
+    // Add minimal scrollbar styles for planning container
+    const style = document.createElement('style');
+    style.id = 'planning-container-scrollbar-styles';
+    style.textContent = `
+      .planning-container-scroll::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      .planning-container-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      .planning-container-scroll::-webkit-scrollbar-thumb {
+        background-color: #e5e7eb;
+        border-radius: 3px;
+      }
+      
+      .planning-container-scroll:hover::-webkit-scrollbar-thumb {
+        background-color: #d1d5db;
+      }
+      
+      /* Firefox */
+      .planning-container-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: #e5e7eb transparent;
+      }
+      
+      .planning-container-scroll:hover {
+        scrollbar-color: #d1d5db transparent;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      const existingStyle = document.getElementById('planning-container-scrollbar-styles');
+      if (existingStyle) {
+        existingStyle.remove();
+      }
+    };
+  }, []);
+
   // Phase 1: Load critical data for instant UI
   const loadCriticalData = async () => {
     const [projectData, tasksData] = await Promise.all([
@@ -78,17 +119,35 @@ export const ProjectDashboard: React.FC = () => {
       setNeedsAttention(cachedDashboard.needsAttention);
       setLastUpdated(cachedDashboard.lastUpdated);
       
-      // Load other data in parallel
-      const [branchesData, planningData, fullTasksData] = await Promise.all([
+      // Load other data in parallel, but handle failures individually
+      const results = await Promise.allSettled([
         api.getProjectBranches(projectId!),
         api.getProjectPlanning(projectId!),
         api.getTasks(projectId!) // Full task data with git status
       ]);
       
-      setBranches(branchesData);
-      setPlanning(planningData);
-      // Update tasks with full git status
-      setTasks(fullTasksData);
+      // Handle branches
+      if (results[0].status === 'fulfilled') {
+        setBranches(results[0].value);
+      } else {
+        console.error('Failed to load branches:', results[0].reason);
+      }
+      
+      // Handle planning
+      if (results[1].status === 'fulfilled') {
+        setPlanning(results[1].value);
+      } else {
+        console.error('Failed to load planning:', results[1].reason);
+        // Set default planning state
+        setPlanning({ exists: false, content: null });
+      }
+      
+      // Handle tasks
+      if (results[2].status === 'fulfilled') {
+        setTasks(results[2].value);
+      } else {
+        console.error('Failed to load tasks:', results[2].reason);
+      }
       
       // Trigger background refresh for next time
       api.refreshProjectStatus(projectId!).catch(console.error);
@@ -111,8 +170,13 @@ export const ProjectDashboard: React.FC = () => {
     }
   };
 
-  const loadDashboard = async () => {
-    // Full refresh - used after actions
+  const loadDashboard = async (forceFullRefresh = false) => {
+    // If not forcing full refresh, use phased approach
+    if (!forceFullRefresh) {
+      return loadDashboardPhased();
+    }
+    
+    // Full refresh - used after actions that modify git state
     try {
       setLoading(true);
       const [dashboardData, tasksData, branchesData, planningData] = await Promise.all([
@@ -142,12 +206,12 @@ export const ProjectDashboard: React.FC = () => {
       switch (action) {
         case 'pull':
           await api.pullBaseBranch(projectId!);
-          await loadDashboard();
+          await loadDashboard(true); // Force full refresh after git operation
           break;
         
         case 'push':
           await api.pushBaseBranch(projectId!);
-          await loadDashboard();
+          await loadDashboard(true); // Force full refresh after git operation
           break;
         
         case 'open-task':
@@ -157,7 +221,7 @@ export const ProjectDashboard: React.FC = () => {
         case 'archive':
           if (confirm(`Archive task "${item.details.taskName}"?`)) {
             await api.archiveTask(projectId!, item.details.taskId);
-            await loadDashboard();
+            await loadDashboard(true); // Force full refresh after task change
           }
           break;
         
@@ -227,7 +291,7 @@ export const ProjectDashboard: React.FC = () => {
       
       // If changes were committed, show in needs attention
       if (result.needsPush) {
-        await loadDashboard();
+        await loadDashboard(true); // Force full refresh after git changes
       }
     }
   };
@@ -470,7 +534,7 @@ export const ProjectDashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Planning Section */}
-          <div>
+          <div className="flex flex-col h-[600px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Planning</h2>
               {planning.exists && (
@@ -482,10 +546,12 @@ export const ProjectDashboard: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-white rounded-lg border border-gray-200 flex-1 overflow-hidden flex flex-col">
               {planning.exists && planning.content ? (
-                <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-ul:list-disc prose-li:marker:text-gray-600 prose-strong:text-gray-900">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{planning.content}</ReactMarkdown>
+                <div className="overflow-y-auto p-6 planning-container-scroll">
+                  <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-ul:list-disc prose-li:marker:text-gray-600 prose-strong:text-gray-900">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{planning.content}</ReactMarkdown>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -547,7 +613,7 @@ export const ProjectDashboard: React.FC = () => {
                 ...tasks.filter(t => t.taskState === 'merged').map(t => ({ ...t, activityType: 'merged' })),
                 ...tasks.filter(t => t.taskState === 'active' && t.has_uncommitted_changes).map(t => ({ ...t, activityType: 'active' }))
               ]
-                .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                 .slice(0, 5)
                 .map(task => (
                   <div key={task.id} className="p-3">

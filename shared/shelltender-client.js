@@ -1,5 +1,4 @@
-import fetch from 'node-fetch';
-
+// Use built-in fetch API (available in Node.js 18+)
 const SHELLTENDER_API_URL = process.env.SHELLTENDER_API_URL || 'http://localhost:8080';
 
 /**

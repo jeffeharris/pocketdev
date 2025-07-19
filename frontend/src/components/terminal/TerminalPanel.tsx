@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
+import { useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Eye, RefreshCw, ExternalLink, Monitor, Plus } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -124,7 +124,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           ref={terminalRef}
           taskId={task.id} 
           sessionId={sessionId} 
-          worktreePath={task.worktree_path || task.worktree} 
+          worktreePath={task.worktree_path} 
           isVisible={isVisible}
         />
       </div>

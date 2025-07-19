@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, FileText, GitBranch, Plus, Minus, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2, GitCompare } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { X, FileText, GitBranch, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 import { api } from '../../services/api';
 import { DiffEditor } from '@monaco-editor/react';
+import { ThreeStateToggle, type ToggleOption } from './ThreeStateToggle';
+import { StatusIcon } from './StatusIcon';
+import { SearchInput, HighlightedPath } from './SearchInput';
 
 interface DiffFile {
   path: string;
@@ -10,7 +13,11 @@ interface DiffFile {
   type: 'added' | 'modified' | 'deleted' | 'renamed';
   diff?: string;
   loading?: boolean;
+  diffLoading?: boolean; // Track diff content loading separately
+  status?: string; // Git status code like 'MM', 'A ', etc.
+  category?: 'staged' | 'unstaged' | 'untracked' | 'committed';
 }
+
 
 interface DiffViewerModalProps {
   isOpen: boolean;
@@ -19,6 +26,7 @@ interface DiffViewerModalProps {
   taskId: string;
   taskTitle: string;
   branch: string;
+  baseBranch?: string;
 }
 
 /**
@@ -43,7 +51,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   projectId,
   taskId,
   taskTitle,
-  branch
+  branch,
+  baseBranch = 'main'
 }) => {
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<DiffFile | null>(null);
@@ -55,13 +64,59 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [canUseSplitView, setCanUseSplitView] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
-  const [compareWith, setCompareWith] = useState<'working' | 'base'>('working');
+  const [compareWith, setCompareWith] = useState<ToggleOption>('working');
   const [hasWorkingChanges, setHasWorkingChanges] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  
+  // Track if user has manually toggled search
+  const hasManuallyToggledSearch = useRef(false);
+  
+  // Track pending staging operations per file
+  const [pendingOperations, setPendingOperations] = useState<Set<string>>(new Set());
+  
+  // Refs for file buttons to enable scroll-to functionality
+  const fileButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  
+  // Get comparison labels based on current view mode
+  const getComparisonLabels = () => {
+    const currentBranch = branch.split('/').pop() || branch;
+    const base = `origin/${baseBranch}`;
+    
+    switch (compareWith) {
+      case 'working':
+        return {
+          left: 'HEAD',
+          right: 'Working Tree',
+          description: 'Uncommitted changes'
+        };
+      case 'all':
+        return {
+          left: base,
+          right: 'Working Tree',
+          description: `All changes from ${baseBranch} to your working tree`
+        };
+      case 'base':
+        return {
+          left: base,
+          right: currentBranch,
+          description: `Committed changes not in ${baseBranch}`
+        };
+      default:
+        return {
+          left: '',
+          right: '',
+          description: ''
+        };
+    }
+  };
+  
+  // Toast state
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
   // Cache for diff data
   const diffCache = useRef<{
-    working?: { files: DiffFile[]; hasWorkingChanges: boolean };
-    base?: { files: DiffFile[]; hasWorkingChanges: boolean };
+    allData?: { files: DiffFile[]; hasWorkingChanges: boolean; summary?: Record<string, unknown> };
   }>({});
   
   // Cache for individual file diffs
@@ -94,6 +149,14 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     return () => window.removeEventListener('resize', checkViewportWidth);
   }, [viewMode]);
 
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   // Load diff data when modal opens
   useEffect(() => {
     if (isOpen && taskId) {
@@ -107,16 +170,123 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       setError(null);
       // Reset comparison mode to working
       setCompareWith('working');
-      // Clear caches
+      // Reset search state
+      setSearchTerm('');
+      setShowSearch(false);
+      hasManuallyToggledSearch.current = false;
+      // Clear pending operations
+      setPendingOperations(new Set());
+      // Clear toast
+      setToast(null);
+      // Clear caches when modal closes
       diffCache.current = {};
       fileDiffCache.current = {};
     }
+    
+    // Cleanup function to prevent Monaco disposal errors
+    return () => {
+      if (!isOpen) {
+        setOriginalCode('');
+        setModifiedCode('');
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskId]);
 
+  // Re-apply filters when compareWith changes
+  useEffect(() => {
+    if (diffCache.current.allData && isOpen) {
+      applyFilters(diffCache.current.allData);
+    }
+  }, [compareWith]); // applyFilters is stable due to useCallback
+
+  // Load first file's diff when a file is selected and hasn't been loaded yet
+  useEffect(() => {
+    if (selectedFile && !selectedFile.diff && selectedFile.loading !== false && files.length > 0) {
+      const fileIndex = files.findIndex(f => f.path === selectedFile.path);
+      if (fileIndex !== -1) {
+        // This will run after loadFileDiff is defined
+        const timer = setTimeout(() => {
+          loadFileDiff(selectedFile.path, fileIndex);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [selectedFile?.path, files.length]); // Intentionally not including loadFileDiff to avoid issues
+
+  // Process diff when file is selected
+  useEffect(() => {
+    if (selectedFile?.diff) {
+      processDiff(selectedFile.diff);
+    } else if (selectedFile && !selectedFile.diff && selectedFile.loading !== false) {
+      // File is loading, keep previous state to avoid flashing
+      // Don't change originalCode/modifiedCode
+    } else if (selectedFile && selectedFile.diff === undefined && selectedFile.loading === false) {
+      // File failed to load
+      setOriginalCode('');
+      setModifiedCode('');
+    } else if (!selectedFile) {
+      // Only clear when no file is selected
+      setOriginalCode('');
+      setModifiedCode('');
+    }
+  }, [selectedFile?.path, selectedFile?.diff, selectedFile?.loading]);
+
+  // Group files by category
+  // This must be defined before filteredFiles since filteredFiles depends on groupedFiles
+  const groupedFiles = useMemo(() => {
+    let result = files;
+    
+    // Apply search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      result = result.filter(file => 
+        file.path.toLowerCase().includes(search)
+      );
+    }
+    
+    // Group by category for working/all modes
+    if (compareWith === 'working' || compareWith === 'all') {
+      const staged = result.filter(f => f.category === 'staged');
+      const unstaged = result.filter(f => f.category === 'unstaged' || f.category === 'untracked');
+      const committed = result.filter(f => f.category === 'committed');
+      
+      return {
+        staged,
+        unstaged,
+        committed,
+        hasGroups: staged.length > 0 && unstaged.length > 0
+      };
+    }
+    
+    // For base mode, just return all files as one group
+    return {
+      staged: [],
+      unstaged: [],
+      committed: result,
+      hasGroups: false
+    };
+  }, [files, searchTerm, compareWith]);
+  
+  const filteredFiles = useMemo(() => 
+    [...groupedFiles.staged, ...groupedFiles.unstaged, ...groupedFiles.committed],
+    [groupedFiles]
+  );
+
   // Keyboard shortcuts
+  // Note: This effect must be defined AFTER filteredFiles to avoid "Cannot access before initialization" error.
+  // The keyboard handler uses filteredFiles for arrow key navigation, so it needs to be in scope.
+  // We don't call loadFileDiff here because it's defined later and would cause another initialization error.
+  // Instead, diff loading is handled by the existing useEffect that watches selectedFile changes.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
+      
+      // Skip shortcuts if user is typing in an input field
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
       
       // Toggle view mode with 'v' key (only if split view is available)
       if (e.key === 'v' && !e.ctrlKey && !e.metaKey && canUseSplitView) {
@@ -132,10 +302,11 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         const direction = e.key === 'ArrowUp' ? -1 : 1;
-        const newIndex = Math.max(0, Math.min(files.length - 1, selectedFileIndex + direction));
-        if (newIndex !== selectedFileIndex && files[newIndex]) {
-          setSelectedFile(files[newIndex]);
+        const newIndex = Math.max(0, Math.min(filteredFiles.length - 1, selectedFileIndex + direction));
+        if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
+          setSelectedFile(filteredFiles[newIndex]);
           setSelectedFileIndex(newIndex);
+          // Note: Diff loading is handled by the useEffect that watches selectedFile changes
         }
       }
       
@@ -147,130 +318,258 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, canUseSplitView, files, selectedFileIndex]);
+  }, [isOpen, onClose, canUseSplitView, filteredFiles, selectedFileIndex]);
 
-  // Process diff when file is selected
+  // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {
-    if (selectedFile?.diff) {
-      processDiff(selectedFile.diff);
-    } else if (selectedFile && !selectedFile.diff) {
-      setOriginalCode('');
-      setModifiedCode('// No diff content available for this file');
-    } else {
-      // Clear codes when no file is selected
-      setOriginalCode('');
-      setModifiedCode('');
+    if (!hasManuallyToggledSearch.current && files.length > 10 && !showSearch) {
+      setShowSearch(true);
+    }
+  }, [files.length, showSearch]); // Now safe to include showSearch
+  
+  // Scroll to selected file or first matching file when search term changes
+  useEffect(() => {
+    if (searchTerm && filteredFiles.length > 0) {
+      let fileToScrollTo = null;
+      
+      // If selected file matches search, scroll to it
+      if (selectedFile && selectedFile.path.toLowerCase().includes(searchTerm.toLowerCase())) {
+        fileToScrollTo = selectedFile;
+      } else {
+        // Otherwise, find the first matching file
+        fileToScrollTo = filteredFiles.find(file => 
+          file.path.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      
+      if (fileToScrollTo && fileButtonRefs.current[fileToScrollTo.path]) {
+        // Slight delay to ensure DOM is updated
+        setTimeout(() => {
+          const button = fileButtonRefs.current[fileToScrollTo.path];
+          if (button) {
+            const container = button.closest('.overflow-y-auto');
+            if (container) {
+              const buttonRect = button.getBoundingClientRect();
+              const containerRect = container.getBoundingClientRect();
+              
+              // Calculate the position to scroll to center the button
+              const scrollTop = button.offsetTop - container.offsetTop - (containerRect.height / 2) + (buttonRect.height / 2);
+              
+              container.scrollTo({
+                top: scrollTop,
+                behavior: 'smooth'
+              });
+            }
+          }
+        }, 100);
+      }
+    }
+  }, [searchTerm, filteredFiles, selectedFile]);
+  
+  // Scroll to selected file when it changes
+  useEffect(() => {
+    if (selectedFile && fileButtonRefs.current[selectedFile.path]) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        const button = fileButtonRefs.current[selectedFile.path];
+        if (button) {
+          // Get the scrollable container - it has overflow-y-auto class
+          const container = button.closest('.overflow-y-auto');
+          if (container) {
+            const buttonRect = button.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            
+            // Calculate the position to scroll to center the button
+            const scrollTop = button.offsetTop - container.offsetTop - (containerRect.height / 2) + (buttonRect.height / 2);
+            
+            container.scrollTo({
+              top: scrollTop,
+              behavior: 'smooth'
+            });
+          }
+        }
+      }, 50);
     }
   }, [selectedFile]);
 
+  // Apply filters based on current view mode
+  const applyFilters = useCallback((allData: { files: DiffFile[]; hasWorkingChanges: boolean; summary?: Record<string, unknown> }) => {
+    let filteredFiles = allData.files;
+    
+    // Filter based on compareWith mode
+    if (compareWith === 'working') {
+      // Show only uncommitted changes (staged, unstaged, untracked)
+      filteredFiles = filteredFiles.filter(file => 
+        file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked'
+      );
+    } else if (compareWith === 'base') {
+      // Show only committed changes
+      filteredFiles = filteredFiles.filter(file => file.category === 'committed');
+    }
+    // For 'all' mode, show everything (no filter)
+    
+    // Process files inline to avoid circular dependency
+    if (filteredFiles.length > 0) {
+      
+      // Set files immediately
+      setFiles(filteredFiles);
+      
+      // Select the first file
+      const firstFile = filteredFiles[0];
+      setSelectedFile(firstFile);
+      setSelectedFileIndex(0);
+      
+      // First file diff will be loaded by the click handler when modal is first opened
+    } else {
+      setFiles([]);
+      setSelectedFile(null);
+      setSelectedFileIndex(0);
+    }
+  }, [compareWith]);
 
-  const loadDiffData = async (comparison: 'working' | 'base' = compareWith, forceReload = false) => {
-    // Check cache first
-    if (!forceReload && diffCache.current[comparison]) {
-      console.log(`Using cached diff data for ${comparison} mode`);
-      const cached = diffCache.current[comparison];
-      setHasWorkingChanges(cached.hasWorkingChanges);
-      processFiles(cached.files);
+  // Helper to update git status codes for icon changes
+  const getUpdatedGitStatus = (currentStatus: string, action: 'stage' | 'unstage'): string => {
+    if (action === 'stage') {
+      switch (currentStatus) {
+        case '??': return 'A ';  // Untracked → Staged new file
+        case ' M': return 'M ';  // Modified → Staged modified
+        case ' D': return 'D ';  // Deleted → Staged deleted
+        case 'MM': return 'M ';  // Modified staged+unstaged → All staged
+        default: return currentStatus;
+      }
+    } else { // unstage
+      switch (currentStatus) {
+        case 'A ': return '??';  // Staged new → Untracked
+        case 'M ': return ' M';  // Staged modified → Unstaged modified
+        case 'D ': return ' D';  // Staged deleted → Unstaged deleted
+        default: return currentStatus;
+      }
+    }
+  };
+
+  // Handle staging/unstaging files
+  const handleStageToggle = async (file: DiffFile) => {
+    const filePath = file.path;
+    
+    // Only prevent clicks on THIS file
+    if (pendingOperations.has(filePath)) return;
+    
+    setPendingOperations(prev => new Set(prev).add(filePath));
+    
+    // Optimistically update git status (StatusIcon will auto-update)
+    const action = file.category === 'staged' ? 'unstage' : 'stage';
+    const newStatus = getUpdatedGitStatus(file.status || '', action);
+    const newCategory: 'staged' | 'unstaged' | 'untracked' = action === 'stage' ? 'staged' : 
+                       (file.status === 'A ' ? 'untracked' : 'unstaged');
+    
+    const optimisticFiles = files.map(f => 
+      f.path === filePath 
+        ? { ...f, status: newStatus, category: newCategory }
+        : f
+    );
+    setFiles(optimisticFiles);
+    
+    try {
+      const result = action === 'unstage'
+        ? await api.unstageFile(projectId, taskId, filePath)
+        : await api.stageFile(projectId, taskId, filePath);
+        
+      if (result.success) {
+        // Success - reload for consistency
+        await loadDiffData(true);
+        // No success toast - visual feedback is enough
+      } else {
+        // Revert on error
+        setFiles(files);
+        setToast({ message: result.error || `Failed to ${action} file`, type: 'error' });
+      }
+    } catch {
+      setFiles(files);
+      setToast({ message: 'Network error while staging file', type: 'error' });
+    } finally {
+      setPendingOperations(prev => {
+        const next = new Set(prev);
+        next.delete(filePath);
+        return next;
+      });
+    }
+  };
+
+  const loadDiffData = useCallback(async (forceReload = false) => {
+    // Always get all changes and filter client-side
+    if (!forceReload && diffCache.current.allData) {
+      applyFilters(diffCache.current.allData);
       setLoading(false);
       return;
     }
     
     setLoading(true);
     setError(null);
+    
     try {
-      const response = await api.getTaskDiff(projectId, taskId, comparison);
+      // Always fetch all changes
+      const response = await api.getAllChanges(projectId, taskId);
       const files: DiffFile[] = response.files || [];
       
-      // Cache the response
-      diffCache.current[comparison] = {
-        files: files,
-        hasWorkingChanges: response.hasWorkingChanges
+      // Cache the full response
+      diffCache.current.allData = {
+        files,
+        hasWorkingChanges: (response.summary?.total || 0) > (response.summary?.committed || 0),
+        summary: response.summary
       };
       
-      // Set whether there are working changes for smart default
-      setHasWorkingChanges(response.hasWorkingChanges);
+      setHasWorkingChanges((response.summary?.total || 0) > (response.summary?.committed || 0));
       
-      // If no working changes and we're in working mode, switch to base comparison
-      if (!response.hasWorkingChanges && comparison === 'working' && files.length === 0) {
-        setCompareWith('base');
-        // Reload with base comparison
-        await loadDiffData('base');
-      } else {
-        processFiles(files);
-      }
-    } catch (error: any) {
+      // Apply filters based on current compareWith value
+      applyFilters(diffCache.current.allData);
+    } catch (error) {
       console.error('Failed to load diff:', error);
-      setError(error.message || 'Failed to load changes');
+      setError((error as Error).message || 'Failed to load changes');
       setFiles([]);
       setSelectedFile(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, taskId, applyFilters]);
+
   
-  const processFiles = (files: DiffFile[]) => {
-    if (files.length > 0) {
-      console.log('[DiffViewer] Processing files, compareWith:', compareWith);
-      console.log('[DiffViewer] First file has diff?', !!files[0]?.diff);
-      
-      // First, set all files without their diff content (for quick sidebar display)
-      const filesWithoutDiff = files.map(file => ({
-        ...file,
-        diff: undefined,
-        loading: true
-      }));
-      setFiles(filesWithoutDiff);
-      
-      // Select and load the first file immediately
-      const firstFile = filesWithoutDiff[0];
-      setSelectedFile(firstFile);
-      setSelectedFileIndex(0);
-      
-      // Load first file's diff content
-      if (files[0].diff) {
-        // If diff was already included, use it
-        setSelectedFile(files[0]);
-        setFiles(prev => {
-          const updated = [...prev];
-          updated[0] = files[0];
-          return updated;
-        });
-      } else {
-        // Load first file's diff via API
-        loadFileDiff(firstFile.path, 0);
+  const updateFileWithDiff = useCallback((fileIndex: number, filePath: string, diff: string) => {
+    setFiles(prevFiles => {
+      const newFiles = [...prevFiles];
+      if (newFiles[fileIndex]) {
+        newFiles[fileIndex] = {
+          ...newFiles[fileIndex],
+          diff: diff,
+          loading: false,
+          diffLoading: false
+        };
       }
-      
-      // Load remaining files in the background
-      files.slice(1).forEach((file, index) => {
-        if (file.diff) {
-          // If diff was already included, update immediately
-          setTimeout(() => {
-            setFiles(prev => {
-              const updated = [...prev];
-              updated[index + 1] = { ...file, loading: false };
-              return updated;
-            });
-          }, 10 * (index + 1)); // Stagger updates slightly
-        } else {
-          // Load diff via API in background
-          setTimeout(() => {
-            loadFileDiff(file.path, index + 1);
-          }, 50 * (index + 1)); // Stagger API calls
-        }
-      });
-    } else {
-      setFiles([]);
-      setSelectedFile(null);
-      setSelectedFileIndex(0);
-    }
-  };
-  
-  const loadFileDiff = async (filePath: string, fileIndex: number) => {
+      return newFiles;
+    });
+    
+    // Update selected file if it's the one we just loaded
+    setSelectedFile(prev => {
+      if (prev && prev.path === filePath) {
+        const updated = {
+          ...prev,
+          diff: diff,
+          loading: false,
+          diffLoading: false
+        };
+        // Trigger diff processing immediately
+        setTimeout(() => processDiff(diff), 0);
+        return updated;
+      }
+      return prev;
+    });
+  }, []);
+
+  const loadFileDiff = useCallback(async (filePath: string, fileIndex: number) => {
+    // Cache by both file path AND compareWith mode since they return different diffs
     const cacheKey = `${compareWith}:${filePath}`;
     
     // Check cache first
     if (fileDiffCache.current[cacheKey]) {
-      console.log(`Using cached diff for ${filePath} in ${compareWith} mode`);
       updateFileWithDiff(fileIndex, filePath, fileDiffCache.current[cacheKey]);
       return;
     }
@@ -297,33 +596,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
         return newFiles;
       });
     }
-  };
-  
-  const updateFileWithDiff = (fileIndex: number, filePath: string, diff: string) => {
-    setFiles(prevFiles => {
-      const newFiles = [...prevFiles];
-      if (newFiles[fileIndex]) {
-        newFiles[fileIndex] = {
-          ...newFiles[fileIndex],
-          diff: diff,
-          loading: false
-        };
-      }
-      return newFiles;
-    });
-    
-    // Update selected file if it's the one we just loaded
-    setSelectedFile(prev => {
-      if (prev && prev.path === filePath) {
-        return {
-          ...prev,
-          diff: diff,
-          loading: false
-        };
-      }
-      return prev;
-    });
-  };
+  }, [compareWith, projectId, taskId, updateFileWithDiff]);
 
   const processDiff = (diff: string) => {
     // Clear previous state first to avoid stale references
@@ -388,17 +661,6 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     return langMap[ext] || 'plaintext';
   };
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'added':
-        return <Plus className="w-4 h-4 text-green-600" />;
-      case 'deleted':
-        return <Minus className="w-4 h-4 text-red-600" />;
-      default:
-        return <FileText className="w-4 h-4 text-blue-600" />;
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -421,138 +683,335 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
-          
-          {/* Comparison mode toggle */}
-          <div className="mt-4 flex items-center gap-4">
-            <span className="text-sm text-gray-600">Compare with:</span>
-            <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-              <button
-                onClick={() => {
-                  setCompareWith('working');
-                  loadDiffData('working');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                  compareWith === 'working'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="Compare with working directory"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Working Directory</span>
-                {!hasWorkingChanges && (
-                  <span className="text-xs text-gray-400">(clean)</span>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setCompareWith('base');
-                  loadDiffData('base');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${
-                  compareWith === 'base'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                title="Compare with base branch"
-              >
-                <GitCompare className="w-3.5 h-3.5" />
-                <span>Base Branch</span>
-              </button>
-            </div>
-            {compareWith === 'base' && (
-              <span className="text-xs text-gray-500">
-                Showing all changes from base branch
-              </span>
-            )}
-          </div>
         </div>
+
+        {/* Toast Notification */}
+        {toast && (
+          <div className={`mx-6 mt-2 px-4 py-2 rounded-md flex items-center justify-between ${
+            toast.type === 'error' 
+              ? 'bg-red-50 text-red-800 border border-red-200' 
+              : 'bg-green-50 text-green-800 border border-green-200'
+          }`}>
+            <span className="text-sm">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="ml-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* File List Sidebar */}
-          <div className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}>
+          <div 
+            className={`${sidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-200 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col`}
+            style={{ scrollbarGutter: 'stable' }}
+          >
             {!sidebarCollapsed ? (
               <div className="flex-1 p-4">
-                <div className="flex items-center justify-between mb-3 min-w-0">
-                  <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                    Changes ({files.length} {files.length === 1 ? 'file' : 'files'})
-                  </h3>
-                  <button
-                    onClick={() => setSidebarCollapsed(true)}
-                    className="p-1 hover:bg-gray-200 rounded transition-colors flex-shrink-0 ml-2"
-                    title="Collapse sidebar"
-                  >
-                    <ChevronLeft className="w-4 h-4 text-gray-500" />
-                  </button>
+                <div className="mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                      Changes ({filteredFiles.length})
+                    </h3>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          hasManuallyToggledSearch.current = true;
+                          setShowSearch(!showSearch);
+                        }}
+                        className={`p-1 hover:bg-gray-200 rounded transition-colors ${
+                          showSearch ? 'bg-gray-200' : ''
+                        }`}
+                        title="Search files"
+                      >
+                        <Search className="w-4 h-4 text-gray-500" />
+                      </button>
+                      <button
+                        onClick={() => setSidebarCollapsed(true)}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title="Collapse sidebar"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Three-state toggle in its own row */}
+                  <div className="mb-3">
+                    <ThreeStateToggle
+                      value={compareWith}
+                      onChange={(value) => {
+                        setCompareWith(value);
+                      }}
+                      disabledOptions={!hasWorkingChanges ? ['working'] : []}
+                    />
+                  </div>
                 </div>
-                {files.length === 0 && !loading && (
-                  <div className="text-sm text-gray-500">
-                    {error ? 'Failed to load changes' : 'No changes to display'}
+                
+                {/* Search input */}
+                {showSearch && (
+                  <div className="mb-3">
+                    <SearchInput
+                      value={searchTerm}
+                      onChange={setSearchTerm}
+                      placeholder="Search files..."
+                      autoFocus
+                      totalItems={files.length}
+                      minItemsToShow={0} // Always show when toggled
+                    />
                   </div>
                 )}
-                <div className="space-y-1">
-                  {files.map((file) => (
-                    <button
-                      key={file.path}
-                      onClick={() => {
-                        const fileIndex = files.indexOf(file);
-                        setSelectedFile(file);
-                        setSelectedFileIndex(fileIndex);
-                        
-                        // Load diff if not already loaded
-                        if (!file.diff) {
-                          loadFileDiff(file.path, fileIndex);
-                        }
-                      }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
-                        selectedFile?.path === file.path
-                          ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
-                          : 'hover:bg-white hover:shadow-sm text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {getFileIcon(file.type)}
-                          <span className="truncate">{file.path}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          {file.loading ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
-                          ) : (
-                            <>
-                              <span className="text-green-600">+{file.additions}</span>
-                              <span className="text-red-600">-{file.deletions}</span>
-                            </>
-                          )}
+                
+                {filteredFiles.length === 0 && !loading && (
+                  <div className="text-sm text-gray-500">
+                    {error ? 'Failed to load changes' : 
+                     searchTerm ? `No files match "${searchTerm}"` : 
+                     'No changes to display'}
+                  </div>
+                )}
+                
+                {/* Skeleton loader */}
+                {loading && files.length === 0 && (
+                  <div className="space-y-1">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="px-3 py-2.5 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 bg-gray-200 rounded" />
+                              <div className="h-4 bg-gray-200 rounded w-32" />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-3 w-8 bg-gray-200 rounded" />
+                              <div className="h-3 w-8 bg-gray-200 rounded" />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </button>
-                  ))}
+                    ))}
+                  </div>
+                )}
+                
+                <div className="space-y-1">
+                  {/* Staged files */}
+                  {groupedFiles.staged.length > 0 && (
+                    <>
+                      {groupedFiles.hasGroups && (
+                        <div className="text-xs text-gray-500 font-medium px-3 py-1">Staged</div>
+                      )}
+                      {groupedFiles.staged.map((file) => (
+                        <button
+                          key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                                onClick={
+                                  (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
+                                  && (compareWith === 'working' || compareWith === 'all')
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        handleStageToggle(file);
+                                      }
+                                    : undefined
+                                }
+                                isLoading={pendingOperations.has(file.path)}
+                                disabled={pendingOperations.has(file.path)}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate" title={file.path}>{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Divider between staged and unstaged */}
+                  {groupedFiles.hasGroups && groupedFiles.unstaged.length > 0 && (
+                    <div className="my-2 border-t border-gray-200"></div>
+                  )}
+                  
+                  {/* Unstaged files */}
+                  {groupedFiles.unstaged.length > 0 && (
+                    <>
+                      {groupedFiles.hasGroups && (
+                        <div className="text-xs text-gray-500 font-medium px-3 py-1">Unstaged</div>
+                      )}
+                      {groupedFiles.unstaged.map((file) => (
+                        <button
+                          key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                                onClick={
+                                  (file.category === 'staged' || file.category === 'unstaged' || file.category === 'untracked')
+                                  && (compareWith === 'working' || compareWith === 'all')
+                                    ? (e) => {
+                                        e.stopPropagation();
+                                        handleStageToggle(file);
+                                      }
+                                    : undefined
+                                }
+                                isLoading={pendingOperations.has(file.path)}
+                                disabled={pendingOperations.has(file.path)}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate" title={file.path}>{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  
+                  {/* Committed files (for 'all' and 'base' modes) */}
+                  {groupedFiles.committed.length > 0 && (compareWith === 'all' || compareWith === 'base') && (
+                    <>
+                      {(groupedFiles.staged.length > 0 || groupedFiles.unstaged.length > 0) && (
+                        <>
+                          <div className="my-2 border-t border-gray-200"></div>
+                          <div className="text-xs text-gray-500 font-medium px-3 py-1">Committed</div>
+                        </>
+                      )}
+                      {groupedFiles.committed.map((file) => (
+                        <button
+                          key={file.path}
+                          ref={(el) => { fileButtonRefs.current[file.path] = el; }}
+                          onClick={() => {
+                            const fileIndex = filteredFiles.indexOf(file);
+                            setSelectedFile(file);
+                            setSelectedFileIndex(fileIndex);
+                            
+                            // Load diff if not already loaded
+                            if (!file.diff && file.loading !== false) {
+                              loadFileDiff(file.path, fileIndex);
+                            }
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
+                            selectedFile?.path === file.path
+                              ? 'bg-white shadow-sm border border-gray-200 text-gray-900'
+                              : 'hover:bg-white hover:shadow-sm text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <StatusIcon 
+                                gitStatus={file.status || '  '} 
+                                size="sm"
+                                category={file.category}
+                              />
+                              {searchTerm ? (
+                                <HighlightedPath 
+                                  path={file.path} 
+                                  searchTerm={searchTerm}
+                                  className="truncate"
+                                  maxLength={40}
+                                />
+                              ) : (
+                                <span className="truncate" title={file.path}>{file.path}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-green-600">+{file.additions}</span>
+                              <span className="text-red-600">-{file.deletions}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
-              <div 
-                className="flex flex-col items-center py-4 gap-4 cursor-pointer hover:bg-gray-100 h-full"
-                onClick={() => setSidebarCollapsed(false)}
-                title="Expand sidebar"
-              >
-                <button
-                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+              <div className="flex flex-col items-center h-full">
+                <div 
+                  className="flex flex-col items-center py-4 gap-4 cursor-pointer hover:bg-gray-100 flex-1 w-full"
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Expand sidebar"
                 >
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
-                </button>
-                <div className="flex flex-col items-center gap-2 select-none">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs text-gray-500 vertical-text">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
-                </div>
-                {selectedFile && (
-                  <div className="flex flex-col items-center gap-1 select-none mt-2 pt-2 border-t border-gray-200">
-                    <span className="text-xs text-gray-600 font-medium">{selectedFileIndex + 1}</span>
-                    <span className="text-xs text-gray-400">of</span>
-                    <span className="text-xs text-gray-600 font-medium">{files.length}</span>
+                  <button
+                    className="p-1 hover:bg-gray-200 rounded transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4 text-gray-500" />
+                  </button>
+                  <div className="flex flex-col items-center gap-2 select-none">
+                    <FileText className="w-4 h-4 text-gray-400" />
+                    <span className="text-xs text-gray-500 vertical-text">{filteredFiles.length} {filteredFiles.length === 1 ? 'file' : 'files'}</span>
                   </div>
-                )}
+                  {selectedFile && (
+                    <div className="flex flex-col items-center gap-1 select-none mt-2 pt-2 border-t border-gray-200">
+                      <span className="text-xs text-gray-600 font-medium">{selectedFileIndex + 1}</span>
+                      <span className="text-xs text-gray-400">of</span>
+                      <span className="text-xs text-gray-600 font-medium">{filteredFiles.length}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -579,44 +1038,67 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p>No changes to display</p>
-                  <p className="text-sm mt-1">Your working tree is clean</p>
+                  {compareWith === 'working' ? (
+                    <>
+                      <p className="text-lg font-medium text-gray-700">✓ Working tree is clean</p>
+                      <p className="text-sm mt-1">All changes have been committed</p>
+                    </>
+                  ) : compareWith === 'all' ? (
+                    <>
+                      <p className="text-lg font-medium text-gray-700">✓ Your branch is up to date</p>
+                      <p className="text-sm mt-1">No changes with origin/{branch.split('/').pop()}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-medium text-gray-700">✓ No changes to merge</p>
+                      <p className="text-sm mt-1">Your branch matches origin/{branch.split('/').pop()}</p>
+                    </>
+                  )}
                 </div>
               </div>
             ) : selectedFile ? (
               <div className="flex flex-col h-full">
-                <div className="px-4 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
-                  <h3 className="font-mono text-sm text-gray-700">{selectedFile.path}</h3>
-                  {canUseSplitView ? (
-                    <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                      <button
-                        onClick={() => setViewMode('split')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                          viewMode === 'split'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                        title="Split view - Side by side comparison"
-                      >
-                        <Columns2 className="w-3.5 h-3.5" />
-                        <span>Split</span>
-                      </button>
-                      <button
-                        onClick={() => setViewMode('unified')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
-                          viewMode === 'unified'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                        title="Unified view - Inline diff"
-                      >
-                        <FileCode className="w-3.5 h-3.5" />
-                        <span>Unified</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-500">Unified view</span>
-                  )}
+                <div className="px-4 py-3 border-b border-gray-200 bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-mono text-sm text-gray-700">{selectedFile.path}</h3>
+                      {canUseSplitView ? (
+                      <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                        <button
+                          onClick={() => setViewMode('split')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                            viewMode === 'split'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                          title="Split view - Side by side comparison"
+                        >
+                          <Columns2 className="w-3.5 h-3.5" />
+                          <span>Split</span>
+                        </button>
+                        <button
+                          onClick={() => setViewMode('unified')}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
+                            viewMode === 'unified'
+                              ? 'bg-white text-gray-900 shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                          title="Unified view - Inline diff"
+                        >
+                          <FileCode className="w-3.5 h-3.5" />
+                          <span>Unified</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-500">Unified view</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="font-medium text-gray-700">{getComparisonLabels().left}</span>
+                    <span>→</span>
+                    <span className="font-medium text-gray-700">{getComparisonLabels().right}</span>
+                    <span className="text-gray-400">·</span>
+                    <span>{getComparisonLabels().description}</span>
+                  </div>
                 </div>
                 <div className="flex-1 relative">
                   {/* Loading overlay for smooth transitions */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { CreateTaskDTO } from '../../types/task';
+import { BranchSelector } from '../common/BranchSelector';
 
 /**
  * Converts a task name into a valid git branch name
@@ -66,7 +67,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  projectId,
+  projectId: _projectId, // Part of component API but handled by parent
   existingBranches = [],
   baseBranch = 'main',
   occupiedBranches = []
@@ -74,10 +75,6 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [branchMode, setBranchMode] = useState<'new' | 'existing'>('new');
   // Track if user has manually edited the branch name (stops auto-generation)
   const [branchManuallyEdited, setBranchManuallyEdited] = useState(false);
-  // Control visibility of branch suggestions dropdown
-  const [showBranchSuggestions, setShowBranchSuggestions] = useState(false);
-  // Track keyboard navigation position in dropdown (-1 = no selection)
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   // Track if user has toggled branch mode (to prevent focus on initial load)
   const [hasToggledBranchMode, setHasToggledBranchMode] = useState(false);
   
@@ -91,9 +88,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   
   // Refs for managing focus and scroll behavior
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const existingBranchRef = useRef<HTMLInputElement>(null);
   const newBranchRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Auto-focus name input when modal opens
   useEffect(() => {
@@ -110,27 +105,11 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const focusTimeout = setTimeout(() => {
       if (branchMode === 'new' && newBranchRef.current) {
         newBranchRef.current.focus();
-      } else if (branchMode === 'existing' && existingBranchRef.current) {
-        existingBranchRef.current.focus();
       }
     }, 600); // 600ms delay to allow for keyboard navigation
     
     return () => clearTimeout(focusTimeout);
   }, [branchMode, isOpen, hasToggledBranchMode]);
-
-  // Scroll selected suggestion into view during keyboard navigation
-  // 'nearest' only scrolls if the item is outside the visible area
-  useEffect(() => {
-    if (selectedSuggestionIndex >= 0 && dropdownRef.current) {
-      const selectedElement = dropdownRef.current.children[selectedSuggestionIndex] as HTMLElement;
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ 
-          block: 'nearest', 
-          behavior: 'smooth' 
-        });
-      }
-    }
-  }, [selectedSuggestionIndex]);
 
   /**
    * Handles name input changes and auto-generates branch name
@@ -186,71 +165,6 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     'master',
     ...occupiedBranches
   ]);
-
-  // Filter branches based on search input
-  const filteredBranches = existingBranches.filter(branch => 
-    formData.existingBranch === '' || 
-    branch.toLowerCase().includes(formData.existingBranch.toLowerCase())
-  );
-
-  /**
-   * Handles keyboard navigation in the branch dropdown
-   * - Arrow keys: Navigate up/down (skips blocked branches)
-   * - Enter: Select current branch (if not blocked)
-   * - Escape: Close dropdown
-   */
-  const handleBranchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showBranchSuggestions || filteredBranches.length === 0) return;
-
-    // Helper to find next selectable (non-blocked) branch
-    const findNextSelectableIndex = (currentIndex: number, direction: 'up' | 'down'): number => {
-      let newIndex = currentIndex;
-      const maxAttempts = filteredBranches.length;
-      let attempts = 0;
-      
-      do {
-        if (direction === 'down') {
-          newIndex = newIndex < filteredBranches.length - 1 ? newIndex + 1 : newIndex;
-        } else {
-          newIndex = newIndex > -1 ? newIndex - 1 : -1;
-        }
-        attempts++;
-        
-        // If we've gone through all items or reached the bounds, stop
-        if (attempts >= maxAttempts || newIndex === -1 || newIndex === currentIndex) {
-          return currentIndex;
-        }
-      } while (blockedBranches.has(filteredBranches[newIndex]));
-      
-      return newIndex;
-    };
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => findNextSelectableIndex(prev, 'down'));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => findNextSelectableIndex(prev, 'up'));
-        break;
-      case 'Enter':
-        if (selectedSuggestionIndex >= 0 && !blockedBranches.has(filteredBranches[selectedSuggestionIndex])) {
-          e.preventDefault();
-          setFormData(prev => ({ 
-            ...prev, 
-            existingBranch: filteredBranches[selectedSuggestionIndex] 
-          }));
-          setShowBranchSuggestions(false);
-          setSelectedSuggestionIndex(-1);
-        }
-        break;
-      case 'Escape':
-        setShowBranchSuggestions(false);
-        setSelectedSuggestionIndex(-1);
-        break;
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -412,78 +326,19 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               {/* Existing Branch Select */}
               {branchMode === 'existing' && (
                 <div>
-                  <div className="relative">
-                    <input
-                      ref={existingBranchRef}
-                      type="text"
-                      value={formData.existingBranch}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, existingBranch: e.target.value }));
-                        setShowBranchSuggestions(true);
-                        setSelectedSuggestionIndex(-1);
-                      }}
-                      onKeyDown={handleBranchKeyDown}
-                      onFocus={() => {
-                        setShowBranchSuggestions(true);
-                        setSelectedSuggestionIndex(-1);
-                      }}
-                      onBlur={() => setTimeout(() => {
-                        setShowBranchSuggestions(false);
-                        setSelectedSuggestionIndex(-1);
-                      }, 200)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Type to search branches..."
-                      required
-                    />
-                    
-                    {/* Custom dropdown */}
-                    {showBranchSuggestions && existingBranches.length > 0 && (
-                      <div 
-                        ref={dropdownRef}
-                        className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
-                        {filteredBranches.map((branch, index) => {
-                          const isBlocked = blockedBranches.has(branch);
-                          const isOccupied = occupiedBranches.includes(branch);
-                          const isBaseBranch = branch === baseBranch;
-                          const isMainBranch = branch === 'main' || branch === 'master';
-                          
-                          return (
-                            <button
-                              key={branch}
-                              type="button"
-                              disabled={isBlocked}
-                              onClick={() => {
-                                if (!isBlocked) {
-                                  setFormData(prev => ({ ...prev, existingBranch: branch }));
-                                  setShowBranchSuggestions(false);
-                                  setSelectedSuggestionIndex(-1);
-                                }
-                              }}
-                              className={`w-full px-3 py-2 text-left focus:outline-none text-sm transition-colors flex items-center justify-between ${
-                                isBlocked 
-                                  ? 'opacity-50 cursor-not-allowed bg-gray-50' 
-                                  : index === selectedSuggestionIndex 
-                                    ? 'bg-blue-50 text-blue-700' 
-                                    : 'hover:bg-gray-50 cursor-pointer'
-                              }`}
-                            >
-                              <span>{branch}</span>
-                              {isBlocked && (
-                                <span className="text-xs text-gray-500">
-                                  {isOccupied ? 'In use' : isBaseBranch ? 'Base branch' : isMainBranch ? 'Protected' : 'Unavailable'}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                        {filteredBranches.length === 0 && formData.existingBranch !== '' && (
-                          <div className="px-3 py-2 text-sm text-gray-500">
-                            No matching branches
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <BranchSelector
+                    value={formData.existingBranch}
+                    onChange={(branch) => setFormData(prev => ({ ...prev, existingBranch: branch }))}
+                    branches={existingBranches}
+                    placeholder="Type to search branches..."
+                    required
+                    blockedBranches={blockedBranches}
+                    occupiedBranches={occupiedBranches}
+                    baseBranch={baseBranch}
+                    showIcons={true}
+                    showStatusLabels={true}
+                    enableKeyboardNavigation={true}
+                  />
                   <p className="mt-1 text-xs text-gray-500">
                     This will create a new worktree for the existing branch
                   </p>

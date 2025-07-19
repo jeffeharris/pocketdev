@@ -19,8 +19,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
   project,
   tasks,
   activeTaskId,
-  onTaskSelect,
-  notifications = 0
+  onTaskSelect
 }) => {
   const navigate = useNavigate();
   const [showTaskSwitcher, setShowTaskSwitcher] = useState(false);

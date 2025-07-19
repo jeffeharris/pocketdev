@@ -1,5 +1,5 @@
 import type { Task } from '../types/task';
-import { WorkerStatus } from '../types/task';
+import { WorkerStatus, TaskState } from '../types/task';
 import type { GitStatus, ChangedFile } from '../types/git';
 import type { Project } from '../types/project';
 
@@ -30,7 +30,7 @@ export const mockTasks: Task[] = [
     branch: 'feature/task-view-page',
     worktree_path: '/projects/17dbiode-task-7d29e028',
     created_at: '2025-01-15T22:27:16Z',
-    taskState: 'active',
+    taskState: TaskState.Active,
     sessionState: {
       status: WorkerStatus.Working,
       lastStateChange: '2025-01-15T22:50:00Z'
@@ -48,7 +48,7 @@ export const mockTasks: Task[] = [
     branch: 'feature/add-auth-system',
     worktree_path: '/projects/17dbiode-task-abc12345',
     created_at: '2025-01-15T21:45:12Z',
-    taskState: 'active',
+    taskState: TaskState.Active,
     sessionState: {
       status: WorkerStatus.Waiting,
       lastStateChange: '2025-01-15T23:00:00Z'
@@ -66,7 +66,7 @@ export const mockTasks: Task[] = [
     branch: 'fix/memory-leak-worker',
     worktree_path: '/projects/17dbiode-task-def45678',
     created_at: '2025-01-15T18:30:00Z',
-    taskState: 'merged',
+    taskState: TaskState.Merged,
     sessionState: {
       status: WorkerStatus.Idle,
       lastStateChange: '2025-01-15T21:00:00Z'

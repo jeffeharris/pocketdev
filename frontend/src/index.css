@@ -1,13 +1,14 @@
+/* Import external CSS first */
+@import "@xterm/xterm/css/xterm.css";
+@import "./styles/terminal.css";
+
+/* Tailwind directives */
 @import "tailwindcss";
 @plugin '@tailwindcss/typography';
 
 /* Force Tailwind to scan these files */
 @source "./src/**/*.{js,ts,jsx,tsx}";
 @source "./index.html";
-
-/* Import xterm CSS directly */
-@import "@xterm/xterm/css/xterm.css";
-@import "./styles/terminal.css";
 
 /* Temporary fix: Add hover styles manually until we figure out why Tailwind v4 isn't generating them */
 @layer utilities {

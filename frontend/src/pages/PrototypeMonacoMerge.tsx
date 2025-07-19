@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Editor, DiffEditor } from '@monaco-editor/react';
+import { Editor } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
 const PrototypeMonacoMerge: React.FC = () => {
   const [mergedContent, setMergedContent] = useState<string>('');
-  const [activeConflict, setActiveConflict] = useState<number>(0);
+  // TODO: activeConflict was commented out to fix TS6133 (unused variable) error
+  // This may be needed when implementing conflict navigation in the merge UI
+  // const [activeConflict, setActiveConflict] = useState<number>(0);
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
 
@@ -154,8 +156,11 @@ export function ShoppingCart() {
     monacoRef.current = monaco;
 
     // Add code actions for conflicts
-    const actionProvider = monaco.languages.registerCodeActionProvider('typescript', {
-      provideCodeActions: (model: any, range: any, context: any, token: any) => {
+    // TODO: actionProvider was commented out to fix TS6133 (unused variable) error
+    // This code action provider may be needed when implementing merge conflict resolution
+    // const actionProvider = 
+    monaco.languages.registerCodeActionProvider('typescript', {
+      provideCodeActions: (model: any, range: any) => {
         const actions = [];
         const startLine = range.startLineNumber;
         const endLine = range.endLineNumber;
@@ -244,6 +249,7 @@ export function ShoppingCart() {
     const lines = content.split('\n');
     const decorations: any[] = [];
     
+    // TODO: These variables track conflict parsing state
     let inConflict = false;
     let conflictStart = 0;
     let conflictCurrent = 0;
@@ -319,7 +325,7 @@ export function ShoppingCart() {
     const content = editorRef.current.getValue();
     const resolved = content.replace(
       /<<<<<<< Current Changes[\s\S]*?=======([\s\S]*?)>>>>>>> /gm,
-      (match: string, p1: string, p2: string) => {
+      (match: string) => {
         const currentContent = match.split('=======')[0].replace('<<<<<<< Current Changes\n', '');
         return currentContent.trim();
       }
@@ -348,7 +354,7 @@ export function ShoppingCart() {
     const content = editorRef.current.getValue();
     const resolved = content.replace(
       /<<<<<<< Current Changes([\s\S]*?)======= Incoming Changes([\s\S]*?)>>>>>>> /gm,
-      (match: string, current: string, incoming: string) => {
+      (_match: string, current: string, incoming: string) => {
         return current.trim() + '\n\n' + incoming.trim();
       }
     );
@@ -429,7 +435,7 @@ export function ShoppingCart() {
                 renderLineHighlight: 'all',
                 renderWhitespace: 'selection',
                 lightbulb: {
-                  enabled: true
+                  enabled: 'on' as const
                 },
                 quickSuggestions: true,
                 suggestOnTriggerCharacters: true

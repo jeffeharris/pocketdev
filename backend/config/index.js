@@ -23,8 +23,8 @@ export default {
   settingsPath: path.join(process.env.HOME || '.', '.pocketdev-settings.json'),
   
   // Shelltender
-  shelltenderApiUrl: process.env.SHELLTENDER_API_URL || 'http://localhost:8081',
-  shelltenderWsUrl: process.env.SHELLTENDER_WS_URL || 'ws://localhost:8080',
+  shelltenderApiUrl: process.env.SHELLTENDER_API_URL || 'http://localhost:8080',
+  shelltenderWsUrl: process.env.SHELLTENDER_WS_URL || 'ws://localhost:8080/ws',
   
   // Upload settings
   upload: {

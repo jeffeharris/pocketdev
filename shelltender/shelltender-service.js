@@ -1,24 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Shelltender v0.5.0 Proper Implementation
- * Uses Shelltender's WebSocketServer correctly instead of reimplementing everything
+ * Shelltender v0.6.0 Implementation
+ * Uses the new simplified createShelltender API with automatic pipeline setup
+ * Includes HTTP endpoints for backend service integration
  */
 
-import { 
-  SessionManager, 
-  BufferManager, 
-  SessionStore, 
-  WebSocketServer,
-  EventManager,
-  TerminalDataPipeline,
-  PipelineIntegration
-} from '@shelltender/server';
 import express from 'express';
-import { createServer } from 'http';
+import { createShelltender } from '@shelltender/server';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import fs from 'fs/promises';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,364 +30,218 @@ app.use((req, res, next) => {
   next();
 });
 
-// Create HTTP server
-const httpServer = createServer(app);
-
-// Global instances
-let sessionManager = null;
-let bufferManager = null;
-let sessionStore = null;
-let wsServer = null;
-let eventManager = null;
-let pipeline = null;
-let integration = null;
-
-// Initialize Shelltender components
-async function initializeShelltender() {
-  console.log('Initializing Shelltender v0.5.0 (WITH PIPELINE INTEGRATION)...');
-  console.log(`Port: ${PORT}`);
-  console.log(`Data directory: ${DATA_DIR}`);
+// Serve admin UI (workaround for v0.6.1 missing HTML file)
+// Note: In v0.6.1, the admin UI HTML file exists in the source but isn't included 
+// in the npm package due to a build configuration issue. The Shelltender team is
+// aware and will fix in a future release. This downloads the actual admin UI from GitHub.
+app.get('/admin', async (req, res) => {
+  const adminHtmlPath = path.join(__dirname, 'admin.html');
   
   try {
-    // Initialize SessionStore with persistence
-    sessionStore = new SessionStore(DATA_DIR);
-    await sessionStore.initialize();
-    console.log('✓ SessionStore initialized');
-    
-    // Initialize BufferManager for scrollback
-    bufferManager = new BufferManager({
-      maxBufferSize: 1024 * 1024 // 1MB per session
-    });
-    console.log('✓ BufferManager initialized');
-    
-    // Initialize EventManager
-    eventManager = new EventManager();
-    console.log('✓ EventManager initialized');
-    
-    // Initialize SessionManager
-    sessionManager = new SessionManager(sessionStore);
-    console.log('✓ SessionManager initialized');
-    
-    // Create WebSocketServer using v0.5.0 API - static create method
-    wsServer = WebSocketServer.create(
-      { 
-        server: httpServer,
-        path: '/ws'
-      },
-      sessionManager,
-      bufferManager,
-      eventManager  // v0.5.0 requires eventManager as 4th parameter
-    );
-    
-    console.log('✓ WebSocketServer attached to HTTP server at /ws');
-    
-    // Initialize pipeline
-    pipeline = new TerminalDataPipeline();
-    console.log('✓ TerminalDataPipeline initialized');
-    
-    // THIS IS THE CRITICAL MISSING PIECE!
-    // Set up integration to connect SessionManager → Pipeline → WebSocket
-    integration = new PipelineIntegration(
-      pipeline,
-      sessionManager,
-      bufferManager,
-      wsServer,
-      sessionStore,
-      eventManager
-    );
-    integration.setup();
-    console.log('✓ PipelineIntegration setup complete - PTY output will now be sent to WebSocket clients');
-    
-  } catch (error) {
-    console.error('Failed to initialize Shelltender:', error);
-    throw error;
-  }
-}
-
-// NOTE: This function is no longer needed after adding PipelineIntegration
-// Keeping it here commented out for reference
-/*
-function setupPTYDataHandlers() {
-  console.log('[PTY Fix] Setting up PTY data handlers...');
-  
-  // Log existing sessions to debug
-  const existingSessions = sessionManager.getAllSessions();
-  console.log(`[PTY Fix] Found ${existingSessions.length} existing sessions`);
-  
-  // Hook into existing sessions
-  existingSessions.forEach(session => {
-    if (session.pty && !ptyDataHandlers.has(session.id)) {
-      console.log(`[PTY Fix] Connecting existing session: ${session.id}`);
-      connectPTYToWebSocket(session);
-    }
-  });
-  
-  // Override SessionManager's createSession to hook PTY data
-  const originalCreateSession = sessionManager.createSession.bind(sessionManager);
-  
-  sessionManager.createSession = async function(options) {
-    console.log(`[PTY Fix] Creating session with ID: ${options.id || 'auto-generated'}`);
-    
-    // Call original method
-    const session = await originalCreateSession(options);
-    
-    // Connect PTY output to WebSocket
-    if (session && session.pty) {
-      console.log(`[PTY Fix] Connecting PTY output for session: ${session.id}`);
-      connectPTYToWebSocket(session);
-    }
-    
-    return session;
-  };
-  
-  // Also hook into session restoration
-  const originalGetSession = sessionManager.getSession.bind(sessionManager);
-  
-  sessionManager.getSession = function(sessionId) {
-    const session = originalGetSession(sessionId);
-    
-    // If session exists with PTY but no handler, connect it
-    if (session && session.pty && !ptyDataHandlers.has(sessionId)) {
-      console.log(`[PTY Fix] Connecting restored session: ${sessionId}`);
-      connectPTYToWebSocket(session);
-    }
-    
-    return session;
-  };
-  
-  // Also hook into killSession for cleanup
-  const originalKillSession = sessionManager.killSession.bind(sessionManager);
-  
-  sessionManager.killSession = function(sessionId) {
-    console.log(`[PTY Fix] Killing session: ${sessionId}`);
-    
-    // Remove data handler
-    if (ptyDataHandlers.has(sessionId)) {
-      ptyDataHandlers.delete(sessionId);
-    }
-    
-    // Call original method
-    return originalKillSession(sessionId);
-  };
-}
-
-// Extract the PTY connection logic to reuse
-function connectPTYToWebSocket(session) {
-  if (!session || !session.pty || ptyDataHandlers.has(session.id)) {
-    return;
-  }
-  
-  // Create data handler for this session
-  const dataHandler = (data) => {
-    console.log(`[PTY Fix] Received output for session ${session.id}: ${data.substring(0, 50)}...`);
-    
-    // Add to buffer
-    bufferManager.addData(session.id, data);
-    
-    // Send to all connected WebSocket clients
-    // TODO: This entire data broadcasting logic should be handled by WebSocketServer
-    // In v0.5.1+, the WebSocketServer should automatically route PTY output to clients
-    const message = JSON.stringify({
-      type: 'output',
-      sessionId: session.id,
-      data: data
-    });
-    
-    // Access the underlying WebSocket server
-    // TODO: Remove this manual broadcasting when WebSocketServer.create() is fixed
-    if (wsServer && wsServer.wss) {
-      console.log(`[PTY Fix] Broadcasting to ${wsServer.wss.clients.size} WebSocket clients`);
-      wsServer.wss.clients.forEach(client => {
-        if (client.readyState === 1) { // WebSocket.OPEN
-          client.send(message);
-        }
-      });
-    } else {
-      console.error(`[PTY Fix] ERROR: Cannot broadcast - wsServer.wss is not available!`);
-    }
-  };
-  
-  // Store handler reference for cleanup
-  ptyDataHandlers.set(session.id, dataHandler);
-  
-  // Connect PTY output to handler
-  session.pty.onData(dataHandler);
-  
-  // Also handle PTY exit
-  session.pty.onExit(() => {
-    console.log(`[PTY Fix] PTY exited for session: ${session.id}`);
-    ptyDataHandlers.delete(session.id);
-  });
-}
-*/
-
-// API Routes - These support the frontend operations
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    mode: 'single-port',
-    port: PORT,
-    wsPath: '/ws',
-    activeSessions: sessionManager ? sessionManager.getAllSessions().length : 0,
-    uptime: process.uptime()
-  });
-});
-
-// Compatibility endpoint for frontend
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    port: PORT,
-    mode: 'single-port',
-    wsPath: '/ws'
-  });
-});
-
-// Create session endpoint - used by frontend before WebSocket connection
-app.post('/api/sessions', async (req, res) => {
-  console.log('[API] Create session request:', req.body);
-  try {
-    const { sessionId } = req.body;
-    
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId required' });
-    }
-    
-    // Check if session already exists
-    const existingSession = sessionManager.getSession(sessionId);
-    if (existingSession) {
-      console.log(`[API] Session ${sessionId} already exists`);
-      return res.json({ 
-        sessionId,
-        status: 'existing',
-        wsUrl: `ws://localhost:${PORT}/ws`
-      });
-    }
-    
-    // Create new session with PTY
-    const session = await sessionManager.createSession({
-      id: sessionId,
-      cols: req.body.cols || 80,
-      rows: req.body.rows || 24,
-      cwd: req.body.cwd || process.cwd(),
-      command: req.body.command || process.env.SHELL || 'bash',
-      env: {
-        ...process.env,
-        ...req.body.env,
-        TERM: 'xterm-256color'
+    // Check if we already have the admin HTML cached
+    await fs.access(adminHtmlPath);
+  } catch {
+    // Download the admin UI from GitHub if we don't have it
+    console.log('Downloading Shelltender admin UI from GitHub...');
+    try {
+      const response = await fetch('https://raw.githubusercontent.com/jeffeharris/shelltender/v0.6.1/packages/server/src/admin/index.html');
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.statusText}`);
       }
-    });
-    
-    console.log(`[API] Created session ${sessionId}`);
-    
-    res.json({
-      sessionId: session.id,
-      status: 'created',
-      wsUrl: `ws://localhost:${PORT}/ws`
-    });
-    
-  } catch (error) {
-    console.error('[API] Error creating session:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get session info
-app.get('/api/sessions/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
-  const session = sessionManager.getSession(sessionId);
-  
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
-  }
-  
-  res.json({
-    id: session.id,
-    status: 'active',
-    cols: session.cols || 80,
-    rows: session.rows || 24,
-    clients: session.clients ? session.clients.size : 0
-  });
-});
-
-// List all sessions
-app.get('/api/sessions', (req, res) => {
-  const sessions = sessionManager.getAllSessions().map(session => ({
-    id: session.id,
-    status: 'active',
-    clients: session.clients ? session.clients.size : 0
-  }));
-  
-  res.json(sessions);
-});
-
-// Delete session
-app.delete('/api/sessions/:sessionId', (req, res) => {
-  const { sessionId } = req.params;
-  
-  try {
-    const session = sessionManager.getSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
+      const html = await response.text();
+      await fs.writeFile(adminHtmlPath, html);
+      console.log('Admin UI downloaded successfully');
+    } catch (error) {
+      console.error('Failed to download admin UI:', error);
+      // Fallback to simple error message
+      return res.status(500).send('Failed to load admin UI. The file will be included in Shelltender v0.6.2.');
     }
-    
-    // In v0.5.0, use killSession instead of removeSession
-    sessionManager.killSession(sessionId);
-    console.log(`[API] Deleted session ${sessionId}`);
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Resize session (optional endpoint for explicit resize)
-app.post('/api/sessions/:sessionId/resize', (req, res) => {
-  const { sessionId } = req.params;
-  const { cols, rows } = req.body;
-  
-  if (!cols || !rows) {
-    return res.status(400).json({ error: 'cols and rows required' });
   }
   
-  try {
-    const session = sessionManager.getSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    sessionManager.resizeSession(sessionId, cols, rows);
-    console.log(`[API] Resized session ${sessionId} to ${cols}x${rows}`);
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  // Serve the admin HTML file
+  res.sendFile(adminHtmlPath);
 });
 
-// Start the unified server
+// Start the server
 async function start() {
   try {
-    // Initialize Shelltender components
-    await initializeShelltender();
+    console.log('Initializing Shelltender v0.6.0 with automatic pipeline setup...');
+    console.log(`Port: ${PORT}`);
+    console.log(`Data directory: ${DATA_DIR}`);
     
-    // Start the unified HTTP/WebSocket server
-    httpServer.listen(PORT, '0.0.0.0', () => {
+    // Create Shelltender with v0.6.0 benefits - follow the team's exact pattern
+    const shelltender = await createShelltender(app, {
+      port: PORT,
+      wsPath: '/ws',
+      apiRoutes: true,  // Enable admin UI routes (default is true)
+      sessionOptions: {
+        defaultCwd: process.cwd(),
+        defaultEnv: {
+          TERM: 'xterm-256color',
+          ...process.env
+        }
+      },
+      dataDir: DATA_DIR,
+      enableSecurity: true
+    });
+    
+    // Add backend's required endpoints using the shelltender object
+    app.post('/api/sessions', async (req, res) => {
+      console.log('[API] Create session request:', req.body);
+      try {
+        const { sessionId } = req.body;
+        
+        if (!sessionId) {
+          return res.status(400).json({ error: 'sessionId required' });
+        }
+        
+        // Add this check
+        if (!shelltender || !shelltender.sessionManager) {
+          console.error('[API] Shelltender not initialized');
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+        
+        // Create session with error handling
+        try {
+          const session = shelltender.createSession({
+            id: sessionId,
+            cols: req.body.cols || 80,
+            rows: req.body.rows || 24,
+            command: req.body.command || '/bin/bash',
+            args: req.body.args || ['--login'],  // Use login shell to load profile
+            cwd: req.body.cwd || req.body.workdir,
+            env: req.body.env ? { ...process.env, ...req.body.env } : undefined
+          });
+          
+          console.log(`[API] Session ${session.id} created successfully`);
+          
+          res.json({
+            id: session.id,
+            sessionId: session.id,
+            status: 'active',
+            createdAt: session.createdAt,
+            cols: session.cols,
+            rows: session.rows,
+            wsUrl: `ws://localhost:${PORT}/ws`
+          });
+          
+        } catch (sessionError) {
+          console.error('[API] Session creation failed:', sessionError);
+          return res.status(500).json({ 
+            error: 'Session creation failed',
+            details: sessionError.message,
+            stack: process.env.NODE_ENV === 'development' ? sessionError.stack : undefined
+          });
+        }
+        
+      } catch (error) {
+        console.error('[API] Unexpected error:', error);
+        res.status(500).json({ 
+          error: 'Internal server error',
+          details: error.message 
+        });
+      }
+    });
+
+    // Get session info
+    app.get('/api/sessions/:sessionId', (req, res) => {
+      const { sessionId } = req.params;
+      
+      // Use sessionManager directly since getSession isn't exposed
+      const session = shelltender.sessionManager.getSession(sessionId);
+      if (session) {
+        res.json({
+          id: sessionId,
+          status: 'active',
+          cols: session.cols,
+          rows: session.rows,
+          createdAt: session.createdAt,
+          lastAccessedAt: session.lastAccessedAt
+        });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
+    });
+
+    // List all sessions
+    app.get('/api/sessions', (req, res) => {
+      // Use sessionManager directly since getAllSessions isn't exposed
+      const sessions = shelltender.sessionManager.getAllSessions();
+      res.json(sessions.map(s => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        lastAccessedAt: s.lastAccessedAt,
+        cols: s.cols,
+        rows: s.rows
+      })));
+    });
+
+    // Delete session
+    app.delete('/api/sessions/:sessionId', (req, res) => {
+      const { sessionId } = req.params;
+      
+      const killed = shelltender.killSession(sessionId);
+      if (killed) {
+        console.log(`[API] Session ${sessionId} terminated`);
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
+    });
+
+    // Resize session
+    app.post('/api/sessions/:sessionId/resize', (req, res) => {
+      const { sessionId } = req.params;
+      const { cols, rows } = req.body;
+      
+      if (!cols || !rows) {
+        return res.status(400).json({ error: 'cols and rows required' });
+      }
+      
+      // Use sessionManager directly since resizeSession isn't exposed
+      const resized = shelltender.sessionManager.resizeSession(sessionId, cols, rows);
+      if (resized) {
+        console.log(`[API] Resized session ${sessionId} to ${cols}x${rows}`);
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Session not found' });
+      }
+    });
+
+    // Start the server
+    app.listen(PORT, '0.0.0.0', () => {
       console.log('\n' + '='.repeat(50));
-      console.log('Shelltender v0.5.0 Service Started');
+      console.log('Shelltender v0.6.1 Service Started');
       console.log('='.repeat(50));
       console.log(`Mode:      Single-port`);
       console.log(`Port:      ${PORT}`);
       console.log(`HTTP API:  http://localhost:${PORT}`);
       console.log(`WebSocket: ws://localhost:${PORT}/ws`);
+      console.log(`Health:    http://localhost:${PORT}/api/health`);
+      console.log(`Doctor:    http://localhost:${PORT}/api/shelltender/doctor`);
+      console.log(`Admin UI:  http://localhost:${PORT}/admin`);
       console.log('='.repeat(50) + '\n');
+      console.log('✨ Automatic pipeline setup enabled - no more black screens!');
+      console.log('✅ HTTP session management endpoints added for backend integration');
+      console.log('🎛️  Admin dashboard available for session monitoring');
     });
     
     // Handle graceful shutdown
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', async () => {
+      console.log('\nShutting down gracefully...');
+      if (shelltender && shelltender.stop) {
+        await shelltender.stop();
+      }
+      process.exit(0);
+    });
+    
+    process.on('SIGINT', async () => {
+      console.log('\nShutting down gracefully...');
+      if (shelltender && shelltender.stop) {
+        await shelltender.stop();
+      }
+      process.exit(0);
+    });
     
   } catch (error) {
     console.error('Failed to start service:', error);
@@ -402,48 +249,16 @@ async function start() {
   }
 }
 
-// Graceful shutdown
-async function shutdown() {
-  console.log('\nShutting down gracefully...');
-  
-  try {
-    // Close WebSocket server
-    if (wsServer && wsServer.close) {
-      console.log('Closing WebSocket server...');
-      wsServer.close();
-    }
-    
-    // Close all sessions
-    if (sessionManager) {
-      console.log('Closing all sessions...');
-      const sessions = sessionManager.getAllSessions();
-      sessions.forEach(session => {
-        try {
-          sessionManager.killSession(session.id);
-        } catch (err) {
-          console.error(`Error closing session ${session.id}:`, err);
-        }
-      });
-    }
-    
-    // Close HTTP server
-    console.log('Closing HTTP server...');
-    httpServer.close(() => {
-      console.log('Server closed');
-      process.exit(0);
-    });
-    
-    // Force exit after 5 seconds
-    setTimeout(() => {
-      console.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 5000);
-    
-  } catch (error) {
-    console.error('Error during shutdown:', error);
-    process.exit(1);
-  }
-}
+// Add global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
 
 // Start the service
 start().catch(error => {

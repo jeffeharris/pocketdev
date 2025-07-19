@@ -11,7 +11,7 @@ PocketDev is a web-based system for managing AI development teams. It treats AI 
 ### Three-Service Architecture
 - **Backend** (`/backend`, port 3005): Express API handling project/task management, Git operations, SQLite database
 - **Frontend** (`/frontend`, port 5173): React 19 + TypeScript + Vite + TailwindCSS
-- **Shelltender** (`/shelltender`, port 8080): Terminal infrastructure for persistent AI sessions
+- **Shelltender** (`/shelltender`, port 8080): Terminal infrastructure for persistent AI sessions (v0.6.1 with admin UI)
 
 ### Data Hierarchy
 ```
@@ -58,6 +58,11 @@ The system monitors AI state through terminal output patterns:
 - Claude thinking pattern detection (e.g., "✻ Analyzing...")
 - Real-time WebSocket broadcasting of state changes
 - Session persistence in `/app/data/shelltender-sessions`
+
+### Shelltender Admin UI
+- Access at http://localhost:8080/admin
+- Features: session monitoring, bulk operations, resource tracking
+- Note: v0.6.1 workaround downloads HTML from GitHub on first access
 
 ### Frontend Import Rules
 **CRITICAL**: Due to Vite's ES module handling, always use direct imports:

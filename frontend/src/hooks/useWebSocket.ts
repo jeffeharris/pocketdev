@@ -17,7 +17,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   const [status, setStatus] = useState<WebSocketStatus>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number>();
+  const reconnectTimeoutRef = useRef<number | undefined>(undefined);
   const reconnectAttemptsRef = useRef(0);
   const subscriptionsRef = useRef<Set<string>>(new Set());
 

@@ -4,6 +4,91 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Fixed
+- **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
+  - Fixed TaskStatus not updating based on console activity detection
+  - Replaced removed `ShelltenderMonitorAdapter` with new `ShelltenderSessionMonitor`
+  - Implemented individual WebSocket connections per task session (v0.6.1 requirement)
+  - Updated WebSocket URLs to use correct `/ws` endpoint
+  - AI state detection now working properly (not-started, idle, working, waiting)
+  - Pattern matching for Claude thinking animations restored
+  - Real-time state broadcasting to frontend restored
+
+### Added
+- **GitHub Token Middleware**
+  - Implemented centralized middleware for GitHub token injection
+  - Reduced database queries from 65+ per request to just 1
+  - All routes now use consistent `req.githubToken` pattern
+  - Improved performance and maintainability
+- **GitHub CLI Integration**
+  - Added gh CLI v2.40.1 to backend container
+  - Switched from temporary remotes to gh credential helper
+  - Git operations now use `GH_TOKEN` environment variable
+  - Proper authentication for fetch, pull, and push operations
+- **Shelltender v0.6.1 Upgrade**
+  - Upgraded @shelltender/server from v0.5.0 to v0.6.1
+  - Fixed WebSocket 404 issues with deferred setup
+  - Added support for all convenience API methods (createSession, getSession, etc.)
+  - Improved session environment handling to include AI tools
+  - Sessions now use login shell to properly load PATH
+  - Implemented workaround for admin UI - downloads from GitHub on first access
+  - Admin UI now available at http://localhost:8080/admin with bulk session management
+- **Branch Autocomplete in Task Creation**
+  - Added reusable BranchSelector component with search and filtering
+  - Implemented keyboard navigation (arrow keys, enter, escape)
+  - Shows branch status labels (Protected, In use, Base branch)
+  - Prevents selection of occupied or protected branches
+  - Includes both local and remote branches in suggestions
+- **Git Diff Viewer Backend Infrastructure (Phase 1)**
+  - Added getAllChanges endpoint to get combined view of working tree and committed changes
+  - Implemented individual file staging/unstaging operations via gitOperation endpoint
+  - Enhanced git service with methods for unpushed commit detection
+  - Added proper file categorization (staged, unstaged, untracked, committed)
+  - Improved line count accuracy for all file types including untracked files
+- **Git Diff Viewer UI Enhancement (Phase 4)**
+  - Integrated three-state toggle (Working Tree/All Changes/Branch Diff) into DiffViewerModal
+  - Added StatusIcon component showing git status with appropriate icons for each file
+  - Implemented single data loading approach with client-side filtering for better performance
+  - Fixed caching to properly work across different comparison modes
+  - Enhanced backend to support 'all' mode showing complete diff from base to working tree
+  - Added staged/unstaged filter for Working Tree and All Changes views
+  - Fixed status code handling to support both working tree (2-letter) and committed (1-letter) formats
+  - Improved empty states with contextual messages for each view mode
+
+### Fixed
+- **Git Authentication Errors**
+  - Fixed "could not read Username" errors during git fetch operations
+  - Corrected PLANNING.md path to use .pocketdev/PLANNING.md consistently
+  - Fixed git service authentication for fetch/pull/push commands
+  - Resolved issue where refresh button triggered different checks than initial load
+- **Planning Editor Modal**
+  - Fixed content not showing when modal opens
+  - Added useEffect to sync content when modal state changes
+  - Planning container on dashboard now has fixed height with scrollable content
+  - Added minimal scrollbar styling for better UX
+- **Git Status API Refactoring**
+  - Fixed all frontend API methods to include projectId parameter for proper scoping
+  - Updated backend to use getComprehensiveDiff for accurate line counts
+  - Changed git status to use --untracked-files=all for individual file listing
+  - Resolved 0/0 line count display issues in diff viewer
+- **Branch Loading in Task Creation**
+  - Fixed API response parsing for branch endpoint
+  - Changed from Promise.all to Promise.allSettled to handle partial API failures
+  - Task creation modal now properly loads branches even when planning API fails
+- **Container Segmentation Fault**
+  - Switched Shelltender from Alpine to Ubuntu-based image (pocketdev/ai-base)
+  - Fixed node-pty compatibility issues causing exit code 139
+  - Removed node-fetch import (using built-in fetch in Node.js 22)
+- **GitHub API Key Saving Error**
+  - Fixed encryption key validation causing 500 errors when saving settings
+  - Added proper hex string to buffer conversion for encryption keys
+  - Improved error messages with clear instructions for key generation
+  - Backend now properly validates 32-byte encryption key requirement
+- **Terminal Cursor Display Issues**
+  - Fixed duplicate cursor display in terminal
+  - Set cursor to non-blinking block style for better visibility
+  - Added CSS rules to hide xterm's native cursor element
+  
 ### Changed
 - **Docker Architecture Reorganization**
   - Moved service-specific Dockerfiles to their respective directories:

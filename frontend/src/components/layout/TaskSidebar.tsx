@@ -8,9 +8,7 @@ interface TaskSidebarProps {
 }
 
 export const TaskSidebar: React.FC<TaskSidebarProps> = ({
-  currentTask,
-  allTasks,
-  onTaskSelect,
+  currentTask
 }) => {
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">

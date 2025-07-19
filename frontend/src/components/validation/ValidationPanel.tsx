@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Square, Monitor, ExternalLink, RefreshCw } from 'lucide-react';
+import { Play, Square, Monitor } from 'lucide-react';
 
 interface ValidationPanelProps {
   taskId: string;
