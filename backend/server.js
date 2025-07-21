@@ -85,6 +85,24 @@ async function initializeDatabase() {
     console.error('Lifecycle migration check failed:', error);
   }
   
+  // Check if multi-terminal sessions migration needs to run
+  try {
+    const needsMultiTerminalMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('terminal_sessions') 
+       WHERE name='tab_name'`
+    );
+    
+    if (needsMultiTerminalMigration.count === 0) {
+      console.log('Running multi-terminal sessions migration...');
+      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/003_multi_terminal_sessions.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Multi-terminal sessions migration completed');
+    }
+  } catch (error) {
+    console.error('Multi-terminal sessions migration check failed:', error);
+  }
+  
   // Store models in app locals for access in routes
   app.locals.models = models;
   app.locals.db = db;

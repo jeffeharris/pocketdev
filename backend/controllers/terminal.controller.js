@@ -1,4 +1,5 @@
 import { createTaskSession, executeCommand, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
+import path from 'path';
 
 /**
  * Get all terminal sessions
@@ -72,12 +73,18 @@ export async function getSession(req, res, next) {
 export async function createTerminalSession(req, res, next) {
   try {
     const { projectId, taskId } = req.params;
+    const { tabName, aiAgent, initialPrompt, workingDirectory } = req.body;
     const models = req.app.locals.models;
     
     // Verify task exists
     const task = await models.tasks.findById(taskId);
-    if (!task || task.project_id !== projectId) {
+    if (!task) {
       return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // If projectId is provided, verify it matches
+    if (projectId && task.project_id !== projectId) {
+      return res.status(404).json({ error: 'Task not found in project' });
     }
     
     // Get git config from settings
@@ -96,12 +103,61 @@ export async function createTerminalSession(req, res, next) {
       email: gitUserEmail?.value || 'user@pocketdev.local'
     };
     
-    // Create or get existing session with git config
-    const result = await createTaskSession(taskId, task.worktree_path, {}, gitConfig);
+    // Generate unique session ID for this tab
+    const sessionId = `task-${taskId}-${Date.now()}`;
+    
+    // Set working directory (default to task root)
+    const workDir = workingDirectory 
+      ? path.join(task.worktree_path, workingDirectory)
+      : task.worktree_path;
+    
+    // Create Shelltender session
+    const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+    const createResponse = await fetch(`${shelltenderUrl}/api/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId: sessionId,
+        cwd: workDir,
+        env: {
+          TASK_ID: taskId,
+          WORKTREE_PATH: task.worktree_path
+        },
+        metadata: {
+          taskId,
+          title: task.name,
+          type: 'task',
+          tabName: tabName || 'Main',
+          aiAgent: aiAgent || 'claude'
+        }
+      })
+    });
+    
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('Shelltender error:', errorText);
+      throw new Error(`Failed to create session: ${createResponse.statusText} - ${errorText}`);
+    }
+    
+    const result = await createResponse.json();
+    
+    // Store session in database with tab info
+    const dbSession = await models.sessions.create(taskId, {
+      sessionId: sessionId,
+      shelltenderSessionId: result.id,
+      tabName: tabName,
+      aiAgent: aiAgent || 'claude',
+      aiSessionId: null, // Will be updated when AI starts
+      metadata: {
+        initialPrompt: initialPrompt,
+        workingDirectory: workingDirectory
+      }
+    });
     
     // Configure git in the session if we have user info
     if (gitConfig.name && gitConfig.email) {
-      const sessionId = result.id;
       try {
         // Set git config in the session
         await executeCommand(sessionId, `git config user.name "${gitConfig.name}"`);
@@ -112,8 +168,21 @@ export async function createTerminalSession(req, res, next) {
       }
     }
     
+    // If working directory specified, change to it
+    if (workingDirectory) {
+      try {
+        await executeCommand(sessionId, `cd "${workingDirectory}"`);
+      } catch (error) {
+        console.error('Failed to change directory:', error);
+      }
+    }
+    
     res.json({
       sessionId: result.id,
+      dbSessionId: dbSession.id,
+      tabName: dbSession.tab_name,
+      tabOrder: dbSession.tab_order,
+      aiAgent: dbSession.ai_agent,
       ...result
     });
   } catch (error) {
@@ -289,6 +358,31 @@ export async function resetSession(req, res, next) {
       workingDirectory: task.worktree_path,
       newSession
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Update terminal tab properties
+ */
+export async function updateTerminalTab(req, res, next) {
+  try {
+    const { sessionId } = req.params;
+    const { tabName, tabOrder } = req.body;
+    const models = req.app.locals.models;
+    
+    // Update tab in database
+    const updatedSession = await models.sessions.updateTab(sessionId, {
+      tabName,
+      tabOrder
+    });
+    
+    if (!updatedSession) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json(updatedSession);
   } catch (error) {
     next(error);
   }

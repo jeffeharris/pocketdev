@@ -14,6 +14,15 @@ router.post('/projects/:projectId/tasks/:taskId/terminal',
   terminalController.createTerminalSession
 );
 
+// Multi-terminal support
+router.post('/tasks/:taskId/terminals',
+  terminalController.createTerminalSession
+);
+
+router.patch('/terminals/:sessionId/tab',
+  terminalController.updateTerminalTab
+);
+
 router.post('/sessions/:sessionId/execute', 
   terminalController.executeInSession
 );

@@ -13,14 +13,23 @@ class SessionModel {
     const id = data.id || this.generateId();
     const now = new Date().toISOString();
     
+    // Get the next tab order for this task
+    const maxOrderResult = await this.db.get(
+      'SELECT MAX(tab_order) as max_order FROM terminal_sessions WHERE task_id = ?',
+      [taskId]
+    );
+    const nextTabOrder = (maxOrderResult?.max_order ?? -1) + 1;
+    
     const result = await this.db.run(`
       INSERT INTO terminal_sessions (
         id, task_id, session_id, shelltender_session_id, ai_state,
         is_active, message_count, created_at, last_activity, 
         size_bytes, token_usage, tool_usage, model, 
-        error_count, metadata
+        error_count, metadata,
+        tab_name, tab_order, ai_session_id, ai_agent,
+        parent_session_id, branch_purpose, is_branch
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, 
       taskId, 
@@ -36,7 +45,15 @@ class SessionModel {
       JSON.stringify(data.toolUsage || data.tool_usage || {}),
       data.model || null,
       data.errorCount || data.error_count || 0,
-      JSON.stringify(data.metadata || {})
+      JSON.stringify(data.metadata || {}),
+      // New fields
+      data.tabName || data.tab_name || `Tab ${nextTabOrder + 1}`,
+      data.tabOrder !== undefined ? data.tabOrder : nextTabOrder,
+      data.aiSessionId || data.ai_session_id || null,
+      data.aiAgent || data.ai_agent || 'claude',
+      data.parentSessionId || data.parent_session_id || null,
+      data.branchPurpose || data.branch_purpose || null,
+      data.isBranch || data.is_branch || 0
     ]);
 
     return this.findById(id);
@@ -218,6 +235,56 @@ class SessionModel {
     `, [taskId]);
     
     return this._parseSession(session);
+  }
+
+  /**
+   * Get all active sessions for a task (multi-terminal support)
+   */
+  async findAllActiveByTaskId(taskId) {
+    const sessions = await this.db.all(`
+      SELECT * FROM terminal_sessions
+      WHERE task_id = ? AND is_active = 1
+      ORDER BY tab_order ASC
+    `, [taskId]);
+    
+    return sessions.map(s => this._parseSession(s));
+  }
+
+  /**
+   * Update tab information
+   */
+  async updateTab(sessionId, tabData) {
+    const updates = [];
+    const values = [];
+    
+    if (tabData.tabName !== undefined) {
+      updates.push('tab_name = ?');
+      values.push(tabData.tabName);
+    }
+    
+    if (tabData.tabOrder !== undefined) {
+      updates.push('tab_order = ?');
+      values.push(tabData.tabOrder);
+    }
+    
+    if (updates.length > 0) {
+      values.push(sessionId);
+      
+      await this.db.run(`
+        UPDATE terminal_sessions 
+        SET ${updates.join(', ')}
+        WHERE id = ?
+      `, values);
+    }
+    
+    return this.findById(sessionId);
+  }
+
+  /**
+   * Delete a session (for closing tabs)
+   */
+  async delete(sessionId) {
+    await this.db.run('DELETE FROM terminal_sessions WHERE id = ?', [sessionId]);
   }
 }
 
