@@ -45,6 +45,15 @@ export interface GitStatus {
   unpushed?: number;
 }
 
+export interface TerminalSession {
+  sessionId: string;
+  dbSessionId: string;
+  tabName: string;
+  tabOrder: number;
+  aiState: WorkerStatus;
+  aiAgent: string;
+}
+
 export interface Task {
   id: string;
   name: string;
@@ -73,6 +82,9 @@ export interface Task {
   is_archived?: boolean;
   merged_at?: string;
   has_uncommitted_changes?: boolean;
+  
+  // Terminal sessions (multiple tabs)
+  terminals?: TerminalSession[];
 }
 
 export interface ExtendedTask extends Task {

@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PocketDev is a web-based system for managing AI development teams. It treats AI developers (Claude, Codex, Gemini) like a real development team, where you can assign tasks, monitor progress, and merge their work - essentially turning you into an engineering manager for AI developers.
 
+## Active Development
+
+### Multi-Terminal Tabs Feature (In Progress)
+- **Status**: Phase 1 (Backend) Complete, Phase 2 (Frontend) Needed
+- **Branch**: `feature/multi-terminal-tabs`
+- **Docs**: See `.pocketdev/specs/multi-terminal-tabs/` for requirements and design
+- **Handoff**: If continuing this work, start with `handoff-phase1-complete.md`
+
 ## Architecture
 
 ### Three-Service Architecture

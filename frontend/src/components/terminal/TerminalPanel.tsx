@@ -1,7 +1,9 @@
-import { useState, forwardRef, useImperativeHandle, useRef } from 'react';
-import { Eye, RefreshCw, ExternalLink, Monitor, Plus } from 'lucide-react';
-import type { Task } from '../../types/task';
+import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { Eye, RefreshCw, ExternalLink, Monitor } from 'lucide-react';
+import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
+import { TerminalTabs, type Tab } from './TerminalTabs';
+import { api } from '../../services/api';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -23,16 +25,56 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   isVisible = true
 }, ref) => {
   const [isResetting, setIsResetting] = useState(false);
-  const sessionId = `task-${task.id}`;
-  const terminalRef = useRef<DirectTerminalHandle>(null);
+  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [initializedTerminals, _setInitializedTerminals] = useState<Set<string>>(new Set());
+  const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
+
+  // Load terminal sessions on mount or task change
+  useEffect(() => {
+    const loadTerminals = async () => {
+      if (task.terminals && task.terminals.length > 0) {
+        setTerminals(task.terminals);
+        // Set first tab as active if none selected
+        if (!activeTabId) {
+          const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
+          if (firstTab) {
+            setActiveTabId(firstTab.sessionId);
+          }
+        }
+      } else {
+        // Create first terminal if none exist
+        try {
+          const newSession = await api.createTerminalSession(task.id, {
+            tabName: 'Main',
+            aiAgent: 'claude'
+          });
+          setTerminals([{
+            sessionId: newSession.sessionId,
+            dbSessionId: newSession.dbSessionId,
+            tabName: newSession.tabName,
+            tabOrder: newSession.tabOrder,
+            aiState: 'not-started',
+            aiAgent: newSession.aiAgent
+          }]);
+          setActiveTabId(newSession.sessionId);
+        } catch (error) {
+          console.error('Failed to create initial terminal:', error);
+        }
+      }
+    };
+    
+    loadTerminals();
+  }, [task.id]);
 
   // Expose focus method to parent components
   useImperativeHandle(ref, () => ({
     focus: () => {
-      // Forwarding focus to terminal
-      terminalRef.current?.focus();
+      // Focus the active terminal
+      const activeRef = terminalRefs.current.get(activeTabId);
+      activeRef?.focus();
     }
-  }), [task.id]);
+  }), [activeTabId]);
   
   const handleResetSession = async () => {
     setIsResetting(true);
@@ -46,6 +88,51 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   };
 
+  const handleTabSelect = (sessionId: string) => {
+    setActiveTabId(sessionId);
+    // Mark as initialized
+    _setInitializedTerminals(prev => new Set(prev).add(sessionId));
+    // Focus the terminal after switching
+    setTimeout(() => {
+      const terminalRef = terminalRefs.current.get(sessionId);
+      terminalRef?.focus();
+    }, 100);
+  };
+
+  const handleTabAdd = async () => {
+    try {
+      const tabCount = terminals.length;
+      const newSession = await api.createTerminalSession(task.id, {
+        tabName: `Tab ${tabCount + 1}`,
+        aiAgent: 'claude'
+      });
+      
+      const newTerminal: TerminalSession = {
+        sessionId: newSession.sessionId,
+        dbSessionId: newSession.dbSessionId,
+        tabName: newSession.tabName,
+        tabOrder: newSession.tabOrder,
+        aiState: 'not-started',
+        aiAgent: newSession.aiAgent
+      };
+      
+      setTerminals(prev => [...prev, newTerminal]);
+      setActiveTabId(newSession.sessionId);
+    } catch (error) {
+      console.error('Failed to create new terminal:', error);
+    }
+  };
+
+  // Convert terminals to Tab format for TerminalTabs component
+  const tabs: Tab[] = terminals.map(t => ({
+    sessionId: t.sessionId,
+    dbSessionId: t.dbSessionId,
+    tabName: t.tabName,
+    tabOrder: t.tabOrder,
+    aiState: t.aiState,
+    aiAgent: t.aiAgent
+  }));
+
 
   return (
     <div 
@@ -55,31 +142,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       {/* Terminal Header */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          {/* Session Tabs - Currently just visual placeholders */}
-          <div className="flex">
-            <button className="px-4 py-2 bg-gray-700 text-gray-200 text-sm border-r border-gray-600 relative">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span>Implementation</span>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-400"></div>
-            </button>
-            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                <span>Planning</span>
-              </div>
-            </button>
-            <button className="px-4 py-2 bg-gray-800 text-gray-400 text-sm border-r border-gray-600 hover:bg-gray-700 hover:text-gray-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                <span>Testing</span>
-              </div>
-            </button>
-            <button className="px-3 py-2 bg-gray-800 text-gray-500 text-sm hover:bg-gray-700 hover:text-gray-400 transition-colors">
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Terminal Tabs */}
+          <TerminalTabs
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onTabSelect={handleTabSelect}
+            onTabAdd={handleTabAdd}
+            maxTabs={6}
+          />
 
           {/* Control Buttons */}
           <div className="flex items-center gap-2 pr-4">
@@ -118,15 +188,24 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         </div>
       </div>
 
-      {/* Shelltender Content */}
+      {/* Terminal Content - Show only active terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        <DirectTerminal 
-          ref={terminalRef}
-          taskId={task.id} 
-          sessionId={sessionId} 
-          worktreePath={task.worktree_path} 
-          isVisible={isVisible}
-        />
+        {terminals.map(terminal => (
+          <DirectTerminal
+            key={terminal.sessionId}
+            ref={(el) => {
+              if (el) {
+                terminalRefs.current.set(terminal.sessionId, el);
+              } else {
+                terminalRefs.current.delete(terminal.sessionId);
+              }
+            }}
+            taskId={task.id}
+            sessionId={terminal.sessionId}
+            worktreePath={task.worktree_path}
+            isVisible={isVisible && terminal.sessionId === activeTabId}
+          />
+        ))}
       </div>
     </div>
   );

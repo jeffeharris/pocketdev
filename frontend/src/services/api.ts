@@ -308,7 +308,12 @@ class ApiService {
       if (!task) throw new Error('Task not found');
       return task;
     }
-    return this.fetch<Task>(`/projects/${projectId}/tasks/${taskId}`);
+    const response = await this.fetch<any>(`/projects/${projectId}/tasks/${taskId}`);
+    // Include terminals if present
+    return {
+      ...response,
+      terminals: response.terminals || []
+    };
   }
 
   async createTask(projectId: string, task: CreateTaskDTO): Promise<Task> {
@@ -746,6 +751,69 @@ index abc123..def456 100644
     if (USE_MOCKS) return;
     await this.fetch<void>(`/projects/${projectId}/tasks/${taskId}/images/${filename}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Terminal session endpoints
+  async getTerminalSessions(taskId: string): Promise<any[]> {
+    if (USE_MOCKS) {
+      return [{
+        id: `task-${taskId}-1`,
+        dbSessionId: 'mock123',
+        tabName: 'Main',
+        tabOrder: 0,
+        aiState: 'idle',
+        aiAgent: 'claude'
+      }];
+    }
+    const response = await this.fetch<any>(`/tasks/${taskId}`);
+    return response.terminals || [];
+  }
+
+  async createTerminalSession(taskId: string, options: {
+    tabName?: string;
+    aiAgent?: string;
+    workingDirectory?: string;
+    initialPrompt?: string;
+  }): Promise<any> {
+    if (USE_MOCKS) {
+      return {
+        sessionId: `task-${taskId}-${Date.now()}`,
+        dbSessionId: Math.random().toString(36).substr(2, 8),
+        tabName: options.tabName || 'New Tab',
+        tabOrder: 1,
+        aiAgent: options.aiAgent || 'claude',
+        id: `task-${taskId}-${Date.now()}`,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        cols: 80,
+        rows: 24,
+        wsUrl: 'ws://localhost:8080/ws'
+      };
+    }
+    return this.fetch<any>(`/tasks/${taskId}/terminals`, {
+      method: 'POST',
+      body: JSON.stringify(options)
+    });
+  }
+
+  async updateTerminalTab(sessionId: string, updates: {
+    tabName?: string;
+    tabOrder?: number;
+  }): Promise<any> {
+    if (USE_MOCKS) {
+      return { ...updates, id: sessionId };
+    }
+    return this.fetch<any>(`/terminals/${sessionId}/tab`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    });
+  }
+
+  async deleteTerminalSession(sessionId: string): Promise<void> {
+    if (USE_MOCKS) return;
+    await this.fetch<void>(`/terminals/${sessionId}`, {
+      method: 'DELETE'
     });
   }
 }

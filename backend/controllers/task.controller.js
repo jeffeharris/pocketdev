@@ -270,6 +270,9 @@ export class TaskController {
       // Get project for base branch info
       const project = await this.models.projects.findById(projectId);
       
+      // Get terminal sessions for this task
+      const terminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+      
       // Get git status for this task's worktree
       let gitInfo = null;
       let mergeInfo = null;
@@ -301,7 +304,15 @@ export class TaskController {
         ...task,
         git: gitInfo,
         mergeInfo: mergeInfo,
-        claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`
+        claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`,
+        terminals: terminals.map(t => ({
+          sessionId: t.session_id || t.shelltender_session_id,
+          dbSessionId: t.id,
+          tabName: t.tab_name,
+          tabOrder: t.tab_order,
+          aiState: t.ai_state,
+          aiAgent: t.ai_agent
+        }))
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
