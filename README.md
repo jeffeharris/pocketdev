@@ -8,6 +8,8 @@ This system allows you to:
 - Manage multiple projects (git repositories) remotely with persistent storage
 - Create isolated tasks using git worktrees
 - Launch Claude terminal sessions for each task with session analytics
+- **NEW: Create multiple terminal tabs per task (up to 6 concurrent AI sessions)**
+- **NEW: Auto-launch Claude in new tabs with one click**
 - Connect JetBrains IDEs to worktrees
 - Perform git operations through the web UI
 - Track Claude session usage and costs
@@ -142,6 +144,15 @@ simple/server/
 - Native fullscreen API support for terminal viewing
 - Optimized for iPhone and other mobile browsers
 
+### Multi-Terminal Tabs (NEW)
+- Create up to 6 concurrent terminal sessions per task
+- Each tab runs an independent AI session with its own context
+- Real-time AI state indicators (idle, working, waiting)
+- Auto-launch Claude in new tabs with configurable delay
+- Tab persistence across page reloads (Note: Currently broken, fix pending)
+- WebSocket-based command execution via Shelltender v0.6.1
+- Individual session tracking and analytics per tab
+
 ### File Attachments
 - Upload files directly to task workspaces
 - Support for images, documents, code files, config files, and archives
@@ -175,7 +186,8 @@ simple/server/
 ### Terminal Sessions
 - `GET /api/sessions` - List all terminal sessions
 - `POST /api/projects/:projectId/tasks/:taskId/terminal` - Create terminal session
-- `POST /api/sessions/:sessionId/execute` - Execute command in session
+- `GET /api/projects/:projectId/tasks/:taskId/terminals` - List terminals for task
+- `POST /api/sessions/:sessionId/execute` - Execute command in session (WebSocket-based)
 
 ### File Uploads
 - `POST /api/projects/:projectId/tasks/:taskId/upload` - Upload file to task

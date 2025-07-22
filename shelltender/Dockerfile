@@ -22,6 +22,13 @@ RUN npm ci --include=dev && \
 # Copy application code
 COPY shelltender/ ./
 
+# Copy system-wide bash configuration
+COPY shelltender/bash-config/bash.bashrc /etc/bash.bashrc
+
+# Copy pocketdev user's bashrc to override the default
+COPY shelltender/bash-config/pocketdev.bashrc /home/pocketdev/.bashrc
+RUN chown pocketdev:pocketdev /home/pocketdev/.bashrc
+
 # Ensure proper permissions
 RUN chmod +x shelltender-service.js || true
 

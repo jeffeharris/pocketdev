@@ -27,7 +27,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [isResetting, setIsResetting] = useState(false);
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
-  const [initializedTerminals, _setInitializedTerminals] = useState<Set<string>>(new Set());
+  const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
+  const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
 
   // Load terminal sessions on mount or task change
@@ -91,7 +92,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const handleTabSelect = (sessionId: string) => {
     setActiveTabId(sessionId);
     // Mark as initialized
-    _setInitializedTerminals(prev => new Set(prev).add(sessionId));
+    setInitializedTerminals(prev => new Set(prev).add(sessionId));
     // Focus the terminal after switching
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(sessionId);
@@ -100,12 +101,21 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   const handleTabAdd = async () => {
+    console.log('[TerminalPanel] handleTabAdd called');
     try {
       const tabCount = terminals.length;
+      console.log('[TerminalPanel] Current tab count:', tabCount);
+      
+      // Get the currently active terminal to copy history from
+      const activeTerminal = terminals.find(t => t.sessionId === activeTabId);
+      
+      console.log('[TerminalPanel] Creating new terminal session...');
       const newSession = await api.createTerminalSession(task.id, {
         tabName: `Tab ${tabCount + 1}`,
-        aiAgent: 'claude'
+        aiAgent: 'claude',
+        copyHistoryFrom: activeTerminal?.sessionId || null
       });
+      console.log('[TerminalPanel] New session created:', newSession);
       
       const newTerminal: TerminalSession = {
         sessionId: newSession.sessionId,
@@ -118,20 +128,65 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       setTerminals(prev => [...prev, newTerminal]);
       setActiveTabId(newSession.sessionId);
+      // Mark this session as launching Claude
+      console.log('[TerminalPanel] Marking session for Claude launch:', newSession.sessionId);
+      setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
+      
+      // Wait for terminal to be ready and prompt to appear, then launch Claude
+      console.log('[TerminalPanel] Setting timeout for Claude launch...');
+      setTimeout(async () => {
+        try {
+          console.log('[TerminalPanel] Auto-launching Claude for new tab:', newSession.sessionId);
+          
+          // First send a newline to ensure prompt is visible
+          console.log('[TerminalPanel] Sending newline to force prompt...');
+          await api.executeCommand(newSession.sessionId, '');
+          
+          // Small delay then send claude command
+          setTimeout(async () => {
+            console.log('[TerminalPanel] Sending claude command...');
+            await api.executeCommand(newSession.sessionId, 'claude');
+            console.log('[TerminalPanel] Claude command sent successfully');
+            
+            // Remove from launching set after some time
+            setTimeout(() => {
+              console.log('[TerminalPanel] Removing launching state for:', newSession.sessionId);
+              setLaunchingClaude(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(newSession.sessionId);
+                return newSet;
+              });
+            }, 3000);
+          }, 500);
+        } catch (error) {
+          console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
+          // Remove from launching set on error
+          setLaunchingClaude(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(newSession.sessionId);
+            return newSet;
+          });
+        }
+      }, 3000); // Wait 3 seconds for terminal to be ready
     } catch (error) {
-      console.error('Failed to create new terminal:', error);
+      console.error('[TerminalPanel] Failed to create new terminal:', error);
     }
   };
 
+
   // Convert terminals to Tab format for TerminalTabs component
-  const tabs: Tab[] = terminals.map(t => ({
-    sessionId: t.sessionId,
-    dbSessionId: t.dbSessionId,
-    tabName: t.tabName,
-    tabOrder: t.tabOrder,
-    aiState: t.aiState,
-    aiAgent: t.aiAgent
-  }));
+  const tabs: Tab[] = terminals.map(t => {
+    const isLaunching = launchingClaude.has(t.sessionId);
+    console.log(`[TerminalPanel] Tab ${t.sessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}`);
+    return {
+      sessionId: t.sessionId,
+      dbSessionId: t.dbSessionId,
+      tabName: t.tabName,
+      tabOrder: t.tabOrder,
+      aiState: isLaunching ? 'working' : t.aiState,
+      aiAgent: t.aiAgent
+    };
+  });
 
 
   return (

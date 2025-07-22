@@ -1,5 +1,11 @@
-import { createTaskSession, executeCommand, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
+import { createTaskSession, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
+import { executeCommandViaWebSocket, executeCommandViaMonitor } from '../utils/execute-command.js';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Get all terminal sessions
@@ -73,7 +79,7 @@ export async function getSession(req, res, next) {
 export async function createTerminalSession(req, res, next) {
   try {
     const { projectId, taskId } = req.params;
-    const { tabName, aiAgent, initialPrompt, workingDirectory } = req.body;
+    const { tabName, aiAgent, initialPrompt, workingDirectory, copyHistoryFrom } = req.body;
     const models = req.app.locals.models;
     
     // Verify task exists
@@ -111,7 +117,7 @@ export async function createTerminalSession(req, res, next) {
       ? path.join(task.worktree_path, workingDirectory)
       : task.worktree_path;
     
-    // Create Shelltender session
+    // Create Shelltender session with proper bash configuration
     const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
     const createResponse = await fetch(`${shelltenderUrl}/api/sessions`, {
       method: 'POST',
@@ -120,10 +126,22 @@ export async function createTerminalSession(req, res, next) {
       },
       body: JSON.stringify({
         sessionId: sessionId,
+        command: '/bin/bash',
+        args: ['--login', '-i'],  // Login + interactive to ensure all configs are loaded
         cwd: workDir,
         env: {
           TASK_ID: taskId,
-          WORKTREE_PATH: task.worktree_path
+          WORKTREE_PATH: task.worktree_path,
+          TERM: 'xterm-256color',
+          // Set PS1 to ensure we have a visible prompt
+          PS1: '\\[\\033[01;32m\\]\\u@pocketdev\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ',
+          // Task-scoped history file
+          HISTFILE: path.join(task.worktree_path, '.pocketdev_task_history'),
+          HISTSIZE: '10000',
+          HISTFILESIZE: '20000',
+          // Git config for bashrc to use
+          GIT_USER_NAME: gitConfig.name,
+          GIT_USER_EMAIL: gitConfig.email
         },
         metadata: {
           taskId,
@@ -156,17 +174,9 @@ export async function createTerminalSession(req, res, next) {
       }
     });
     
-    // Configure git in the session if we have user info
-    if (gitConfig.name && gitConfig.email) {
-      try {
-        // Set git config in the session
-        await executeCommand(sessionId, `git config user.name "${gitConfig.name}"`);
-        await executeCommand(sessionId, `git config user.email "${gitConfig.email}"`);
-      } catch (error) {
-        console.error('Failed to configure git in session:', error);
-        // Don't fail the whole request if git config fails
-      }
-    }
+    // Note: Terminal initialization is now handled by the bashrc file
+    // The executeCommand function doesn't work with Shelltender v0.6.1
+    // Commands must be sent via WebSocket, which happens on the frontend
     
     // If working directory specified, change to it
     if (workingDirectory) {
@@ -198,11 +208,22 @@ export async function executeInSession(req, res, next) {
     const { sessionId } = req.params;
     const { command } = req.body;
     
-    if (!command) {
+    if (command === undefined) {
       return res.status(400).json({ error: 'Command is required' });
     }
     
-    const result = await executeCommand(sessionId, command);
+    // Try to use the session monitor if available
+    const monitor = req.app.locals.shelltenderMonitor;
+    let result;
+    
+    if (monitor) {
+      console.log('[executeInSession] Using session monitor');
+      result = await executeCommandViaMonitor(sessionId, command, monitor);
+    } else {
+      console.log('[executeInSession] Using direct WebSocket connection');
+      result = await executeCommandViaWebSocket(sessionId, command);
+    }
+    
     res.json({
       sessionId,
       command,

@@ -775,6 +775,7 @@ index abc123..def456 100644
     aiAgent?: string;
     workingDirectory?: string;
     initialPrompt?: string;
+    copyHistoryFrom?: string | null;
   }): Promise<any> {
     if (USE_MOCKS) {
       return {
@@ -815,6 +816,26 @@ index abc123..def456 100644
     await this.fetch<void>(`/terminals/${sessionId}`, {
       method: 'DELETE'
     });
+  }
+
+  async executeCommand(sessionId: string, command: string): Promise<void> {
+    console.log('[API] executeCommand called:', { sessionId, command });
+    if (USE_MOCKS) {
+      console.log('[API] Mocks enabled, skipping actual API call');
+      return;
+    }
+    
+    try {
+      const response = await this.fetch<void>(`/sessions/${sessionId}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({ command })
+      });
+      console.log('[API] executeCommand successful');
+      return response;
+    } catch (error) {
+      console.error('[API] executeCommand failed:', error);
+      throw error;
+    }
   }
 }
 

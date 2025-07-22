@@ -4,6 +4,23 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Added
+- **Multi-Terminal Tabs Feature**
+  - Phase 1 (Backend): Added terminal session persistence and management
+    - New `terminal_sessions` table tracking individual tabs per task
+    - Session state persistence across server restarts
+    - Support for up to 6 concurrent terminals per task
+  - Phase 2 (Frontend): Implemented tab UI and switching
+    - New TerminalTabs component with visual state indicators
+    - Tab management with add/remove functionality
+    - Real-time AI state visualization (idle/working/waiting)
+    - Refactored TerminalPanel to support multiple DirectTerminal instances
+  - Phase 3 (Auto-Launch): WebSocket-based command execution
+    - Fixed Shelltender v0.6.1 command execution via WebSocket
+    - Auto-launch Claude in new tabs with configurable delays
+    - Created execute-command.js utility for proper WebSocket communication
+    - Note: Tab persistence is currently broken and needs fixing
+
 ### Fixed
 - **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
   - Fixed TaskStatus not updating based on console activity detection

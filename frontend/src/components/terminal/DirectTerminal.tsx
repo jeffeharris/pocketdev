@@ -22,7 +22,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   worktreePath: _worktreePath, // May be used for session initialization in future
   isVisible = true
 }, ref) => {
-  const { isConnected } = useWebSocket();
+  const { isConnected, wsService } = useWebSocket();
   const [isReady, setIsReady] = useState(false);
   const terminalSessionId = sessionId || `task-${taskId}`;
   const terminalRef = useRef<TerminalHandle>(null);
@@ -63,6 +63,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     }
   }), []); // Empty deps array for stable reference
 
+
   // Auto-fit when becoming visible
   useEffect(() => {
     if (isVisible && terminalRef.current) {
@@ -90,35 +91,22 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       <Terminal
         ref={terminalRef}
         sessionId={terminalSessionId}
-        // TODO: These callbacks were commented out to fix TS2322 error
-        // Check @shelltender/client v0.6.0 documentation for supported callbacks
-        // onSessionCreated={() => {
-        //   // Auto-focus new terminals after a delay
-        //   setTimeout(() => {
-        //     terminalRef.current?.focus();
-        //   }, 200);
-        // }}
-        // onError={(error: any) => {
-        //   console.error('[DirectTerminal] Terminal error:', error);
-        // }}
-        // onReady={() => {
-        //   // Terminal is ready
-        // }}
-        // Terminal customization
-        // TODO: These props were commented out to fix TS2322 error
-        // Check @shelltender/client v0.6.0 documentation for supported props
-        // fontSize={14}
-        // fontFamily="'JetBrains Mono', 'Cascadia Code', Consolas, Monaco, monospace"
-        // theme={{ 
-        //   background: '#1e1e1e',
-        //   foreground: '#d4d4d4',
-        //   cursor: '#ffffff',
-        //   selection: '#3a3d41'
-        // }}
-        // padding={{ left: 12, right: 4 }}
+        onSessionCreated={(sessionId: string) => {
+          console.log('[DirectTerminal] Session created:', sessionId);
+          // Force prompt display by sending a newline
+          setTimeout(() => {
+            if (wsService) {
+              console.log('[DirectTerminal] Forcing prompt display');
+              wsService.send({
+                type: 'input',
+                sessionId: sessionId,
+                data: '\n'
+              });
+            }
+          }, 500);
+        }}
         cursorStyle="block"
         cursorBlink={false}
-        // scrollback={10000}
       />
     </div>
   );
