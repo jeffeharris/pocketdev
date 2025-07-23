@@ -300,19 +300,44 @@ export class TaskController {
         }
       }
       
+      // Check Shelltender status for each terminal
+      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+      const terminalsWithStatus = await Promise.all(
+        terminals.map(async (terminal) => {
+          let shelltenderStatus = 'not-found';
+          
+          try {
+            const sessionId = terminal.session_id || terminal.shelltender_session_id;
+            if (sessionId) {
+              const response = await fetch(`${shelltenderUrl}/api/sessions/${sessionId}`);
+              if (response.ok) {
+                const session = await response.json();
+                shelltenderStatus = session.status === 'active' ? 'active' : 'inactive';
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to check Shelltender status for session ${terminal.id}:`, error.message);
+          }
+          
+          return {
+            sessionId: terminal.session_id || terminal.shelltender_session_id,
+            dbSessionId: terminal.id,
+            shelltenderSessionId: terminal.session_id || terminal.shelltender_session_id,
+            tabName: terminal.tab_name,
+            tabOrder: terminal.tab_order,
+            aiState: terminal.ai_state,
+            aiAgent: terminal.ai_agent,
+            shelltenderStatus
+          };
+        })
+      );
+      
       res.json({
         ...task,
         git: gitInfo,
         mergeInfo: mergeInfo,
         claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`,
-        terminals: terminals.map(t => ({
-          sessionId: t.session_id || t.shelltender_session_id,
-          dbSessionId: t.id,
-          tabName: t.tab_name,
-          tabOrder: t.tab_order,
-          aiState: t.ai_state,
-          aiAgent: t.ai_agent
-        }))
+        terminals: terminalsWithStatus
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
