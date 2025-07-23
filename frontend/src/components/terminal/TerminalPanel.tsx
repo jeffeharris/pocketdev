@@ -61,6 +61,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   useEffect(() => {
     const loadTerminals = async () => {
       if (task.terminals && task.terminals.length > 0) {
+        console.warn(`[TerminalPanel] Task ${task.id} has ${task.terminals.length} terminals! This indicates session cleanup is not working properly.`);
         setTerminals(task.terminals);
         
         // Check if we need to validate or set the active tab
@@ -84,8 +85,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             setActiveTabId(firstTab.dbSessionId);
           }
         }
-      } else {
-        // Create first terminal if none exist
+      } else if (!task.terminals || task.terminals.length === 0) {
+        // Only create first terminal if task truly has no terminals
+        console.log('[TerminalPanel] No terminals found for task, creating first one');
         try {
           const newSession = await api.createTerminalSession(task.id, {
             tabName: 'Main',
@@ -394,7 +396,21 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   // Convert terminals to Tab format for TerminalTabs component
-  const tabs: Tab[] = terminals.map(t => {
+  // First, sort all terminals by tab order
+  const sortedTerminals = [...terminals].sort((a, b) => a.tabOrder - b.tabOrder);
+  
+  // Ensure active tab is included in visible tabs
+  let visibleTerminals = sortedTerminals.slice(0, 6);
+  
+  // If active tab is not in the first 6, replace the last one with it
+  if (activeTabId && !visibleTerminals.find(t => t.dbSessionId === activeTabId)) {
+    const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
+    if (activeTerminal && visibleTerminals.length >= 6) {
+      visibleTerminals[5] = activeTerminal;
+    }
+  }
+  
+  const tabs: Tab[] = visibleTerminals.map(t => {
     const isLaunching = launchingClaude.has(t.dbSessionId);
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
     console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
