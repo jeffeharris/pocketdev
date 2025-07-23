@@ -35,6 +35,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Sort tabs by tabOrder
   const sortedTabs = [...tabs].sort((a, b) => a.tabOrder - b.tabOrder);
@@ -46,6 +47,15 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
       inputRef.current.select();
     }
   }, [editingTabId]);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // Determine indicator color based on AI state
   const getStateColor = (state: Tab['aiState']) => {
@@ -61,7 +71,29 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
     }
   };
   
+  const handleSingleClick = (tab: Tab) => {
+    // Clear any pending double-click timeout
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    
+    // Set a timeout for single click
+    clickTimeoutRef.current = setTimeout(() => {
+      if (!editingTabId) {
+        onTabSelect(tab.dbSessionId);
+      }
+      clickTimeoutRef.current = null;
+    }, 200);
+  };
+
   const handleDoubleClick = (tab: Tab) => {
+    // Cancel single click timeout
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    
     setEditingTabId(tab.dbSessionId);
     setEditValue(tab.tabName);
   };
@@ -92,7 +124,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
           return (
             <button
               key={tab.dbSessionId}
-              onClick={() => onTabSelect(tab.dbSessionId)}
+              onClick={() => handleSingleClick(tab)}
               onDoubleClick={() => handleDoubleClick(tab)}
               className={`px-4 py-2 text-sm border-r border-gray-600 relative transition-colors ${
                 isActive
@@ -109,7 +141,13 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
                     type="text"
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleRenameSubmit}
+                    onBlur={(e) => {
+                      // Only submit if we're not clicking within the same button
+                      const relatedTarget = e.relatedTarget as HTMLElement;
+                      if (!relatedTarget || !e.currentTarget.parentElement?.parentElement?.contains(relatedTarget)) {
+                        handleRenameSubmit();
+                      }
+                    }}
                     onKeyDown={handleKeyDown}
                     onClick={(e) => e.stopPropagation()}
                     className="bg-gray-900 text-gray-200 px-1 py-0 text-sm border border-gray-600 rounded outline-none focus:border-blue-500"
