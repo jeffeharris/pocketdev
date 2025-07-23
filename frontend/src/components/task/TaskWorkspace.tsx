@@ -304,7 +304,19 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                       terminalRefs.current.delete(task.id);
                     }
                   }}
-                  task={task}
+                  task={{
+                    ...task,
+                    onReload: () => {
+                      // Reload task details to get updated terminals
+                      api.getTask(projectId, task.id).then(taskDetails => {
+                        setTasks(prevTasks => 
+                          prevTasks.map(t => 
+                            t.id === task.id ? { ...t, terminals: taskDetails.terminals } : t
+                          )
+                        );
+                      });
+                    }
+                  }}
                   validationMode={validationMode}
                   onToggleValidation={() => setValidationMode(!validationMode)}
                   onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}

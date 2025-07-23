@@ -87,6 +87,9 @@ export interface Task {
   
   // Terminal sessions (multiple tabs)
   terminals?: TerminalSession[];
+  
+  // Callback to reload task data (used by TerminalPanel)
+  onReload?: () => void;
 }
 
 export interface ExtendedTask extends Task {

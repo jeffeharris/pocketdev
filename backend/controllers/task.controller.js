@@ -270,8 +270,14 @@ export class TaskController {
       // Get project for base branch info
       const project = await this.models.projects.findById(projectId);
       
-      // Get terminal sessions for this task
-      const terminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+      // Get terminal sessions for this task (limit to 6 most recent)
+      const allTerminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+      const terminals = allTerminals.slice(0, 6);
+      
+      // Log warning if too many terminals
+      if (allTerminals.length > 6) {
+        console.warn(`Task ${taskId} has ${allTerminals.length} terminals - showing only first 6`);
+      }
       
       // Get git status for this task's worktree
       let gitInfo = null;

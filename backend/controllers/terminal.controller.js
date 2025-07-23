@@ -111,6 +111,15 @@ export async function createTerminalSession(req, res, next) {
       return res.status(404).json({ error: 'Task not found in project' });
     }
     
+    // Check current terminal count (limit to 6)
+    const currentTerminals = await models.sessions.findAllActiveByTaskId(taskId);
+    if (currentTerminals.length >= 6) {
+      return res.status(400).json({ 
+        error: 'Maximum number of terminals (6) reached for this task',
+        currentCount: currentTerminals.length
+      });
+    }
+    
     // Get git config from settings
     const gitUserName = await models.db.get(
       'SELECT value FROM settings WHERE key = ?',

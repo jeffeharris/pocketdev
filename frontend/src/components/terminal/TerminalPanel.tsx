@@ -27,66 +27,37 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   isVisible = true
 }, ref) => {
   const [isResetting, setIsResetting] = useState(false);
-  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
-  const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
+  const [activeTabId, setActiveTabId] = useState(() => {
+    return localStorage.getItem(`activeTab-${task.id}`) || '';
+  });
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const { showToast } = useToast();
 
-  // Load terminal sessions on mount or task change
+  // Simple effect - just validate the saved tab exists
   useEffect(() => {
-    const loadTerminals = async () => {
-      if (task.terminals && task.terminals.length > 0) {
-        setTerminals(task.terminals);
-        
-        // Try to restore active tab from localStorage
-        const savedActiveTabId = localStorage.getItem(`activeTab-${task.id}`);
-        const validTab = savedActiveTabId && task.terminals.find(t => t.dbSessionId === savedActiveTabId);
-        
-        if (validTab) {
-          setActiveTabId(savedActiveTabId);
-        } else if (!activeTabId) {
-          // Set first tab as active if none selected
-          const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          if (firstTab) {
-            setActiveTabId(firstTab.dbSessionId);
-          }
-        }
-      } else {
-        // Create first terminal if none exist
-        try {
-          const newSession = await api.createTerminalSession(task.id, {
-            tabName: 'Main',
-            aiAgent: 'claude'
-          });
-          setTerminals([{
-            sessionId: newSession.sessionId,
-            dbSessionId: newSession.dbSessionId,
-            shelltenderSessionId: newSession.shelltenderSessionId,
-            tabName: newSession.tabName,
-            tabOrder: newSession.tabOrder,
-            aiState: 'not-started',
-            aiAgent: newSession.aiAgent
-          }]);
-          setActiveTabId(newSession.dbSessionId);
-        } catch (error) {
-          console.error('Failed to create initial terminal:', error);
-        }
+    if (task.terminals?.length > 0) {
+      const savedId = localStorage.getItem(`activeTab-${task.id}`);
+      const validTab = task.terminals.find(t => t.dbSessionId === savedId);
+      
+      if (!validTab && task.terminals[0]) {
+        setActiveTabId(task.terminals[0].dbSessionId);
       }
-    };
-    
-    loadTerminals();
-  }, [task.id]);
-
-  // Save active tab to localStorage when it changes
-  useEffect(() => {
-    if (activeTabId && task.id) {
-      localStorage.setItem(`activeTab-${task.id}`, activeTabId);
     }
-  }, [activeTabId, task.id]);
+  }, [task.id, task.terminals]);
+
+  // Save when active tab changes
+  const handleTabSelect = (tabId: string) => {
+    setActiveTabId(tabId);
+    localStorage.setItem(`activeTab-${task.id}`, tabId);
+    // Focus the terminal after switching
+    setTimeout(() => {
+      const terminalRef = terminalRefs.current.get(tabId);
+      terminalRef?.focus();
+    }, 100);
+  };
 
   // Expose focus method to parent components
   useImperativeHandle(ref, () => ({
@@ -119,25 +90,15 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   };
 
-  const handleTabSelect = (dbSessionId: string) => {
-    setActiveTabId(dbSessionId);
-    // Mark as initialized
-    setInitializedTerminals(prev => new Set(prev).add(dbSessionId));
-    // Focus the terminal after switching
-    setTimeout(() => {
-      const terminalRef = terminalRefs.current.get(dbSessionId);
-      terminalRef?.focus();
-    }, 100);
-  };
 
   const handleTabAdd = async (options?: SessionOptions) => {
     console.log('[TerminalPanel] handleTabAdd called with options:', options);
     try {
-      const tabCount = terminals.length;
+      const tabCount = task.terminals?.length || 0;
       console.log('[TerminalPanel] Current tab count:', tabCount);
       
       // Get the currently active terminal to copy history from
-      const activeTerminal = terminals.find(t => t.sessionId === activeTabId);
+      const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
       
       // Use provided options or defaults
       const tabName = options?.tabName || `Tab ${tabCount + 1}`;
@@ -161,8 +122,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         aiAgent: newSession.aiAgent
       };
       
-      setTerminals(prev => [...prev, newTerminal]);
+      // Just update the active tab - backend has already added it to the database
       setActiveTabId(newSession.dbSessionId);
+      localStorage.setItem(`activeTab-${task.id}`, newSession.dbSessionId);
+      
+      // Reload task to get updated terminals list
+      if (task.onReload) {
+        task.onReload();
+      }
       
       // Only auto-launch Claude if no options provided (quick launch)
       if (!options) {
@@ -288,15 +255,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         tabName: newName
       });
       
-      // Update local state
-      setTerminals(prev => prev.map(terminal => 
-        terminal.dbSessionId === dbSessionId 
-          ? { ...terminal, tabName: newName }
-          : terminal
-      ));
+      // Reload task to get updated terminals list
+      if (task.onReload) {
+        task.onReload();
+      }
     } catch (error) {
       console.error('[TerminalPanel] Failed to rename tab:', error);
-      // TODO: Show error notification to user
+      showNotification('error', 'Failed to rename tab');
     }
   };
 
@@ -310,7 +275,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       return newMap;
     });
 
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
     if (status === 'disconnected') {
@@ -335,7 +300,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
     console.log(`[TerminalPanel] Attempting to reconnect session ${dbSessionId}`);
@@ -344,8 +309,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // Try to reconnect by reloading the terminal
       const terminalRef = terminalRefs.current.get(dbSessionId);
       if (terminalRef) {
-        // Force a reconnection by updating the terminal key
-        setTerminals(prev => [...prev]); // Force re-render
+        // Reload task to force reconnection
+        if (task.onReload) {
+          task.onReload();
+        }
       }
     } catch (error) {
       console.error(`[TerminalPanel] Failed to reconnect session:`, error);
@@ -363,7 +330,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   // Convert terminals to Tab format for TerminalTabs component
-  const tabs: Tab[] = terminals.map(t => {
+  const tabs: Tab[] = (task.terminals || []).map(t => {
     const isLaunching = launchingClaude.has(t.dbSessionId);
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
     console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
@@ -441,7 +408,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
       {/* Terminal Content - Show only active terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {terminals.map(terminal => (
+        {(task.terminals || []).map(terminal => (
           <DirectTerminal
             key={terminal.dbSessionId}
             ref={(el) => {
