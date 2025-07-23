@@ -92,12 +92,29 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     };
   }, [tasks, subscribe, unsubscribe]);
   
-  // Update active task when taskId prop changes
+  // Update active task when taskId prop changes and load task details
   useEffect(() => {
     // taskId prop changed
     setActiveTaskId(taskId);
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
+    
+    // Load detailed task data to get terminals
+    const loadTaskDetails = async () => {
+      try {
+        const taskDetails = await api.getTask(projectId, taskId);
+        // Update the task in our state with the detailed version that includes terminals
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { ...task, terminals: taskDetails.terminals } : task
+          )
+        );
+      } catch (error) {
+        console.error('Failed to load task details:', error);
+      }
+    };
+    
+    loadTaskDetails();
     
     // Focus the terminal using ref
     setTimeout(() => {
@@ -109,7 +126,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         console.log('[TaskWorkspace] Terminal ref not found for task:', taskId);
       }
     }, 100);
-  }, [taskId]);
+  }, [taskId, projectId]);
   
   // Focus terminal when page becomes visible (tab switch, modal close, etc)
   useEffect(() => {

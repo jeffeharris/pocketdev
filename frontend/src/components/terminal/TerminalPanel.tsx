@@ -38,8 +38,15 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     const loadTerminals = async () => {
       if (task.terminals && task.terminals.length > 0) {
         setTerminals(task.terminals);
-        // Set first tab as active if none selected
-        if (!activeTabId) {
+        
+        // Try to restore active tab from localStorage
+        const savedActiveTabId = localStorage.getItem(`activeTab-${task.id}`);
+        const validTab = savedActiveTabId && task.terminals.find(t => t.dbSessionId === savedActiveTabId);
+        
+        if (validTab) {
+          setActiveTabId(savedActiveTabId);
+        } else if (!activeTabId) {
+          // Set first tab as active if none selected
           const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
           if (firstTab) {
             setActiveTabId(firstTab.dbSessionId);
@@ -70,6 +77,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     
     loadTerminals();
   }, [task.id]);
+
+  // Save active tab to localStorage when it changes
+  useEffect(() => {
+    if (activeTabId && task.id) {
+      localStorage.setItem(`activeTab-${task.id}`, activeTabId);
+    }
+  }, [activeTabId, task.id]);
 
   // Expose focus method to parent components
   useImperativeHandle(ref, () => ({
