@@ -217,3 +217,23 @@ function attachTaskListeners(container) {
 **Issue:** Both session_id and shelltender_session_id columns storing same value
 **Impact:** Data redundancy and confusion
 **Solution:** Consolidate to single session_id column
+
+## Notification System Tech Debt (Added 2025-07-23)
+
+### 1. No User Notification System
+**Files:** `frontend/src/components/terminal/TerminalPanel.tsx`
+**Issue:** Session disconnections/reconnections only log to console
+**Impact:** Users unaware of connection issues
+**Solution:** Integrate react-toastify or similar notification library
+
+### 2. Missing Connection Status Indicators
+**Files:** `frontend/src/components/terminal/TerminalTabs.tsx`
+**Issue:** No visual indicator for session connection state
+**Impact:** Users can't tell if terminal is connected or not
+**Solution:** Add connection status icon/color to tabs
+
+### 3. Basic Reconnection Logic
+**Files:** `frontend/src/components/terminal/TerminalPanel.tsx`
+**Issue:** Reconnection just forces re-render, no actual session recovery
+**Impact:** May not properly restore lost sessions
+**Solution:** Implement proper session recovery with backend coordination

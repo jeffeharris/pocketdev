@@ -1,5 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { Eye, RefreshCw, ExternalLink, Monitor } from 'lucide-react';
+import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
@@ -31,7 +32,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
+  const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
+  const { showToast } = useToast();
 
   // Load terminal sessions on mount or task change
   useEffect(() => {
@@ -97,10 +100,20 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const handleResetSession = async () => {
     setIsResetting(true);
     try {
-      // TODO: Call shelltender API to reset the session
-      // For now, we'll just show the animation
+      // If any session is disconnected, try to reconnect it
+      const disconnectedSession = Array.from(sessionStatuses.entries())
+        .find(([_, status]) => status === 'disconnected' || status === 'error');
+      
+      if (disconnectedSession) {
+        const [dbSessionId] = disconnectedSession;
+        await handleReconnectSession(dbSessionId);
+        showNotification('success', 'Attempting to reconnect session...');
+      } else {
+        // TODO: Implement actual session reset
+        showNotification('warning', 'Session reset not yet implemented');
+      }
     } catch (error) {
-      // Error resetting session
+      showNotification('error', 'Failed to reset session');
     } finally {
       setTimeout(() => setIsResetting(false), 1000);
     }
@@ -290,26 +303,78 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Handle session status changes
   const handleSessionStatus = (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => {
-    if (status === 'error' || status === 'disconnected') {
-      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-      if (terminal) {
-        console.error(`[TerminalPanel] Session ${status} for ${terminal.tabName}`);
-        // TODO: Show user notification and offer to recreate session
+    // Update status map
+    setSessionStatuses(prev => {
+      const newMap = new Map(prev);
+      newMap.set(dbSessionId, status);
+      return newMap;
+    });
+
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    if (!terminal) return;
+
+    if (status === 'disconnected') {
+      console.warn(`[TerminalPanel] Session disconnected for ${terminal.tabName}`);
+      // Attempt automatic reconnection after a delay
+      setTimeout(() => {
+        handleReconnectSession(dbSessionId);
+      }, 2000);
+    } else if (status === 'error') {
+      console.error(`[TerminalPanel] Session error for ${terminal.tabName}`);
+      // Show error notification
+      showNotification('error', `Terminal "${terminal.tabName}" encountered an error`);
+    } else if (status === 'connected') {
+      console.log(`[TerminalPanel] Session connected for ${terminal.tabName}`);
+      // Clear any error state
+      const prevStatus = sessionStatuses.get(dbSessionId);
+      if (prevStatus === 'disconnected' || prevStatus === 'error') {
+        showNotification('success', `Terminal "${terminal.tabName}" reconnected`);
       }
     }
+  };
+
+  // Handle session reconnection
+  const handleReconnectSession = async (dbSessionId: string) => {
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    if (!terminal) return;
+
+    console.log(`[TerminalPanel] Attempting to reconnect session ${dbSessionId}`);
+    
+    try {
+      // Try to reconnect by reloading the terminal
+      const terminalRef = terminalRefs.current.get(dbSessionId);
+      if (terminalRef) {
+        // Force a reconnection by updating the terminal key
+        setTerminals(prev => [...prev]); // Force re-render
+      }
+    } catch (error) {
+      console.error(`[TerminalPanel] Failed to reconnect session:`, error);
+      showNotification('error', `Failed to reconnect terminal "${terminal.tabName}"`);
+    }
+  };
+
+  // Show notification using Shelltender's toast system
+  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
+    showToast({
+      title: message,
+      variant: type === 'error' ? 'destructive' : type === 'warning' ? 'default' : 'default',
+      duration: 5000
+    });
   };
 
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = terminals.map(t => {
     const isLaunching = launchingClaude.has(t.dbSessionId);
-    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}`);
+    const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
+    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
     return {
       sessionId: t.sessionId,
       dbSessionId: t.dbSessionId,
       tabName: t.tabName,
       tabOrder: t.tabOrder,
       aiState: isLaunching ? 'working' : t.aiState,
-      aiAgent: t.aiAgent
+      aiAgent: t.aiAgent,
+      connectionStatus: connectionStatus
     };
   });
 
@@ -347,10 +412,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               className={`p-1 transition-colors ${
                 isResetting 
                   ? 'text-blue-400 animate-spin' 
+                  : Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error')
+                  ? 'text-orange-400 hover:text-orange-300'
                   : 'text-gray-400 hover:text-gray-200'
               }`}
               disabled={isResetting}
-              title="Reset session to original state"
+              title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
+                ? "Reconnect disconnected sessions" 
+                : "Reset session to original state"}
             >
               <RefreshCw className="w-4 h-4" />
             </button>

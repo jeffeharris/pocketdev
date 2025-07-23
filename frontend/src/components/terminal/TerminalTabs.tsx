@@ -8,6 +8,7 @@ export interface Tab {
   tabOrder: number;
   aiState: 'not-started' | 'idle' | 'working' | 'waiting';
   aiAgent: string;
+  connectionStatus?: 'connected' | 'disconnected' | 'error';
 }
 
 interface TerminalTabsProps {
@@ -135,6 +136,13 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
             >
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${getStateColor(tab.aiState)}`}></div>
+                {/* Connection status indicator */}
+                {tab.connectionStatus === 'disconnected' && (
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Disconnected - Reconnecting..."></div>
+                )}
+                {tab.connectionStatus === 'error' && (
+                  <div className="w-2 h-2 rounded-full bg-red-600" title="Connection Error"></div>
+                )}
                 {editingTabId === tab.dbSessionId ? (
                   <input
                     ref={inputRef}
