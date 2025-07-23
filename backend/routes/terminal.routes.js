@@ -23,6 +23,10 @@ router.patch('/terminals/:sessionId/tab',
   terminalController.updateTerminalTab
 );
 
+router.delete('/terminals/:sessionId',
+  terminalController.deleteTerminalSession
+);
+
 router.post('/sessions/:sessionId/execute', 
   terminalController.executeInSession
 );

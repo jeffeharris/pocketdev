@@ -286,6 +286,41 @@ class SessionModel {
   async delete(sessionId) {
     await this.db.run('DELETE FROM terminal_sessions WHERE id = ?', [sessionId]);
   }
+
+  /**
+   * Mark a session as inactive
+   */
+  async markInactive(sessionId) {
+    const now = new Date().toISOString();
+    await this.db.run(`
+      UPDATE terminal_sessions 
+      SET is_active = 0, last_activity = ?
+      WHERE id = ?
+    `, [now, sessionId]);
+  }
+
+  /**
+   * Find all sessions with optional filters
+   */
+  async findAll(filters = {}) {
+    let query = 'SELECT * FROM terminal_sessions WHERE 1=1';
+    const params = [];
+    
+    if (filters.isActive !== undefined) {
+      query += ' AND is_active = ?';
+      params.push(filters.isActive ? 1 : 0);
+    }
+    
+    if (filters.taskId) {
+      query += ' AND task_id = ?';
+      params.push(filters.taskId);
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const sessions = await this.db.all(query, params);
+    return sessions.map(s => this._parseSession(s));
+  }
 }
 
 export default SessionModel;

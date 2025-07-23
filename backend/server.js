@@ -17,6 +17,7 @@ import { NotificationService } from './notification-service.js';
 import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
+import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
@@ -114,6 +115,11 @@ async function initializeDatabase() {
   
   // Run cleanup on startup
   await cleanupOrphanedWorktrees(models);
+  
+  // Initialize session cleanup service
+  const sessionCleanupService = new SessionCleanupService(db, models);
+  app.locals.sessionCleanupService = sessionCleanupService;
+  sessionCleanupService.start();
 }
 
 // Load settings
@@ -344,6 +350,12 @@ async function start() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
+  
+  // Stop session cleanup service
+  if (app.locals.sessionCleanupService) {
+    app.locals.sessionCleanupService.stop();
+    console.log('Session cleanup service stopped');
+  }
   
   if (db) {
     await db.close();

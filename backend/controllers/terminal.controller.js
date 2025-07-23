@@ -447,3 +447,43 @@ export async function updateTerminalTab(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Delete a terminal session
+ */
+export async function deleteTerminalSession(req, res, next) {
+  try {
+    const { sessionId } = req.params;
+    const models = req.app.locals.models;
+    
+    // Get session details to find Shelltender session ID
+    const session = await models.sessions.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Terminate Shelltender session if it exists
+    if (session.shelltender_session_id) {
+      try {
+        const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+        const response = await fetch(`${shelltenderUrl}/api/sessions/${session.shelltender_session_id}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          console.error(`Failed to terminate Shelltender session ${session.shelltender_session_id}:`, response.statusText);
+        }
+      } catch (error) {
+        console.error(`Error terminating Shelltender session ${session.shelltender_session_id}:`, error);
+        // Continue with database deletion even if Shelltender deletion fails
+      }
+    }
+    
+    // Delete from database
+    await models.sessions.delete(sessionId);
+    
+    res.json({ success: true, message: 'Terminal session deleted' });
+  } catch (error) {
+    next(error);
+  }
+}

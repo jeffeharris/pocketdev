@@ -437,6 +437,9 @@ export class TaskController {
       
       const project = await this.models.projects.findById(task.project_id);
       
+      // Clean up all Shelltender sessions for this task
+      await this.cleanupTaskSessions(taskId);
+      
       if (softDelete && !force) {
         // Soft delete - archive the task
         await this.models.tasks.archive(task.id);
@@ -803,6 +806,47 @@ Original task: ${task.name}`;
         mergeCommitSha: task.merge_commit_sha,
         error: 'Could not verify merge status'
       };
+    }
+  }
+
+  /**
+   * Clean up all Shelltender sessions for a task
+   */
+  async cleanupTaskSessions(taskId) {
+    try {
+      // Get all active sessions for this task
+      const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+      
+      if (sessions.length === 0) {
+        console.log(`No active sessions found for task ${taskId}`);
+        return;
+      }
+      
+      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+      
+      // Terminate each Shelltender session
+      for (const session of sessions) {
+        if (session.shelltender_session_id) {
+          try {
+            console.log(`Terminating Shelltender session: ${session.shelltender_session_id}`);
+            const response = await fetch(`${shelltenderUrl}/api/sessions/${session.shelltender_session_id}`, {
+              method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+              console.error(`Failed to terminate session ${session.shelltender_session_id}:`, response.statusText);
+            }
+          } catch (error) {
+            console.error(`Error terminating session ${session.shelltender_session_id}:`, error.message);
+            // Continue with other sessions even if one fails
+          }
+        }
+      }
+      
+      console.log(`Cleaned up ${sessions.length} sessions for task ${taskId}`);
+    } catch (error) {
+      console.error(`Error cleaning up sessions for task ${taskId}:`, error);
+      // Don't throw - we don't want session cleanup failure to prevent task deletion
     }
   }
 }
