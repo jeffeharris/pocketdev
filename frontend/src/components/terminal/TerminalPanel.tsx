@@ -267,6 +267,26 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     return commands[agent] || 'claude';
   };
 
+  // Handle tab rename
+  const handleTabRename = async (dbSessionId: string, newName: string) => {
+    try {
+      // Update via API
+      await api.updateTerminalTab(dbSessionId, {
+        tabName: newName
+      });
+      
+      // Update local state
+      setTerminals(prev => prev.map(terminal => 
+        terminal.dbSessionId === dbSessionId 
+          ? { ...terminal, tabName: newName }
+          : terminal
+      ));
+    } catch (error) {
+      console.error('[TerminalPanel] Failed to rename tab:', error);
+      // TODO: Show error notification to user
+    }
+  };
+
 
   // Handle session status changes
   const handleSessionStatus = (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => {
@@ -309,6 +329,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             onTabSelect={handleTabSelect}
             onTabAdd={() => handleTabAdd()}
             onTabAdvancedAdd={() => setShowSessionLauncher(true)}
+            onTabRename={handleTabRename}
             maxTabs={6}
           />
 
