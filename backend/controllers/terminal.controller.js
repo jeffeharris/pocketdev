@@ -74,6 +74,24 @@ export async function getSession(req, res, next) {
 }
 
 /**
+ * Helper function to check if a Shelltender session exists and is active
+ */
+async function checkShelltenderSession(sessionId) {
+  try {
+    const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+    const response = await fetch(`${shelltenderUrl}/api/sessions/${sessionId}`);
+    if (response.ok) {
+      const session = await response.json();
+      return session.status === 'active' ? session : null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error checking Shelltender session:', error);
+    return null;
+  }
+}
+
+/**
  * Create terminal session for task
  */
 export async function createTerminalSession(req, res, next) {
@@ -109,15 +127,53 @@ export async function createTerminalSession(req, res, next) {
       email: gitUserEmail?.value || 'user@pocketdev.local'
     };
     
-    // Generate unique session ID for this tab
-    const sessionId = `task-${taskId}-${Date.now()}`;
+    // Generate a stable database ID upfront
+    const dbSessionId = models.sessions.generateId();
+    
+    // Generate stable Shelltender session ID using the database ID
+    const shelltenderSessionId = `task-${taskId}-${dbSessionId}`;
+    
+    // Create database record with the final session ID
+    const dbSession = await models.sessions.create(taskId, {
+      id: dbSessionId,
+      sessionId: shelltenderSessionId,  // Use the final ID from the start
+      shelltenderSessionId: shelltenderSessionId,
+      tabName: tabName,
+      aiAgent: aiAgent || 'claude',
+      aiSessionId: null,
+      metadata: {
+        initialPrompt: initialPrompt,
+        workingDirectory: workingDirectory
+      }
+    });
+    
+    // Check if Shelltender session already exists
+    const existingSession = await checkShelltenderSession(shelltenderSessionId);
+    
+    if (existingSession) {
+      // Reconnect to existing session
+      console.log(`[createTerminalSession] Reconnecting to existing session: ${shelltenderSessionId}`);
+      
+      // Session already exists and is properly configured in DB
+      
+      return res.json({
+        sessionId: shelltenderSessionId,
+        dbSessionId: dbSession.id,
+        shelltenderSessionId: shelltenderSessionId,
+        tabName: dbSession.tab_name,
+        tabOrder: dbSession.tab_order,
+        aiAgent: dbSession.ai_agent,
+        isReconnected: true
+      });
+    }
     
     // Set working directory (default to task root)
     const workDir = workingDirectory 
       ? path.join(task.worktree_path, workingDirectory)
       : task.worktree_path;
     
-    // Create Shelltender session with proper bash configuration
+    // Create new Shelltender session with stable ID
+    console.log(`[createTerminalSession] Creating new session: ${shelltenderSessionId}`);
     const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
     const createResponse = await fetch(`${shelltenderUrl}/api/sessions`, {
       method: 'POST',
@@ -125,12 +181,13 @@ export async function createTerminalSession(req, res, next) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        sessionId: sessionId,
+        sessionId: shelltenderSessionId,  // Use our stable ID
         command: '/bin/bash',
         args: ['--login', '-i'],  // Login + interactive to ensure all configs are loaded
         cwd: workDir,
         env: {
           TASK_ID: taskId,
+          DB_SESSION_ID: dbSession.id,
           WORKTREE_PATH: task.worktree_path,
           TERM: 'xterm-256color',
           // Set PS1 to ensure we have a visible prompt
@@ -145,6 +202,7 @@ export async function createTerminalSession(req, res, next) {
         },
         metadata: {
           taskId,
+          dbSessionId: dbSession.id,
           title: task.name,
           type: 'task',
           tabName: tabName || 'Main',
@@ -161,39 +219,20 @@ export async function createTerminalSession(req, res, next) {
     
     const result = await createResponse.json();
     
-    // Store session in database with tab info
-    const dbSession = await models.sessions.create(taskId, {
-      sessionId: sessionId,
-      shelltenderSessionId: result.id,
-      tabName: tabName,
-      aiAgent: aiAgent || 'claude',
-      aiSessionId: null, // Will be updated when AI starts
-      metadata: {
-        initialPrompt: initialPrompt,
-        workingDirectory: workingDirectory
-      }
-    });
+    // No need to update - we already set the correct IDs when creating
     
     // Note: Terminal initialization is now handled by the bashrc file
     // The executeCommand function doesn't work with Shelltender v0.6.1
     // Commands must be sent via WebSocket, which happens on the frontend
     
-    // If working directory specified, change to it
-    if (workingDirectory) {
-      try {
-        await executeCommand(sessionId, `cd "${workingDirectory}"`);
-      } catch (error) {
-        console.error('Failed to change directory:', error);
-      }
-    }
-    
     res.json({
-      sessionId: result.id,
+      sessionId: shelltenderSessionId,
       dbSessionId: dbSession.id,
+      shelltenderSessionId: shelltenderSessionId,
       tabName: dbSession.tab_name,
       tabOrder: dbSession.tab_order,
       aiAgent: dbSession.ai_agent,
-      ...result
+      isReconnected: false
     });
   } catch (error) {
     next(error);

@@ -3,6 +3,7 @@ import { Eye, RefreshCw, ExternalLink, Monitor } from 'lucide-react';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
+import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { api } from '../../services/api';
 
 export type TerminalPanelHandle = {
@@ -29,6 +30,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [activeTabId, setActiveTabId] = useState<string>('');
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
+  const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
 
   // Load terminal sessions on mount or task change
@@ -100,8 +102,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }, 100);
   };
 
-  const handleTabAdd = async () => {
-    console.log('[TerminalPanel] handleTabAdd called');
+  const handleTabAdd = async (options?: SessionOptions) => {
+    console.log('[TerminalPanel] handleTabAdd called with options:', options);
     try {
       const tabCount = terminals.length;
       console.log('[TerminalPanel] Current tab count:', tabCount);
@@ -109,10 +111,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // Get the currently active terminal to copy history from
       const activeTerminal = terminals.find(t => t.sessionId === activeTabId);
       
+      // Use provided options or defaults
+      const tabName = options?.tabName || `Tab ${tabCount + 1}`;
+      const aiAgent = options?.aiAgent || 'claude';
+      
       console.log('[TerminalPanel] Creating new terminal session...');
       const newSession = await api.createTerminalSession(task.id, {
-        tabName: `Tab ${tabCount + 1}`,
-        aiAgent: 'claude',
+        tabName,
+        aiAgent,
         copyHistoryFrom: activeTerminal?.sessionId || null
       });
       console.log('[TerminalPanel] New session created:', newSession);
@@ -128,9 +134,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       setTerminals(prev => [...prev, newTerminal]);
       setActiveTabId(newSession.sessionId);
-      // Mark this session as launching Claude
-      console.log('[TerminalPanel] Marking session for Claude launch:', newSession.sessionId);
-      setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
+      
+      // Only auto-launch Claude if no options provided (quick launch)
+      if (!options) {
+        // Mark this session as launching Claude
+        console.log('[TerminalPanel] Marking session for Claude launch:', newSession.sessionId);
+        setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
       
       // Wait for terminal to be ready and prompt to appear, then launch Claude
       console.log('[TerminalPanel] Setting timeout for Claude launch...');
@@ -168,9 +177,78 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           });
         }
       }, 3000); // Wait 3 seconds for terminal to be ready
+      } else {
+        // Advanced launch with options
+        console.log('[TerminalPanel] Advanced launch with options:', options);
+        
+        // Mark as launching if we have a prompt or need to change directory
+        if (options.workingDirectory || options.initialPrompt) {
+          setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
+          
+          setTimeout(async () => {
+            try {
+              let commands: string[] = [];
+              
+              // Change directory if specified
+              if (options.workingDirectory) {
+                // Make path relative to task path
+                const fullPath = options.workingDirectory.startsWith('/') 
+                  ? options.workingDirectory 
+                  : `${task.worktree_path}/${options.workingDirectory}`;
+                commands.push(`cd ${fullPath}`);
+              }
+              
+              // Launch AI with or without prompt
+              const aiCommand = getAiCommand(aiAgent);
+              if (options.initialPrompt) {
+                // Properly escape the prompt for shell
+                const escapedPrompt = options.initialPrompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+                commands.push(`${aiCommand} "${escapedPrompt}"`);
+              } else {
+                commands.push(aiCommand);
+              }
+              
+              // Execute commands in sequence
+              for (const command of commands) {
+                console.log('[TerminalPanel] Executing command:', command);
+                await api.executeCommand(newSession.sessionId, command);
+                // Small delay between commands
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+              
+              // Remove launching state
+              setTimeout(() => {
+                setLaunchingClaude(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(newSession.sessionId);
+                  return newSet;
+                });
+              }, 3000);
+            } catch (error) {
+              console.error('[TerminalPanel] Failed to execute advanced launch:', error);
+              setLaunchingClaude(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(newSession.sessionId);
+                return newSet;
+              });
+            }
+          }, 3000); // Wait for terminal to be ready
+        }
+      }
     } catch (error) {
       console.error('[TerminalPanel] Failed to create new terminal:', error);
     }
+  };
+
+  // Helper function to get AI command from agent name
+  const getAiCommand = (agent: string): string => {
+    const commands: Record<string, string> = {
+      claude: 'claude',
+      aider: 'aider',
+      codex: 'codex',
+      gemini: 'gemini'
+    };
+    return commands[agent] || 'claude';
   };
 
 
@@ -202,7 +280,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             tabs={tabs}
             activeTabId={activeTabId}
             onTabSelect={handleTabSelect}
-            onTabAdd={handleTabAdd}
+            onTabAdd={() => handleTabAdd()}
+            onTabAdvancedAdd={() => setShowSessionLauncher(true)}
             maxTabs={6}
           />
 
@@ -262,6 +341,17 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           />
         ))}
       </div>
+
+      {/* Session Launcher Modal */}
+      <SessionLauncher
+        isOpen={showSessionLauncher}
+        onClose={() => setShowSessionLauncher(false)}
+        onLaunch={(options) => {
+          handleTabAdd(options);
+          setShowSessionLauncher(false);
+        }}
+        taskPath={task.worktree_path}
+      />
     </div>
   );
 });

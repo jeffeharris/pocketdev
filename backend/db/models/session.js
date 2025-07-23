@@ -33,7 +33,7 @@ class SessionModel {
     `, [
       id, 
       taskId, 
-      data.sessionId || data.session_id,
+      data.sessionId || data.session_id || null,
       data.shelltenderSessionId || data.shelltender_session_id || null,
       data.aiState || data.ai_state || 'not-started',
       data.isActive !== undefined ? (data.isActive ? 1 : 0) : 1,

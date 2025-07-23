@@ -15,6 +15,7 @@ interface TerminalTabsProps {
   activeTabId: string;
   onTabSelect: (sessionId: string) => void;
   onTabAdd: () => void;
+  onTabAdvancedAdd?: () => void;
   onTabClose?: (sessionId: string) => void; // For future implementation
   maxTabs?: number;
 }
@@ -24,6 +25,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   activeTabId,
   onTabSelect,
   onTabAdd,
+  onTabAdvancedAdd,
   onTabClose: _onTabClose, // Prefixed with _ to indicate intentionally unused
   maxTabs = 6
 }) => {
@@ -75,8 +77,14 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
         {tabs.length < maxTabs && (
           <button
             onClick={onTabAdd}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              if (onTabAdvancedAdd) {
+                onTabAdvancedAdd();
+              }
+            }}
             className="px-3 py-2 bg-gray-800 text-gray-500 text-sm hover:bg-gray-700 hover:text-gray-400 transition-colors"
-            title="Add new terminal tab"
+            title="Add new terminal tab (right-click for advanced options)"
           >
             <Plus className="w-4 h-4" />
           </button>
