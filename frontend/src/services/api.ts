@@ -778,14 +778,16 @@ index abc123..def456 100644
     copyHistoryFrom?: string | null;
   }): Promise<any> {
     if (USE_MOCKS) {
+      const dbSessionId = Math.random().toString(36).substr(2, 8);
+      const sessionId = `task-${taskId}-${dbSessionId}`;
       return {
-        sessionId: `task-${taskId}-${Date.now()}`,
-        dbSessionId: Math.random().toString(36).substr(2, 8),
+        sessionId: sessionId,
+        dbSessionId: dbSessionId,
+        shelltenderSessionId: sessionId,
         tabName: options.tabName || 'New Tab',
         tabOrder: 1,
         aiAgent: options.aiAgent || 'claude',
-        id: `task-${taskId}-${Date.now()}`,
-        status: 'active',
+        isReconnected: false,
         createdAt: new Date().toISOString(),
         cols: 80,
         rows: 24,

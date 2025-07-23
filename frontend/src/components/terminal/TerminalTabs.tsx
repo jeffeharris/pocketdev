@@ -50,11 +50,11 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
     <div className="flex items-center bg-gray-800 border-b border-gray-700">
       <div className="flex overflow-x-auto">
         {sortedTabs.map((tab) => {
-          const isActive = tab.sessionId === activeTabId;
+          const isActive = tab.dbSessionId === activeTabId;
           return (
             <button
-              key={tab.sessionId}
-              onClick={() => onTabSelect(tab.sessionId)}
+              key={tab.dbSessionId}
+              onClick={() => onTabSelect(tab.dbSessionId)}
               className={`px-4 py-2 text-sm border-r border-gray-600 relative transition-colors ${
                 isActive
                   ? 'bg-gray-700 text-gray-200'

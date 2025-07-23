@@ -46,12 +46,14 @@ export interface GitStatus {
 }
 
 export interface TerminalSession {
-  sessionId: string;
-  dbSessionId: string;
+  sessionId: string;           // Shelltender session ID (for backward compatibility)
+  dbSessionId: string;         // Database session ID (stable identifier)
+  shelltenderSessionId: string; // Shelltender session ID (explicit)
   tabName: string;
   tabOrder: number;
   aiState: WorkerStatus;
   aiAgent: string;
+  shelltenderStatus?: 'active' | 'inactive' | 'not-found';
 }
 
 export interface Task {

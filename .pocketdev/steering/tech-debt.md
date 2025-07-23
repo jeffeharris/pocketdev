@@ -76,3 +76,83 @@ This document tracks technical debt items that should be addressed in future ite
 - Original issue investigation: Backend monitoring broke after Shelltender v0.6.1 upgrade
 - New implementation: `/backend/shelltender-session-monitor.js`
 - Documentation: `/docs/shelltender/MONITORING_v0.6.1.md`
+
+## Session Management & Multi-Terminal Tabs
+
+**Date Added:** 2025-07-23  
+**Priority:** High  
+**Component:** Backend/Frontend Terminal Management
+
+### Current Issues
+
+1. **Session ID Proliferation**
+   - Three different session ID fields: sessionId, dbSessionId, shelltenderSessionId
+   - Database has both session_id and shelltender_session_id columns with same values
+   - Frontend components inconsistently use different IDs
+   - Impact: Confusion, bugs, and maintenance overhead
+
+2. **Massive Session Accumulation (FIXED)**
+   - Previous implementation created new Shelltender sessions on every tab/page refresh
+   - Task 3d36b64f had accumulated 68 database sessions and counting
+   - System had 80+ active Shelltender sessions
+   - **Status:** Fixed with stable session IDs in current branch
+
+3. **Tab Persistence Not Implemented**
+   - Tabs don't persist across page reloads (requirement violation)
+   - Active tab selection not saved
+   - Users lose their multi-terminal setup on refresh
+   - Impact: Poor user experience
+
+4. **Missing Tab Management Features**
+   - No tab renaming (double-click to edit)
+   - No tab reordering (drag and drop)
+   - No keyboard shortcuts for tab switching
+   - No close tab functionality
+
+5. **Session Error Handling**
+   - No user notifications when sessions disconnect
+   - TODOs left in handleSessionStatus
+   - No automatic reconnection attempts
+   - Silent failures leave users confused
+
+6. **Frontend Type Safety Issues**
+   - Multiple `@typescript-eslint/no-explicit-any` violations
+   - Inconsistent typing for session objects
+   - Missing proper types for API responses
+
+### Proposed Solutions
+
+1. **Consolidate Session IDs:**
+   ```typescript
+   interface TerminalSession {
+     id: string;              // Database ID, primary identifier
+     sessionId: string;       // Shelltender session ID
+     // Remove redundant fields
+   }
+   ```
+
+2. **Implement Tab Persistence:**
+   - Store active terminals in database (already done)
+   - Save active tab to localStorage
+   - Restore on component mount
+
+3. **Add Missing Features:**
+   - Tab renaming with inline editing
+   - Tab close with confirmation
+   - Keyboard shortcuts (Ctrl+1-6 for tabs)
+   - Status aggregation for task-level state
+
+4. **Improve Error Handling:**
+   - Add toast notifications for errors
+   - Implement reconnection with exponential backoff
+   - Show connection status in UI
+
+### Impact
+- **User Experience:** High - Core feature incomplete
+- **Data Integrity:** Medium - Session accumulation wastes resources
+- **Code Quality:** Medium - Type safety and consistency issues
+
+### References
+- Requirements: `/.pocketdev/specs/multi-terminal-tabs/requirements.md`
+- Design: `/.pocketdev/specs/multi-terminal-tabs/technical-design.md`
+- Implementation: Current branch `fix/session-management-and-tab-persistence`

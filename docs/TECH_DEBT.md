@@ -179,3 +179,41 @@ function attachTaskListeners(container) {
 - The multitasking feature with persistent iframes is innovative but needs proper memory management
 - Consider using a frontend framework (React/Vue) for better state management
 - The backend API also needs security review (not covered in this document)
+
+## Session Management Tech Debt (Added 2025-07-23)
+
+### 1. Massive Session Accumulation
+**Files:** `backend/controllers/terminal.controller.js`, `frontend/src/components/terminal/TerminalPanel.tsx`
+**Issue:** Old implementation created new Shelltender sessions with timestamp-based IDs on every tab creation
+**Impact:** 
+- Task 3d36b64f accumulated 68 terminal sessions
+- 80+ active Shelltender sessions across the system
+- Resource waste and potential memory issues
+**Status:** Fixed in current branch with stable session IDs
+
+### 2. ESLint Configuration Issues
+**Files:** Various frontend files
+**Issue:** 
+- Multiple ESLint rule definitions not found (unicorn/prefer-includes, jsx-a11y/anchor-has-content, etc.)
+- Vite deps folder being linted
+- TypeScript any types scattered throughout
+**Impact:** Inconsistent code quality checks
+**Solution:** Update ESLint config, exclude .vite folder, fix TypeScript types
+
+### 3. Inconsistent Session ID Usage
+**Files:** Frontend terminal components
+**Issue:** Mix of sessionId, dbSessionId, and shelltenderSessionId throughout codebase
+**Impact:** Confusion about which ID to use where
+**Status:** Partially fixed - now using dbSessionId as primary identifier
+
+### 4. Missing Error Handling
+**Files:** `frontend/src/components/terminal/TerminalPanel.tsx`
+**Issue:** handleSessionStatus has TODOs for user notifications on errors
+**Impact:** Users don't know when sessions fail
+**Solution:** Implement proper toast notifications for session errors
+
+### 5. Duplicate Session ID Fields
+**Files:** `backend/db/schema.sql`, `backend/db/models/session.js`
+**Issue:** Both session_id and shelltender_session_id columns storing same value
+**Impact:** Data redundancy and confusion
+**Solution:** Consolidate to single session_id column

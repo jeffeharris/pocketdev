@@ -42,7 +42,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         if (!activeTabId) {
           const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
           if (firstTab) {
-            setActiveTabId(firstTab.sessionId);
+            setActiveTabId(firstTab.dbSessionId);
           }
         }
       } else {
@@ -55,12 +55,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           setTerminals([{
             sessionId: newSession.sessionId,
             dbSessionId: newSession.dbSessionId,
+            shelltenderSessionId: newSession.shelltenderSessionId,
             tabName: newSession.tabName,
             tabOrder: newSession.tabOrder,
             aiState: 'not-started',
             aiAgent: newSession.aiAgent
           }]);
-          setActiveTabId(newSession.sessionId);
+          setActiveTabId(newSession.dbSessionId);
         } catch (error) {
           console.error('Failed to create initial terminal:', error);
         }
@@ -91,13 +92,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   };
 
-  const handleTabSelect = (sessionId: string) => {
-    setActiveTabId(sessionId);
+  const handleTabSelect = (dbSessionId: string) => {
+    setActiveTabId(dbSessionId);
     // Mark as initialized
-    setInitializedTerminals(prev => new Set(prev).add(sessionId));
+    setInitializedTerminals(prev => new Set(prev).add(dbSessionId));
     // Focus the terminal after switching
     setTimeout(() => {
-      const terminalRef = terminalRefs.current.get(sessionId);
+      const terminalRef = terminalRefs.current.get(dbSessionId);
       terminalRef?.focus();
     }, 100);
   };
@@ -126,6 +127,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       const newTerminal: TerminalSession = {
         sessionId: newSession.sessionId,
         dbSessionId: newSession.dbSessionId,
+        shelltenderSessionId: newSession.shelltenderSessionId,
         tabName: newSession.tabName,
         tabOrder: newSession.tabOrder,
         aiState: 'not-started',
@@ -133,36 +135,36 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       };
       
       setTerminals(prev => [...prev, newTerminal]);
-      setActiveTabId(newSession.sessionId);
+      setActiveTabId(newSession.dbSessionId);
       
       // Only auto-launch Claude if no options provided (quick launch)
       if (!options) {
         // Mark this session as launching Claude
-        console.log('[TerminalPanel] Marking session for Claude launch:', newSession.sessionId);
-        setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
+        console.log('[TerminalPanel] Marking session for Claude launch:', newSession.dbSessionId);
+        setLaunchingClaude(prev => new Set(prev).add(newSession.dbSessionId));
       
       // Wait for terminal to be ready and prompt to appear, then launch Claude
       console.log('[TerminalPanel] Setting timeout for Claude launch...');
       setTimeout(async () => {
         try {
-          console.log('[TerminalPanel] Auto-launching Claude for new tab:', newSession.sessionId);
+          console.log('[TerminalPanel] Auto-launching Claude for new tab:', newSession.dbSessionId);
           
           // First send a newline to ensure prompt is visible
           console.log('[TerminalPanel] Sending newline to force prompt...');
-          await api.executeCommand(newSession.sessionId, '');
+          await api.executeCommand(newSession.shelltenderSessionId, '');
           
           // Small delay then send claude command
           setTimeout(async () => {
             console.log('[TerminalPanel] Sending claude command...');
-            await api.executeCommand(newSession.sessionId, 'claude');
+            await api.executeCommand(newSession.shelltenderSessionId, 'claude');
             console.log('[TerminalPanel] Claude command sent successfully');
             
             // Remove from launching set after some time
             setTimeout(() => {
-              console.log('[TerminalPanel] Removing launching state for:', newSession.sessionId);
+              console.log('[TerminalPanel] Removing launching state for:', newSession.dbSessionId);
               setLaunchingClaude(prev => {
                 const newSet = new Set(prev);
-                newSet.delete(newSession.sessionId);
+                newSet.delete(newSession.dbSessionId);
                 return newSet;
               });
             }, 3000);
@@ -172,7 +174,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           // Remove from launching set on error
           setLaunchingClaude(prev => {
             const newSet = new Set(prev);
-            newSet.delete(newSession.sessionId);
+            newSet.delete(newSession.dbSessionId);
             return newSet;
           });
         }
@@ -183,7 +185,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         
         // Mark as launching if we have a prompt or need to change directory
         if (options.workingDirectory || options.initialPrompt) {
-          setLaunchingClaude(prev => new Set(prev).add(newSession.sessionId));
+          setLaunchingClaude(prev => new Set(prev).add(newSession.dbSessionId));
           
           setTimeout(async () => {
             try {
@@ -211,7 +213,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               // Execute commands in sequence
               for (const command of commands) {
                 console.log('[TerminalPanel] Executing command:', command);
-                await api.executeCommand(newSession.sessionId, command);
+                await api.executeCommand(newSession.shelltenderSessionId, command);
                 // Small delay between commands
                 await new Promise(resolve => setTimeout(resolve, 500));
               }
@@ -220,7 +222,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               setTimeout(() => {
                 setLaunchingClaude(prev => {
                   const newSet = new Set(prev);
-                  newSet.delete(newSession.sessionId);
+                  newSet.delete(newSession.dbSessionId);
                   return newSet;
                 });
               }, 3000);
@@ -228,7 +230,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               console.error('[TerminalPanel] Failed to execute advanced launch:', error);
               setLaunchingClaude(prev => {
                 const newSet = new Set(prev);
-                newSet.delete(newSession.sessionId);
+                newSet.delete(newSession.dbSessionId);
                 return newSet;
               });
             }
@@ -252,10 +254,21 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
 
+  // Handle session status changes
+  const handleSessionStatus = (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => {
+    if (status === 'error' || status === 'disconnected') {
+      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+      if (terminal) {
+        console.error(`[TerminalPanel] Session ${status} for ${terminal.tabName}`);
+        // TODO: Show user notification and offer to recreate session
+      }
+    }
+  };
+
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = terminals.map(t => {
-    const isLaunching = launchingClaude.has(t.sessionId);
-    console.log(`[TerminalPanel] Tab ${t.sessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}`);
+    const isLaunching = launchingClaude.has(t.dbSessionId);
+    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}`);
     return {
       sessionId: t.sessionId,
       dbSessionId: t.dbSessionId,
@@ -326,18 +339,20 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
         {terminals.map(terminal => (
           <DirectTerminal
-            key={terminal.sessionId}
+            key={terminal.dbSessionId}
             ref={(el) => {
               if (el) {
-                terminalRefs.current.set(terminal.sessionId, el);
+                terminalRefs.current.set(terminal.dbSessionId, el);
               } else {
-                terminalRefs.current.delete(terminal.sessionId);
+                terminalRefs.current.delete(terminal.dbSessionId);
               }
             }}
             taskId={task.id}
-            sessionId={terminal.sessionId}
+            dbSessionId={terminal.dbSessionId}
+            shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
             worktreePath={task.worktree_path}
-            isVisible={isVisible && terminal.sessionId === activeTabId}
+            isVisible={isVisible && terminal.dbSessionId === activeTabId}
+            onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
           />
         ))}
       </div>

@@ -9,22 +9,25 @@ export interface DirectTerminalHandle {
 
 interface DirectTerminalProps {
   taskId: string;
-  sessionId?: string;
+  dbSessionId: string;          // Database session ID
+  shelltenderSessionId: string; // Actual Shelltender session ID to connect to
   className?: string;
   worktreePath?: string;
   isVisible?: boolean;
+  onSessionStatus?: (status: 'connected' | 'disconnected' | 'error') => void;
 }
 
 const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalProps>(({ 
   taskId, 
-  sessionId,
+  dbSessionId,
+  shelltenderSessionId,
   className = '',
   worktreePath: _worktreePath, // May be used for session initialization in future
-  isVisible = true
+  isVisible = true,
+  onSessionStatus
 }, ref) => {
   const { isConnected, wsService } = useWebSocket();
   const [isReady, setIsReady] = useState(false);
-  const terminalSessionId = sessionId || `task-${taskId}`;
   const terminalRef = useRef<TerminalHandle>(null);
   
   // Container ref for DOM-based fallback
@@ -35,7 +38,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     if (isConnected) {
       setIsReady(true);
     }
-  }, [isConnected, terminalSessionId]);
+  }, [isConnected, shelltenderSessionId]);
 
   // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({
@@ -90,9 +93,10 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     <div ref={containerRef} className={`w-full h-full overflow-hidden ${className}`} style={{ display: isVisible ? 'block' : 'none' }}>
       <Terminal
         ref={terminalRef}
-        sessionId={terminalSessionId}
+        sessionId={shelltenderSessionId}
         onSessionCreated={(sessionId: string) => {
           console.log('[DirectTerminal] Session created:', sessionId);
+          onSessionStatus?.('connected');
           // Force prompt display by sending a newline
           setTimeout(() => {
             if (wsService) {
@@ -104,6 +108,14 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
               });
             }
           }, 500);
+        }}
+        onSessionError={(error: any) => {
+          console.error('[DirectTerminal] Session error:', error);
+          onSessionStatus?.('error');
+        }}
+        onSessionDisconnected={() => {
+          console.log('[DirectTerminal] Session disconnected');
+          onSessionStatus?.('disconnected');
         }}
         cursorStyle="block"
         cursorBlink={false}
