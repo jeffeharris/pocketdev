@@ -28,18 +28,33 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 }, ref) => {
   const [isResetting, setIsResetting] = useState(false);
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    // Initialize from localStorage if available
+    const saved = localStorage.getItem(`activeTab-${task.id}`);
+    console.log('[TerminalPanel] Initial state - task:', task.id, 'saved tab:', saved);
+    return saved || '';
+  });
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
-  const hasRestoredTab = useRef(false);
   const { showToast } = useToast();
 
-  // Reset restoration flag when task changes
+  // When task changes, load the saved tab for the new task
   useEffect(() => {
-    hasRestoredTab.current = false;
+    const savedTab = localStorage.getItem(`activeTab-${task.id}`);
+    console.log('[TerminalPanel] Task changed to:', task.id, 'Loading saved tab:', savedTab);
+    
+    // Debug: Show all localStorage keys
+    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('activeTab-'));
+    console.log('[TerminalPanel] All saved tabs in localStorage:', allKeys);
+    
+    if (savedTab) {
+      setActiveTabId(savedTab);
+    } else {
+      setActiveTabId(''); // Reset if no saved tab
+    }
   }, [task.id]);
 
   // Load terminal sessions on mount or when task/terminals change
@@ -48,25 +63,25 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       if (task.terminals && task.terminals.length > 0) {
         setTerminals(task.terminals);
         
-        // Only restore tab if we haven't already done so
-        if (!hasRestoredTab.current) {
-          // Try to restore active tab from localStorage
-          const savedActiveTabId = localStorage.getItem(`activeTab-${task.id}`);
-          console.log('[TerminalPanel] Restoring tab - saved:', savedActiveTabId, 'available:', task.terminals.map(t => t.dbSessionId));
-          
-          const validTab = savedActiveTabId && task.terminals.find(t => t.dbSessionId === savedActiveTabId);
-          
-          if (validTab) {
-            console.log('[TerminalPanel] Restored active tab:', savedActiveTabId);
-            setActiveTabId(savedActiveTabId);
-            hasRestoredTab.current = true;
-          } else if (!activeTabId) {
-            // Set first tab as active if saved tab not found and no tab is active
+        // Check if we need to validate or set the active tab
+        console.log('[TerminalPanel] Current activeTabId:', activeTabId, 'Available terminals:', task.terminals.map(t => t.dbSessionId));
+        
+        if (activeTabId) {
+          // Validate that the active tab still exists
+          const validTab = task.terminals.find(t => t.dbSessionId === activeTabId);
+          if (!validTab) {
+            console.log('[TerminalPanel] Active tab no longer exists, selecting first tab');
             const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
             if (firstTab) {
-              console.log('[TerminalPanel] Setting first tab as active:', firstTab.dbSessionId);
               setActiveTabId(firstTab.dbSessionId);
             }
+          }
+        } else {
+          // No active tab, select the first one
+          const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
+          if (firstTab) {
+            console.log('[TerminalPanel] No active tab, selecting first:', firstTab.dbSessionId);
+            setActiveTabId(firstTab.dbSessionId);
           }
         }
       } else {
@@ -135,6 +150,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   const handleTabSelect = (dbSessionId: string) => {
+    console.log('[TerminalPanel] Tab selected:', dbSessionId, 'previous:', activeTabId);
     setActiveTabId(dbSessionId);
     // Mark as initialized
     setInitializedTerminals(prev => new Set(prev).add(dbSessionId));
