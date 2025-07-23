@@ -28,12 +28,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 }, ref) => {
   const [isResetting, setIsResetting] = useState(false);
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    // Initialize from localStorage if available
-    const saved = localStorage.getItem(`activeTab-${task.id}`);
-    console.log('[TerminalPanel] Initial state - task:', task.id, 'saved tab:', saved);
-    return saved || '';
-  });
+  const [activeTabId, setActiveTabId] = useState<string>('');
   const [initializedTerminals, setInitializedTerminals] = useState<Set<string>>(new Set());
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
@@ -41,53 +36,27 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const { showToast } = useToast();
 
-  // When task changes, load the saved tab for the new task
-  useEffect(() => {
-    const savedTab = localStorage.getItem(`activeTab-${task.id}`);
-    console.log('[TerminalPanel] Task changed to:', task.id, 'Loading saved tab:', savedTab);
-    
-    // Debug: Show all localStorage keys
-    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('activeTab-'));
-    console.log('[TerminalPanel] All saved tabs in localStorage:', allKeys);
-    
-    if (savedTab) {
-      setActiveTabId(savedTab);
-    } else {
-      setActiveTabId(''); // Reset if no saved tab
-    }
-  }, [task.id]);
-
-  // Load terminal sessions on mount or when task/terminals change
+  // Load terminal sessions on mount or task change
   useEffect(() => {
     const loadTerminals = async () => {
       if (task.terminals && task.terminals.length > 0) {
-        console.warn(`[TerminalPanel] Task ${task.id} has ${task.terminals.length} terminals! This indicates session cleanup is not working properly.`);
         setTerminals(task.terminals);
         
-        // Check if we need to validate or set the active tab
-        console.log('[TerminalPanel] Current activeTabId:', activeTabId, 'Available terminals:', task.terminals.map(t => t.dbSessionId));
+        // Try to restore active tab from localStorage
+        const savedActiveTabId = localStorage.getItem(`activeTab-${task.id}`);
+        const validTab = savedActiveTabId && task.terminals.find(t => t.dbSessionId === savedActiveTabId);
         
-        if (activeTabId) {
-          // Validate that the active tab still exists
-          const validTab = task.terminals.find(t => t.dbSessionId === activeTabId);
-          if (!validTab) {
-            console.log('[TerminalPanel] Active tab no longer exists, selecting first tab');
-            const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-            if (firstTab) {
-              setActiveTabId(firstTab.dbSessionId);
-            }
-          }
-        } else {
-          // No active tab, select the first one
+        if (validTab) {
+          setActiveTabId(savedActiveTabId);
+        } else if (!activeTabId) {
+          // Set first tab as active if none selected
           const firstTab = task.terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
           if (firstTab) {
-            console.log('[TerminalPanel] No active tab, selecting first:', firstTab.dbSessionId);
             setActiveTabId(firstTab.dbSessionId);
           }
         }
-      } else if (!task.terminals || task.terminals.length === 0) {
-        // Only create first terminal if task truly has no terminals
-        console.log('[TerminalPanel] No terminals found for task, creating first one');
+      } else {
+        // Create first terminal if none exist
         try {
           const newSession = await api.createTerminalSession(task.id, {
             tabName: 'Main',
@@ -110,12 +79,11 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     };
     
     loadTerminals();
-  }, [task.id, task.terminals]);
+  }, [task.id]);
 
   // Save active tab to localStorage when it changes
   useEffect(() => {
     if (activeTabId && task.id) {
-      console.log('[TerminalPanel] Saving active tab:', activeTabId, 'for task:', task.id);
       localStorage.setItem(`activeTab-${task.id}`, activeTabId);
     }
   }, [activeTabId, task.id]);
@@ -152,7 +120,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   const handleTabSelect = (dbSessionId: string) => {
-    console.log('[TerminalPanel] Tab selected:', dbSessionId, 'previous:', activeTabId);
     setActiveTabId(dbSessionId);
     // Mark as initialized
     setInitializedTerminals(prev => new Set(prev).add(dbSessionId));
@@ -396,21 +363,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   // Convert terminals to Tab format for TerminalTabs component
-  // First, sort all terminals by tab order
-  const sortedTerminals = [...terminals].sort((a, b) => a.tabOrder - b.tabOrder);
-  
-  // Ensure active tab is included in visible tabs
-  let visibleTerminals = sortedTerminals.slice(0, 6);
-  
-  // If active tab is not in the first 6, replace the last one with it
-  if (activeTabId && !visibleTerminals.find(t => t.dbSessionId === activeTabId)) {
-    const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
-    if (activeTerminal && visibleTerminals.length >= 6) {
-      visibleTerminals[5] = activeTerminal;
-    }
-  }
-  
-  const tabs: Tab[] = visibleTerminals.map(t => {
+  const tabs: Tab[] = terminals.map(t => {
     const isLaunching = launchingClaude.has(t.dbSessionId);
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
     console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
