@@ -165,6 +165,17 @@ export async function createTerminalSession(req, res, next) {
       
       // Session already exists and is properly configured in DB
       
+      // Ensure monitor is connected to this session
+      const monitor = req.app.locals.wsAdapter;
+      if (monitor && !monitor.sessions.has(shelltenderSessionId)) {
+        try {
+          await monitor.connectToSession(shelltenderSessionId);
+          console.log(`[createTerminalSession] Monitor connected to existing session: ${shelltenderSessionId}`);
+        } catch (error) {
+          console.error(`[createTerminalSession] Failed to connect monitor to session: ${error.message}`);
+        }
+      }
+      
       return res.json({
         sessionId: shelltenderSessionId,
         dbSessionId: dbSession.id,
@@ -230,6 +241,17 @@ export async function createTerminalSession(req, res, next) {
     
     // No need to update - we already set the correct IDs when creating
     
+    // Connect the monitor to this new session to avoid creating new connections later
+    const monitor = req.app.locals.wsAdapter;
+    if (monitor) {
+      try {
+        await monitor.connectToSession(shelltenderSessionId);
+        console.log(`[createTerminalSession] Monitor connected to new session: ${shelltenderSessionId}`);
+      } catch (error) {
+        console.error(`[createTerminalSession] Failed to connect monitor to session: ${error.message}`);
+      }
+    }
+    
     // Note: Terminal initialization is now handled by the bashrc file
     // The executeCommand function doesn't work with Shelltender v0.6.1
     // Commands must be sent via WebSocket, which happens on the frontend
@@ -261,7 +283,7 @@ export async function executeInSession(req, res, next) {
     }
     
     // Try to use the session monitor if available
-    const monitor = req.app.locals.shelltenderMonitor;
+    const monitor = req.app.locals.wsAdapter; // This is the ShelltenderSessionMonitor instance
     let result;
     
     if (monitor) {

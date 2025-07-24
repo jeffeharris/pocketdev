@@ -144,8 +144,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           console.log('[TerminalPanel] Auto-launching Claude for new tab:', newSession.dbSessionId);
           
           // First send a newline to ensure prompt is visible
-          console.log('[TerminalPanel] Sending newline to force prompt...');
-          await api.executeCommand(newSession.shelltenderSessionId, '');
+          // COMMENTED OUT - DirectTerminal already sends a newline
+          // console.log('[TerminalPanel] Sending newline to force prompt...');
+          // await api.executeCommand(newSession.shelltenderSessionId, '');
           
           // Small delay then send claude command
           setTimeout(async () => {
@@ -355,11 +356,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Show notification using Shelltender's toast system
   const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
-    showToast({
-      title: message,
-      variant: type === 'error' ? 'destructive' : type === 'warning' ? 'default' : 'default',
-      duration: 5000
-    });
+    // showToast expects (message: string, duration?: number)
+    // For now, ignore the type parameter as the toast library doesn't support variants
+    showToast(message, 5000);
   };
 
   // Convert terminals to Tab format for TerminalTabs component
