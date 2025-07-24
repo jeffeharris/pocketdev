@@ -298,6 +298,39 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   };
 
+  // Handle tab close
+  const handleTabClose = async (dbSessionId: string) => {
+    try {
+      // Find the terminal being closed
+      const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+      if (!terminalToClose) return;
+      
+      // If closing the active tab, switch to another tab
+      if (dbSessionId === activeTabId) {
+        const remainingTabs = task.terminals?.filter(t => t.dbSessionId !== dbSessionId) || [];
+        if (remainingTabs.length > 0) {
+          // Switch to the first remaining tab
+          const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
+          setActiveTabId(nextTab.dbSessionId);
+          localStorage.setItem(`activeTab-${task.id}`, nextTab.dbSessionId);
+        }
+      }
+      
+      // Delete the terminal session
+      await api.deleteTerminalSession(dbSessionId);
+      
+      // Reload task to get updated terminals list
+      if (task.onReload) {
+        task.onReload();
+      }
+      
+      showNotification('success', `Closed terminal "${terminalToClose.tabName}"`);
+    } catch (error) {
+      console.error('[TerminalPanel] Failed to close tab:', error);
+      showNotification('error', 'Failed to close tab');
+    }
+  };
+
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
     const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
@@ -362,6 +395,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             onTabAdd={() => handleTabAdd()}
             onTabAdvancedAdd={() => setShowSessionLauncher(true)}
             onTabRename={handleTabRename}
+            onTabClose={handleTabClose}
             maxTabs={6}
           />
 

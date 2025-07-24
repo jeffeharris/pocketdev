@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 export interface Tab {
   sessionId: string;
@@ -18,7 +18,7 @@ interface TerminalTabsProps {
   onTabAdd: () => void;
   onTabAdvancedAdd?: () => void;
   onTabRename?: (dbSessionId: string, newName: string) => void;
-  onTabClose?: (sessionId: string) => void; // For future implementation
+  onTabClose?: (dbSessionId: string) => void;
   maxTabs?: number;
 }
 
@@ -29,7 +29,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   onTabAdd,
   onTabAdvancedAdd,
   onTabRename,
-  onTabClose: _onTabClose, // Prefixed with _ to indicate intentionally unused
+  onTabClose,
   maxTabs = 6
 }) => {
   // State for inline editing
@@ -134,35 +134,50 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
               }`}
               title={`${tab.tabName} (${tab.aiAgent}) - Double-click to rename`}
             >
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${getStateColor(tab.aiState)}`}></div>
-                {/* Connection status indicator */}
-                {tab.connectionStatus === 'disconnected' && (
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Disconnected - Reconnecting..."></div>
-                )}
-                {tab.connectionStatus === 'error' && (
-                  <div className="w-2 h-2 rounded-full bg-red-600" title="Connection Error"></div>
-                )}
-                {editingTabId === tab.dbSessionId ? (
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={(e) => {
-                      // Only submit if we're not clicking within the same button
-                      const relatedTarget = e.relatedTarget as HTMLElement;
-                      if (!relatedTarget || !e.currentTarget.parentElement?.parentElement?.contains(relatedTarget)) {
-                        handleRenameSubmit();
-                      }
+              <div className="flex items-center gap-2 w-full">
+                <div className="flex items-center gap-2 flex-grow">
+                  <div className={`w-2 h-2 rounded-full ${getStateColor(tab.aiState)}`}></div>
+                  {/* Connection status indicator */}
+                  {tab.connectionStatus === 'disconnected' && (
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Disconnected - Reconnecting..."></div>
+                  )}
+                  {tab.connectionStatus === 'error' && (
+                    <div className="w-2 h-2 rounded-full bg-red-600" title="Connection Error"></div>
+                  )}
+                  {editingTabId === tab.dbSessionId ? (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={(e) => {
+                        // Only submit if we're not clicking within the same button
+                        const relatedTarget = e.relatedTarget as HTMLElement;
+                        if (!relatedTarget || !e.currentTarget.parentElement?.parentElement?.contains(relatedTarget)) {
+                          handleRenameSubmit();
+                        }
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-gray-900 text-gray-200 px-1 py-0 text-sm border border-gray-600 rounded outline-none focus:border-blue-500"
+                      style={{ width: `${Math.max(50, editValue.length * 8)}px` }}
+                    />
+                  ) : (
+                    <span>{tab.tabName}</span>
+                  )}
+                </div>
+                {/* Close button - only show if more than one tab */}
+                {tabs.length > 1 && onTabClose && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTabClose(tab.dbSessionId);
                     }}
-                    onKeyDown={handleKeyDown}
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-gray-900 text-gray-200 px-1 py-0 text-sm border border-gray-600 rounded outline-none focus:border-blue-500"
-                    style={{ width: `${Math.max(50, editValue.length * 8)}px` }}
-                  />
-                ) : (
-                  <span>{tab.tabName}</span>
+                    className="ml-1 p-0.5 hover:bg-gray-600 rounded transition-colors opacity-60 hover:opacity-100"
+                    title="Close tab"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 )}
               </div>
               {isActive && (
