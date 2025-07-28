@@ -153,7 +153,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
         }
-      }, 3000); // Wait 3 seconds for terminal to be ready
+      }, 500); // Quick delay to ensure terminal connection is established
       } else {
         // Advanced launch with options
         console.log('[TerminalPanel] Advanced launch with options:', options);
@@ -189,8 +189,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               for (const command of commands) {
                 console.log('[TerminalPanel] Executing command:', command);
                 await api.executeCommand(newSession.shelltenderSessionId, command);
-                // Small delay between commands
-                await new Promise(resolve => setTimeout(resolve, 500));
+                // Minimal delay between commands
+                await new Promise(resolve => setTimeout(resolve, 100));
               }
               
               // Remove launching state
@@ -209,7 +209,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                 return newSet;
               });
             }
-          }, 3000); // Wait for terminal to be ready
+          }, 500); // Quick delay to ensure terminal connection is established
         }
       }
     } catch (error) {
