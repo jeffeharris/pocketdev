@@ -30,6 +30,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 }, ref) => {
   const [isResetting, setIsResetting] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => {
+    // Check if there's a focus request first
+    const focusTabKey = `focus-tab-${task.id}`;
+    const focusTabId = sessionStorage.getItem(focusTabKey);
+    if (focusTabId) return focusTabId;
+    
+    // Otherwise use saved preference
     return localStorage.getItem(`activeTab-${task.id}`) || '';
   });
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
@@ -61,8 +67,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     if (focusTabId && task.terminals) {
       const tabToFocus = task.terminals.find(t => t.dbSessionId === focusTabId);
       if (tabToFocus) {
-        console.log('[TerminalPanel] Focusing tab that needs attention:', tabToFocus.tabName);
         setActiveTabId(focusTabId);
+        localStorage.setItem(`activeTab-${task.id}`, focusTabId);
         // Clean up after using
         sessionStorage.removeItem(focusTabKey);
       }
@@ -88,16 +94,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       activeRef?.focus();
     },
     switchToTab: (dbSessionId: string) => {
-      console.log('[TerminalPanel] switchToTab called with:', dbSessionId);
-      console.log('[TerminalPanel] Available terminals:', task.terminals?.map(t => ({ id: t.dbSessionId, name: t.tabName })));
-      
       // Check if the tab exists
       const tab = task.terminals?.find(t => t.dbSessionId === dbSessionId);
       if (tab) {
-        console.log('[TerminalPanel] Tab found, switching to:', dbSessionId);
         handleTabSelect(dbSessionId);
-      } else {
-        console.log('[TerminalPanel] Tab not found:', dbSessionId);
       }
     }
   }), [activeTabId, task.terminals, handleTabSelect]);
@@ -126,10 +126,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
 
   const handleTabAdd = async (options?: SessionOptions) => {
-    console.log('[TerminalPanel] handleTabAdd called with options:', options);
     try {
       const tabCount = task.terminals?.length || 0;
-      console.log('[TerminalPanel] Current tab count:', tabCount);
       
       // Get the currently active terminal to copy history from
       const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
@@ -138,13 +136,11 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       const tabName = options?.tabName || `Tab ${tabCount + 1}`;
       const aiAgent = options?.aiAgent || 'claude';
       
-      console.log('[TerminalPanel] Creating new terminal session...');
       const newSession = await api.createTerminalSession(task.id, {
         tabName,
         aiAgent,
         copyHistoryFrom: activeTerminal?.sessionId || null
       });
-      console.log('[TerminalPanel] New session created:', newSession);
       
       const newTerminal: TerminalSession = {
         sessionId: newSession.sessionId,
@@ -168,21 +164,16 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // Only auto-launch Claude if no options provided (quick launch)
       if (!options) {
       // Wait for terminal to be ready and prompt to appear, then launch Claude
-      console.log('[TerminalPanel] Setting timeout for Claude launch...');
       setTimeout(async () => {
         try {
-          console.log('[TerminalPanel] Auto-launching Claude for new tab:', newSession.dbSessionId);
           
           // First send a newline to ensure prompt is visible
           // COMMENTED OUT - DirectTerminal already sends a newline
-          // console.log('[TerminalPanel] Sending newline to force prompt...');
           // await api.executeCommand(newSession.shelltenderSessionId, '');
           
           // Small delay then send claude command
           setTimeout(async () => {
-            console.log('[TerminalPanel] Sending claude command...');
             await api.executeCommand(newSession.shelltenderSessionId, 'claude');
-            console.log('[TerminalPanel] Claude command sent successfully');
           }, 500);
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
@@ -190,7 +181,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       }, 500); // Quick delay to ensure terminal connection is established
       } else {
         // Advanced launch with options
-        console.log('[TerminalPanel] Advanced launch with options:', options);
         
         // Mark as launching if we have a prompt or need to change directory
         if (options.workingDirectory || options.initialPrompt) {
@@ -237,7 +227,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               
               // Execute commands in sequence
               for (const command of commands) {
-                console.log('[TerminalPanel] Executing command:', command);
                 await api.executeCommand(newSession.shelltenderSessionId, command);
                 // Minimal delay between commands
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -320,7 +309,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // Show error notification
       showNotification('error', `Terminal "${terminal.tabName}" encountered an error`);
     } else if (status === 'connected') {
-      console.log(`[TerminalPanel] Session connected for ${terminal.tabName}`);
       // Clear any error state
       const prevStatus = sessionStatuses.get(dbSessionId);
       if (prevStatus === 'disconnected' || prevStatus === 'error') {
@@ -367,7 +355,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
-    console.log(`[TerminalPanel] Attempting to reconnect session ${dbSessionId}`);
     
     try {
       // Try to reconnect by reloading the terminal
@@ -399,7 +386,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     const realtimeState = realtimeSessionStates?.find(s => s.id === t.dbSessionId);
     const currentAiState = realtimeState?.aiState || t.aiState;
     
-    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - aiState: ${currentAiState} (realtime: ${realtimeState?.aiState}, initial: ${t.aiState}), connectionStatus: ${connectionStatus}`);
     
     return {
       sessionId: t.sessionId,

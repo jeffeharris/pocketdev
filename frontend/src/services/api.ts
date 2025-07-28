@@ -821,9 +821,7 @@ index abc123..def456 100644
   }
 
   async executeCommand(sessionId: string, command: string): Promise<void> {
-    console.log('[API] executeCommand called:', { sessionId, command });
     if (USE_MOCKS) {
-      console.log('[API] Mocks enabled, skipping actual API call');
       return;
     }
     
@@ -832,7 +830,6 @@ index abc123..def456 100644
         method: 'POST',
         body: JSON.stringify({ command })
       });
-      console.log('[API] executeCommand successful');
       return response;
     } catch (error) {
       console.error('[API] executeCommand failed:', error);

@@ -120,10 +120,8 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', taskId);
         terminalRef.focus();
       } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', taskId);
       }
     }, 100);
   }, [taskId, projectId]);
@@ -165,16 +163,13 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log(`[TaskWorkspace] Focusing terminal for task: ${taskId} (reason: ${reason})`);
         terminalRef.focus();
       } else {
-        console.log(`[TaskWorkspace] Terminal ref not found for task: ${taskId} (reason: ${reason})`);
       }
     }, 200); // Slightly longer delay for modal close animations
   };
 
   const handleTaskSelect = (newTaskId: string, focusTabId?: string) => {
-    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId, focusTabId);
     setActiveTaskId(newTaskId);
     // Reset validation mode when switching tasks
     setValidationMode(false);
@@ -191,16 +186,14 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(newTaskId);
       if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', newTaskId);
         terminalRef.focus();
       } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', newTaskId);
       }
     }, 100);
   };
 
-  const handleTaskChange = (task: Task) => {
-    handleTaskSelect(task.id);
+  const handleTaskChange = (task: Task, focusTabId?: string) => {
+    handleTaskSelect(task.id, focusTabId);
   };
 
   const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
