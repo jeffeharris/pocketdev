@@ -50,4 +50,13 @@ router.get('/tasks/:taskId/shelltender-session',
   terminalController.getShelltenderSession
 );
 
+// AI agents configuration
+router.get('/ai-agents',
+  terminalController.getAIAgents
+);
+
+router.post('/ai-agents/:agentId/launch-command',
+  terminalController.getAgentLaunchCommandHandler
+);
+
 export default router;

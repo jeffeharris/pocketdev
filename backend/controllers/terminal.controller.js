@@ -1,5 +1,6 @@
 import { createTaskSession, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
 import { executeCommandViaWebSocket, executeCommandViaMonitor } from '../utils/execute-command.js';
+import { getAllAgents, getAgentConfig, getAgentLaunchCommand } from '../config/ai-agents.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -520,6 +521,53 @@ export async function deleteTerminalSession(req, res, next) {
     await models.sessions.delete(sessionId);
     
     res.json({ success: true, message: 'Terminal session deleted' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get AI agent configurations
+ */
+export async function getAIAgents(req, res, next) {
+  try {
+    const agents = getAllAgents();
+    
+    // Check which agents are actually installed in the container
+    // For now, we know Claude is always installed
+    const agentsWithStatus = agents.map(agent => ({
+      ...agent,
+      // TODO: Actually check if each agent is installed
+      installed: agent.id === 'claude' // Only Claude is guaranteed to be installed
+    }));
+    
+    res.json(agentsWithStatus);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get launch command for a specific AI agent
+ */
+export async function getAgentLaunchCommandHandler(req, res, next) {
+  try {
+    const { agentId } = req.params;
+    const { prompt } = req.body;
+    
+    const agent = getAgentConfig(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    
+    const command = getAgentLaunchCommand(agentId, prompt);
+    
+    res.json({
+      agentId,
+      agent,
+      command,
+      supportsPrompt: agent.capabilities.acceptsPrompt
+    });
   } catch (error) {
     next(error);
   }

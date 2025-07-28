@@ -10,6 +10,7 @@ import { useTaskStatus } from '../../hooks/useTaskStatus';
 
 export type TerminalPanelHandle = {
   focus: () => void;
+  switchToTab: (dbSessionId: string) => void;
 };
 
 interface TerminalPanelProps {
@@ -79,14 +80,27 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }, 100);
   };
 
-  // Expose focus method to parent components
+  // Expose methods to parent components
   useImperativeHandle(ref, () => ({
     focus: () => {
       // Focus the active terminal
       const activeRef = terminalRefs.current.get(activeTabId);
       activeRef?.focus();
+    },
+    switchToTab: (dbSessionId: string) => {
+      console.log('[TerminalPanel] switchToTab called with:', dbSessionId);
+      console.log('[TerminalPanel] Available terminals:', task.terminals?.map(t => ({ id: t.dbSessionId, name: t.tabName })));
+      
+      // Check if the tab exists
+      const tab = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+      if (tab) {
+        console.log('[TerminalPanel] Tab found, switching to:', dbSessionId);
+        handleTabSelect(dbSessionId);
+      } else {
+        console.log('[TerminalPanel] Tab not found:', dbSessionId);
+      }
     }
-  }), [activeTabId]);
+  }), [activeTabId, task.terminals, handleTabSelect]);
   
   const handleResetSession = async () => {
     setIsResetting(true);
@@ -207,12 +221,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                     commands.push(`${aiCommand} --message "${escapedPrompt}"`);
                     break;
                   case 'claude':
-                  case 'gemini':
+                  case 'codex':
                     commands.push(`${aiCommand} "${escapedPrompt}"`);
                     break;
-                  case 'codex':
-                    // Codex would need a custom wrapper since it's API-only
-                    commands.push(aiCommand);
+                  case 'gemini':
+                    // Use -p flag for prompt
+                    commands.push(`${aiCommand} -p "${escapedPrompt}"`);
                     break;
                   default:
                     commands.push(`${aiCommand} "${escapedPrompt}"`);
@@ -258,8 +272,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     const commands: Record<string, string> = {
       claude: 'claude',
       aider: 'aider',
-      codex: 'codex', // Would need custom wrapper
-      gemini: 'npx @google/gemini-cli'
+      codex: 'codex',
+      gemini: 'gemini'
     };
     return commands[agent] || 'claude';
   };
