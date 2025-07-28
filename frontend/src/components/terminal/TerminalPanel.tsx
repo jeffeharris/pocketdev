@@ -32,6 +32,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   });
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
+  const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const { showToast } = useToast();
 
@@ -199,7 +200,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                   newSet.delete(newSession.dbSessionId);
                   return newSet;
                 });
-              }, 3000);
+              }, 1000);
             } catch (error) {
               console.error('[TerminalPanel] Failed to execute advanced launch:', error);
               setLaunchingClaude(prev => {

@@ -97,7 +97,9 @@ The backend already had full support for session options:
 2. Wait 3 seconds for terminal ready
 3. If working directory: execute `cd ${path}`
 4. Wait 500ms between commands
-5. Launch AI: `${agent} "${escaped_prompt}"`
+5. Launch AI with prompt: `claude "Your initial prompt here"`
+   - The prompt is passed as a command-line argument to Claude
+   - This starts Claude in interactive mode with the given context
 6. Update launching state for UI feedback
 ```
 

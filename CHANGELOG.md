@@ -4,6 +4,13 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Fixed
+- **Advanced Session Launcher Prompt Handling**
+  - Fixed missing `launchingClaude` state variable in TerminalPanel causing React errors
+  - Restored proper command syntax for Claude CLI with initial prompts: `claude "prompt here"`
+  - AI agents now correctly launch with initial prompts when using the advanced session launcher
+  - Prompts are properly escaped for shell execution to handle quotes and special characters
+
 ### Added
 - **Shelltender v0.6.2 Upgrade**
   - Updated @shelltender/client from v0.6.1 to v0.6.2
