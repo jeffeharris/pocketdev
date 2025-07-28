@@ -6,6 +6,7 @@ import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
 import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { api } from '../../services/api';
+import { useTaskStatus } from '../../hooks/useTaskStatus';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -35,6 +36,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const { showToast } = useToast();
+  
+  // Get real-time session states from WebSocket
+  const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
 
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
@@ -44,6 +48,22 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       if (!validTab && task.terminals[0]) {
         setActiveTabId(task.terminals[0].dbSessionId);
+      }
+    }
+  }, [task.id, task.terminals]);
+
+  // Check for focus tab request
+  useEffect(() => {
+    const focusTabKey = `focus-tab-${task.id}`;
+    const focusTabId = sessionStorage.getItem(focusTabKey);
+    
+    if (focusTabId && task.terminals) {
+      const tabToFocus = task.terminals.find(t => t.dbSessionId === focusTabId);
+      if (tabToFocus) {
+        console.log('[TerminalPanel] Focusing tab that needs attention:', tabToFocus.tabName);
+        setActiveTabId(focusTabId);
+        // Clean up after using
+        sessionStorage.removeItem(focusTabKey);
       }
     }
   }, [task.id, task.terminals]);
@@ -180,7 +200,23 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               if (options.initialPrompt) {
                 // Properly escape the prompt for shell
                 const escapedPrompt = options.initialPrompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-                commands.push(`${aiCommand} "${escapedPrompt}"`);
+                
+                // Different syntax for different agents
+                switch (aiAgent) {
+                  case 'aider':
+                    commands.push(`${aiCommand} --message "${escapedPrompt}"`);
+                    break;
+                  case 'claude':
+                  case 'gemini':
+                    commands.push(`${aiCommand} "${escapedPrompt}"`);
+                    break;
+                  case 'codex':
+                    // Codex would need a custom wrapper since it's API-only
+                    commands.push(aiCommand);
+                    break;
+                  default:
+                    commands.push(`${aiCommand} "${escapedPrompt}"`);
+                }
               } else {
                 commands.push(aiCommand);
               }
@@ -222,8 +258,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     const commands: Record<string, string> = {
       claude: 'claude',
       aider: 'aider',
-      codex: 'codex',
-      gemini: 'gemini'
+      codex: 'codex', // Would need custom wrapper
+      gemini: 'npx @google/gemini-cli'
     };
     return commands[agent] || 'claude';
   };
@@ -344,13 +380,19 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = (task.terminals || []).map(t => {
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
-    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
+    
+    // Use real-time AI state if available, otherwise fall back to initial state
+    const realtimeState = realtimeSessionStates?.find(s => s.id === t.dbSessionId);
+    const currentAiState = realtimeState?.aiState || t.aiState;
+    
+    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - aiState: ${currentAiState} (realtime: ${realtimeState?.aiState}, initial: ${t.aiState}), connectionStatus: ${connectionStatus}`);
+    
     return {
       sessionId: t.sessionId,
       dbSessionId: t.dbSessionId,
       tabName: t.tabName,
       tabOrder: t.tabOrder,
-      aiState: t.aiState,
+      aiState: currentAiState,
       aiAgent: t.aiAgent,
       connectionStatus: connectionStatus
     };

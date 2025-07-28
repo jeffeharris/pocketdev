@@ -26,6 +26,8 @@ import { clsx } from 'clsx';
  * - inline: For task lists - minimal, scannable
  * - detailed: For expanded views - shows everything
  */
+import type { IndividualSessionState } from '../../types/task';
+
 interface TaskStatusProps {
   workerStatus: string;
   gitStatus?: { 
@@ -37,13 +39,15 @@ interface TaskStatusProps {
   };
   isMerged?: boolean;
   variant?: 'compact' | 'detailed' | 'inline';
+  sessionStates?: IndividualSessionState[];
 }
 
 export const TaskStatus: React.FC<TaskStatusProps> = ({ 
   workerStatus, 
   gitStatus,
   isMerged = false,
-  variant = 'compact'
+  variant = 'compact',
+  sessionStates
 }) => {
   // Calculate common values once at the top to avoid redundant calculations
   // We combine staged and unstaged because users care about "do I have uncommitted work?"
@@ -73,6 +77,25 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   };
 
   const worker = workerConfig[workerStatus as keyof typeof workerConfig] || workerConfig['not-started'];
+
+  // Generate tooltip content for session states
+  const getSessionStatesTooltip = () => {
+    if (!sessionStates || sessionStates.length === 0) return '';
+    
+    return sessionStates
+      .map(session => {
+        const config = workerConfig[session.aiState as keyof typeof workerConfig];
+        const statusEmoji = {
+          'not-started': '⚪',
+          'idle': '🔵',
+          'working': '🟡',
+          'waiting': '🟣'
+        }[session.aiState] || '⚪';
+        
+        return `${statusEmoji} ${session.tabName}: ${config?.label || 'Unknown'}`;
+      })
+      .join('\n');
+  };
 
   // Merged status overrides everything - once merged, nothing else matters
   // This provides closure and prevents confusion about what to do with a merged task
@@ -117,14 +140,20 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <div className={clsx(
-            'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
-            needsUserInput 
-              ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
-              : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
-          )}>
+          <div 
+            className={clsx(
+              'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
+              needsUserInput 
+                ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
+                : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
+            )}
+            title={getSessionStatesTooltip()}
+          >
             <worker.icon className="w-3 h-3" />
             {worker.label}
+            {sessionStates && sessionStates.length > 1 && (
+              <span className="text-xs opacity-60">({sessionStates.length})</span>
+            )}
           </div>
         </div>
         
@@ -171,14 +200,20 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   return (
     <div className="flex items-center gap-2">
       {/* Always show worker status */}
-      <div className={clsx(
-        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
-        needsUserInput 
-          ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
-          : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
-      )}>
+      <div 
+        className={clsx(
+          'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
+          needsUserInput 
+            ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
+            : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
+        )}
+        title={getSessionStatesTooltip()}
+      >
         <worker.icon className="w-3 h-3" />
         {worker.label}
+        {sessionStates && sessionStates.length > 1 && (
+          <span className="text-xs opacity-60">({sessionStates.length})</span>
+        )}
       </div>
 
       {/* Only show additional status if there's something important */}

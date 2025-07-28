@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
 import { WorkerStatus, TaskState } from '../types/task';
-import type { SessionState } from '../types/task';
+import type { SessionState, IndividualSessionState } from '../types/task';
 
 interface TaskStatusData {
   sessionState: SessionState;
+  sessionStates?: IndividualSessionState[];
   taskState: TaskState;
   gitStatus?: {
     ahead: number;
@@ -48,7 +49,8 @@ export function useTaskStatus(taskId: string | undefined) {
           sessionState: {
             status: message.data.sessionState.status,
             lastStateChange: message.data.sessionState.lastStateChange
-          }
+          },
+          sessionStates: message.data.sessionState.sessionStates
         }));
         lastUpdateRef.current = Date.now();
         break;
@@ -146,6 +148,7 @@ export function useTaskStatus(taskId: string | undefined) {
 
   return {
     sessionState: taskStatus?.sessionState || { status: WorkerStatus.NotStarted, lastStateChange: null },
+    sessionStates: taskStatus?.sessionStates,
     taskState: taskStatus?.taskState || TaskState.Active,
     gitStatus: taskStatus?.gitStatus,
     idleTime

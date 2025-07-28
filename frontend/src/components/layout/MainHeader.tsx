@@ -11,7 +11,7 @@ interface MainHeaderProps {
   project: Project;
   tasks: Task[];
   activeTaskId: string;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, focusTabId?: string) => void;
   notifications?: number;
 }
 
@@ -73,8 +73,8 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                         key={task.id}
                         task={task}
                         isActive={task.id === activeTaskId}
-                        onSelect={(task) => {
-                          onTaskSelect(task.id);
+                        onSelect={(task, focusTabId) => {
+                          onTaskSelect(task.id, focusTabId);
                           setShowTaskSwitcher(false);
                         }}
                       />

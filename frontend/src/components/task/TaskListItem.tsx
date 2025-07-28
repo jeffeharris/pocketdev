@@ -8,7 +8,7 @@ import { clsx } from 'clsx';
 interface TaskListItemProps {
   task: Task;
   isActive: boolean;
-  onSelect: (task: Task) => void;
+  onSelect: (task: Task, focusTabId?: string) => void;
 }
 
 export const TaskListItem: React.FC<TaskListItemProps> = ({ 
@@ -17,7 +17,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   onSelect
 }) => {
   // Get real-time status updates via WebSocket
-  const { sessionState, taskState, gitStatus } = useTaskStatus(task.id);
+  const { sessionState, sessionStates, taskState, gitStatus } = useTaskStatus(task.id);
   
   // Merge initial data with real-time updates
   const currentSessionState = sessionState.status !== WorkerStatus.NotStarted ? sessionState : task.sessionState;
@@ -26,6 +26,13 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   
   // Style based on task state
   const isMerged = currentTaskState === TaskState.Merged;
+  
+  // Find the first tab that needs attention (waiting state)
+  const handleClick = () => {
+    const currentSessionStates = sessionStates || task.sessionStates;
+    const waitingSession = currentSessionStates?.find(s => s.aiState === WorkerStatus.Waiting);
+    onSelect(task, waitingSession?.id);
+  };
   
   return (
     <div 
@@ -36,7 +43,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
           ? "bg-blue-50 ring-2 ring-blue-500 ring-opacity-50" 
           : "hover:bg-gray-50"
       )}
-      onClick={() => onSelect(task)}
+      onClick={handleClick}
     >
       <div className="font-medium text-gray-900">#{task.id} {task.name || 'Unnamed Task'}</div>
       <div className="text-xs text-gray-500 mt-1">
@@ -45,6 +52,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
           gitStatus={currentGitStatus}
           isMerged={isMerged}
           variant="compact"
+          sessionStates={sessionStates || task.sessionStates}
         />
       </div>
     </div>

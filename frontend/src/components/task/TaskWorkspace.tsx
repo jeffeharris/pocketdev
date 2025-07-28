@@ -173,14 +173,19 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     }, 200); // Slightly longer delay for modal close animations
   };
 
-  const handleTaskSelect = (newTaskId: string) => {
-    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId);
+  const handleTaskSelect = (newTaskId: string, focusTabId?: string) => {
+    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId, focusTabId);
     setActiveTaskId(newTaskId);
     // Reset validation mode when switching tasks
     setValidationMode(false);
     
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(newTaskId));
+    
+    // Store the tab to focus for when TerminalPanel mounts
+    if (focusTabId) {
+      sessionStorage.setItem(`focus-tab-${newTaskId}`, focusTabId);
+    }
     
     // Focus the terminal using ref
     setTimeout(() => {

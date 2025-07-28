@@ -494,33 +494,63 @@ export class AISessionMonitor {
    * This is the central point for all state changes - ensures frontend
    * and database stay in sync with the detected AI state.
    */
-  broadcastStateUpdate(sessionId, status) {
-    // Extract task ID from session ID (format: task-123)
-    const taskId = sessionId.replace('task-', '');
+  async broadcastStateUpdate(sessionId, status) {
+    // Extract task ID and db session ID from session ID (format: task-{taskId}-{dbSessionId})
+    const sessionParts = sessionId.split('-');
+    const taskId = sessionParts[1];
+    const dbSessionId = sessionParts[2];
+    
+    // Update individual session state in database
+    if (this.models && this.models.sessions && dbSessionId) {
+      try {
+        await this.models.sessions.updateSessionAIState(dbSessionId, status.currentState);
+      } catch (error) {
+        console.error(`Failed to update AI state for session ${dbSessionId}:`, error);
+      }
+    }
+    
+    // Get all active sessions for this task to calculate aggregate state
+    let aggregateState = status.currentState;
+    let sessionStates = [];
+    
+    if (this.models && this.models.sessions) {
+      try {
+        const activeSessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+        sessionStates = activeSessions.map(session => ({
+          id: session.id,
+          shelltenderSessionId: session.shelltender_session_id,
+          tabName: session.tab_name,
+          aiState: session.ai_state || 'not-started',
+          aiAgent: session.ai_agent
+        }));
+        
+        // Calculate aggregate state based on priority
+        // Priority: waiting > working > idle > not-started
+        const states = activeSessions.map(s => s.ai_state || 'not-started');
+        if (states.includes('waiting')) {
+          aggregateState = 'waiting';
+        } else if (states.includes('working')) {
+          aggregateState = 'working';
+        } else if (states.includes('idle')) {
+          aggregateState = 'idle';
+        } else {
+          aggregateState = 'not-started';
+        }
+      } catch (error) {
+        console.error(`Failed to get active sessions for task ${taskId}:`, error);
+      }
+    }
     
     // Use our WebSocket event service for broadcasting
     if (this.wsEventService) {
       this.wsEventService.sendAIStateUpdate(taskId, {
-        status: status.currentState,
-        lastStateChange: new Date().toISOString()
+        status: aggregateState,
+        lastStateChange: new Date().toISOString(),
+        sessionStates: sessionStates // Include individual session states
       });
     }
     
-    // Update database asynchronously to not block WebSocket updates
-    // This ensures the database always reflects the current AI state
-    if (this.models && this.models.sessions) {
-      setImmediate(async () => {
-        try {
-          await this.models.sessions.updateAIState(taskId, status.currentState);
-        } catch (error) {
-          console.error(`Failed to update AI state in DB for task ${taskId}:`, error);
-        }
-      });
-    } else {
-      console.warn(`Cannot update database - models.sessions not available`);
-    }
-    
-    console.log('AI state update:', sessionId, status.currentState);
+    console.log(`AI state update: session ${sessionId} -> ${status.currentState}, task ${taskId} aggregate -> ${aggregateState}`);
   }
 
   /**

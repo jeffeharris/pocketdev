@@ -34,6 +34,14 @@ export interface SessionState {
   lastStateChange: string | null;
 }
 
+export interface IndividualSessionState {
+  id: string;
+  shelltenderSessionId: string;
+  tabName: string;
+  aiState: WorkerStatus;
+  lastStateChange?: string;
+}
+
 export interface GitStatus {
   ahead: number;
   behind: number;
@@ -67,8 +75,11 @@ export interface Task {
   // Task lifecycle state
   taskState: TaskState;
   
-  // AI session state
+  // AI session state (aggregated)
   sessionState: SessionState;
+  
+  // Individual session states (for multi-tab support)
+  sessionStates?: IndividualSessionState[];
   
   // Git status (optional, added by frontend)
   gitStatus?: GitStatus;

@@ -211,7 +211,7 @@ class SessionModel {
   }
 
   /**
-   * Update AI state for a session
+   * Update AI state for all sessions in a task (legacy method)
    */
   async updateAIState(taskId, aiState) {
     const now = new Date().toISOString();
@@ -221,6 +221,19 @@ class SessionModel {
       SET ai_state = ?, ai_state_updated_at = ?, last_activity = ?
       WHERE task_id = ? AND is_active = 1
     `, [aiState, now, now, taskId]);
+  }
+
+  /**
+   * Update AI state for a specific session
+   */
+  async updateSessionAIState(sessionId, aiState) {
+    const now = new Date().toISOString();
+    
+    await this.db.run(`
+      UPDATE terminal_sessions 
+      SET ai_state = ?, ai_state_updated_at = ?, last_activity = ?
+      WHERE id = ?
+    `, [aiState, now, now, sessionId]);
   }
 
   /**
