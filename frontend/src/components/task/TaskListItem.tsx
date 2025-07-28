@@ -21,7 +21,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   
   // Convert task.terminals to sessionStates format if needed
   const taskSessionStates = task.terminals?.map(terminal => ({
-    id: terminal.dbSessionId,
+    id: terminal.dbSessionId, // Backend expects 'id' field
     tabName: terminal.tabName,
     aiState: terminal.aiState || WorkerStatus.NotStarted,
     lastStateChange: terminal.lastStateChange || null
@@ -66,11 +66,42 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   // Style based on task state
   const isMerged = currentTaskState === TaskState.Merged;
   
-  // Find the first tab that needs attention (waiting state)
+  // Find the highest priority tab to focus on
   const handleClick = () => {
+    // Priority: real-time WebSocket data > mapped terminals > initial task data
     const currentSessionStates = sessionStates || taskSessionStates || task.sessionStates;
-    const waitingSession = currentSessionStates?.find(s => s.aiState === WorkerStatus.Waiting);
-    onSelect(task, waitingSession?.id);
+    
+    
+    if (!currentSessionStates || currentSessionStates.length === 0) {
+      onSelect(task);
+      return;
+    }
+    
+    // Same priority logic as TaskStatus component
+    const statePriority: Record<string, number> = {
+      'waiting': 4,
+      'working': 3,
+      'idle': 2,
+      'not-started': 1
+    };
+    
+    // Sort sessions by priority, then by most recent update
+    const sortedSessions = [...currentSessionStates].sort((a, b) => {
+      const priorityA = statePriority[a.aiState] || 0;
+      const priorityB = statePriority[b.aiState] || 0;
+      
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA;
+      }
+      
+      // If same priority, use most recent update
+      const timeA = a.lastStateChange ? new Date(a.lastStateChange).getTime() : 0;
+      const timeB = b.lastStateChange ? new Date(b.lastStateChange).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    const prioritySessionId = sortedSessions[0]?.id;
+    onSelect(task, prioritySessionId);
   };
   
   return (

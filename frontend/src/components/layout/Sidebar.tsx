@@ -14,7 +14,7 @@ interface SidebarProps {
   projectId: string;
   currentTask: Task;
   allTasks: Task[];
-  onTaskSelect: (task: Task) => void;
+  onTaskSelect: (task: Task, focusTabId?: string) => void;
   collapsed?: boolean;
   onCreateTask?: () => void;
   onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
