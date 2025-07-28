@@ -19,8 +19,47 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   // Get real-time status updates via WebSocket
   const { sessionState, sessionStates, taskState, gitStatus } = useTaskStatus(task.id);
   
+  // Convert task.terminals to sessionStates format if needed
+  const taskSessionStates = task.terminals?.map(terminal => ({
+    id: terminal.dbSessionId,
+    tabName: terminal.tabName,
+    aiState: terminal.aiState || WorkerStatus.NotStarted,
+    lastStateChange: terminal.lastStateChange || null
+  }));
+  
+  // Use real-time sessionStates or fallback to terminals
+  const currentSessionStates = sessionStates || taskSessionStates || task.sessionStates;
+  
+  // Calculate aggregated state based on priority
+  const calculateAggregatedState = () => {
+    if (!currentSessionStates || currentSessionStates.length === 0) {
+      return sessionState.status !== WorkerStatus.NotStarted ? sessionState : task.sessionState;
+    }
+    
+    // Priority order: waiting > working > idle > not-started
+    const statePriority: Record<string, number> = {
+      'waiting': 4,
+      'working': 3,
+      'idle': 2,
+      'not-started': 1
+    };
+    
+    let highestPriority = 0;
+    let aggregatedStatus = WorkerStatus.NotStarted;
+    
+    for (const session of currentSessionStates) {
+      const priority = statePriority[session.aiState] || 0;
+      if (priority > highestPriority) {
+        highestPriority = priority;
+        aggregatedStatus = session.aiState as WorkerStatus;
+      }
+    }
+    
+    return { status: aggregatedStatus, lastStateChange: null };
+  };
+  
   // Merge initial data with real-time updates
-  const currentSessionState = sessionState.status !== WorkerStatus.NotStarted ? sessionState : task.sessionState;
+  const currentSessionState = calculateAggregatedState();
   const currentTaskState = taskState || task.taskState;
   const currentGitStatus = gitStatus || task.gitStatus;
   
@@ -29,7 +68,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   
   // Find the first tab that needs attention (waiting state)
   const handleClick = () => {
-    const currentSessionStates = sessionStates || task.sessionStates;
+    const currentSessionStates = sessionStates || taskSessionStates || task.sessionStates;
     const waitingSession = currentSessionStates?.find(s => s.aiState === WorkerStatus.Waiting);
     onSelect(task, waitingSession?.id);
   };
@@ -46,13 +85,19 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
       onClick={handleClick}
     >
       <div className="font-medium text-gray-900">#{task.id} {task.name || 'Unnamed Task'}</div>
-      <div className="text-xs text-gray-500 mt-1">
+      <div 
+        className="text-xs text-gray-500 mt-1"
+        onClick={(e) => e.stopPropagation()}
+      >
         <TaskStatusComponent 
           workerStatus={currentSessionState.status}
           gitStatus={currentGitStatus}
           isMerged={isMerged}
           variant="compact"
-          sessionStates={sessionStates || task.sessionStates}
+          sessionStates={currentSessionStates}
+          onStatusClick={(prioritySessionId) => {
+            onSelect(task, prioritySessionId);
+          }}
         />
       </div>
     </div>

@@ -40,6 +40,7 @@ interface TaskStatusProps {
   isMerged?: boolean;
   variant?: 'compact' | 'detailed' | 'inline';
   sessionStates?: IndividualSessionState[];
+  onStatusClick?: (prioritySessionId?: string) => void;
 }
 
 export const TaskStatus: React.FC<TaskStatusProps> = ({ 
@@ -47,7 +48,8 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   gitStatus,
   isMerged = false,
   variant = 'compact',
-  sessionStates
+  sessionStates,
+  onStatusClick
 }) => {
   // Calculate common values once at the top to avoid redundant calculations
   // We combine staged and unstaged because users care about "do I have uncommitted work?"
@@ -77,6 +79,44 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   };
 
   const worker = workerConfig[workerStatus as keyof typeof workerConfig] || workerConfig['not-started'];
+
+  // Find the highest priority session to navigate to
+  const getHighestPrioritySessionId = (): string | undefined => {
+    if (!sessionStates || sessionStates.length === 0) return undefined;
+    
+    // Define priority order (higher number = higher priority)
+    const statePriority: Record<string, number> = {
+      'waiting': 4,
+      'working': 3,
+      'idle': 2,
+      'not-started': 1
+    };
+    
+    // Sort by priority, then by most recent update
+    const sortedSessions = [...sessionStates].sort((a, b) => {
+      const priorityA = statePriority[a.aiState] || 0;
+      const priorityB = statePriority[b.aiState] || 0;
+      
+      if (priorityA !== priorityB) {
+        return priorityB - priorityA;
+      }
+      
+      // If same priority, use most recent update
+      const timeA = a.lastStateChange ? new Date(a.lastStateChange).getTime() : 0;
+      const timeB = b.lastStateChange ? new Date(b.lastStateChange).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    return sortedSessions[0]?.id;
+  };
+
+  // Handle click on status badge
+  const handleStatusClick = () => {
+    if (onStatusClick) {
+      const prioritySessionId = getHighestPrioritySessionId();
+      onStatusClick(prioritySessionId);
+    }
+  };
 
   // Generate tooltip content for session states
   const getSessionStatesTooltip = () => {
@@ -145,9 +185,11 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
               'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
               needsUserInput 
                 ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
-                : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
+                : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`,
+              onStatusClick && 'cursor-pointer hover:opacity-80'
             )}
             title={getSessionStatesTooltip()}
+            onClick={handleStatusClick}
           >
             <worker.icon className="w-3 h-3" />
             {worker.label}
@@ -205,9 +247,11 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
           'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium',
           needsUserInput 
             ? 'bg-purple-50 text-purple-700 border border-purple-200 animate-pulse'
-            : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`
+            : `bg-${worker.color}-50 text-${worker.color}-700 border border-${worker.color}-200`,
+          onStatusClick && 'cursor-pointer hover:opacity-80'
         )}
         title={getSessionStatesTooltip()}
+        onClick={handleStatusClick}
       >
         <worker.icon className="w-3 h-3" />
         {worker.label}
