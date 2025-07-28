@@ -97,11 +97,12 @@ This document tracks technical debt items that should be addressed in future ite
    - System had 80+ active Shelltender sessions
    - **Status:** Fixed with stable session IDs in current branch
 
-3. **Tab Persistence Not Implemented**
-   - Tabs don't persist across page reloads (requirement violation)
-   - Active tab selection not saved
-   - Users lose their multi-terminal setup on refresh
-   - Impact: Poor user experience
+3. **Tab Persistence Not Implemented** ✅ FIXED
+   - ~~Tabs don't persist across page reloads (requirement violation)~~
+   - ~~Active tab selection not saved~~
+   - ~~Users lose their multi-terminal setup on refresh~~
+   - ~~Impact: Poor user experience~~
+   - **Status:** Fixed in feature/multi-terminal-tabs branch
 
 4. **Missing Tab Management Features**
    - No tab renaming (double-click to edit)
@@ -156,3 +157,92 @@ This document tracks technical debt items that should be addressed in future ite
 - Requirements: `/.pocketdev/specs/multi-terminal-tabs/requirements.md`
 - Design: `/.pocketdev/specs/multi-terminal-tabs/technical-design.md`
 - Implementation: Current branch `fix/session-management-and-tab-persistence`
+
+## Frontend Terminal Session State Management
+
+**Date Added:** 2025-07-28  
+**Priority:** High  
+**Component:** Frontend State Management
+
+### Current Issues
+
+1. **Duplicated State Aggregation Logic**
+   - Same priority calculation logic exists in both `TaskListItem.tsx` and `TaskStatus.tsx`
+   - Each component independently calculates which session has highest priority
+   - Violates DRY principle and risks inconsistencies
+
+2. **Complex Prop Drilling**
+   - Session states passed through multiple component layers
+   - `TaskWorkspace` → `Sidebar` → `TaskListItem` → `TaskStatus`
+   - Makes components tightly coupled and hard to maintain
+
+3. **Multiple State Formats**
+   - Converting between `task.terminals`, `sessionStates`, and `taskSessionStates`
+   - Each component handles format conversions differently
+   - Increases complexity and potential for bugs
+
+4. **Hacky State Communication**
+   - Using `sessionStorage` to pass focus tab IDs between components
+   - Components can't easily access terminal state when needed
+   - Leading to workarounds like storing data in DOM or sessionStorage
+
+5. **Mixed Responsibilities**
+   - Components both display AND calculate aggregated states
+   - Business logic mixed with presentation logic
+   - Makes testing and refactoring difficult
+
+### Impact
+- **Code Quality:** High - Significant duplication and complexity
+- **Maintainability:** High - Changes require updates in multiple places
+- **Bug Risk:** High - Easy to introduce inconsistencies
+- **Performance:** Medium - Redundant calculations in multiple components
+
+### Proposed Solution
+
+Implement a global state management solution for terminal sessions:
+
+1. **Create a Terminal Session Store** (using Zustand or Context API)
+   ```typescript
+   interface TerminalSessionStore {
+     // Session states by task ID
+     sessionStates: Map<string, TerminalSessionState[]>;
+     
+     // Aggregated states (cached)
+     aggregatedStates: Map<string, AggregatedState>;
+     
+     // Actions
+     updateSessionState: (taskId: string, sessions: TerminalSessionState[]) => void;
+     getAggregatedState: (taskId: string) => AggregatedState;
+     getHighestPrioritySession: (taskId: string) => string | undefined;
+   }
+   ```
+
+2. **Centralize Business Logic**
+   - Move all priority calculations to the store
+   - Single source of truth for aggregation logic
+   - Memoize aggregated states for performance
+
+3. **Simplify Components**
+   - Components just read from store
+   - Remove prop drilling for session states
+   - Focus on presentation, not calculation
+
+4. **WebSocket Integration**
+   - Store subscribes to WebSocket updates
+   - Automatic state updates across all components
+   - No manual prop passing needed
+
+### Benefits
+- Single source of truth for terminal session states
+- Eliminates code duplication
+- Easier to test business logic in isolation
+- Components become simpler and more focused
+- Better performance through memoization
+- Easier to add new features (like session filtering)
+
+### References
+- Current implementation shows issues in:
+  - `/frontend/src/components/task/TaskListItem.tsx`
+  - `/frontend/src/components/task/TaskStatus.tsx`
+  - `/frontend/src/hooks/useTaskStatus.ts`
+- Similar pattern could benefit AI state tracking across the app

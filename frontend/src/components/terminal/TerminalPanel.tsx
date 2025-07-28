@@ -7,6 +7,7 @@ import { TerminalTabs, type Tab } from './TerminalTabs';
 import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { api } from '../../services/api';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -43,6 +44,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const { showToast } = useToast();
+  const [confirmClose, setConfirmClose] = useState<{ dbSessionId: string; tabName: string } | null>(null);
   
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
@@ -132,9 +134,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       // Get the currently active terminal to copy history from
       const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
       
-      // Use provided options or defaults
-      const tabName = options?.tabName || `Tab ${tabCount + 1}`;
+      // Use provided options or generate next available "Tab #"
       const aiAgent = options?.aiAgent || 'claude';
+      const tabName = options?.tabName || getNextAvailableTabName(task.terminals || []);
       
       const newSession = await api.createTerminalSession(task.id, {
         tabName,
@@ -267,6 +269,24 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     return commands[agent] || 'claude';
   };
 
+  // Get next available "Tab #" name that doesn't already exist
+  const getNextAvailableTabName = (existingTabs: TerminalSession[]): string => {
+    const existingTabNumbers = existingTabs
+      .map(t => {
+        const match = t.tabName.match(/^Tab (\d+)$/);
+        return match ? parseInt(match[1]) : null;
+      })
+      .filter((n): n is number => n !== null);
+    
+    // Find the first available number starting from 1
+    let nextNumber = 1;
+    while (existingTabNumbers.includes(nextNumber)) {
+      nextNumber++;
+    }
+    
+    return `Tab ${nextNumber}`;
+  };
+
   // Handle tab rename
   const handleTabRename = async (dbSessionId: string, newName: string) => {
     try {
@@ -282,6 +302,28 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     } catch (error) {
       console.error('[TerminalPanel] Failed to rename tab:', error);
       showNotification('error', 'Failed to rename tab');
+    }
+  };
+
+  // Handle tab reorder
+  const handleTabReorder = async (reorderedTabs: Tab[]) => {
+    try {
+      // Update each tab's order in the backend
+      const updatePromises = reorderedTabs.map(tab => 
+        api.updateTerminalTab(tab.dbSessionId, {
+          tabOrder: tab.tabOrder
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Reload task to get updated terminals list
+      if (task.onReload) {
+        task.onReload();
+      }
+    } catch (error) {
+      console.error('[TerminalPanel] Failed to reorder tabs:', error);
+      showNotification('error', 'Failed to reorder tabs');
     }
   };
 
@@ -319,6 +361,28 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Handle tab close
   const handleTabClose = async (dbSessionId: string) => {
+    // Find the terminal being closed
+    const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+    if (!terminalToClose) return;
+    
+    // Get the real-time state for this session
+    const realtimeState = realtimeSessionStates?.find(s => s.id === dbSessionId);
+    const currentAiState = realtimeState?.aiState || terminalToClose.aiState;
+    
+    // If AI is active (not 'not-started'), show confirmation
+    if (currentAiState !== 'not-started') {
+      setConfirmClose({ 
+        dbSessionId, 
+        tabName: terminalToClose.tabName 
+      });
+      return;
+    }
+    
+    // Otherwise, close immediately
+    await performTabClose(dbSessionId);
+  };
+  
+  const performTabClose = async (dbSessionId: string) => {
     try {
       // Find the terminal being closed
       const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
@@ -416,6 +480,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             onTabAdvancedAdd={() => setShowSessionLauncher(true)}
             onTabRename={handleTabRename}
             onTabClose={handleTabClose}
+            onTabReorder={handleTabReorder}
             maxTabs={6}
           />
 
@@ -491,6 +556,23 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           setShowSessionLauncher(false);
         }}
         taskPath={task.worktree_path}
+      />
+      
+      {/* Confirm Close Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmClose}
+        onClose={() => setConfirmClose(null)}
+        onConfirm={() => {
+          if (confirmClose) {
+            performTabClose(confirmClose.dbSessionId);
+            setConfirmClose(null);
+          }
+        }}
+        title="Close Terminal Tab"
+        message={`Are you sure you want to close "${confirmClose?.tabName}"? The AI session is currently active and will be terminated.`}
+        confirmText="Close Tab"
+        cancelText="Cancel"
+        variant="warning"
       />
     </div>
   );
