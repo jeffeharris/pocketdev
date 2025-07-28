@@ -265,6 +265,10 @@ export class AISessionMonitor {
           return;
         }
         
+        // Debug logging to trace duplicate data
+        if (data.length > 0) {
+          console.log(`[AIMonitor] Processing data for ${sessionId}: ${data.length} bytes, first 50 chars: "${data.substring(0, 50).replace(/\n/g, '\\n')}"`);
+        }
         
         // Strip ANSI escape sequences for pattern matching
         // This prevents control sequences from interfering

@@ -10,6 +10,8 @@ import { MergeStatesDiagram } from './components/prototype/MergeStatesDiagram';
 import PrototypeDiffViewers from './pages/PrototypeDiffViewers';
 import PrototypeMergeConflict from './pages/PrototypeMergeConflict';
 import PrototypeMonacoMerge from './pages/PrototypeMonacoMerge';
+import { TerminalBufferTest } from './pages/TerminalBufferTest';
+import { TerminalRawTest } from './pages/TerminalRawTest';
 // import { ComponentPlayground } from './pages/archive/ComponentPlayground-phase3'; // Archived - Phase 3 UI components
 
 function App() {
@@ -45,6 +47,8 @@ function App() {
               <Route path="/prototype/diff-viewers" element={<PrototypeDiffViewers />} />
               <Route path="/prototype/merge-conflict" element={<PrototypeMergeConflict />} />
               <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
+              <Route path="/test/terminal-buffer" element={<TerminalBufferTest />} />
+              <Route path="/test/terminal-raw" element={<TerminalRawTest />} />
               {/* <Route path="/prototype/components" element={<ComponentPlayground />} /> */}
             </Routes>
           </Router>

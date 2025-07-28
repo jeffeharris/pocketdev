@@ -123,11 +123,11 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
         {sortedTabs.map((tab) => {
           const isActive = tab.dbSessionId === activeTabId;
           return (
-            <button
+            <div
               key={tab.dbSessionId}
               onClick={() => handleSingleClick(tab)}
               onDoubleClick={() => handleDoubleClick(tab)}
-              className={`px-4 py-2 text-sm border-r border-gray-600 relative transition-colors ${
+              className={`px-4 py-2 text-sm border-r border-gray-600 relative transition-colors cursor-pointer ${
                 isActive
                   ? 'bg-gray-700 text-gray-200'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
@@ -183,7 +183,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
               {isActive && (
                 <div className={`absolute bottom-0 left-0 right-0 h-0.5 ${getStateColor(tab.aiState)}`}></div>
               )}
-            </button>
+            </div>
           );
         })}
         

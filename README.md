@@ -47,7 +47,7 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - **Backend**: Node.js with Express (ES modules) - Modular architecture
 - **Database**: SQLite with prepared statements
 - **Frontend**: Vanilla JavaScript with modern ES6+
-- **Terminal**: Shelltender v0.6.1 for web-based terminal access with AI monitoring
+- **Terminal**: Shelltender v0.6.2 for web-based terminal access with AI monitoring
 - **Container**: Docker with Docker Compose
 - **Git**: Requires Git 2.38+ for merge conflict detection
 
@@ -223,3 +223,13 @@ npm test
 # Build for production
 docker-compose build
 ```
+
+## Debugging Tools
+
+PocketDev includes terminal debugging tools for troubleshooting WebSocket and buffer restoration issues:
+
+- **Terminal Buffer Test** (`/test/terminal-buffer`) - Test terminal buffer restoration with debug logging
+- **Raw WebSocket Test** (`/test/terminal-raw`) - Low-level WebSocket testing bypassing the client library
+- **Debug Terminal Component** - Swap DirectTerminal with DirectTerminalDebug for verbose logging
+
+See [docs/terminal-debugging.md](docs/terminal-debugging.md) for detailed usage instructions.

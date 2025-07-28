@@ -2,28 +2,88 @@ import { useRef, forwardRef, useImperativeHandle, useEffect, useState, memo } fr
 import { Terminal, useWebSocket } from '@shelltender/client';
 import type { TerminalHandle } from '@shelltender/client';
 
-// Memoized Terminal wrapper that only re-renders if sessionId changes
-const MemoizedTerminal = memo<{ 
+// Debug wrapper to intercept WebSocket messages
+const DebugTerminal = memo<{ 
   sessionId: string;
   onSessionCreated?: (id: string) => void;
   onSessionError?: (error: any) => void;
   onSessionDisconnected?: () => void;
   terminalRef: any;
 }>(({ sessionId, onSessionCreated, onSessionError, onSessionDisconnected, terminalRef }) => {
+  useEffect(() => {
+    console.log('[DirectTerminalDebug] Mounting terminal with sessionId:', sessionId);
+    
+    // Add WebSocket message interceptor
+    const originalSend = WebSocket.prototype.send;
+    const originalOnMessage = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage');
+    
+    WebSocket.prototype.send = function(data) {
+      console.log('[DirectTerminalDebug] WS Send:', data);
+      return originalSend.call(this, data);
+    };
+    
+    Object.defineProperty(WebSocket.prototype, 'onmessage', {
+      set: function(handler) {
+        this._onmessage = handler;
+        this.addEventListener('message', function(event) {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('[DirectTerminalDebug] WS Receive:', data);
+            
+            // Check for connect message with scrollback
+            if (data.type === 'connect') {
+              console.log('[DirectTerminalDebug] Connect response:', {
+                hasIncrementalData: !!data.incrementalData,
+                hasScrollback: !!data.scrollback,
+                scrollbackLength: data.scrollback?.length,
+                lastSequence: data.lastSequence
+              });
+            }
+          } catch (e) {
+            console.log('[DirectTerminalDebug] WS Receive (non-JSON):', event.data);
+          }
+          
+          if (this._onmessage) {
+            this._onmessage(event);
+          }
+        });
+      },
+      get: function() {
+        return this._onmessage;
+      }
+    });
+    
+    return () => {
+      // Restore original methods
+      WebSocket.prototype.send = originalSend;
+      if (originalOnMessage) {
+        Object.defineProperty(WebSocket.prototype, 'onmessage', originalOnMessage);
+      }
+    };
+  }, [sessionId]);
+  
   return (
     <Terminal
       ref={terminalRef}
       sessionId={sessionId}
-      onSessionCreated={onSessionCreated}
-      onSessionError={onSessionError}
-      onSessionDisconnected={onSessionDisconnected}
+      onSessionCreated={(id) => {
+        console.log('[DirectTerminalDebug] Session created:', id);
+        onSessionCreated?.(id);
+      }}
+      onSessionError={(error) => {
+        console.log('[DirectTerminalDebug] Session error:', error);
+        onSessionError?.(error);
+      }}
+      onSessionDisconnected={() => {
+        console.log('[DirectTerminalDebug] Session disconnected');
+        onSessionDisconnected?.();
+      }}
       cursorStyle="block"
       cursorBlink={false}
       useIncrementalUpdates={true}
     />
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if sessionId changes
   return prevProps.sessionId === nextProps.sessionId;
 });
 
@@ -32,57 +92,45 @@ export interface DirectTerminalHandle {
   fit: () => void;
 }
 
-interface DirectTerminalProps {
+interface DirectTerminalDebugProps {
   taskId: string;
-  dbSessionId: string;          // Database session ID
-  shelltenderSessionId: string; // Actual Shelltender session ID to connect to
+  dbSessionId: string;
+  shelltenderSessionId: string;
   className?: string;
   worktreePath?: string;
   isVisible?: boolean;
   onSessionStatus?: (status: 'connected' | 'disconnected' | 'error') => void;
 }
 
-const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalProps>(({ 
+const DirectTerminalDebugComponent = forwardRef<DirectTerminalHandle, DirectTerminalDebugProps>(({ 
   taskId, 
   dbSessionId,
   shelltenderSessionId,
   className = '',
-  worktreePath: _worktreePath, // May be used for session initialization in future
+  worktreePath: _worktreePath,
   isVisible = true,
   onSessionStatus
 }, ref) => {
   const { isConnected, wsService } = useWebSocket();
   const [isReady, setIsReady] = useState(false);
   const terminalRef = useRef<TerminalHandle>(null);
-  
-  // Container ref for DOM-based fallback
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Track if we've already created the terminal to prevent re-creation
   const [terminalCreated, setTerminalCreated] = useState(false);
 
-  // Update ready state when connected
   useEffect(() => {
     if (isConnected) {
+      console.log('[DirectTerminalDebug] WebSocket connected, setting ready');
       setIsReady(true);
     }
   }, [isConnected, shelltenderSessionId]);
 
-  // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({
     focus: () => {
-      // Only focus if the terminal is visible
-      if (!isVisible) {
-        return;
-      }
+      if (!isVisible) return;
       
       if (terminalRef.current?.focus) {
         terminalRef.current.focus();
       } else {
-        // TODO: Remove this workaround when upgrading to @shelltender/client v0.4.4+
-        // v0.4.3 has a bug where forwardRef is stripped by Vite's bundler optimization
-        // The Shelltender team has fixed this using Object.assign() to prevent optimization
-        // See: simple/docs/shelltender/ for investigation details
         const xtermTextarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
         if (xtermTextarea) {
           xtermTextarea.focus();
@@ -93,20 +141,15 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       if (terminalRef.current?.fit) {
         terminalRef.current.fit();
       } else {
-        // Fallback: trigger window resize event
         window.dispatchEvent(new Event('resize'));
       }
     }
-  }), [isVisible, dbSessionId]); // Include isVisible to update focus behavior
+  }), [isVisible, dbSessionId]);
 
-
-  // Auto-fit when becoming visible and manage focus
   useEffect(() => {
     if (isVisible && terminalRef.current) {
-      // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         terminalRef.current?.fit();
-        // Auto-focus when becoming visible
         if (terminalRef.current?.focus) {
           terminalRef.current.focus();
         } else {
@@ -118,17 +161,15 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       }, 50);
       return () => clearTimeout(timer);
     } else if (!isVisible) {
-      // Blur the terminal when it becomes hidden
       const xtermTextarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
       if (xtermTextarea && document.activeElement === xtermTextarea) {
         xtermTextarea.blur();
       }
     }
   }, [isVisible, taskId]);
-  
 
-  // Don't render terminal until WebSocket is connected
   if (!isReady) {
+    console.log('[DirectTerminalDebug] Not ready, showing loading state');
     return (
       <div 
         ref={containerRef} 
@@ -147,6 +188,8 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     );
   }
 
+  console.log('[DirectTerminalDebug] Rendering terminal for sessionId:', shelltenderSessionId);
+  
   return (
     <div 
       ref={containerRef} 
@@ -158,12 +201,11 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         width: '100%'
       }}
     >
-      <MemoizedTerminal
+      <DebugTerminal
         terminalRef={terminalRef}
         sessionId={shelltenderSessionId}
         onSessionCreated={(sessionId: string) => {
           onSessionStatus?.('connected');
-          // Removed - sending newline doesn't actually show prompt
         }}
         onSessionError={(error: any) => {
           onSessionStatus?.('error');
@@ -176,19 +218,14 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   );
 });
 
-DirectTerminalComponent.displayName = 'DirectTerminal';
+DirectTerminalDebugComponent.displayName = 'DirectTerminalDebug';
 
-// Memoize the component to prevent unnecessary re-renders
-// This prevents the terminal from re-displaying its buffer when parent re-renders
-export const DirectTerminal = memo(DirectTerminalComponent, (prevProps, nextProps) => {
-  // Only re-render if these specific props change
+export const DirectTerminalDebug = memo(DirectTerminalDebugComponent, (prevProps, nextProps) => {
   const isEqual = (
     prevProps.taskId === nextProps.taskId &&
     prevProps.dbSessionId === nextProps.dbSessionId &&
     prevProps.shelltenderSessionId === nextProps.shelltenderSessionId &&
     prevProps.worktreePath === nextProps.worktreePath
-    // Don't compare isVisible - we want terminals to stay mounted
-    // Don't compare onSessionStatus - it's recreated on every render
   );
   
   return isEqual;

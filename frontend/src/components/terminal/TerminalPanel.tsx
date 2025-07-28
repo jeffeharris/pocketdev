@@ -30,7 +30,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const [activeTabId, setActiveTabId] = useState(() => {
     return localStorage.getItem(`activeTab-${task.id}`) || '';
   });
-  const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const [showSessionLauncher, setShowSessionLauncher] = useState(false);
   const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
@@ -133,10 +132,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       // Only auto-launch Claude if no options provided (quick launch)
       if (!options) {
-        // Mark this session as launching Claude
-        console.log('[TerminalPanel] Marking session for Claude launch:', newSession.dbSessionId);
-        setLaunchingClaude(prev => new Set(prev).add(newSession.dbSessionId));
-      
       // Wait for terminal to be ready and prompt to appear, then launch Claude
       console.log('[TerminalPanel] Setting timeout for Claude launch...');
       setTimeout(async () => {
@@ -153,25 +148,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             console.log('[TerminalPanel] Sending claude command...');
             await api.executeCommand(newSession.shelltenderSessionId, 'claude');
             console.log('[TerminalPanel] Claude command sent successfully');
-            
-            // Remove from launching set after some time
-            setTimeout(() => {
-              console.log('[TerminalPanel] Removing launching state for:', newSession.dbSessionId);
-              setLaunchingClaude(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(newSession.dbSessionId);
-                return newSet;
-              });
-            }, 3000);
           }, 500);
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
-          // Remove from launching set on error
-          setLaunchingClaude(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(newSession.dbSessionId);
-            return newSet;
-          });
         }
       }, 3000); // Wait 3 seconds for terminal to be ready
       } else {
@@ -363,15 +342,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = (task.terminals || []).map(t => {
-    const isLaunching = launchingClaude.has(t.dbSessionId);
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
-    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - isLaunching: ${isLaunching}, aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
+    console.log(`[TerminalPanel] Tab ${t.dbSessionId} - aiState: ${t.aiState}, connectionStatus: ${connectionStatus}`);
     return {
       sessionId: t.sessionId,
       dbSessionId: t.dbSessionId,
       tabName: t.tabName,
       tabOrder: t.tabOrder,
-      aiState: isLaunching ? 'working' : t.aiState,
+      aiState: t.aiState,
       aiAgent: t.aiAgent,
       connectionStatus: connectionStatus
     };

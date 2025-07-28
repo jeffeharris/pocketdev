@@ -5,6 +5,11 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- **Shelltender v0.6.2 Upgrade**
+  - Updated @shelltender/client from v0.6.1 to v0.6.2
+  - Updated @shelltender/server from v0.6.1 to v0.6.2
+  - Admin UI HTML file now properly included in the package
+  - Improved terminal buffer restoration with incremental updates
 - **Multi-Terminal Tabs Feature**
   - Phase 1 (Backend): Added terminal session persistence and management
     - New `terminal_sessions` table tracking individual tabs per task
@@ -19,9 +24,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
     - Fixed Shelltender v0.6.1 command execution via WebSocket
     - Auto-launch Claude in new tabs with configurable delays
     - Created execute-command.js utility for proper WebSocket communication
-    - Note: Tab persistence is currently broken and needs fixing
+    - Tab persistence now working - renamed tabs persist across page reloads
 
 ### Fixed
+- **Terminal Buffer Restoration Issue**
+  - Fixed terminal scrollback not displaying after page refresh
+  - Added `useIncrementalUpdates={true}` prop to Terminal component (required for Shelltender v0.6.2)
+  - Terminal history and command output now properly persists across page reloads
+  - Added debug tools for troubleshooting WebSocket communication:
+    - `/test/terminal-buffer` - Terminal buffer test page with debug logging
+    - `/test/terminal-raw` - Raw WebSocket test bypassing Shelltender client
 - **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
   - Fixed TaskStatus not updating based on console activity detection
   - Replaced removed `ShelltenderMonitorAdapter` with new `ShelltenderSessionMonitor`

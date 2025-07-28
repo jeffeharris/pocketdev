@@ -286,11 +286,17 @@ export async function executeInSession(req, res, next) {
     const monitor = req.app.locals.wsAdapter; // This is the ShelltenderSessionMonitor instance
     let result;
     
-    if (monitor) {
-      console.log('[executeInSession] Using session monitor');
+    console.log('[executeInSession] Monitor available:', !!monitor, 'Session:', sessionId, 'Command:', command);
+    
+    if (monitor && monitor.sessions && monitor.sessions.has(sessionId)) {
+      console.log('[executeInSession] Using existing monitor connection');
+      result = await executeCommandViaMonitor(sessionId, command, monitor);
+    } else if (monitor) {
+      console.log('[executeInSession] Monitor exists but session not connected, connecting first...');
+      await monitor.connectToSession(sessionId);
       result = await executeCommandViaMonitor(sessionId, command, monitor);
     } else {
-      console.log('[executeInSession] Using direct WebSocket connection');
+      console.log('[executeInSession] No monitor available, using direct WebSocket connection');
       result = await executeCommandViaWebSocket(sessionId, command);
     }
     

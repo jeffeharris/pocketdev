@@ -1,8 +1,8 @@
 /**
- * Shelltender Session Monitor for v0.6.1
+ * Shelltender Session Monitor for v0.6.2
  * 
  * This implementation connects to individual task sessions to monitor their output,
- * since Shelltender v0.6.1 doesn't have a global monitor mode.
+ * since Shelltender v0.6.2 doesn't have a global monitor mode.
  */
 
 import WebSocket from 'ws';
@@ -97,6 +97,7 @@ export class ShelltenderSessionMonitor extends EventEmitter {
    * Handle session output data
    */
   handleSessionOutput(sessionId, data, metadata) {
+    
     // Call all registered onData callbacks
     this.dataCallbacks.forEach(callback => {
       try {
