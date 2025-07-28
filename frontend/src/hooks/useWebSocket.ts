@@ -32,7 +32,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
         
@@ -61,14 +60,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         setStatus('disconnected');
         wsRef.current = null;
 
         // Attempt reconnection if under max attempts
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++;
-          console.log(`Reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
           reconnectTimeoutRef.current = window.setTimeout(connect, reconnectDelay);
         }
       };
