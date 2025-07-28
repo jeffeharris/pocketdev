@@ -4,6 +4,13 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Changed
+- **Code Cleanup**
+  - Removed debug console.log statements from production components
+  - Cleaned up TerminalPanel, TaskWorkspace, and API service debug logging
+  - Removed WebSocket connection/disconnection logging from hooks and contexts
+  - Maintained test pages and prototype components for development use
+
 ### Fixed
 - **Advanced Session Launcher Prompt Handling**
   - Fixed missing `launchingClaude` state variable in TerminalPanel causing React errors
