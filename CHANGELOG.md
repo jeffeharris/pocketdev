@@ -46,6 +46,10 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Terminal disposal system to prevent memory leaks
   - Disposal callbacks execute when terminals are removed
   - Smart disposal - terminals not disposed on view switches
+- **Split View Enhancements**
+  - Double-click divider to reset split to 50/50 (REQ-SV-009)
+  - Tooltip shows "Drag to resize, double-click to reset to 50/50"
+  - Works in both horizontal and vertical orientations
 
 ### Fixed
 - **Terminal Focus Indicator**

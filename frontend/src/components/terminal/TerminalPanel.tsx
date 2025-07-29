@@ -525,6 +525,66 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       connectionStatus: connectionStatus
     };
   });
+  
+  // Listen for keyboard shortcut events
+  useEffect(() => {
+    const handleTerminalShortcut = (event: CustomEvent) => {
+      switch (event.type) {
+        case 'terminal-new-tab':
+          if (terminals.length < 6) {
+            handleTabAdd();
+          }
+          break;
+        case 'terminal-close-tab':
+          if (activeTabId && terminals.length > 1) {
+            handleTabClose(activeTabId);
+          }
+          break;
+        case 'terminal-next-tab':
+          {
+            const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
+            const nextIndex = (currentIndex + 1) % terminals.length;
+            if (terminals[nextIndex]) {
+              handleTabSelect(terminals[nextIndex].dbSessionId);
+            }
+          }
+          break;
+        case 'terminal-previous-tab':
+          {
+            const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
+            const prevIndex = currentIndex === 0 ? terminals.length - 1 : currentIndex - 1;
+            if (terminals[prevIndex]) {
+              handleTabSelect(terminals[prevIndex].dbSessionId);
+            }
+          }
+          break;
+        case 'terminal-switch-tab':
+          {
+            const detail = (event as CustomEvent).detail;
+            if (detail && typeof detail.index === 'number' && terminals[detail.index]) {
+              handleTabSelect(terminals[detail.index].dbSessionId);
+            }
+          }
+          break;
+      }
+    };
+
+    // Add event listeners
+    document.addEventListener('terminal-new-tab', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-close-tab', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
+
+    return () => {
+      // Remove event listeners
+      document.removeEventListener('terminal-new-tab', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-close-tab', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
+    };
+  }, [terminals, activeTabId]);
 
 
   return (
