@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { shallow } from 'zustand/shallow';
+import { enableMapSet } from 'immer';
+
+// Enable Map/Set support in Immer
+enableMapSet();
 
 export interface SplitLayoutConfig {
   mode: 'tab' | 'split';
