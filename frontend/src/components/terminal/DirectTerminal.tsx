@@ -49,7 +49,9 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   className = '',
   worktreePath: _worktreePath, // May be used for session initialization in future
   isVisible = true,
-  onSessionStatus
+  hasFocus = false,
+  onSessionStatus,
+  onFocusRequest
 }, ref) => {
   const { isConnected, wsService } = useWebSocket();
   const [isReady, setIsReady] = useState(false);
