@@ -146,13 +146,15 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   return (
     <div 
       ref={containerRef} 
-      className={`w-full h-full overflow-hidden ${className} ${hasFocus ? 'ring-2 ring-blue-500' : 'ring-1 ring-gray-700'}`} 
+      className={`relative w-full h-full ${className}`} 
       style={{ 
         height: '100%',
         width: '100%'
       }}
       onClick={handleContainerClick}
     >
+      {/* Focus indicator border */}
+      <div className={`absolute inset-0 pointer-events-none ${hasFocus ? 'border-2 border-blue-500' : 'border border-gray-600'}`} />
       <MemoizedTerminal
         terminalRef={terminalRef}
         sessionId={shelltenderSessionId}

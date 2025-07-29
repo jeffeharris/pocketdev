@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
 import { SplitViewControls } from './SplitViewControls';
 import { loadLayout, persistLayout } from '../../stores/splitViewStore';
-import { useTerminalStore, useTaskTerminals, useActiveTerminalId } from '../../stores/terminalStore';
+import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -66,14 +66,19 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Get terminals from the store
   const terminals = useTaskTerminals(task.id);
   const activeTerminalId = useActiveTerminalId(task.id);
-  const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal } = useTerminalStore();
+  const focusedTerminalId = useFocusedTerminalId(task.id);
+  const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal, setFocusedTerminal } = useTerminalStore();
   
   // Initialize terminals from task prop on mount or when task changes
   useEffect(() => {
     if (task.terminals && task.terminals.length > 0) {
       setTerminals(task.id, task.terminals);
+      // Set initial focus to active terminal if no focus set
+      if (!focusedTerminalId && activeTabId) {
+        setFocusedTerminal(task.id, activeTabId);
+      }
     }
-  }, [task.id, task.terminals, setTerminals]);
+  }, [task.id, task.terminals, setTerminals, focusedTerminalId, activeTabId, setFocusedTerminal]);
   
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
@@ -83,9 +88,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       if (!validTab && terminals[0]) {
         setActiveTabId(terminals[0].dbSessionId);
+        setFocusedTerminal(task.id, terminals[0].dbSessionId);
+      } else if (validTab && !focusedTerminalId) {
+        // Set focus if we have a valid tab but no focus set
+        setFocusedTerminal(task.id, validTab.dbSessionId);
       }
     }
-  }, [task.id, terminals]);
+  }, [task.id, terminals, focusedTerminalId, setFocusedTerminal]);
 
   // Check for focus tab request
   useEffect(() => {
@@ -108,6 +117,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const handleTabSelect = (tabId: string) => {
     setActiveTabId(tabId);
     setActiveTerminal(task.id, tabId);
+    setFocusedTerminal(task.id, tabId);
     localStorage.setItem(`activeTab-${task.id}`, tabId);
     // Focus the terminal after switching
     setTimeout(() => {
