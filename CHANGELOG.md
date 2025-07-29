@@ -39,8 +39,20 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Backend API endpoint tests with edge cases
   - Test utilities and documentation
   - Coverage reporting and interactive UI
+- **Focus Management and Terminal Disposal**
+  - Visual focus indicators for active terminals (blue ring for focused, gray for unfocused)
+  - Click-to-focus behavior for terminal selection
+  - Focus state management in terminalStore
+  - Terminal disposal system to prevent memory leaks
+  - Disposal callbacks execute when terminals are removed
+  - Smart disposal - terminals not disposed on view switches
 
 ### Fixed
+- **Terminal Focus Indicator**
+  - Fixed focus indicator not showing despite clicks being detected
+  - Issue was caused by terminalStore using sessionId as Map key but dbSessionId for lookups
+  - Updated store to use dbSessionId consistently throughout
+  - Focus indicators now work correctly with immediate visual feedback
 - **Advanced Session Launcher Prompt Handling**
   - Fixed missing `launchingClaude` state variable in TerminalPanel causing React errors
   - Restored proper command syntax for Claude CLI with initial prompts: `claude "prompt here"`
