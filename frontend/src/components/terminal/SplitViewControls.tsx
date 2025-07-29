@@ -8,22 +8,22 @@ import {
   Monitor
 } from 'lucide-react';
 import { useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
+import { useTaskTerminals } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 
 interface SplitViewControlsProps {
   taskId: string;
-  terminals: TerminalSession[];
   activeTabId: string;
   onTerminalSelect?: (dbSessionId: string) => void;
 }
 
 export function SplitViewControls({
   taskId,
-  terminals,
   activeTabId,
   onTerminalSelect
 }: SplitViewControlsProps) {
   const layout = useSplitLayout(taskId);
+  const terminals = useTaskTerminals(taskId);
   const { toggleSplitMode, updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);

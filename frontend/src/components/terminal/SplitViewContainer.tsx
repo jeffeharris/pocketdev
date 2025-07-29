@@ -1,13 +1,13 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { useSplitViewStore, useSplitLayout, persistLayout } from '../../stores/splitViewStore';
+import { useTaskTerminals } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 import type { Task } from '../../types/task';
 
 interface SplitViewContainerProps {
   taskId: string;
   projectId?: string;
-  terminals: TerminalSession[];
   worktreePath: string;
   isVisible: boolean;
   onSessionStatus: (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => void;
@@ -17,7 +17,6 @@ interface SplitViewContainerProps {
 export function SplitViewContainer({
   taskId,
   projectId,
-  terminals,
   worktreePath,
   isVisible,
   onSessionStatus,
@@ -25,6 +24,7 @@ export function SplitViewContainer({
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
+  const terminals = useTaskTerminals(taskId);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<DirectTerminalHandle>(null);

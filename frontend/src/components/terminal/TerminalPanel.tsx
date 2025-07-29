@@ -579,7 +579,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       {splitViewEnabled && (
         <SplitViewControls
           taskId={task.id}
-          terminals={terminals}
           activeTabId={activeTabId}
           onTerminalSelect={handleTabSelect}
         />
@@ -591,7 +590,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}
-            terminals={terminals}
             worktreePath={task.worktree_path}
             isVisible={isVisible}
             onSessionStatus={handleSessionStatus}
