@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useSplitViewStore } from '../stores/splitViewStore';
+import { handleTerminalWebSocketEvent } from '../stores/terminalStore';
 
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -70,6 +71,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             if (data.data?.splitLayout) {
               updateLayout(data.taskId, data.data.splitLayout);
             }
+          }
+          
+          // Handle terminal-related events
+          const terminalEvents = [
+            'terminal-created',
+            'terminal-updated',
+            'terminal-deleted',
+            'terminal-state-changed',
+            'terminal-renamed',
+            'terminals-reordered'
+          ];
+          
+          if (terminalEvents.includes(data.type) && data.taskId) {
+            handleTerminalWebSocketEvent(data.type, data);
           }
           
           // Route message to appropriate handlers

@@ -8,6 +8,7 @@ import type { Task, CreateTaskDTO } from '../../types/task';
 import type { Project } from '../../types/project';
 import { api } from '../../services/api';
 import { useWebSocketContext } from '../../contexts/WebSocketContext';
+import { useTerminalStore } from '../../stores/terminalStore';
 
 interface TaskWorkspaceProps {
   projectId: string;
@@ -109,6 +110,12 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             task.id === taskId ? { ...task, terminals: taskDetails.terminals } : task
           )
         );
+        
+        // Also update the terminal store
+        if (taskDetails.terminals) {
+          const { setTerminals } = useTerminalStore.getState();
+          setTerminals(taskId, taskDetails.terminals);
+        }
       } catch (error) {
         console.error('Failed to load task details:', error);
       }
@@ -312,6 +319,12 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                             t.id === task.id ? { ...t, terminals: taskDetails.terminals } : t
                           )
                         );
+                        
+                        // Also update the terminal store
+                        if (taskDetails.terminals) {
+                          const { setTerminals } = useTerminalStore.getState();
+                          setTerminals(task.id, taskDetails.terminals);
+                        }
                       });
                     }
                   }}

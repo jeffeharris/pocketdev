@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
 import { SplitViewControls } from './SplitViewControls';
 import { loadLayout, persistLayout } from '../../stores/splitViewStore';
+import { useTerminalStore, useTaskTerminals, useActiveTerminalId } from '../../stores/terminalStore';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -62,37 +63,51 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   }, [task.id, task.project_id, splitViewEnabled]);
 
+  // Get terminals from the store
+  const terminals = useTaskTerminals(task.id);
+  const activeTerminalId = useActiveTerminalId(task.id);
+  const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal } = useTerminalStore();
+  
+  // Initialize terminals from task prop on mount or when task changes
+  useEffect(() => {
+    if (task.terminals && task.terminals.length > 0) {
+      setTerminals(task.id, task.terminals);
+    }
+  }, [task.id, task.terminals, setTerminals]);
+  
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
-    if (task.terminals?.length > 0) {
+    if (terminals.length > 0) {
       const savedId = localStorage.getItem(`activeTab-${task.id}`);
-      const validTab = task.terminals.find(t => t.dbSessionId === savedId);
+      const validTab = terminals.find(t => t.dbSessionId === savedId);
       
-      if (!validTab && task.terminals[0]) {
-        setActiveTabId(task.terminals[0].dbSessionId);
+      if (!validTab && terminals[0]) {
+        setActiveTabId(terminals[0].dbSessionId);
       }
     }
-  }, [task.id, task.terminals]);
+  }, [task.id, terminals]);
 
   // Check for focus tab request
   useEffect(() => {
     const focusTabKey = `focus-tab-${task.id}`;
     const focusTabId = sessionStorage.getItem(focusTabKey);
     
-    if (focusTabId && task.terminals) {
-      const tabToFocus = task.terminals.find(t => t.dbSessionId === focusTabId);
+    if (focusTabId && terminals.length > 0) {
+      const tabToFocus = terminals.find(t => t.dbSessionId === focusTabId);
       if (tabToFocus) {
         setActiveTabId(focusTabId);
+        setActiveTerminal(task.id, focusTabId);
         localStorage.setItem(`activeTab-${task.id}`, focusTabId);
         // Clean up after using
         sessionStorage.removeItem(focusTabKey);
       }
     }
-  }, [task.id, task.terminals]);
+  }, [task.id, terminals, setActiveTerminal]);
 
   // Save when active tab changes
   const handleTabSelect = (tabId: string) => {
     setActiveTabId(tabId);
+    setActiveTerminal(task.id, tabId);
     localStorage.setItem(`activeTab-${task.id}`, tabId);
     // Focus the terminal after switching
     setTimeout(() => {
@@ -110,12 +125,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     },
     switchToTab: (dbSessionId: string) => {
       // Check if the tab exists
-      const tab = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+      const tab = terminals.find(t => t.dbSessionId === dbSessionId);
       if (tab) {
         handleTabSelect(dbSessionId);
       }
     }
-  }), [activeTabId, task.terminals, handleTabSelect]);
+  }), [activeTabId, terminals, handleTabSelect]);
   
   const handleResetSession = async () => {
     setIsResetting(true);
@@ -303,6 +318,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Handle tab rename
   const handleTabRename = async (dbSessionId: string, newName: string) => {
     try {
+      // Find the terminal
+      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+      if (!terminal) return;
+      
+      // Optimistically update the store
+      updateTerminal(task.id, terminal.sessionId, { tabName: newName });
+      
       // Update via API
       await api.updateTerminalTab(dbSessionId, {
         tabName: newName
@@ -314,6 +336,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       }
     } catch (error) {
       console.error('[TerminalPanel] Failed to rename tab:', error);
+      // Revert on error
+      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+      if (terminal) {
+        const currentName = tabs.find(t => t.id === dbSessionId)?.name || 'Tab';
+        updateTerminal(task.id, terminal.sessionId, { tabName: currentName });
+      }
       showNotification('error', 'Failed to rename tab');
     }
   };
@@ -438,7 +466,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
-    const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
     
@@ -465,7 +493,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   };
 
   // Convert terminals to Tab format for TerminalTabs component
-  const tabs: Tab[] = (task.terminals || []).map(t => {
+  const tabs: Tab[] = terminals.map(t => {
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
     
     // Use real-time AI state if available, otherwise fall back to initial state
@@ -551,7 +579,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       {splitViewEnabled && (
         <SplitViewControls
           taskId={task.id}
-          terminals={task.terminals || []}
+          terminals={terminals}
           activeTabId={activeTabId}
           onTerminalSelect={handleTabSelect}
         />
@@ -563,7 +591,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}
-            terminals={task.terminals || []}
+            terminals={terminals}
             worktreePath={task.worktree_path}
             isVisible={isVisible}
             onSessionStatus={handleSessionStatus}
@@ -572,7 +600,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         ) : (
           // Original single terminal view
           (() => {
-            const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
+            const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
             if (!activeTerminal) return null;
             
             return (
