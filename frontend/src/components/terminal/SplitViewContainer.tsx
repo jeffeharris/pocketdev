@@ -74,6 +74,12 @@ export function SplitViewContainer({
     setResizing(true);
   }, [setResizing]);
 
+  // Handle double-click to reset to 50/50
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setSplitRatio(taskId, 0.5);
+  }, [taskId, setSplitRatio]);
+
   useEffect(() => {
     if (!isDragging) return;
 
@@ -180,6 +186,8 @@ export function SplitViewContainer({
           relative group
         `}
         onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        title="Drag to resize, double-click to reset to 50/50"
       >
         {/* Hover indicator */}
         <div className={`

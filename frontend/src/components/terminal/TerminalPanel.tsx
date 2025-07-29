@@ -12,6 +12,7 @@ import { SplitViewContainer } from './SplitViewContainer';
 import { SplitViewControls } from './SplitViewControls';
 import { loadLayout, persistLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
+import { useShortcutContext } from '../../hooks/keyboard';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -68,6 +69,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const activeTerminalId = useActiveTerminalId(task.id);
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal, setFocusedTerminal } = useTerminalStore();
+  
+  // Activate terminal keyboard context
+  useShortcutContext('terminal');
   
   // Initialize terminals from task prop on mount or when task changes
   useEffect(() => {
