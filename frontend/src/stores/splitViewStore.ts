@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { shallow } from 'zustand/shallow';
 import { enableMapSet } from 'immer';
 
 // Enable Map/Set support in Immer
@@ -133,8 +132,7 @@ export const splitViewStore = useSplitViewStore.getState;
 // 2025 Pattern: Selective subscriptions
 export const useSplitLayout = (taskId: string) => {
   return useSplitViewStore(
-    state => state.getLayout(taskId),
-    shallow
+    state => state.getLayout(taskId)
   );
 };
 
