@@ -4,6 +4,22 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Added
+- **Split Views Feature (Phase 1)**
+  - View 2 terminal sessions side-by-side within a single task
+  - Toggle between traditional tab view and split view modes
+  - Horizontal and vertical split orientations
+  - Draggable resizer to adjust pane sizes (10%-90% range)
+  - Terminal selector dropdowns to choose which terminals to display
+  - Swap terminals button for quick pane switching
+  - Layout persistence - split configurations save to backend
+  - Real-time sync - layout changes broadcast via WebSocket
+  - Mobile responsive - automatically disables on screens <768px
+  - Feature flag support via `VITE_FEATURE_SPLIT_VIEW` environment variable
+  - Backend API endpoints for split layout CRUD operations
+  - Zustand state management following latest best practices
+  - Components: SplitViewContainer, SplitViewControls, splitViewStore
+
 ### Changed
 - **Code Cleanup**
   - Removed debug console.log statements from production components

@@ -144,14 +144,26 @@ simple/server/
 - Native fullscreen API support for terminal viewing
 - Optimized for iPhone and other mobile browsers
 
-### Multi-Terminal Tabs (NEW)
+### Multi-Terminal Tabs
 - Create up to 6 concurrent terminal sessions per task
 - Each tab runs an independent AI session with its own context
 - Real-time AI state indicators (idle, working, waiting)
 - Auto-launch Claude in new tabs with configurable delay
-- Tab persistence across page reloads (Note: Currently broken, fix pending)
-- WebSocket-based command execution via Shelltender v0.6.1
+- Tab persistence across page reloads
+- WebSocket-based command execution via Shelltender v0.6.2
 - Individual session tracking and analytics per tab
+
+### Split Views (NEW)
+- View 2 terminal sessions side-by-side within a single task
+- Toggle between traditional tab view and new split view mode
+- Horizontal and vertical split orientations
+- Draggable resizer to adjust pane sizes (10%-90% range)
+- Terminal selector dropdowns to choose which terminals to display
+- Swap terminals button for quick pane switching
+- Layout persistence - split configurations save to database
+- Real-time sync - layout changes broadcast to all connected clients
+- Mobile responsive - automatically disables on screens <768px
+- Enable via `VITE_FEATURE_SPLIT_VIEW=true` environment variable
 
 ### File Attachments
 - Upload files directly to task workspaces
@@ -176,6 +188,8 @@ simple/server/
 - `GET /api/projects/:projectId/tasks/:taskId` - Get task details
 - `POST /api/projects/:projectId/tasks/:taskId/git` - Git operations
 - `DELETE /api/projects/:projectId/tasks/:taskId` - Delete task
+- `GET /api/projects/:projectId/tasks/:taskId/split-layout` - Get split view layout
+- `PUT /api/projects/:projectId/tasks/:taskId/split-layout` - Update split view layout
 
 ### Settings & Monitoring
 - `GET /api/settings` - Get settings
