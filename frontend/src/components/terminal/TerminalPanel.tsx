@@ -388,14 +388,16 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
       if (!terminalToClose) return;
       
-      // If closing the active tab, switch to another tab
+      // Store next tab id if we need to switch
+      let nextTabId: string | null = null;
+      
+      // If closing the active tab, determine which tab to switch to
       if (dbSessionId === activeTabId) {
         const remainingTabs = task.terminals?.filter(t => t.dbSessionId !== dbSessionId) || [];
         if (remainingTabs.length > 0) {
-          // Switch to the first remaining tab
+          // Find the next tab
           const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          setActiveTabId(nextTab.dbSessionId);
-          localStorage.setItem(`activeTab-${task.id}`, nextTab.dbSessionId);
+          nextTabId = nextTab.dbSessionId;
         }
       }
       
@@ -404,10 +406,17 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       // Reload task to get updated terminals list
       if (task.onReload) {
-        task.onReload();
+        await task.onReload();
       }
       
-      showNotification('success', `Closed terminal "${terminalToClose.tabName}"`);
+      // Now trigger tab selection after reload completes
+      if (nextTabId) {
+        // Use handleTabSelect to trigger the same flow as clicking a tab
+        handleTabSelect(nextTabId);
+      }
+      
+      // Skip the success notification to avoid terminal re-render issues
+      // The tab closing is already visually apparent to the user
     } catch (error) {
       console.error('[TerminalPanel] Failed to close tab:', error);
       showNotification('error', 'Failed to close tab');
@@ -527,24 +536,30 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
       {/* Terminal Content - Show only active terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {(task.terminals || []).map(terminal => (
-          <DirectTerminal
-            key={terminal.dbSessionId}
-            ref={(el) => {
-              if (el) {
-                terminalRefs.current.set(terminal.dbSessionId, el);
-              } else {
-                terminalRefs.current.delete(terminal.dbSessionId);
-              }
-            }}
-            taskId={task.id}
-            dbSessionId={terminal.dbSessionId}
-            shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
-            worktreePath={task.worktree_path}
-            isVisible={isVisible && terminal.dbSessionId === activeTabId}
-            onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
-          />
-        ))}
+        {(() => {
+          // Only render the active terminal to avoid conflicts
+          const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
+          if (!activeTerminal) return null;
+          
+          return (
+            <DirectTerminal
+              key={activeTerminal.dbSessionId}
+              ref={(el) => {
+                if (el) {
+                  terminalRefs.current.set(activeTerminal.dbSessionId, el);
+                } else {
+                  terminalRefs.current.delete(activeTerminal.dbSessionId);
+                }
+              }}
+              taskId={task.id}
+              dbSessionId={activeTerminal.dbSessionId}
+              shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
+              worktreePath={task.worktree_path}
+              isVisible={isVisible}
+              onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
+            />
+          );
+        })()}
       </div>
 
       {/* Session Launcher Modal */}

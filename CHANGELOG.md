@@ -48,6 +48,12 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Added debug tools for troubleshooting WebSocket communication:
     - `/test/terminal-buffer` - Terminal buffer test page with debug logging
     - `/test/terminal-raw` - Raw WebSocket test bypassing Shelltender client
+- **Terminal Buffer Clearing on Tab Close**
+  - Fixed issue where terminals would go blank when closing a tab
+  - Changed from rendering all terminals with CSS visibility to only rendering the active terminal
+  - This eliminates WebSocket message conflicts and xterm.js visibility issues
+  - Removed success toast notification on tab close to prevent terminal re-render
+  - Tab switching now properly triggers terminal refresh after closing a tab
 - **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
   - Fixed TaskStatus not updating based on console activity detection
   - Replaced removed `ShelltenderMonitorAdapter` with new `ShelltenderSessionMonitor`

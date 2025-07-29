@@ -71,11 +71,6 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({
     focus: () => {
-      // Only focus if the terminal is visible
-      if (!isVisible) {
-        return;
-      }
-      
       if (terminalRef.current?.focus) {
         terminalRef.current.focus();
       } else {
@@ -97,16 +92,16 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         window.dispatchEvent(new Event('resize'));
       }
     }
-  }), [isVisible, dbSessionId]); // Include isVisible to update focus behavior
+  }), [dbSessionId]);
 
 
-  // Auto-fit when becoming visible and manage focus
+  // Auto-fit and focus when terminal is ready
   useEffect(() => {
-    if (isVisible && terminalRef.current) {
+    if (terminalRef.current) {
       // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         terminalRef.current?.fit();
-        // Auto-focus when becoming visible
+        // Auto-focus
         if (terminalRef.current?.focus) {
           terminalRef.current.focus();
         } else {
@@ -117,14 +112,8 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         }
       }, 50);
       return () => clearTimeout(timer);
-    } else if (!isVisible) {
-      // Blur the terminal when it becomes hidden
-      const xtermTextarea = containerRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
-      if (xtermTextarea && document.activeElement === xtermTextarea) {
-        xtermTextarea.blur();
-      }
     }
-  }, [isVisible, taskId]);
+  }, [taskId, dbSessionId]);
   
 
   // Don't render terminal until WebSocket is connected
@@ -134,9 +123,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         ref={containerRef} 
         className={`w-full h-full overflow-hidden ${className}`} 
         style={{ 
-          visibility: isVisible ? 'visible' : 'hidden',
           height: '100%',
-          position: isVisible ? 'relative' : 'absolute',
           width: '100%'
         }}
       >
@@ -152,9 +139,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       ref={containerRef} 
       className={`w-full h-full overflow-hidden ${className}`} 
       style={{ 
-        visibility: isVisible ? 'visible' : 'hidden',
         height: '100%',
-        position: isVisible ? 'relative' : 'absolute',
         width: '100%'
       }}
     >
