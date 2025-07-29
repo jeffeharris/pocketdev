@@ -8,7 +8,8 @@ This document explains key technology decisions and patterns for the PocketDev c
 
 **Date**: 2025-07-29  
 **Status**: Approved  
-**Context**: Split views feature requires sophisticated state management beyond prop drilling
+**Context**: Split views feature requires sophisticated state management beyond prop drilling  
+**Version**: Using Zustand v4.5+ (2025)
 
 ### Why Zustand?
 
@@ -18,29 +19,37 @@ This document explains key technology decisions and patterns for the PocketDev c
 4. **No Providers** - Cleaner component tree
 5. **DevTools Support** - Redux DevTools compatible
 6. **Simple Learning Curve** - Team can adopt quickly
+7. **SSR/SSG Ready** - Works seamlessly with Next.js App Router
+8. **Performance** - Fine-grained reactivity, only re-renders changed components
 
-### Comparison
+### Comparison (2025 Update)
 
-| Feature | Zustand | Redux Toolkit | Context API | MobX |
-|---------|---------|---------------|-------------|------|
-| Bundle Size | 8KB | 40KB+ | 0KB | 50KB+ |
-| Boilerplate | Minimal | Moderate | Minimal | Moderate |
-| TypeScript | Excellent | Good | Basic | Good |
-| Learning Curve | Easy | Moderate | Easy | Steep |
-| Performance | Excellent | Good | Poor* | Excellent |
+| Feature | Zustand | Redux Toolkit | Context API | MobX | Jotai |
+|---------|---------|---------------|-------------|------|-------|
+| Bundle Size | 8KB | 40KB+ | 0KB | 50KB+ | 13KB |
+| Boilerplate | Minimal | Moderate | Minimal | Moderate | Minimal |
+| TypeScript | Excellent | Good | Basic | Good | Excellent |
+| Learning Curve | Easy | Moderate | Easy | Steep | Moderate |
+| Performance | Excellent | Good | Poor* | Excellent | Excellent |
+| SSR Support | Excellent | Good | Limited | Good | Excellent |
+| React 19 Ready | Yes | Yes | Yes | Yes | Yes |
 
 *Context API causes unnecessary re-renders without careful optimization
 
-### Implementation Pattern
+### Implementation Pattern (2025 Best Practices)
 
 ```typescript
 // stores/terminalStore.ts
+import { create } from 'zustand';
+import { devtools, subscribeWithSelector } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+
 interface TerminalStore {
   // State
   sessions: Map<string, TerminalSession>;
   activeTerminals: Map<string, string[]>; // taskId -> sessionIds
   
-  // Computed
+  // Computed (using get() for derived state)
   getTaskSessions: (taskId: string) => TerminalSession[];
   getActiveSession: (taskId: string) => TerminalSession | null;
   
@@ -49,25 +58,52 @@ interface TerminalStore {
   setActiveTerminal: (taskId: string, sessionId: string) => void;
 }
 
-export const useTerminalStore = create<TerminalStore>((set, get) => ({
-  sessions: new Map(),
-  activeTerminals: new Map(),
-  
-  getTaskSessions: (taskId) => {
-    return Array.from(get().sessions.values())
-      .filter(session => session.taskId === taskId);
-  },
-  
-  updateSession: (sessionId, updates) => {
-    set(state => {
-      const session = state.sessions.get(sessionId);
-      if (session) {
-        state.sessions.set(sessionId, { ...session, ...updates });
-      }
-      return { sessions: new Map(state.sessions) };
-    });
-  }
-}));
+// 2025 Pattern: Combine middleware for better DX
+export const useTerminalStore = create<TerminalStore>()(
+  devtools(
+    subscribeWithSelector(
+      immer((set, get) => ({
+        sessions: new Map(),
+        activeTerminals: new Map(),
+        
+        // Computed values use get() - no memoization needed
+        getTaskSessions: (taskId) => {
+          return Array.from(get().sessions.values())
+            .filter(session => session.taskId === taskId);
+        },
+        
+        // Immer allows direct mutation
+        updateSession: (sessionId, updates) => {
+          set(state => {
+            const session = state.sessions.get(sessionId);
+            if (session) {
+              Object.assign(session, updates);
+            }
+          });
+        },
+        
+        setActiveTerminal: (taskId, sessionId) => {
+          set(state => {
+            state.activeTerminals.set(taskId, [sessionId]);
+          });
+        }
+      }))
+    ),
+    { name: 'terminal-store' } // DevTools name
+  )
+);
+
+// 2025 Pattern: Non-reactive access for effects
+export const terminalStore = useTerminalStore.getState;
+
+// 2025 Pattern: Selective subscriptions
+export const useActiveTerminal = (taskId: string) => {
+  return useTerminalStore(
+    state => state.activeTerminals.get(taskId)?.[0],
+    // Shallow equality prevents unnecessary re-renders
+    (a, b) => a === b
+  );
+};
 ```
 
 ## Planned Zustand Use Cases
@@ -204,6 +240,58 @@ describe('TerminalStore', () => {
 });
 ```
 
+## 2025 Zustand Updates & Patterns
+
+### Latest Best Practices
+
+#### 1. Middleware Composition
+```typescript
+// Recommended middleware stack for production apps
+const store = create()(
+  devtools(
+    persist(
+      subscribeWithSelector(
+        immer(storeDefinition)
+      ),
+      { name: 'app-storage' }
+    )
+  )
+);
+```
+
+#### 2. React Server Components Compatibility
+```typescript
+// ⚠️ NEVER use Zustand in Server Components
+// ✅ Client Components only
+'use client';
+
+export function TerminalView() {
+  const sessions = useTerminalStore(state => state.sessions);
+  // ...
+}
+```
+
+#### 3. Performance Patterns
+```typescript
+// 2025: Use selectors for granular updates
+const terminalCount = useTerminalStore(
+  state => state.sessions.size,
+  shallow // Prevent re-renders on reference changes
+);
+
+// 2025: Transient updates (no re-render)
+useTerminalStore.setState({ temp: value }, false, 'transient-update');
+```
+
+#### 4. TypeScript Enhancements
+```typescript
+// 2025: Better inference with const assertions
+const useStore = create<State & Actions>()((set) => ({
+  count: 0,
+  inc: () => set((state) => ({ count: state.count + 1 })),
+} as const));
+```
+
 ## Anti-Patterns to Avoid
 
 ### 1. ❌ Storing Derived State
@@ -262,10 +350,12 @@ set(state => ({
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2025-07-29 | Adopt Zustand | Split views need better state management than prop drilling |
+| 2025-07-29 | Adopt Zustand v4.5+ | Split views need better state management; 2025 best choice for medium-large apps |
+| 2025-07-29 | Use Immer middleware | Simplifies nested state updates, 2025 standard practice |
 | 2025-07-29 | Stores per domain | Easier to maintain than monolithic store |
 | 2025-07-29 | No Redux | Too much boilerplate for our needs |
 | 2025-07-29 | No MobX | Team unfamiliar, steeper learning curve |
+| 2025-07-29 | No Jotai | Zustand better for our use case (not atom-based) |
 
 ## Future Considerations
 

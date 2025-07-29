@@ -103,6 +103,24 @@ async function initializeDatabase() {
   } catch (error) {
     console.error('Multi-terminal sessions migration check failed:', error);
   }
+
+  // Check if split view layouts migration needs to run
+  try {
+    const needsSplitViewMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
+       WHERE name='split_layout'`
+    );
+    
+    if (needsSplitViewMigration.count === 0) {
+      console.log('Running split view layouts migration...');
+      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/004_split_view_layouts.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Split view layouts migration completed');
+    }
+  } catch (error) {
+    console.error('Split view layouts migration check failed:', error);
+  }
   
   // Store models in app locals for access in routes
   app.locals.models = models;

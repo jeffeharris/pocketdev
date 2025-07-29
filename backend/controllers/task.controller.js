@@ -383,6 +383,97 @@ export class TaskController {
   }
 
   /**
+   * Get split layout configuration for a task
+   */
+  async getSplitLayout(req, res) {
+    const { projectId, taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Verify task belongs to project
+      if (task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found in this project' });
+      }
+      
+      // Return split layout or default configuration
+      const defaultLayout = {
+        mode: 'tab',
+        orientation: 'horizontal',
+        primaryTerminalId: null,
+        secondaryTerminalId: null,
+        splitRatio: 0.5
+      };
+      
+      res.json(task.split_layout || defaultLayout);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Update split layout configuration for a task
+   */
+  async updateSplitLayout(req, res) {
+    const { projectId, taskId } = req.params;
+    const splitLayout = req.body;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Verify task belongs to project
+      if (task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found in this project' });
+      }
+      
+      // Validate split layout structure
+      const validModes = ['tab', 'split'];
+      const validOrientations = ['horizontal', 'vertical'];
+      
+      if (splitLayout.mode && !validModes.includes(splitLayout.mode)) {
+        return res.status(400).json({ error: 'Invalid mode. Must be "tab" or "split"' });
+      }
+      
+      if (splitLayout.orientation && !validOrientations.includes(splitLayout.orientation)) {
+        return res.status(400).json({ error: 'Invalid orientation. Must be "horizontal" or "vertical"' });
+      }
+      
+      if (splitLayout.splitRatio !== undefined) {
+        const ratio = parseFloat(splitLayout.splitRatio);
+        if (isNaN(ratio) || ratio < 0.1 || ratio > 0.9) {
+          return res.status(400).json({ error: 'Invalid splitRatio. Must be between 0.1 and 0.9' });
+        }
+        splitLayout.splitRatio = ratio;
+      }
+      
+      // Update the task with new split layout
+      const updatedTask = await this.models.tasks.update(taskId, {
+        split_layout: splitLayout
+      });
+      
+      // Broadcast layout change via WebSocket
+      if (req.app.locals.wsEventService) {
+        req.app.locals.wsEventService.broadcastToTask(taskId, {
+          type: 'split-layout-changed',
+          data: {
+            splitLayout: splitLayout
+          }
+        });
+      }
+      
+      res.json(splitLayout);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Check if task can be safely deleted
    */
   async checkDelete(req, res) {
@@ -747,8 +838,8 @@ Original task: ${task.name}`;
         await this.triggerStatusUpdate(taskId, req);
         
         // Send task state change via WebSocket
-        if (req.app.locals.websocketService) {
-          req.app.locals.websocketService.sendTaskStateChange(taskId, 'merged');
+        if (req.app.locals.wsEventService) {
+          req.app.locals.wsEventService.sendTaskStateChange(taskId, 'merged');
         }
         
         res.json({

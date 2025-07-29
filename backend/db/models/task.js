@@ -66,6 +66,14 @@ class TaskModel {
       }
     }
 
+    if (task && task.split_layout) {
+      try {
+        task.split_layout = JSON.parse(task.split_layout);
+      } catch (e) {
+        task.split_layout = null;
+      }
+    }
+
     return task;
   }
 
@@ -91,6 +99,13 @@ class TaskModel {
           t.metadata = JSON.parse(t.metadata);
         } catch (e) {
           t.metadata = {};
+        }
+      }
+      if (t.split_layout) {
+        try {
+          t.split_layout = JSON.parse(t.split_layout);
+        } catch (e) {
+          t.split_layout = null;
         }
       }
       return t;
@@ -141,6 +156,13 @@ class TaskModel {
           t.metadata = JSON.parse(t.metadata);
         } catch (e) {
           t.metadata = {};
+        }
+      }
+      if (t.split_layout) {
+        try {
+          t.split_layout = JSON.parse(t.split_layout);
+        } catch (e) {
+          t.split_layout = null;
         }
       }
       
@@ -264,6 +286,10 @@ class TaskModel {
     if (data.metadata !== undefined) {
       updates.push('metadata = ?');
       values.push(typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata));
+    }
+    if (data.split_layout !== undefined) {
+      updates.push('split_layout = ?');
+      values.push(typeof data.split_layout === 'string' ? data.split_layout : JSON.stringify(data.split_layout));
     }
     
     if (updates.length > 0) {
