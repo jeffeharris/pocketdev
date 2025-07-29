@@ -616,7 +616,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                 shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
                 worktreePath={task.worktree_path}
                 isVisible={isVisible}
+                hasFocus={focusedTerminalId === activeTerminal.dbSessionId}
                 onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
+                onFocusRequest={() => setFocusedTerminal(task.id, activeTerminal.dbSessionId)}
               />
             );
           })()

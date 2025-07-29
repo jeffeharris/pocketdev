@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { useSplitViewStore, useSplitLayout, persistLayout } from '../../stores/splitViewStore';
-import { useTaskTerminals } from '../../stores/terminalStore';
+import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 import type { Task } from '../../types/task';
 
@@ -25,6 +25,8 @@ export function SplitViewContainer({
   const layout = useSplitLayout(taskId);
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
+  const focusedTerminalId = useFocusedTerminalId(taskId);
+  const { setFocusedTerminal } = useTerminalStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<DirectTerminalHandle>(null);
@@ -125,7 +127,9 @@ export function SplitViewContainer({
           shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
           worktreePath={worktreePath}
           isVisible={isVisible}
+          hasFocus={focusedTerminalId === activeTerminal.dbSessionId}
           onSessionStatus={(status) => onSessionStatus(activeTerminal.dbSessionId, status)}
+          onFocusRequest={() => setFocusedTerminal(taskId, activeTerminal.dbSessionId)}
         />
       </div>
     );
@@ -159,7 +163,9 @@ export function SplitViewContainer({
             shelltenderSessionId={primaryTerminal.shelltenderSessionId || primaryTerminal.sessionId}
             worktreePath={worktreePath}
             isVisible={isVisible}
+            hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
             onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
           />
         )}
       </div>
@@ -200,7 +206,9 @@ export function SplitViewContainer({
             shelltenderSessionId={secondaryTerminal.shelltenderSessionId || secondaryTerminal.sessionId}
             worktreePath={worktreePath}
             isVisible={isVisible}
+            hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
             onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
           />
         )}
       </div>

@@ -15,13 +15,16 @@ export interface Terminal {
   isActive?: boolean;
   createdAt?: string;
   lastActivity?: string;
+  hasFocus?: boolean;
 }
 
 interface TerminalStoreState {
   // State - nested Map for efficient lookups by taskId and terminalId
   terminals: Map<string, Map<string, Terminal>>; // taskId -> sessionId -> Terminal
   activeTerminals: Map<string, string>; // taskId -> activeSessionId
+  focusedTerminals: Map<string, string>; // taskId -> focusedSessionId
   loadingStates: Map<string, boolean>; // taskId -> isLoading
+  disposalCallbacks: Map<string, () => void>; // sessionId -> disposal callback
   
   // Actions
   setTerminals: (taskId: string, terminals: Terminal[]) => void;
@@ -29,8 +32,11 @@ interface TerminalStoreState {
   updateTerminal: (taskId: string, sessionId: string, updates: Partial<Terminal>) => void;
   removeTerminal: (taskId: string, sessionId: string) => void;
   setActiveTerminal: (taskId: string, sessionId: string) => void;
+  setFocusedTerminal: (taskId: string, sessionId: string) => void;
   clearTaskTerminals: (taskId: string) => void;
   setLoading: (taskId: string, loading: boolean) => void;
+  registerDisposal: (sessionId: string, callback: () => void) => void;
+  disposeTerminal: (sessionId: string) => void;
   
   // Bulk updates (for WebSocket events)
   updateTerminalState: (taskId: string, sessionId: string, aiState: Terminal['aiState']) => void;
@@ -42,6 +48,8 @@ interface TerminalStoreState {
   getTerminal: (taskId: string, sessionId: string) => Terminal | undefined;
   getActiveTerminal: (taskId: string) => Terminal | undefined;
   getActiveTerminalId: (taskId: string) => string | undefined;
+  getFocusedTerminal: (taskId: string) => Terminal | undefined;
+  getFocusedTerminalId: (taskId: string) => string | undefined;
   isLoading: (taskId: string) => boolean;
 }
 
@@ -57,7 +65,9 @@ export const useTerminalStore = create<TerminalStoreState>()(
       immer((set, get) => ({
         terminals: new Map(),
         activeTerminals: new Map(),
+        focusedTerminals: new Map(),
         loadingStates: new Map(),
+        disposalCallbacks: new Map(),
         
         setTerminals: (taskId, terminals) => {
           set(state => {
@@ -106,6 +116,13 @@ export const useTerminalStore = create<TerminalStoreState>()(
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
+              // Dispose the terminal
+              const dispose = state.disposalCallbacks.get(sessionId);
+              if (dispose) {
+                dispose();
+                state.disposalCallbacks.delete(sessionId);
+              }
+              
               taskTerminals.delete(sessionId);
               
               // Update active terminal if removed
@@ -116,6 +133,18 @@ export const useTerminalStore = create<TerminalStoreState>()(
                   state.activeTerminals.set(taskId, remaining[0].sessionId);
                 } else {
                   state.activeTerminals.delete(taskId);
+                }
+              }
+              
+              // Update focused terminal if removed
+              const focusedId = state.focusedTerminals.get(taskId);
+              if (focusedId === sessionId) {
+                const remaining = mapToSortedArray(taskTerminals);
+                if (remaining.length > 0) {
+                  state.focusedTerminals.set(taskId, remaining[0].sessionId);
+                  remaining[0].hasFocus = true;
+                } else {
+                  state.focusedTerminals.delete(taskId);
                 }
               }
               
@@ -136,10 +165,41 @@ export const useTerminalStore = create<TerminalStoreState>()(
           });
         },
         
+        setFocusedTerminal: (taskId, sessionId) => {
+          set(state => {
+            const taskTerminals = state.terminals.get(taskId);
+            if (taskTerminals?.has(sessionId)) {
+              // Clear focus from other terminals in this task
+              taskTerminals.forEach(terminal => {
+                terminal.hasFocus = false;
+              });
+              // Set focus on the selected terminal
+              const terminal = taskTerminals.get(sessionId);
+              if (terminal) {
+                terminal.hasFocus = true;
+                state.focusedTerminals.set(taskId, sessionId);
+              }
+            }
+          });
+        },
+        
         clearTaskTerminals: (taskId) => {
           set(state => {
+            // Dispose all terminals for this task
+            const taskTerminals = state.terminals.get(taskId);
+            if (taskTerminals) {
+              taskTerminals.forEach((_, sessionId) => {
+                const dispose = state.disposalCallbacks.get(sessionId);
+                if (dispose) {
+                  dispose();
+                  state.disposalCallbacks.delete(sessionId);
+                }
+              });
+            }
+            
             state.terminals.delete(taskId);
             state.activeTerminals.delete(taskId);
+            state.focusedTerminals.delete(taskId);
             state.loadingStates.delete(taskId);
           });
         },
@@ -210,8 +270,36 @@ export const useTerminalStore = create<TerminalStoreState>()(
           return get().activeTerminals.get(taskId);
         },
         
+        getFocusedTerminal: (taskId) => {
+          const focusedId = get().focusedTerminals.get(taskId);
+          if (focusedId) {
+            return get().terminals.get(taskId)?.get(focusedId);
+          }
+          return undefined;
+        },
+        
+        getFocusedTerminalId: (taskId) => {
+          return get().focusedTerminals.get(taskId);
+        },
+        
         isLoading: (taskId) => {
           return get().loadingStates.get(taskId) || false;
+        },
+        
+        registerDisposal: (sessionId, callback) => {
+          set(state => {
+            state.disposalCallbacks.set(sessionId, callback);
+          });
+        },
+        
+        disposeTerminal: (sessionId) => {
+          set(state => {
+            const dispose = state.disposalCallbacks.get(sessionId);
+            if (dispose) {
+              dispose();
+              state.disposalCallbacks.delete(sessionId);
+            }
+          });
         }
       }))
     ),
@@ -233,6 +321,14 @@ export const useActiveTerminal = (taskId: string) => {
 
 export const useActiveTerminalId = (taskId: string) => {
   return useTerminalStore(state => state.getActiveTerminalId(taskId));
+};
+
+export const useFocusedTerminal = (taskId: string) => {
+  return useTerminalStore(state => state.getFocusedTerminal(taskId));
+};
+
+export const useFocusedTerminalId = (taskId: string) => {
+  return useTerminalStore(state => state.getFocusedTerminalId(taskId));
 };
 
 export const useTerminalLoading = (taskId: string) => {

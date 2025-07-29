@@ -138,8 +138,7 @@ export const useSplitLayout = (taskId: string) => {
 
 export const useSplitMode = (taskId: string) => {
   return useSplitViewStore(
-    state => state.getLayout(taskId).mode,
-    (a, b) => a === b
+    state => state.getLayout(taskId).mode
   );
 };
 

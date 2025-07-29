@@ -134,14 +134,22 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     );
   }
 
+  // Handle click to focus
+  const handleContainerClick = () => {
+    if (onFocusRequest) {
+      onFocusRequest();
+    }
+  };
+  
   return (
     <div 
       ref={containerRef} 
-      className={`w-full h-full overflow-hidden ${className}`} 
+      className={`w-full h-full overflow-hidden ${className} ${hasFocus ? 'ring-2 ring-blue-500' : 'ring-1 ring-gray-700'}`} 
       style={{ 
         height: '100%',
         width: '100%'
       }}
+      onClick={handleContainerClick}
     >
       <MemoizedTerminal
         terminalRef={terminalRef}
@@ -171,9 +179,11 @@ export const DirectTerminal = memo(DirectTerminalComponent, (prevProps, nextProp
     prevProps.taskId === nextProps.taskId &&
     prevProps.dbSessionId === nextProps.dbSessionId &&
     prevProps.shelltenderSessionId === nextProps.shelltenderSessionId &&
-    prevProps.worktreePath === nextProps.worktreePath
+    prevProps.worktreePath === nextProps.worktreePath &&
+    prevProps.hasFocus === nextProps.hasFocus
     // Don't compare isVisible - we want terminals to stay mounted
     // Don't compare onSessionStatus - it's recreated on every render
+    // Don't compare onFocusRequest - it's recreated on every render
   );
   
   return isEqual;
