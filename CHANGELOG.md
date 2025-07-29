@@ -26,6 +26,19 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Cleaned up TerminalPanel, TaskWorkspace, and API service debug logging
   - Removed WebSocket connection/disconnection logging from hooks and contexts
   - Maintained test pages and prototype components for development use
+- **Terminal State Management**
+  - Refactored to use centralized terminalStore instead of prop drilling
+  - All terminal state now managed through Zustand stores
+  - Improved performance with Map-based lookups
+  - Added focus state tracking and disposal callbacks
+
+### Added (continued)
+- **Comprehensive Testing Infrastructure**
+  - Set up Vitest for both frontend and backend (ESM compatible)
+  - 104 frontend tests for stores and components
+  - Backend API endpoint tests with edge cases
+  - Test utilities and documentation
+  - Coverage reporting and interactive UI
 
 ### Fixed
 - **Advanced Session Launcher Prompt Handling**

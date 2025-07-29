@@ -70,10 +70,40 @@ VITE_FEATURE_SPLIT_VIEW=true
 }
 ```
 
+## Recent Enhancements (Post Day 1)
+
+### Terminal Store Implementation
+- Centralized state management using Zustand
+- Eliminated prop drilling throughout the application
+- Map-based data structures for O(1) lookups
+- Full WebSocket integration for real-time updates
+- Convenience hooks for component integration
+
+### Focus Management (REQ-SV-005, REQ-SV-014)
+- Visual focus indicators: 2px blue ring for focused, 1px gray for unfocused
+- Click-to-focus behavior implemented
+- Focus state tracked in terminalStore
+- Focus persists across tab switches
+- Only focused terminal receives keyboard input
+
+### Terminal Disposal (REQ-SV-026)
+- Disposal callback system prevents memory leaks
+- Automatic cleanup when terminals are removed
+- Smart disposal that doesn't affect view switches
+- Registered callbacks execute on terminal deletion
+
+### Testing Infrastructure
+- Vitest setup for both frontend and backend (ESM compatible)
+- 104 frontend tests (stores and state management)
+- 54 component tests (SplitViewContainer, SplitViewControls)
+- Backend API tests with comprehensive edge cases
+- Test utilities and documentation provided
+
 ## Known Issues/Bugs
 
-1. Initial implementation complete - specific bugs to be documented as discovered
-2. TypeScript build warnings exist but don't prevent functionality
+1. Some requirements still pending (see phase1-completion-plan.md)
+2. TypeScript build warnings resolved
+3. No critical bugs identified in current implementation
 
 ## Performance
 

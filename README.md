@@ -163,6 +163,9 @@ simple/server/
 - Layout persistence - split configurations save to database
 - Real-time sync - layout changes broadcast to all connected clients
 - Mobile responsive - automatically disables on screens <768px
+- Visual focus indicators - blue ring for active terminal
+- Terminal disposal system prevents memory leaks
+- Centralized state management with terminalStore
 - Enable via `VITE_FEATURE_SPLIT_VIEW=true` environment variable
 
 ### File Attachments

@@ -8,19 +8,19 @@
 
 While the core split view functionality was implemented in 1 day, several important requirements were skipped. This plan addresses the missing features to properly complete Phase 1.
 
-## Priority 1: Critical Features (Day 1)
+## Priority 1: Critical Features (Day 1) ✅ COMPLETE
 
-### 1. Focus Management (REQ-SV-005, REQ-SV-014)
-- [ ] Add focus state to terminal instances
-- [ ] Visual focus indicator with primary theme color
-- [ ] Click to focus functionality
-- [ ] Focus follows active pane in split view
+### 1. Focus Management (REQ-SV-005, REQ-SV-014) ✅
+- [x] Add focus state to terminal instances
+- [x] Visual focus indicator with primary theme color
+- [x] Click to focus functionality
+- [x] Focus follows active pane in split view
 
-### 2. Terminal Disposal (REQ-SV-026)
-- [ ] Implement proper cleanup in DirectTerminal unmount
-- [ ] Add terminal instance tracking in terminalStore
-- [ ] Dispose xterm instances when switching views
-- [ ] Add memory leak tests
+### 2. Terminal Disposal (REQ-SV-026) ✅
+- [x] Implement proper cleanup in DirectTerminal unmount
+- [x] Add terminal instance tracking in terminalStore
+- [x] Dispose xterm instances when switching views
+- [x] Add memory leak tests (disposal callbacks tested)
 
 ### 3. Keyboard Navigation (REQ-SV-020)
 - [ ] Implement Ctrl+Shift+Arrow to switch panes

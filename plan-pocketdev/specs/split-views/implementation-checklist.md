@@ -38,19 +38,22 @@
 - [x] Modify TerminalPanel for split view mode
 - [x] Implement terminal reuse (not lazy rendering)
 - [x] Handle terminal lifecycle in splits
+- [x] Terminal disposal system to prevent memory leaks
+- [x] Centralized terminalStore for state management
 - [ ] Add keyboard navigation (Ctrl+Shift+Arrows) - TODO
-- [ ] Implement focus management - TODO
+- [x] Implement focus management - COMPLETE ✅
 
 ### Polish & Responsive ✅
 - [ ] Add split view animations/transitions - TODO
 - [x] Implement mobile responsive auto-disable
-- [ ] Add visual indicators for active terminal - TODO
+- [x] Add visual indicators for active terminal - COMPLETE ✅
 - [x] Implement layout persistence
 - [x] Add basic error handling
 
-### Testing & Documentation 🚧
-- [ ] Write unit tests for store
-- [ ] Write component tests
+### Testing & Documentation ✅
+- [x] Write unit tests for stores (104 tests)
+- [x] Write component tests (54 tests)
+- [x] Backend API tests with edge cases
 - [ ] Integration testing
 - [ ] Performance testing
 - [x] Update implementation documentation
@@ -70,6 +73,25 @@
 - [ ] Memory: <500MB for 2 terminals
 - [ ] Zero errors in console
 - [ ] Feature flag tested (on/off)
+
+## Recent Additions (Post Day 1)
+- [x] Terminal Store Implementation
+  - Centralized state management with Zustand
+  - Eliminated prop drilling throughout components
+  - Map-based efficient lookups
+  - WebSocket event integration
+- [x] Focus Management (REQ-SV-005, REQ-SV-014)
+  - Visual focus indicators (blue/gray rings)
+  - Click-to-focus functionality
+  - Focus state persistence
+- [x] Terminal Disposal (REQ-SV-026)
+  - Automatic cleanup callbacks
+  - Memory leak prevention
+  - Smart disposal on terminal removal
+- [x] Comprehensive Testing
+  - Vitest setup for frontend and backend
+  - 158+ tests across stores, components, and APIs
+  - Test utilities and documentation
 
 ## Post-Implementation
 - [ ] Monitor for 1 week
