@@ -20,32 +20,32 @@ export interface Terminal {
 
 interface TerminalStoreState {
   // State - nested Map for efficient lookups by taskId and terminalId
-  terminals: Map<string, Map<string, Terminal>>; // taskId -> sessionId -> Terminal
-  activeTerminals: Map<string, string>; // taskId -> activeSessionId
-  focusedTerminals: Map<string, string>; // taskId -> focusedSessionId
+  terminals: Map<string, Map<string, Terminal>>; // taskId -> dbSessionId -> Terminal
+  activeTerminals: Map<string, string>; // taskId -> activeDbSessionId
+  focusedTerminals: Map<string, string>; // taskId -> focusedDbSessionId
   loadingStates: Map<string, boolean>; // taskId -> isLoading
-  disposalCallbacks: Map<string, () => void>; // sessionId -> disposal callback
+  disposalCallbacks: Map<string, () => void>; // dbSessionId -> disposal callback
   
   // Actions
   setTerminals: (taskId: string, terminals: Terminal[]) => void;
   addTerminal: (taskId: string, terminal: Terminal) => void;
-  updateTerminal: (taskId: string, sessionId: string, updates: Partial<Terminal>) => void;
-  removeTerminal: (taskId: string, sessionId: string) => void;
-  setActiveTerminal: (taskId: string, sessionId: string) => void;
-  setFocusedTerminal: (taskId: string, sessionId: string) => void;
+  updateTerminal: (taskId: string, dbSessionId: string, updates: Partial<Terminal>) => void;
+  removeTerminal: (taskId: string, dbSessionId: string) => void;
+  setActiveTerminal: (taskId: string, dbSessionId: string) => void;
+  setFocusedTerminal: (taskId: string, dbSessionId: string) => void;
   clearTaskTerminals: (taskId: string) => void;
   setLoading: (taskId: string, loading: boolean) => void;
-  registerDisposal: (sessionId: string, callback: () => void) => void;
-  disposeTerminal: (sessionId: string) => void;
+  registerDisposal: (dbSessionId: string, callback: () => void) => void;
+  disposeTerminal: (dbSessionId: string) => void;
   
   // Bulk updates (for WebSocket events)
-  updateTerminalState: (taskId: string, sessionId: string, aiState: Terminal['aiState']) => void;
-  renameTerminal: (taskId: string, sessionId: string, newName: string) => void;
-  reorderTerminals: (taskId: string, terminals: Array<{ sessionId: string; tabOrder: number }>) => void;
+  updateTerminalState: (taskId: string, dbSessionId: string, aiState: Terminal['aiState']) => void;
+  renameTerminal: (taskId: string, dbSessionId: string, newName: string) => void;
+  reorderTerminals: (taskId: string, terminals: Array<{ dbSessionId: string; tabOrder: number }>) => void;
   
   // Selectors
   getTerminals: (taskId: string) => Terminal[];
-  getTerminal: (taskId: string, sessionId: string) => Terminal | undefined;
+  getTerminal: (taskId: string, dbSessionId: string) => Terminal | undefined;
   getActiveTerminal: (taskId: string) => Terminal | undefined;
   getActiveTerminalId: (taskId: string) => string | undefined;
   getFocusedTerminal: (taskId: string) => Terminal | undefined;
@@ -73,13 +73,14 @@ export const useTerminalStore = create<TerminalStoreState>()(
           set(state => {
             const taskTerminals = new Map<string, Terminal>();
             terminals.forEach(terminal => {
-              taskTerminals.set(terminal.sessionId, terminal);
+              // Use dbSessionId as the key for consistency
+              taskTerminals.set(terminal.dbSessionId, terminal);
             });
             state.terminals.set(taskId, taskTerminals);
             
             // Set first terminal as active if none selected
             if (!state.activeTerminals.has(taskId) && terminals.length > 0) {
-              state.activeTerminals.set(taskId, terminals[0].sessionId);
+              state.activeTerminals.set(taskId, terminals[0].dbSessionId);
             }
           });
         },
@@ -91,46 +92,46 @@ export const useTerminalStore = create<TerminalStoreState>()(
               taskTerminals = new Map();
               state.terminals.set(taskId, taskTerminals);
             }
-            taskTerminals.set(terminal.sessionId, terminal);
+            taskTerminals.set(terminal.dbSessionId, terminal);
             
             // Set as active if it's the first terminal
             if (taskTerminals.size === 1) {
-              state.activeTerminals.set(taskId, terminal.sessionId);
+              state.activeTerminals.set(taskId, terminal.dbSessionId);
             }
           });
         },
         
-        updateTerminal: (taskId, sessionId, updates) => {
+        updateTerminal: (taskId, dbSessionId, updates) => {
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
-              const terminal = taskTerminals.get(sessionId);
+              const terminal = taskTerminals.get(dbSessionId);
               if (terminal) {
-                taskTerminals.set(sessionId, { ...terminal, ...updates });
+                taskTerminals.set(dbSessionId, { ...terminal, ...updates });
               }
             }
           });
         },
         
-        removeTerminal: (taskId, sessionId) => {
+        removeTerminal: (taskId, dbSessionId) => {
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
               // Dispose the terminal
-              const dispose = state.disposalCallbacks.get(sessionId);
+              const dispose = state.disposalCallbacks.get(dbSessionId);
               if (dispose) {
                 dispose();
-                state.disposalCallbacks.delete(sessionId);
+                state.disposalCallbacks.delete(dbSessionId);
               }
               
-              taskTerminals.delete(sessionId);
+              taskTerminals.delete(dbSessionId);
               
               // Update active terminal if removed
               const activeId = state.activeTerminals.get(taskId);
-              if (activeId === sessionId) {
+              if (activeId === dbSessionId) {
                 const remaining = mapToSortedArray(taskTerminals);
                 if (remaining.length > 0) {
-                  state.activeTerminals.set(taskId, remaining[0].sessionId);
+                  state.activeTerminals.set(taskId, remaining[0].dbSessionId);
                 } else {
                   state.activeTerminals.delete(taskId);
                 }
@@ -138,10 +139,10 @@ export const useTerminalStore = create<TerminalStoreState>()(
               
               // Update focused terminal if removed
               const focusedId = state.focusedTerminals.get(taskId);
-              if (focusedId === sessionId) {
+              if (focusedId === dbSessionId) {
                 const remaining = mapToSortedArray(taskTerminals);
                 if (remaining.length > 0) {
-                  state.focusedTerminals.set(taskId, remaining[0].sessionId);
+                  state.focusedTerminals.set(taskId, remaining[0].dbSessionId);
                   remaining[0].hasFocus = true;
                 } else {
                   state.focusedTerminals.delete(taskId);
@@ -156,29 +157,35 @@ export const useTerminalStore = create<TerminalStoreState>()(
           });
         },
         
-        setActiveTerminal: (taskId, sessionId) => {
+        setActiveTerminal: (taskId, dbSessionId) => {
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
-            if (taskTerminals?.has(sessionId)) {
-              state.activeTerminals.set(taskId, sessionId);
+            if (taskTerminals?.has(dbSessionId)) {
+              state.activeTerminals.set(taskId, dbSessionId);
             }
           });
         },
         
-        setFocusedTerminal: (taskId, sessionId) => {
+        setFocusedTerminal: (taskId, dbSessionId) => {
+          console.log('[terminalStore] setFocusedTerminal called:', { taskId, dbSessionId });
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
-            if (taskTerminals?.has(sessionId)) {
+            console.log('[terminalStore] taskTerminals:', taskTerminals);
+            if (taskTerminals?.has(dbSessionId)) {
               // Clear focus from other terminals in this task
               taskTerminals.forEach(terminal => {
                 terminal.hasFocus = false;
               });
               // Set focus on the selected terminal
-              const terminal = taskTerminals.get(sessionId);
+              const terminal = taskTerminals.get(dbSessionId);
+              console.log('[terminalStore] Found terminal:', terminal);
               if (terminal) {
                 terminal.hasFocus = true;
-                state.focusedTerminals.set(taskId, sessionId);
+                state.focusedTerminals.set(taskId, dbSessionId);
+                console.log('[terminalStore] Focus set successfully');
               }
+            } else {
+              console.log('[terminalStore] Terminal not found in task');
             }
           });
         },
@@ -188,11 +195,11 @@ export const useTerminalStore = create<TerminalStoreState>()(
             // Dispose all terminals for this task
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
-              taskTerminals.forEach((_, sessionId) => {
-                const dispose = state.disposalCallbacks.get(sessionId);
+              taskTerminals.forEach((terminal) => {
+                const dispose = state.disposalCallbacks.get(terminal.dbSessionId);
                 if (dispose) {
                   dispose();
-                  state.disposalCallbacks.delete(sessionId);
+                  state.disposalCallbacks.delete(terminal.dbSessionId);
                 }
               });
             }
@@ -210,11 +217,11 @@ export const useTerminalStore = create<TerminalStoreState>()(
           });
         },
         
-        updateTerminalState: (taskId, sessionId, aiState) => {
+        updateTerminalState: (taskId, dbSessionId, aiState) => {
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
-              const terminal = taskTerminals.get(sessionId);
+              const terminal = taskTerminals.get(dbSessionId);
               if (terminal) {
                 terminal.aiState = aiState;
                 terminal.lastActivity = new Date().toISOString();
@@ -223,11 +230,11 @@ export const useTerminalStore = create<TerminalStoreState>()(
           });
         },
         
-        renameTerminal: (taskId, sessionId, newName) => {
+        renameTerminal: (taskId, dbSessionId, newName) => {
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
-              const terminal = taskTerminals.get(sessionId);
+              const terminal = taskTerminals.get(dbSessionId);
               if (terminal) {
                 terminal.tabName = newName;
               }
@@ -239,8 +246,8 @@ export const useTerminalStore = create<TerminalStoreState>()(
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
             if (taskTerminals) {
-              terminals.forEach(({ sessionId, tabOrder }) => {
-                const terminal = taskTerminals.get(sessionId);
+              terminals.forEach(({ dbSessionId, tabOrder }) => {
+                const terminal = taskTerminals.get(dbSessionId);
                 if (terminal) {
                   terminal.tabOrder = tabOrder;
                 }
@@ -254,8 +261,8 @@ export const useTerminalStore = create<TerminalStoreState>()(
           return mapToSortedArray(taskTerminals);
         },
         
-        getTerminal: (taskId, sessionId) => {
-          return get().terminals.get(taskId)?.get(sessionId);
+        getTerminal: (taskId, dbSessionId) => {
+          return get().terminals.get(taskId)?.get(dbSessionId);
         },
         
         getActiveTerminal: (taskId) => {
@@ -286,18 +293,18 @@ export const useTerminalStore = create<TerminalStoreState>()(
           return get().loadingStates.get(taskId) || false;
         },
         
-        registerDisposal: (sessionId, callback) => {
+        registerDisposal: (dbSessionId, callback) => {
           set(state => {
-            state.disposalCallbacks.set(sessionId, callback);
+            state.disposalCallbacks.set(dbSessionId, callback);
           });
         },
         
-        disposeTerminal: (sessionId) => {
+        disposeTerminal: (dbSessionId) => {
           set(state => {
-            const dispose = state.disposalCallbacks.get(sessionId);
+            const dispose = state.disposalCallbacks.get(dbSessionId);
             if (dispose) {
               dispose();
-              state.disposalCallbacks.delete(sessionId);
+              state.disposalCallbacks.delete(dbSessionId);
             }
           });
         }
@@ -345,19 +352,19 @@ export const handleTerminalWebSocketEvent = (event: string, data: any) => {
       break;
       
     case 'terminal-updated':
-      store.updateTerminal(data.taskId, data.sessionId, data.updates);
+      store.updateTerminal(data.taskId, data.dbSessionId, data.updates);
       break;
       
     case 'terminal-deleted':
-      store.removeTerminal(data.taskId, data.sessionId);
+      store.removeTerminal(data.taskId, data.dbSessionId);
       break;
       
     case 'terminal-state-changed':
-      store.updateTerminalState(data.taskId, data.sessionId, data.aiState);
+      store.updateTerminalState(data.taskId, data.dbSessionId, data.aiState);
       break;
       
     case 'terminal-renamed':
-      store.renameTerminal(data.taskId, data.sessionId, data.newName);
+      store.renameTerminal(data.taskId, data.dbSessionId, data.newName);
       break;
       
     case 'terminals-reordered':

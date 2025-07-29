@@ -39,7 +39,9 @@ interface DirectTerminalProps {
   className?: string;
   worktreePath?: string;
   isVisible?: boolean;
+  hasFocus?: boolean;
   onSessionStatus?: (status: 'connected' | 'disconnected' | 'error') => void;
+  onFocusRequest?: () => void;
 }
 
 const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalProps>(({ 
@@ -62,6 +64,11 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   
   // Track if we've already created the terminal to prevent re-creation
   const [terminalCreated, setTerminalCreated] = useState(false);
+
+  // Debug focus state
+  useEffect(() => {
+    console.log('[DirectTerminal] Render:', { dbSessionId, hasFocus });
+  }, [dbSessionId, hasFocus]);
 
   // Update ready state when connected
   useEffect(() => {
@@ -138,23 +145,25 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
 
   // Handle click to focus
   const handleContainerClick = () => {
+    console.log('[DirectTerminal] Click detected, hasFocus:', hasFocus, 'dbSessionId:', dbSessionId, 'onFocusRequest:', !!onFocusRequest);
     if (onFocusRequest) {
       onFocusRequest();
+    } else {
+      console.log('[DirectTerminal] No onFocusRequest handler provided');
     }
   };
   
   return (
     <div 
       ref={containerRef} 
-      className={`relative w-full h-full ${className}`} 
+      className={`relative w-full h-full ${className} ${hasFocus ? 'border-2 border-blue-500' : 'border border-gray-600'}`} 
       style={{ 
         height: '100%',
-        width: '100%'
+        width: '100%',
+        boxSizing: 'border-box'
       }}
       onClick={handleContainerClick}
     >
-      {/* Focus indicator border */}
-      <div className={`absolute inset-0 pointer-events-none ${hasFocus ? 'border-2 border-blue-500' : 'border border-gray-600'}`} />
       <MemoizedTerminal
         terminalRef={terminalRef}
         sessionId={shelltenderSessionId}

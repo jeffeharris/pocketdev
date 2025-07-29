@@ -333,7 +333,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       if (!terminal) return;
       
       // Optimistically update the store
-      updateTerminal(task.id, terminal.sessionId, { tabName: newName });
+      updateTerminal(task.id, terminal.dbSessionId, { tabName: newName });
       
       // Update via API
       await api.updateTerminalTab(dbSessionId, {
@@ -350,7 +350,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
       if (terminal) {
         const currentName = tabs.find(t => t.id === dbSessionId)?.name || 'Tab';
-        updateTerminal(task.id, terminal.sessionId, { tabName: currentName });
+        updateTerminal(task.id, terminal.dbSessionId, { tabName: currentName });
       }
       showNotification('error', 'Failed to rename tab');
     }
@@ -628,7 +628,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                 isVisible={isVisible}
                 hasFocus={focusedTerminalId === activeTerminal.dbSessionId}
                 onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
-                onFocusRequest={() => setFocusedTerminal(task.id, activeTerminal.dbSessionId)}
+                onFocusRequest={() => {
+                  console.log('[TerminalPanel] Setting focus to:', activeTerminal.dbSessionId);
+                  setFocusedTerminal(task.id, activeTerminal.dbSessionId);
+                }}
               />
             );
           })()
