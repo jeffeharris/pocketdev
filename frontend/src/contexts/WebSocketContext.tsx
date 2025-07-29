@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { useSplitViewStore } from '../stores/splitViewStore';
 
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -62,6 +63,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // Handle split layout changes
+          if (data.type === 'split-layout-changed' && data.taskId) {
+            const { updateLayout } = useSplitViewStore.getState();
+            if (data.data?.splitLayout) {
+              updateLayout(data.taskId, data.data.splitLayout);
+            }
+          }
           
           // Route message to appropriate handlers
           if (data.taskId) {

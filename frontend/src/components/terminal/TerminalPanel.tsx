@@ -8,6 +8,9 @@ import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { api } from '../../services/api';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { SplitViewContainer } from './SplitViewContainer';
+import { SplitViewControls } from './SplitViewControls';
+import { loadLayout, persistLayout } from '../../stores/splitViewStore';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -48,6 +51,16 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
+  
+  // Feature flag for split view
+  const splitViewEnabled = import.meta.env.VITE_FEATURE_SPLIT_VIEW === 'true';
+  
+  // Load split layout on mount
+  useEffect(() => {
+    if (splitViewEnabled && task.project_id) {
+      loadLayout(task.id, task.project_id);
+    }
+  }, [task.id, task.project_id, splitViewEnabled]);
 
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
@@ -534,32 +547,54 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         </div>
       </div>
 
-      {/* Terminal Content - Show only active terminal */}
+      {/* Split View Controls */}
+      {splitViewEnabled && (
+        <SplitViewControls
+          taskId={task.id}
+          terminals={task.terminals || []}
+          activeTabId={activeTabId}
+          onTerminalSelect={handleTabSelect}
+        />
+      )}
+
+      {/* Terminal Content - Split view or single terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {(() => {
-          // Only render the active terminal to avoid conflicts
-          const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
-          if (!activeTerminal) return null;
-          
-          return (
-            <DirectTerminal
-              key={activeTerminal.dbSessionId}
-              ref={(el) => {
-                if (el) {
-                  terminalRefs.current.set(activeTerminal.dbSessionId, el);
-                } else {
-                  terminalRefs.current.delete(activeTerminal.dbSessionId);
-                }
-              }}
-              taskId={task.id}
-              dbSessionId={activeTerminal.dbSessionId}
-              shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
-              worktreePath={task.worktree_path}
-              isVisible={isVisible}
-              onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
-            />
-          );
-        })()}
+        {splitViewEnabled ? (
+          <SplitViewContainer
+            taskId={task.id}
+            projectId={task.project_id}
+            terminals={task.terminals || []}
+            worktreePath={task.worktree_path}
+            isVisible={isVisible}
+            onSessionStatus={handleSessionStatus}
+            activeTabId={activeTabId}
+          />
+        ) : (
+          // Original single terminal view
+          (() => {
+            const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
+            if (!activeTerminal) return null;
+            
+            return (
+              <DirectTerminal
+                key={activeTerminal.dbSessionId}
+                ref={(el) => {
+                  if (el) {
+                    terminalRefs.current.set(activeTerminal.dbSessionId, el);
+                  } else {
+                    terminalRefs.current.delete(activeTerminal.dbSessionId);
+                  }
+                }}
+                taskId={task.id}
+                dbSessionId={activeTerminal.dbSessionId}
+                shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
+                worktreePath={task.worktree_path}
+                isVisible={isVisible}
+                onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
+              />
+            );
+          })()
+        )}
       </div>
 
       {/* Session Launcher Modal */}
