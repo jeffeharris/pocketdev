@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
-import { Eye, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows, Grid2x2 } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows, Grid2x2 } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -25,6 +25,7 @@ interface TerminalPanelProps {
   onToggleValidation: () => void;
   onToggleSidebar: () => void;
   isVisible?: boolean;
+  isFullscreen?: boolean;
 }
 
 const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProps>((props, ref) => {
@@ -33,7 +34,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     validationMode,
     onToggleValidation,
     onToggleSidebar,
-    isVisible = true
+    isVisible = true,
+    isFullscreen = false
   } = props;
   const [isResetting, setIsResetting] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => {
@@ -637,9 +639,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       <button 
         onClick={onToggleSidebar}
         className="text-gray-400 hover:text-gray-200 p-1"
-        title="Toggle sidebar"
+        title={isFullscreen ? "Exit fullscreen (Alt+F)" : "Enter fullscreen (Alt+F)"}
       >
-        <Eye className="w-4 h-4" />
+        {isFullscreen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
       <button 
         onClick={handleResetSession}
@@ -658,6 +660,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         <RefreshCw className="w-4 h-4" />
       </button>
       <button 
+        onClick={() => {
+          // Open terminal in a new window
+          const url = `/terminal/${task.project_id}/${task.id}`;
+          const features = 'width=1400,height=800,menubar=no,toolbar=no,location=no,status=no';
+          window.open(url, `terminal-${task.id}`, features);
+        }}
         className="text-gray-400 hover:text-gray-200 p-1"
         title="Open in new window"
       >
@@ -764,6 +772,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             }
           }
           break;
+        case 'terminal-toggle-fullscreen':
+          onToggleSidebar();
+          break;
       }
     };
 
@@ -774,6 +785,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     document.addEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
 
     return () => {
       // Remove event listeners
@@ -783,8 +795,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       document.removeEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad]);
+  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar]);
 
 
 

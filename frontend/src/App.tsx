@@ -13,6 +13,7 @@ import PrototypeMergeConflict from './pages/PrototypeMergeConflict';
 import PrototypeMonacoMerge from './pages/PrototypeMonacoMerge';
 import { TerminalBufferTest } from './pages/TerminalBufferTest';
 import { TerminalRawTest } from './pages/TerminalRawTest';
+import { StandaloneTerminal } from './components/terminal/StandaloneTerminal';
 // import { ComponentPlayground } from './pages/archive/ComponentPlayground-phase3'; // Archived - Phase 3 UI components
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
                 <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
                 <Route path="/test/terminal-buffer" element={<TerminalBufferTest />} />
                 <Route path="/test/terminal-raw" element={<TerminalRawTest />} />
+                <Route path="/terminal/:projectId/:taskId" element={<StandaloneTerminal />} />
                 {/* <Route path="/prototype/components" element={<ComponentPlayground />} /> */}
               </Routes>
             </Router>

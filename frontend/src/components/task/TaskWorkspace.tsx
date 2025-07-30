@@ -18,6 +18,7 @@ interface TaskWorkspaceProps {
 export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId }) => {
   const [activeTaskId, setActiveTaskId] = useState(taskId);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
   const [validationMode, setValidationMode] = useState(false);
   const [activePhase, setActivePhase] = useState<'validate' | 'merge'>('validate');
   const [loading, setLoading] = useState(true);
@@ -262,26 +263,30 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
-      <MainHeader 
-        project={project} 
-        tasks={tasks} 
-        activeTaskId={activeTaskId}
-        onTaskSelect={handleTaskSelect}
-      />
+      {!fullscreenMode && (
+        <MainHeader 
+          project={project} 
+          tasks={tasks} 
+          activeTaskId={activeTaskId}
+          onTaskSelect={handleTaskSelect}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <Sidebar
-          projectId={projectId}
-          currentTask={activeTask}
-          allTasks={tasks}
-          onTaskSelect={handleTaskChange}
-          collapsed={sidebarCollapsed}
-          onCreateTask={() => setShowCreateModal(true)}
-          onTaskUpdate={handleTaskUpdate}
-          baseBranch={project?.baseBranch}
-        />
+        {!fullscreenMode && (
+          <Sidebar
+            projectId={projectId}
+            currentTask={activeTask}
+            allTasks={tasks}
+            onTaskSelect={handleTaskChange}
+            collapsed={sidebarCollapsed}
+            onCreateTask={() => setShowCreateModal(true)}
+            onTaskUpdate={handleTaskUpdate}
+            baseBranch={project?.baseBranch}
+          />
+        )}
 
         {/* Main Terminal Area - Split Layout */}
         <div className="flex-1 flex flex-col bg-gray-900">
@@ -330,8 +335,9 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                   }}
                   validationMode={validationMode}
                   onToggleValidation={() => setValidationMode(!validationMode)}
-                  onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  onToggleSidebar={() => setFullscreenMode(!fullscreenMode)}
                   isVisible={isActive}
+                  isFullscreen={fullscreenMode}
                 />
               </div>
             );

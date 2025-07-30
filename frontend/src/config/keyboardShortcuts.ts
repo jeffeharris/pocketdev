@@ -162,6 +162,19 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
       document.dispatchEvent(new CustomEvent('terminal-toggle-split'));
     },
     icon: '🔄'
+  },
+
+  // Fullscreen
+  'terminal.fullscreen.toggle': {
+    id: 'terminal.fullscreen.toggle',
+    key: 'alt+f',
+    description: 'Toggle fullscreen mode',
+    category: 'terminal',
+    contexts: [{ name: 'terminal', priority: 10 }],
+    handler: () => {
+      document.dispatchEvent(new CustomEvent('terminal-toggle-fullscreen'));
+    },
+    icon: '🔳'
   }
 };
 
