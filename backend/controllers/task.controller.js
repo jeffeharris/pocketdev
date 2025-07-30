@@ -433,11 +433,11 @@ export class TaskController {
       }
       
       // Validate split layout structure
-      const validModes = ['tab', 'split'];
+      const validModes = ['tab', 'split', 'split-4'];
       const validOrientations = ['horizontal', 'vertical'];
       
       if (splitLayout.mode && !validModes.includes(splitLayout.mode)) {
-        return res.status(400).json({ error: 'Invalid mode. Must be "tab" or "split"' });
+        return res.status(400).json({ error: 'Invalid mode. Must be "tab", "split", or "split-4"' });
       }
       
       if (splitLayout.orientation && !validOrientations.includes(splitLayout.orientation)) {
