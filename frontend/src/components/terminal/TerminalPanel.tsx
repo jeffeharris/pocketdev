@@ -218,8 +218,40 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         await handleReconnectSession(dbSessionId);
         showNotification('success', 'Attempting to reconnect session...');
       } else {
-        // TODO: Implement actual session reset
-        showNotification('warning', 'Session reset not yet implemented');
+        // Reset the current active terminal session
+        const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
+        if (activeTerminal && activeTerminal.shelltenderSessionId) {
+          try {
+            // Send clear command to clear the terminal
+            await api.executeCommand(activeTerminal.shelltenderSessionId, 'clear');
+            
+            // If AI is running, we might want to exit it first
+            const realtimeState = realtimeSessionStates?.find(s => s.id === activeTabId);
+            const currentAiState = realtimeState?.aiState || activeTerminal.aiState;
+            
+            if (currentAiState !== 'not-started') {
+              // Send Ctrl+C to interrupt any running command/AI
+              await api.executeCommand(activeTerminal.shelltenderSessionId, '\x03');
+              // Small delay
+              await new Promise(resolve => setTimeout(resolve, 200));
+              // Send exit command to exit AI
+              await api.executeCommand(activeTerminal.shelltenderSessionId, 'exit');
+              // Another small delay
+              await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            // Clear again after exiting AI
+            await api.executeCommand(activeTerminal.shelltenderSessionId, 'clear');
+            
+            // Change to task directory to ensure we're in the right place
+            await api.executeCommand(activeTerminal.shelltenderSessionId, `cd ${task.worktree_path}`);
+            
+            showNotification('success', 'Terminal session reset');
+          } catch (error) {
+            console.error('[TerminalPanel] Failed to reset session:', error);
+            showNotification('error', 'Failed to reset terminal session');
+          }
+        }
       }
     } catch (error) {
       showNotification('error', 'Failed to reset session');
@@ -655,7 +687,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         disabled={isResetting}
         title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
           ? "Reconnect disconnected sessions" 
-          : "Reset session to original state"}
+          : "Reset terminal (clear screen, exit AI, return to task directory)"}
       >
         <RefreshCw className="w-4 h-4" />
       </button>
