@@ -175,6 +175,19 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
       document.dispatchEvent(new CustomEvent('terminal-toggle-fullscreen'));
     },
     icon: '🔳'
+  },
+
+  // Refresh
+  'terminal.refresh': {
+    id: 'terminal.refresh',
+    key: 'ctrl+shift+r',
+    description: 'Refresh terminal(s)',
+    category: 'terminal',
+    contexts: [{ name: 'terminal', priority: 10 }],
+    handler: () => {
+      document.dispatchEvent(new CustomEvent('terminal-refresh'));
+    },
+    icon: '🔄'
   }
 };
 
