@@ -84,122 +84,45 @@ export function SplitViewContainer({
   }, [layout, taskId, projectId]);
 
 
-  // Auto-assign terminals to panes if not set
+  // Simple auto-assignment: just assign available terminals in order
   useEffect(() => {
-    if (layout.mode === 'split' && terminals.length >= 1) {
-      // If primary not set or doesn't exist, use active tab or first terminal
-      if (!layout.primaryTerminalId || !terminals.find(t => t.dbSessionId === layout.primaryTerminalId)) {
-        const primaryTerminal = terminals.find(t => t.dbSessionId === activeTabId) || terminals[0];
-        if (primaryTerminal) {
-          setPrimaryTerminal(taskId, primaryTerminal.dbSessionId);
-        }
+    if (layout.mode === 'split' || layout.mode === 'split-4') {
+      const terminalIds = terminals.map(t => t.dbSessionId);
+      
+      // Assign terminals in order: primary, secondary, tertiary, quaternary
+      if (terminalIds[0] && layout.primaryTerminalId !== terminalIds[0]) {
+        setPrimaryTerminal(taskId, terminalIds[0]);
       }
       
-      // For secondary, only assign if we have 2+ terminals and it's not already set correctly
-      if (terminals.length >= 2) {
-        const validSecondary = layout.secondaryTerminalId && 
-                             terminals.find(t => t.dbSessionId === layout.secondaryTerminalId) &&
-                             layout.secondaryTerminalId !== layout.primaryTerminalId;
+      if (layout.mode === 'split') {
+        // For 2-way split, only use 2 terminals max
+        if (terminalIds[1] && layout.secondaryTerminalId !== terminalIds[1]) {
+          setSecondaryTerminal(taskId, terminalIds[1]);
+        } else if (!terminalIds[1] && layout.secondaryTerminalId) {
+          setSecondaryTerminal(taskId, null);
+        }
+      } else {
+        // For quad view, use up to 4 terminals
+        if (terminalIds[1] && layout.secondaryTerminalId !== terminalIds[1]) {
+          setSecondaryTerminal(taskId, terminalIds[1]);
+        } else if (!terminalIds[1] && layout.secondaryTerminalId) {
+          setSecondaryTerminal(taskId, null);
+        }
         
-        if (!validSecondary) {
-          // Find a terminal that's not the primary
-          const secondaryTerminal = terminals.find(t => 
-            t.dbSessionId !== layout.primaryTerminalId
-          );
-          
-          if (secondaryTerminal) {
-            setSecondaryTerminal(taskId, secondaryTerminal.dbSessionId);
-          }
+        if (terminalIds[2] && layout.tertiaryTerminalId !== terminalIds[2]) {
+          setTertiaryTerminal(taskId, terminalIds[2]);
+        } else if (!terminalIds[2] && layout.tertiaryTerminalId) {
+          setTertiaryTerminal(taskId, null);
         }
-      }
-      
-      // Ensure at least one terminal has focus if none is set
-      if (!focusedTerminalId && layout.primaryTerminalId) {
-        setFocusedTerminal(taskId, layout.primaryTerminalId);
-      }
-    } else if (layout.mode === 'split-4') {
-      // Auto-assign for quad view
-      let newPrimaryId = layout.primaryTerminalId;
-      let newSecondaryId = layout.secondaryTerminalId;
-      let newTertiaryId = layout.tertiaryTerminalId;
-      let newQuaternaryId = layout.quaternaryTerminalId;
-      
-      // Ensure all 4 positions are filled with unique terminals
-      const usedIds = new Set<string>();
-      
-      // Primary
-      if (!newPrimaryId || !terminals.find(t => t.dbSessionId === newPrimaryId)) {
-        const primaryTerminal = terminals.find(t => t.dbSessionId === activeTabId) || terminals[0];
-        newPrimaryId = primaryTerminal.dbSessionId;
-        setPrimaryTerminal(taskId, newPrimaryId);
-      }
-      usedIds.add(newPrimaryId);
-      
-      // Secondary
-      if (!newSecondaryId || !terminals.find(t => t.dbSessionId === newSecondaryId) || usedIds.has(newSecondaryId)) {
-        const secondaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
-        if (secondaryTerminal) {
-          newSecondaryId = secondaryTerminal.dbSessionId;
-          setSecondaryTerminal(taskId, newSecondaryId);
-          usedIds.add(newSecondaryId);
+        
+        if (terminalIds[3] && layout.quaternaryTerminalId !== terminalIds[3]) {
+          setQuaternaryTerminal(taskId, terminalIds[3]);
+        } else if (!terminalIds[3] && layout.quaternaryTerminalId) {
+          setQuaternaryTerminal(taskId, null);
         }
-      } else if (newSecondaryId) {
-        usedIds.add(newSecondaryId);
-      }
-      
-      // Tertiary
-      if (!newTertiaryId || !terminals.find(t => t.dbSessionId === newTertiaryId) || usedIds.has(newTertiaryId)) {
-        const tertiaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
-        if (tertiaryTerminal) {
-          newTertiaryId = tertiaryTerminal.dbSessionId;
-          setTertiaryTerminal(taskId, newTertiaryId);
-          usedIds.add(newTertiaryId);
-        }
-      } else if (newTertiaryId) {
-        usedIds.add(newTertiaryId);
-      }
-      
-      // Quaternary (might be null if only 3 terminals)
-      if (terminals.length >= 4) {
-        if (!newQuaternaryId || !terminals.find(t => t.dbSessionId === newQuaternaryId) || usedIds.has(newQuaternaryId)) {
-          const quaternaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
-          if (quaternaryTerminal) {
-            newQuaternaryId = quaternaryTerminal.dbSessionId;
-            setQuaternaryTerminal(taskId, newQuaternaryId);
-          }
-        }
-      }
-      
-      // Ensure focus
-      if (!focusedTerminalId && newPrimaryId) {
-        setFocusedTerminal(taskId, newPrimaryId);
       }
     }
-  }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, focusedTerminalId, setFocusedTerminal]);
-
-  // Separate effect to clear invalid terminal assignments
-  useEffect(() => {
-    // In split mode with only 1 terminal, clear secondary if it's set
-    if (layout.mode === 'split' && terminals.length === 1 && layout.secondaryTerminalId) {
-      setSecondaryTerminal(taskId, null);
-    }
-    
-    // In split-4 mode, clear terminals based on available count
-    if (layout.mode === 'split-4') {
-      if (terminals.length < 4 && layout.quaternaryTerminalId) {
-        setQuaternaryTerminal(taskId, null);
-      }
-      if (terminals.length < 3 && layout.tertiaryTerminalId) {
-        setTertiaryTerminal(taskId, null);
-      }
-      if (terminals.length < 2 && layout.secondaryTerminalId) {
-        setSecondaryTerminal(taskId, null);
-      }
-      if (terminals.length < 1 && layout.primaryTerminalId) {
-        setPrimaryTerminal(taskId, null);
-      }
-    }
-  }, [terminals.length, layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal]);
+  }, [layout.mode, terminals, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
