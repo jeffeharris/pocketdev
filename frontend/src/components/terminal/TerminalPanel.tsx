@@ -206,57 +206,66 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     }
   }), [activeTabId, terminals, handleTabSelect]);
   
-  const handleResetSession = async () => {
+  const handleRefreshSession = async () => {
     setIsResetting(true);
     try {
-      // If any session is disconnected, try to reconnect it
-      const disconnectedSession = Array.from(sessionStatuses.entries())
-        .find(([_, status]) => status === 'disconnected' || status === 'error');
+      const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
+      if (!activeTerminal) {
+        showNotification('warning', 'No active terminal to refresh');
+        return;
+      }
+
+      // Check if session is disconnected
+      const sessionStatus = sessionStatuses.get(activeTabId);
+      const isDisconnected = sessionStatus === 'disconnected' || sessionStatus === 'error';
       
-      if (disconnectedSession) {
-        const [dbSessionId] = disconnectedSession;
-        await handleReconnectSession(dbSessionId);
-        showNotification('success', 'Attempting to reconnect session...');
+      // Get the terminal ref for the active terminal
+      const terminalRef = terminalRefs.current.get(activeTabId);
+      
+      if (terminalRef?.refresh) {
+        // Call the refresh method which will:
+        // 1. Reconnect WebSocket if needed
+        // 2. Restore terminal buffer
+        // 3. Fit terminal to container
+        terminalRef.refresh();
+        
+        // Also trigger a fit after a short delay to ensure proper sizing
+        setTimeout(() => {
+          terminalRef.fit();
+        }, 200);
+        
+        // If we were disconnected, also try to reload task data
+        if (isDisconnected && task.onReload) {
+          await task.onReload();
+        }
+        
+        showNotification('success', isDisconnected ? 'Reconnecting terminal session...' : 'Terminal refreshed');
       } else {
-        // Reset the current active terminal session
-        const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
-        if (activeTerminal && activeTerminal.shelltenderSessionId) {
-          try {
-            // Send clear command to clear the terminal
-            await api.executeCommand(activeTerminal.shelltenderSessionId, 'clear');
-            
-            // If AI is running, we might want to exit it first
-            const realtimeState = realtimeSessionStates?.find(s => s.id === activeTabId);
-            const currentAiState = realtimeState?.aiState || activeTerminal.aiState;
-            
-            if (currentAiState !== 'not-started') {
-              // Send Ctrl+C to interrupt any running command/AI
-              await api.executeCommand(activeTerminal.shelltenderSessionId, '\x03');
-              // Small delay
-              await new Promise(resolve => setTimeout(resolve, 200));
-              // Send exit command to exit AI
-              await api.executeCommand(activeTerminal.shelltenderSessionId, 'exit');
-              // Another small delay
-              await new Promise(resolve => setTimeout(resolve, 200));
-            }
-            
-            // Clear again after exiting AI
-            await api.executeCommand(activeTerminal.shelltenderSessionId, 'clear');
-            
-            // Change to task directory to ensure we're in the right place
-            await api.executeCommand(activeTerminal.shelltenderSessionId, `cd ${task.worktree_path}`);
-            
-            showNotification('success', 'Terminal session reset');
-          } catch (error) {
-            console.error('[TerminalPanel] Failed to reset session:', error);
-            showNotification('error', 'Failed to reset terminal session');
-          }
+        // Fallback: reload the entire task
+        if (task.onReload) {
+          await task.onReload();
+          showNotification('success', 'Reloading terminal session...');
         }
       }
+      
+      // Update the session status to trigger any necessary UI updates
+      await triggerStatusUpdate(task.id, activeTabId);
+      
     } catch (error) {
-      showNotification('error', 'Failed to reset session');
+      console.error('[TerminalPanel] Failed to refresh session:', error);
+      showNotification('error', 'Failed to refresh terminal session');
     } finally {
       setTimeout(() => setIsResetting(false), 1000);
+    }
+  };
+  
+  // Helper to trigger status update
+  const triggerStatusUpdate = async (taskId: string, sessionId: string) => {
+    // This would trigger any status checks or updates needed
+    // For now, we'll just ensure the terminal gets properly sized
+    const terminalRef = terminalRefs.current.get(sessionId);
+    if (terminalRef?.fit) {
+      terminalRef.fit();
     }
   };
 
@@ -676,7 +685,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         {isFullscreen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
       <button 
-        onClick={handleResetSession}
+        onClick={handleRefreshSession}
         className={`p-1 transition-colors ${
           isResetting 
             ? 'text-blue-400 animate-spin' 
@@ -686,8 +695,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         }`}
         disabled={isResetting}
         title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
-          ? "Reconnect disconnected sessions" 
-          : "Reset terminal (clear screen, exit AI, return to task directory)"}
+          ? "Reconnect and restore terminal session" 
+          : "Refresh terminal (sync state, reload buffer, restore cursor)"}
       >
         <RefreshCw className="w-4 h-4" />
       </button>

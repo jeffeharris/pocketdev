@@ -33,7 +33,8 @@ export const ThrottledTerminal = forwardRef<DirectTerminalHandle, ThrottledTermi
   // Expose the same interface as DirectTerminal
   useImperativeHandle(ref, () => ({
     focus: () => terminalRef.current?.focus(),
-    fit: () => terminalRef.current?.fit()
+    fit: () => terminalRef.current?.fit(),
+    refresh: () => terminalRef.current?.refresh()
   }), []);
   
   // Handle resize throttling for unfocused terminals

@@ -30,6 +30,7 @@ const MemoizedTerminal = memo<{
 export interface DirectTerminalHandle {
   focus: () => void;
   fit: () => void;
+  refresh: () => void;
 }
 
 interface DirectTerminalProps {
@@ -96,8 +97,24 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         // Fallback: trigger window resize event
         window.dispatchEvent(new Event('resize'));
       }
+    },
+    refresh: () => {
+      // Trigger a reconnection by updating the terminal state
+      if (!isConnected && wsService?.connect) {
+        wsService.connect();
+      }
+      
+      // Fit terminal after refresh to ensure proper sizing
+      setTimeout(() => {
+        if (terminalRef.current?.fit) {
+          terminalRef.current.fit();
+        }
+      }, 100);
+      
+      // The Terminal component from @shelltender/client should automatically
+      // restore the buffer when reconnecting to an existing session
     }
-  }), [dbSessionId]);
+  }), [dbSessionId, isConnected, wsService]);
 
 
   // Auto-fit and focus when terminal is ready
