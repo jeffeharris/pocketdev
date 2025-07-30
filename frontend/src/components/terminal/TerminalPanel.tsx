@@ -83,6 +83,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     return () => window.removeEventListener('resize', checkViewport);
   }, []);
   
+  // Split view state
+  const layout = useSplitLayout(task.id);
+  const { toggleSplitMode, updateLayout } = useSplitViewStore();
+  
   // Auto-downgrade layout if viewport becomes too small
   useEffect(() => {
     // If in quad view but screen too small, downgrade
@@ -113,10 +117,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       }
     }
   }, [layout.mode, layout.orientation, canShowQuad, canShowHorizontal, canShowVertical, task.id, updateLayout]);
-  
-  // Split view state
-  const layout = useSplitLayout(task.id);
-  const { toggleSplitMode, updateLayout } = useSplitViewStore();
   
   // Load split layout on mount
   useEffect(() => {
