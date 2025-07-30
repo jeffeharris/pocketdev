@@ -525,8 +525,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split
               updateLayout(task.id, { orientation: 'horizontal' });
-            } else if (layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3) {
-              // Switch to quad view (allow with 3+ terminals)
+            } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
+              // Switch to quad view (allow with any number of terminals)
               updateLayout(task.id, { mode: 'split-4' });
             } else {
               // Switch back to tab mode
@@ -543,7 +543,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               ? 'Enable vertical split view (Alt+D)' 
               : layout.mode === 'split' && layout.orientation === 'vertical'
               ? 'Switch to horizontal split (Alt+D)'
-              : layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3
+              : layout.mode === 'split' && layout.orientation === 'horizontal'
               ? 'Switch to quad view (Alt+D)'
               : layout.mode === 'split-4'
               ? 'Switch to single tab view (Alt+D)'
@@ -666,8 +666,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split
               updateLayout(task.id, { orientation: 'horizontal' });
-            } else if (layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3) {
-              // Switch to quad view
+            } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
+              // Switch to quad view (allow with any number of terminals)
               updateLayout(task.id, { mode: 'split-4' });
             } else {
               // Switch back to tab mode

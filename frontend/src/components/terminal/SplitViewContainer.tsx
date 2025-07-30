@@ -118,7 +118,7 @@ export function SplitViewContainer({
         // Immediate focus setting if terminals are already loaded
         setFocusedTerminal(taskId, newPrimaryId);
       }
-    } else if (layout.mode === 'split-4' && terminals.length >= 3) {
+    } else if (layout.mode === 'split-4') {
       // Auto-assign for quad view
       let newPrimaryId = layout.primaryTerminalId;
       let newSecondaryId = layout.secondaryTerminalId;
@@ -287,23 +287,6 @@ export function SplitViewContainer({
 
   // Handle quad view (split-4)
   if (layout.mode === 'split-4') {
-    // Check if we have at least 3 terminals
-    if (terminals.length < 3) {
-      return (
-        <div className="w-full h-full flex items-center justify-center bg-gray-900">
-          <div className="text-gray-400">Need at least 3 terminals for quad view</div>
-        </div>
-      );
-    }
-    
-    // Ensure we have at least the first 3 terminals assigned
-    if (!primaryTerminal || !secondaryTerminal || !tertiaryTerminal) {
-      return (
-        <div className="w-full h-full flex items-center justify-center bg-gray-900">
-          <div className="text-gray-400">Initializing quad view...</div>
-        </div>
-      );
-    }
     
     return (
       <div 
@@ -320,67 +303,106 @@ export function SplitViewContainer({
         }}
       >
         {/* Top-left quadrant (Primary) */}
-        <TerminalPane
-          ref={primaryRef}
-          terminal={primaryTerminal}
-          terminals={terminals}
-          taskId={taskId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
-          showControls={false}
-          controlButtons={controlButtons}
-          showDropdown={false}
-          onDropdownToggle={() => {}}
-          onTerminalSelect={(terminalId) => setPrimaryTerminal(taskId, terminalId)}
-          onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
-          onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-          position="primary"
-          getStateColor={getStateColor}
-          otherTerminalId=""
-        />
+        {primaryTerminal ? (
+          <TerminalPane
+            ref={primaryRef}
+            terminal={primaryTerminal}
+            terminals={terminals}
+            taskId={taskId}
+            worktreePath={worktreePath}
+            isVisible={isVisible}
+            hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
+            showControls={false}
+            controlButtons={controlButtons}
+            showDropdown={false}
+            onDropdownToggle={() => {}}
+            onTerminalSelect={(terminalId) => setPrimaryTerminal(taskId, terminalId)}
+            onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
+            position="primary"
+            getStateColor={getStateColor}
+            otherTerminalId=""
+          />
+        ) : (
+          <div className="flex items-center justify-center bg-gray-900">
+            <button
+              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+            >
+              + Add Terminal
+            </button>
+          </div>
+        )}
         
         {/* Top-right quadrant (Secondary) - contains control buttons */}
-        <TerminalPane
-          ref={secondaryRef}
-          terminal={secondaryTerminal}
-          terminals={terminals}
-          taskId={taskId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
-          showControls={true} // Show controls in top-right
-          controlButtons={controlButtons}
-          showDropdown={false}
-          onDropdownToggle={() => {}}
-          onTerminalSelect={(terminalId) => setSecondaryTerminal(taskId, terminalId)}
-          onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
-          onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-          position="secondary"
-          getStateColor={getStateColor}
-          otherTerminalId=""
-        />
+        {secondaryTerminal ? (
+          <TerminalPane
+            ref={secondaryRef}
+            terminal={secondaryTerminal}
+            terminals={terminals}
+            taskId={taskId}
+            worktreePath={worktreePath}
+            isVisible={isVisible}
+            hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
+            showControls={true} // Show controls in top-right
+            controlButtons={controlButtons}
+            showDropdown={false}
+            onDropdownToggle={() => {}}
+            onTerminalSelect={(terminalId) => setSecondaryTerminal(taskId, terminalId)}
+            onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
+            position="secondary"
+            getStateColor={getStateColor}
+            otherTerminalId=""
+          />
+        ) : (
+          <div className="relative flex items-center justify-center bg-gray-900">
+            {/* Control buttons at top of empty pane */}
+            <div className="absolute top-2 right-2">
+              <div className="flex items-center gap-2">
+                {controlButtons}
+              </div>
+            </div>
+            <button
+              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+            >
+              + Add Terminal
+            </button>
+          </div>
+        )}
         
         {/* Bottom-left quadrant (Tertiary) */}
-        <TerminalPane
-          ref={tertiaryRef}
-          terminal={tertiaryTerminal}
-          terminals={terminals}
-          taskId={taskId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === tertiaryTerminal.dbSessionId}
-          showControls={false}
-          controlButtons={controlButtons}
-          showDropdown={false}
-          onDropdownToggle={() => {}}
-          onTerminalSelect={(terminalId) => setTertiaryTerminal(taskId, terminalId)}
-          onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
-          onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
-          position="tertiary"
-          getStateColor={getStateColor}
-          otherTerminalId=""
-        />
+        {tertiaryTerminal ? (
+          <TerminalPane
+            ref={tertiaryRef}
+            terminal={tertiaryTerminal}
+            terminals={terminals}
+            taskId={taskId}
+            worktreePath={worktreePath}
+            isVisible={isVisible}
+            hasFocus={focusedTerminalId === tertiaryTerminal.dbSessionId}
+            showControls={false}
+            controlButtons={controlButtons}
+            showDropdown={false}
+            onDropdownToggle={() => {}}
+            onTerminalSelect={(terminalId) => setTertiaryTerminal(taskId, terminalId)}
+            onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
+            position="tertiary"
+            getStateColor={getStateColor}
+            otherTerminalId=""
+          />
+        ) : (
+          <div className="flex items-center justify-center bg-gray-900">
+            <button
+              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+            >
+              + Add Terminal
+            </button>
+          </div>
+        )}
         
         {/* Bottom-right quadrant (Quaternary) - might be empty */}
         {quaternaryTerminal ? (
