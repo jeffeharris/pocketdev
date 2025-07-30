@@ -58,6 +58,62 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Feature flag for split view
   const splitViewEnabled = import.meta.env.VITE_FEATURE_SPLIT_VIEW === 'true';
   
+  // Viewport constraints for split views
+  const [canShowQuad, setCanShowQuad] = useState(false);
+  const [canShowHorizontal, setCanShowHorizontal] = useState(false);
+  const [canShowVertical, setCanShowVertical] = useState(false);
+  
+  useEffect(() => {
+    const checkViewport = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // Quad view needs large screen (1400x800)
+      setCanShowQuad(width >= 1400 && height >= 800);
+      
+      // Horizontal split (top/bottom) needs sufficient height
+      setCanShowHorizontal(height >= 600);
+      
+      // Vertical split (side by side) needs sufficient width
+      setCanShowVertical(width >= 1000);
+    };
+    
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
+  
+  // Auto-downgrade layout if viewport becomes too small
+  useEffect(() => {
+    // If in quad view but screen too small, downgrade
+    if (layout.mode === 'split-4' && !canShowQuad) {
+      // Try horizontal split first, then vertical, then tab
+      if (canShowHorizontal) {
+        updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+      } else if (canShowVertical) {
+        updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+      } else {
+        updateLayout(task.id, { mode: 'tab' });
+      }
+    }
+    // If in horizontal split but screen too short, switch to vertical or tab
+    else if (layout.mode === 'split' && layout.orientation === 'horizontal' && !canShowHorizontal) {
+      if (canShowVertical) {
+        updateLayout(task.id, { orientation: 'vertical' });
+      } else {
+        updateLayout(task.id, { mode: 'tab' });
+      }
+    }
+    // If in vertical split but screen too narrow, switch to horizontal or tab
+    else if (layout.mode === 'split' && layout.orientation === 'vertical' && !canShowVertical) {
+      if (canShowHorizontal) {
+        updateLayout(task.id, { orientation: 'horizontal' });
+      } else {
+        updateLayout(task.id, { mode: 'tab' });
+      }
+    }
+  }, [layout.mode, layout.orientation, canShowQuad, canShowHorizontal, canShowVertical, task.id, updateLayout]);
+  
   // Split view state
   const layout = useSplitLayout(task.id);
   const { toggleSplitMode, updateLayout } = useSplitViewStore();
@@ -516,20 +572,38 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         <button 
           onClick={() => {
             if (layout.mode === 'tab') {
-              // Switch to vertical split
-              updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
-              // Ensure focus remains on the active terminal
-              if (activeTabId && !focusedTerminalId) {
-                setFocusedTerminal(task.id, activeTabId);
+              // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
+              if (canShowVertical) {
+                updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+                // Ensure focus remains on the active terminal
+                if (activeTabId && !focusedTerminalId) {
+                  setFocusedTerminal(task.id, activeTabId);
+                }
+              } else if (canShowHorizontal) {
+                updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+                if (activeTabId && !focusedTerminalId) {
+                  setFocusedTerminal(task.id, activeTabId);
+                }
               }
+              // If neither split view is possible, stay in tab mode
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
-              // Switch to horizontal split
-              updateLayout(task.id, { orientation: 'horizontal' });
+              // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
+              if (canShowHorizontal) {
+                updateLayout(task.id, { orientation: 'horizontal' });
+              } else if (canShowQuad) {
+                updateLayout(task.id, { mode: 'split-4' });
+              } else {
+                updateLayout(task.id, { mode: 'tab' });
+              }
             } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
-              // Switch to quad view (allow with any number of terminals)
-              updateLayout(task.id, { mode: 'split-4' });
+              // Switch to quad view if allowed, otherwise back to tab
+              if (canShowQuad) {
+                updateLayout(task.id, { mode: 'split-4' });
+              } else {
+                updateLayout(task.id, { mode: 'tab' });
+              }
             } else {
-              // Switch back to tab mode
+              // From quad view, always go back to tab mode
               updateLayout(task.id, { mode: 'tab' });
             }
           }}
@@ -540,11 +614,11 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           }`}
           title={
             layout.mode === 'tab' 
-              ? 'Enable vertical split view (Alt+D)' 
+              ? (!canShowVertical && !canShowHorizontal) ? 'Screen too small for split view' : 'Enable split view (Alt+D)' 
               : layout.mode === 'split' && layout.orientation === 'vertical'
-              ? 'Switch to horizontal split (Alt+D)'
+              ? !canShowHorizontal ? 'Switch to single tab view (Alt+D) - Screen too narrow for horizontal split' : 'Switch to horizontal split (Alt+D)'
               : layout.mode === 'split' && layout.orientation === 'horizontal'
-              ? 'Switch to quad view (Alt+D)'
+              ? !canShowQuad ? 'Switch to single tab view (Alt+D) - Screen too small for quad view' : 'Switch to quad view (Alt+D)'
               : layout.mode === 'split-4'
               ? 'Switch to single tab view (Alt+D)'
               : 'Switch to single tab view (Alt+D)'
@@ -661,16 +735,31 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         case 'terminal-toggle-split':
           if (splitViewEnabled) {
             if (layout.mode === 'tab') {
-              // Switch to vertical split
-              updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+              // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
+              if (canShowVertical) {
+                updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+              } else if (canShowHorizontal) {
+                updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+              }
+              // If neither split view is possible, stay in tab mode
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
-              // Switch to horizontal split
-              updateLayout(task.id, { orientation: 'horizontal' });
+              // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
+              if (canShowHorizontal) {
+                updateLayout(task.id, { orientation: 'horizontal' });
+              } else if (canShowQuad) {
+                updateLayout(task.id, { mode: 'split-4' });
+              } else {
+                updateLayout(task.id, { mode: 'tab' });
+              }
             } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
-              // Switch to quad view (allow with any number of terminals)
-              updateLayout(task.id, { mode: 'split-4' });
+              // Switch to quad view if allowed, otherwise back to tab
+              if (canShowQuad) {
+                updateLayout(task.id, { mode: 'split-4' });
+              } else {
+                updateLayout(task.id, { mode: 'tab' });
+              }
             } else {
-              // Switch back to tab mode
+              // From quad view, always go back to tab mode
               updateLayout(task.id, { mode: 'tab' });
             }
           }
@@ -695,7 +784,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout]);
+  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad]);
 
 
 
