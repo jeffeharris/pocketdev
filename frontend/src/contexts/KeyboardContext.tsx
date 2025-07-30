@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { KEYBOARD_SHORTCUTS, isInInputContext } from '../config/keyboardShortcuts';
+import { KEYBOARD_SHORTCUTS, isInInputContext, setToggleQuickAccess } from '../config/keyboardShortcuts';
 import type { KeyboardShortcut, KeyboardContextValue } from '../types/keyboard';
+import { QuickAccessPanel } from '../components/keyboard/QuickAccessPanel';
 
 const KeyboardContext = createContext<KeyboardContextValue | null>(null);
 
@@ -20,14 +21,18 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
   // Initialize with built-in shortcuts
   const [shortcuts] = useState(() => new Map(Object.entries(KEYBOARD_SHORTCUTS)));
   
-  // Track active contexts
+  // Track active contexts with their priorities
   const [activeContexts, setActiveContexts] = useState<Set<string>>(new Set(['global']));
+  const [contextPriorities, setContextPriorities] = useState<Map<string, number>>(new Map([['global', 0]]));
   
   // Track dynamic shortcuts added at runtime
   const [dynamicShortcuts, setDynamicShortcuts] = useState<Map<string, KeyboardShortcut>>(new Map());
   
   // Track context reference counts for proper cleanup
   const contextRefs = useRef<Map<string, number>>(new Map());
+  
+  // Quick access panel state
+  const [isQuickAccessOpen, setIsQuickAccessOpen] = useState(false);
 
   // Format keyboard event to normalized key string
   const formatKeyCombo = useCallback((event: KeyboardEvent): string => {
@@ -50,7 +55,9 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
       'escape': 'escape',
       'enter': 'enter',
       ' ': 'space',
-      'tab': 'tab'
+      'tab': 'tab',
+      'delete': 'delete',
+      'backspace': 'backspace'
     };
     
     key = keyMap[key] || key;
@@ -69,6 +76,16 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
   const getActiveShortcuts = useCallback((): KeyboardShortcut[] => {
     const allShortcuts = [...shortcuts.values(), ...dynamicShortcuts.values()];
     
+    // Find the highest priority active context (30+ is modal priority)
+    let hasModalContext = false;
+    
+    for (const [context, priority] of contextPriorities) {
+      if (activeContexts.has(context) && priority >= 30) {
+        hasModalContext = true;
+        break;
+      }
+    }
+    
     return allShortcuts.filter(shortcut => {
       // Check if enabled
       if (shortcut.enabled === false) return false;
@@ -78,26 +95,36 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
         // Check if context is active
         if (!activeContexts.has(ctx.name)) return false;
         
+        // If a modal is open (priority 30+), exclude non-global shortcuts from contexts with priority < 30
+        if (hasModalContext && ctx.name !== 'global') {
+          // Get the priority of this context
+          const ctxPriority = contextPriorities.get(ctx.name) || ctx.priority;
+          if (ctxPriority < 30) {
+            return false;
+          }
+        }
+        
         // Check dynamic test if provided
         if (ctx.test && !ctx.test()) return false;
         
         return true;
       });
     });
-  }, [shortcuts, dynamicShortcuts, activeContexts]);
+  }, [shortcuts, dynamicShortcuts, activeContexts, contextPriorities]);
 
   // Push a context onto the stack
-  const pushContext = useCallback((context: string) => {
+  const pushContext = useCallback((context: string, priority: number = 10) => {
     if (!context) return;
     
     setActiveContexts(prev => new Set([...prev, context]));
+    setContextPriorities(prev => new Map([...prev, [context, priority]]));
     
     // Track reference count
     const refs = contextRefs.current;
     refs.set(context, (refs.get(context) || 0) + 1);
     
-    console.debug(`[Keyboard] Context pushed: ${context}`, Array.from(activeContexts));
-  }, [activeContexts]);
+    console.debug(`[Keyboard] Context pushed: ${context} (priority: ${priority})`);
+  }, []);
 
   // Pop a context from the stack
   const popContext = useCallback((context: string) => {
@@ -114,13 +141,18 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
         next.delete(context);
         return next;
       });
+      setContextPriorities(prev => {
+        const next = new Map(prev);
+        next.delete(context);
+        return next;
+      });
     } else {
       // Decrement reference count
       refs.set(context, count - 1);
     }
     
-    console.debug(`[Keyboard] Context popped: ${context}`, Array.from(activeContexts));
-  }, [activeContexts]);
+    console.debug(`[Keyboard] Context popped: ${context}`);
+  }, []);
 
   // Register a dynamic shortcut
   const registerShortcut = useCallback((shortcut: KeyboardShortcut) => {
@@ -150,6 +182,16 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
   const getShortcutByKey = useCallback((key: string): KeyboardShortcut | undefined => {
     return getActiveShortcuts().find(s => s.key === key);
   }, [getActiveShortcuts]);
+  
+  // Toggle quick access panel
+  const toggleQuickAccess = useCallback(() => {
+    setIsQuickAccessOpen(prev => !prev);
+  }, []);
+  
+  // Set the toggle function for the shortcuts to use
+  useEffect(() => {
+    setToggleQuickAccess(toggleQuickAccess);
+  }, [toggleQuickAccess]);
 
   // Global keyboard event handler
   useEffect(() => {
@@ -213,12 +255,18 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
     popContext,
     isShortcutActive,
     getActiveShortcuts,
-    getShortcutByKey
+    getShortcutByKey,
+    toggleQuickAccess,
+    isQuickAccessOpen
   };
 
   return (
     <KeyboardContext.Provider value={value}>
       {children}
+      <QuickAccessPanel 
+        isOpen={isQuickAccessOpen} 
+        onClose={() => setIsQuickAccessOpen(false)} 
+      />
     </KeyboardContext.Provider>
   );
 }

@@ -9,18 +9,40 @@ import type { KeyboardShortcut } from '../types/keyboard';
  * - Component-level: 20-29
  * - Modal/Dialog: 30+
  */
+// Helper function to toggle quick access (will be set by KeyboardContext)
+let toggleQuickAccessFn: (() => void) | null = null;
+export const setToggleQuickAccess = (fn: () => void) => {
+  toggleQuickAccessFn = fn;
+};
+
 export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
   // Global shortcuts
-  'global.help': {
-    id: 'global.help',
-    key: 'f1',
-    description: 'Show keyboard shortcuts',
+  'global.quickAccess': {
+    id: 'global.quickAccess',
+    key: 'ctrl+k',
+    description: 'Show quick access panel',
     category: 'global',
     contexts: [{ name: 'global', priority: 0 }],
     handler: () => {
-      // Dispatch event to show shortcuts dialog
-      document.dispatchEvent(new CustomEvent('show-keyboard-shortcuts'));
-    }
+      if (toggleQuickAccessFn) {
+        toggleQuickAccessFn();
+      }
+    },
+    hidden: true // Hide from panel to avoid recursion
+  },
+  
+  'global.quickAccess.alt': {
+    id: 'global.quickAccess.alt',
+    key: 'ctrl+space',
+    description: 'Show quick access panel',
+    category: 'global',
+    contexts: [{ name: 'global', priority: 0 }],
+    handler: () => {
+      if (toggleQuickAccessFn) {
+        toggleQuickAccessFn();
+      }
+    },
+    hidden: true // Hide from panel to avoid recursion
   },
 
   // Terminal tab navigation
@@ -30,7 +52,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 1',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(0)
+    handler: () => switchToTabByIndex(0),
+    icon: '1️⃣'
   },
   'terminal.tab.2': {
     id: 'terminal.tab.2',
@@ -38,7 +61,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 2',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(1)
+    handler: () => switchToTabByIndex(1),
+    icon: '2️⃣'
   },
   'terminal.tab.3': {
     id: 'terminal.tab.3',
@@ -46,7 +70,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 3',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(2)
+    handler: () => switchToTabByIndex(2),
+    icon: '3️⃣'
   },
   'terminal.tab.4': {
     id: 'terminal.tab.4',
@@ -54,7 +79,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 4',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(3)
+    handler: () => switchToTabByIndex(3),
+    icon: '4️⃣'
   },
   'terminal.tab.5': {
     id: 'terminal.tab.5',
@@ -62,7 +88,8 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 5',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(4)
+    handler: () => switchToTabByIndex(4),
+    icon: '5️⃣'
   },
   'terminal.tab.6': {
     id: 'terminal.tab.6',
@@ -70,53 +97,58 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     description: 'Switch to tab 6',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
-    handler: () => switchToTabByIndex(5)
+    handler: () => switchToTabByIndex(5),
+    icon: '6️⃣'
   },
 
   // Terminal tab management
   'terminal.tab.new': {
     id: 'terminal.tab.new',
-    key: 'ctrl+shift+t',
+    key: 'alt+t',
     description: 'New terminal tab',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
     handler: () => {
       // Dispatch event to create new tab
       document.dispatchEvent(new CustomEvent('terminal-new-tab'));
-    }
+    },
+    icon: '➕'
   },
   'terminal.tab.close': {
     id: 'terminal.tab.close',
-    key: 'ctrl+shift+w',
+    key: 'alt+w',
     description: 'Close current tab',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
     handler: () => {
       // Dispatch event to close current tab
       document.dispatchEvent(new CustomEvent('terminal-close-tab'));
-    }
+    },
+    icon: '❌'
   },
 
   // Terminal tab cycling
   'terminal.tab.next': {
     id: 'terminal.tab.next',
-    key: 'ctrl+tab',
+    key: 'alt+]',
     description: 'Next terminal tab',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
     handler: () => {
       document.dispatchEvent(new CustomEvent('terminal-next-tab'));
-    }
+    },
+    icon: '➡️'
   },
   'terminal.tab.previous': {
     id: 'terminal.tab.previous',
-    key: 'ctrl+shift+tab',
+    key: 'alt+[',
     description: 'Previous terminal tab',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
     handler: () => {
       document.dispatchEvent(new CustomEvent('terminal-previous-tab'));
-    }
+    },
+    icon: '⬅️'
   },
 };
 

@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
-import { Eye, RefreshCw, ExternalLink, Monitor } from 'lucide-react';
+import { Eye, RefreshCw, ExternalLink, Monitor, Columns, Maximize2 } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -10,7 +10,7 @@ import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
 import { SplitViewControls } from './SplitViewControls';
-import { loadLayout, persistLayout } from '../../stores/splitViewStore';
+import { loadLayout, persistLayout, useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 import { useShortcutContext } from '../../hooks/keyboard';
 
@@ -57,6 +57,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Feature flag for split view
   const splitViewEnabled = import.meta.env.VITE_FEATURE_SPLIT_VIEW === 'true';
   
+  // Split view state
+  const layout = useSplitLayout(task.id);
+  const { toggleSplitMode } = useSplitViewStore();
+  
   // Load split layout on mount
   useEffect(() => {
     if (splitViewEnabled && task.project_id) {
@@ -70,8 +74,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal, setFocusedTerminal } = useTerminalStore();
   
-  // Activate terminal keyboard context
-  useShortcutContext('terminal');
+  // Activate terminal keyboard context only when visible (priority 10 for feature-level)
+  useShortcutContext('terminal', { enabled: isVisible, priority: 10 });
   
   // Initialize terminals from task prop on mount or when task changes
   useEffect(() => {
@@ -92,13 +96,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       
       if (!validTab && terminals[0]) {
         setActiveTabId(terminals[0].dbSessionId);
-        setFocusedTerminal(task.id, terminals[0].dbSessionId);
-      } else if (validTab && !focusedTerminalId) {
-        // Set focus if we have a valid tab but no focus set
-        setFocusedTerminal(task.id, validTab.dbSessionId);
+        // Don't set focus here - let the initial terminals effect handle it
       }
     }
-  }, [task.id, terminals, focusedTerminalId, setFocusedTerminal]);
+  }, [task.id, terminals]);
 
   // Check for focus tab request
   useEffect(() => {
@@ -595,21 +596,42 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       {/* Terminal Header */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex items-center justify-between">
-          {/* Terminal Tabs */}
-          <TerminalTabs
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onTabSelect={handleTabSelect}
-            onTabAdd={() => handleTabAdd()}
-            onTabAdvancedAdd={() => setShowSessionLauncher(true)}
-            onTabRename={handleTabRename}
-            onTabClose={handleTabClose}
-            onTabReorder={handleTabReorder}
-            maxTabs={6}
-          />
+          {/* Terminal Tabs or Split View Controls */}
+          {splitViewEnabled && layout.mode === 'split' ? (
+            <SplitViewControls
+              taskId={task.id}
+              activeTabId={activeTabId}
+              onTerminalSelect={handleTabSelect}
+            />
+          ) : (
+            <TerminalTabs
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onTabSelect={handleTabSelect}
+              onTabAdd={() => handleTabAdd()}
+              onTabAdvancedAdd={() => setShowSessionLauncher(true)}
+              onTabRename={handleTabRename}
+              onTabClose={handleTabClose}
+              onTabReorder={handleTabReorder}
+              maxTabs={6}
+            />
+          )}
 
           {/* Control Buttons */}
           <div className="flex items-center gap-2 pr-4">
+            {splitViewEnabled && (
+              <button 
+                onClick={() => toggleSplitMode(task.id)}
+                className={`p-1 transition-colors ${
+                  layout.mode === 'split' 
+                    ? 'text-blue-400' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title={layout.mode === 'split' ? 'Switch to tab view' : 'Enable split view'}
+              >
+                {layout.mode === 'split' ? <Columns className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+            )}
             <button 
               onClick={onToggleSidebar}
               className="text-gray-400 hover:text-gray-200 p-1"
@@ -648,15 +670,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
           </div>
         </div>
       </div>
-
-      {/* Split View Controls */}
-      {splitViewEnabled && (
-        <SplitViewControls
-          taskId={task.id}
-          activeTabId={activeTabId}
-          onTerminalSelect={handleTabSelect}
-        />
-      )}
 
       {/* Terminal Content - Split view or single terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">

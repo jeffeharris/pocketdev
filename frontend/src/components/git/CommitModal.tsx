@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, GitBranch, AlertCircle } from 'lucide-react';
 import { api } from '../../services/api';
+import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
 
 interface CommitModalProps {
   isOpen: boolean;
@@ -24,6 +25,9 @@ export const CommitModal: React.FC<CommitModalProps> = ({
   const [message, setMessage] = useState('');
   const [isCommitting, setIsCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Activate commit modal context when open (high priority for modal)
+  useShortcutContext('commitModal', { enabled: isOpen, priority: 30 });
 
   const handleCommit = async () => {
     if (!message.trim()) {
@@ -51,11 +55,16 @@ export const CommitModal: React.FC<CommitModalProps> = ({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+  // Keyboard shortcut for Ctrl+Enter to commit
+  useKeyboardShortcut('ctrl+enter', () => {
+    if (message.trim() && !isCommitting) {
       handleCommit();
     }
-  };
+  }, {
+    contexts: ['commitModal'],
+    description: 'Commit changes',
+    enabled: isOpen && !!message.trim() && !isCommitting
+  });
 
   if (!isOpen) return null;
 
@@ -104,7 +113,6 @@ export const CommitModal: React.FC<CommitModalProps> = ({
                 id="commit-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 rows={4}
                 placeholder="Describe your changes..."

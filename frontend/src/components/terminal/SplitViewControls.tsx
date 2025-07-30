@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   Columns, 
   Rows, 
-  Maximize2, 
   ArrowLeftRight,
   ChevronDown,
   Monitor
@@ -24,7 +23,7 @@ export function SplitViewControls({
 }: SplitViewControlsProps) {
   const layout = useSplitLayout(taskId);
   const terminals = useTaskTerminals(taskId);
-  const { toggleSplitMode, updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
+  const { updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
   const primaryDropdownRef = useRef<HTMLDivElement>(null);
@@ -68,63 +67,26 @@ export function SplitViewControls({
   }
 
   return (
-    <div className="flex items-center space-x-2 px-2 py-1 bg-gray-800 border-b border-gray-700">
-      {/* Mode Toggle */}
-      <button
-        onClick={() => toggleSplitMode(taskId)}
-        className={`p-1.5 rounded transition-colors ${
-          layout.mode === 'split' 
-            ? 'bg-blue-600 text-white' 
-            : 'bg-gray-700 text-gray-400 hover:text-gray-200'
-        }`}
-        title={layout.mode === 'split' ? 'Switch to tab view' : 'Enable split view'}
-      >
-        {layout.mode === 'split' ? <Columns className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-      </button>
-
-      {/* Split View Controls - Only show when in split mode */}
-      {layout.mode === 'split' && (
-        <>
-          {/* Orientation Toggle */}
-          <div className="flex items-center bg-gray-700 rounded">
-            <button
-              onClick={() => updateLayout(taskId, { orientation: 'horizontal' })}
-              className={`p-1.5 rounded-l transition-colors ${
-                layout.orientation === 'horizontal'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Horizontal split"
-            >
-              <Columns className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => updateLayout(taskId, { orientation: 'vertical' })}
-              className={`p-1.5 rounded-r transition-colors ${
-                layout.orientation === 'vertical'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Vertical split"
-            >
-              <Rows className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Terminal Selectors */}
-          <div className="flex items-center space-x-2 text-sm">
-            {/* Primary Terminal Selector */}
-            <div className="relative" ref={primaryDropdownRef}>
-              <button
-                onClick={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
-                className="flex items-center space-x-1 px-2 py-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
-              >
-                <Monitor className="w-3 h-3" />
-                <span className="max-w-[120px] truncate">
-                  {primaryTerminal?.tabName || 'Select Terminal'}
-                </span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
+    <div className="flex items-center flex-1">
+      {/* Tab-style Terminal Selectors */}
+      <div className="flex items-center">
+        {/* Primary Terminal Tab */}
+        <div className="relative" ref={primaryDropdownRef}>
+          <button
+            onClick={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
+            className={`px-3 py-2 text-sm border-r border-gray-600 relative transition-colors cursor-pointer flex items-center gap-2 ${
+              layout.primaryTerminalId === activeTabId
+                ? 'bg-gray-700 text-gray-200'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+            }`}
+            title="Primary terminal"
+          >
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <span className="max-w-[120px] truncate">
+              {primaryTerminal?.tabName || 'Select Terminal'}
+            </span>
+            <ChevronDown className="w-3 h-3" />
+          </button>
               
               {showPrimaryDropdown && (
                 <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded shadow-lg z-50">
@@ -155,27 +117,23 @@ export function SplitViewControls({
               )}
             </div>
 
-            {/* Swap Button */}
-            <button
-              onClick={() => swapPanes(taskId)}
-              className="p-1.5 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
-              title="Swap terminals"
-            >
-              <ArrowLeftRight className="w-4 h-4" />
-            </button>
-
-            {/* Secondary Terminal Selector */}
-            <div className="relative" ref={secondaryDropdownRef}>
-              <button
-                onClick={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
-                className="flex items-center space-x-1 px-2 py-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors"
-              >
-                <Monitor className="w-3 h-3" />
-                <span className="max-w-[120px] truncate">
-                  {secondaryTerminal?.tabName || 'Select Terminal'}
-                </span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
+        {/* Secondary Terminal Tab */}
+        <div className="relative" ref={secondaryDropdownRef}>
+          <button
+            onClick={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
+            className={`px-3 py-2 text-sm border-r border-gray-600 relative transition-colors cursor-pointer flex items-center gap-2 ${
+              layout.secondaryTerminalId === activeTabId
+                ? 'bg-gray-700 text-gray-200'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+            }`}
+            title="Secondary terminal"
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <span className="max-w-[120px] truncate">
+              {secondaryTerminal?.tabName || 'Select Terminal'}
+            </span>
+            <ChevronDown className="w-3 h-3" />
+          </button>
               
               {showSecondaryDropdown && (
                 <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded shadow-lg z-50">
@@ -205,14 +163,50 @@ export function SplitViewControls({
                 </div>
               )}
             </div>
-          </div>
+      </div>
 
-          {/* Split Ratio Indicator */}
-          <div className="text-xs text-gray-500">
-            {Math.round(layout.splitRatio * 100)}% / {Math.round((1 - layout.splitRatio) * 100)}%
-          </div>
-        </>
-      )}
+      {/* Split Controls */}
+      <div className="flex items-center gap-2 ml-4">
+        {/* Orientation Toggle */}
+        <div className="flex items-center bg-gray-700 rounded text-xs">
+          <button
+            onClick={() => updateLayout(taskId, { orientation: 'horizontal' })}
+            className={`p-1 rounded-l transition-colors ${
+              layout.orientation === 'horizontal'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+            title="Horizontal split"
+          >
+            <Columns className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => updateLayout(taskId, { orientation: 'vertical' })}
+            className={`p-1 rounded-r transition-colors ${
+              layout.orientation === 'vertical'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+            title="Vertical split"
+          >
+            <Rows className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Swap Button */}
+        <button
+          onClick={() => swapPanes(taskId)}
+          className="p-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors text-gray-400 hover:text-gray-200"
+          title="Swap terminals"
+        >
+          <ArrowLeftRight className="w-3 h-3" />
+        </button>
+
+        {/* Split Ratio Indicator */}
+        <div className="text-xs text-gray-500 px-2">
+          {Math.round(layout.splitRatio * 100)}% / {Math.round((1 - layout.splitRatio) * 100)}%
+        </div>
+      </div>
     </div>
   );
 }

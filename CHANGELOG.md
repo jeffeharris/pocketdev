@@ -5,6 +5,22 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- **Keyboard Shortcuts System**
+  - Comprehensive keyboard shortcut architecture with context-aware activation
+  - Quick Access Panel (Ctrl+K / Ctrl+Space) showing available commands based on context
+  - Terminal tab navigation shortcuts (Alt+1-6, Alt+T for new, Alt+W to close, Alt+[/] for next/prev)
+  - Modal-aware context system preventing shortcut conflicts
+  - Dynamic shortcut registration with priority-based filtering
+  - TypeScript types for keyboard management
+  - Icons and categories for better shortcut discovery
+  - Context priorities: Global (0), Terminal (10), Component (20), Modal (30+)
+
+- **UI Improvements**
+  - Standardized modal backdrops to use consistent semi-transparent black (bg-black/50)
+  - Reduced header padding for more compact layout
+  - Icon-only buttons in header for cleaner appearance
+  - Quick Access button with keyboard indicator
+
 - **Split Views Feature (Phase 1)**
   - View 2 terminal sessions side-by-side within a single task
   - Toggle between traditional tab view and split view modes
@@ -19,6 +35,11 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Backend API endpoints for split layout CRUD operations
   - Zustand state management following latest best practices
   - Components: SplitViewContainer, SplitViewControls, splitViewStore
+  - **Phase 2 Improvements**
+    - Split view toggle moved to terminal header for better accessibility
+    - Tab-style terminal selectors replace regular tabs in split mode
+    - Unified UI where split controls occupy same space as tabs
+    - Color-coded terminals (blue for primary, green for secondary)
 
 ### Changed
 - **Code Cleanup**

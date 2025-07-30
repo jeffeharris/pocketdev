@@ -46,6 +46,15 @@ export function useKeyboardShortcut(
   // Use ref to avoid recreating the shortcut on every render
   const shortcutIdRef = useRef<string>();
   
+  // Context priorities to match the pushContext priorities
+  const contextPriorityMap: Record<string, number> = {
+    'global': 0,
+    'terminal': 10,
+    'diffViewer': 30,
+    'commitModal': 30,
+    'mergeWorkflow': 20
+  };
+  
   useEffect(() => {
     // Skip if disabled
     if (options.enabled === false) return;
@@ -62,7 +71,7 @@ export function useKeyboardShortcut(
       category: options.category || 'navigation',
       contexts: (options.contexts || ['global']).map(name => ({
         name,
-        priority: 10 // Default priority for dynamic shortcuts
+        priority: contextPriorityMap[name] || 10 // Use context's priority or default to 10
       })),
       preventDefault: options.preventDefault !== false, // Default to true
       enabled: options.enabled !== false
