@@ -65,6 +65,9 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   
   // Track if we've already created the terminal to prevent re-creation
   const [terminalCreated, setTerminalCreated] = useState(false);
+  
+  // Force re-render counter to trigger reconnection
+  const [reconnectCounter, setReconnectCounter] = useState(0);
 
 
   // Update ready state when connected
@@ -98,21 +101,32 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         window.dispatchEvent(new Event('resize'));
       }
     },
-    refresh: () => {
-      // Trigger a reconnection by updating the terminal state
+    refresh: async () => {
+      // Ensure WebSocket is connected first
       if (!isConnected && wsService?.connect) {
-        wsService.connect();
+        await wsService.connect();
+        // Wait a bit for connection to establish
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      // Fit terminal after refresh to ensure proper sizing
-      setTimeout(() => {
-        if (terminalRef.current?.fit) {
-          terminalRef.current.fit();
-        }
-      }, 100);
+      // Force the terminal to reconnect by incrementing the counter
+      // This will cause the Terminal component to unmount and remount with the same session ID
+      setReconnectCounter(prev => prev + 1);
       
-      // The Terminal component from @shelltender/client should automatically
-      // restore the buffer when reconnecting to an existing session
+      // Mark as not ready temporarily to show connecting state
+      setIsReady(false);
+      
+      // Re-enable after a short delay
+      setTimeout(() => {
+        setIsReady(true);
+        
+        // Fit terminal after it's ready
+        setTimeout(() => {
+          if (terminalRef.current?.fit) {
+            terminalRef.current.fit();
+          }
+        }, 100);
+      }, 300);
     }
   }), [dbSessionId, isConnected, wsService]);
 
@@ -136,6 +150,18 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       return () => clearTimeout(timer);
     }
   }, [taskId, dbSessionId]);
+  
+  // Handle reconnection when counter changes
+  useEffect(() => {
+    if (reconnectCounter > 0 && terminalRef.current) {
+      // Wait for the terminal to reconnect and then fit
+      const timer = setTimeout(() => {
+        terminalRef.current?.fit();
+        onSessionStatus?.('connected');
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [reconnectCounter, onSessionStatus]);
   
 
   // Don't render terminal until WebSocket is connected
@@ -175,6 +201,7 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       onClick={handleContainerClick}
     >
       <MemoizedTerminal
+        key={`${shelltenderSessionId}-${reconnectCounter}`}
         terminalRef={terminalRef}
         sessionId={shelltenderSessionId}
         onSessionCreated={(sessionId: string) => {
