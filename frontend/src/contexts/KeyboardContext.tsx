@@ -123,7 +123,6 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
     const refs = contextRefs.current;
     refs.set(context, (refs.get(context) || 0) + 1);
     
-    console.debug(`[Keyboard] Context pushed: ${context} (priority: ${priority})`);
   }, []);
 
   // Pop a context from the stack
@@ -151,13 +150,11 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
       refs.set(context, count - 1);
     }
     
-    console.debug(`[Keyboard] Context popped: ${context}`);
   }, []);
 
   // Register a dynamic shortcut
   const registerShortcut = useCallback((shortcut: KeyboardShortcut) => {
     setDynamicShortcuts(prev => new Map(prev).set(shortcut.id, shortcut));
-    console.debug(`[Keyboard] Shortcut registered: ${shortcut.id} (${shortcut.key})`);
   }, []);
 
   // Unregister a dynamic shortcut
@@ -167,7 +164,6 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
       next.delete(id);
       return next;
     });
-    console.debug(`[Keyboard] Shortcut unregistered: ${id}`);
   }, []);
 
   // Check if a shortcut is active
@@ -221,7 +217,6 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
       if (matches.length > 0) {
         const shortcut = matches[0];
         
-        console.debug(`[Keyboard] Shortcut triggered: ${shortcut.id} (${key})`);
         
         if (shortcut.preventDefault !== false) {
           event.preventDefault();

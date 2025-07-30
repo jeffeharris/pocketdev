@@ -706,7 +706,6 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
                 hasFocus={focusedTerminalId === activeTerminal.dbSessionId}
                 onSessionStatus={(status) => handleSessionStatus(activeTerminal.dbSessionId, status)}
                 onFocusRequest={() => {
-                  console.log('[TerminalPanel] Setting focus to:', activeTerminal.dbSessionId);
                   setFocusedTerminal(task.id, activeTerminal.dbSessionId);
                 }}
               />
