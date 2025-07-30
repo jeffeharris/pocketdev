@@ -12,7 +12,6 @@ export class TaskController {
   constructor(models, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
     this.projectsDir = projectsDir;
-    this.gitService = new GitService();
     this.worktreeService = new WorktreeService();
   }
 
@@ -136,13 +135,16 @@ export class TaskController {
       const project = await this.models.projects.findById(projectId);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Enrich tasks with git status and session state
       const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
         let gitStatus = null;
         
         if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
           try {
-            gitStatus = await this.gitService.getBranchStatus(
+            gitStatus = await gitService.getBranchStatus(
               task.worktree_path, 
               task.branch, 
               baseBranch

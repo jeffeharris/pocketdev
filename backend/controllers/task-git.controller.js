@@ -6,7 +6,7 @@ import { GitService } from '../services/git.service.js';
 export class TaskGitController {
   constructor(models) {
     this.models = models;
-    this.gitService = new GitService();
+    // Don't create a default GitService - we'll create one per request with the token
   }
 
   async getGitConfig() {
@@ -39,13 +39,16 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Debug logging for merged tasks with changes
       if (task.status === 'merged' || task.merged_at) {
         console.log(`[GitStatus] Checking merged task ${taskId} on branch ${task.branch}`);
-        const statusResult = await this.gitService.command(task.worktree_path, 'git status --porcelain');
+        const statusResult = await gitService.command(task.worktree_path, 'git status --porcelain');
         if (statusResult.output.trim()) {
           console.log(`[GitStatus] Merged task has changes:`, statusResult.output);
-          const branchResult = await this.gitService.command(task.worktree_path, 'git branch --show-current');
+          const branchResult = await gitService.command(task.worktree_path, 'git branch --show-current');
           console.log(`[GitStatus] Task worktree is on branch:`, branchResult.output.trim());
         }
       }
@@ -53,15 +56,15 @@ export class TaskGitController {
       const project = await this.models.projects.findById(projectId);
       
       // Get detailed git status
-      const statusResult = await this.gitService.getStatus(task.worktree_path);
+      const statusResult = await gitService.getStatus(task.worktree_path);
       const cleanStatus = statusResult.output.trim().length === 0;
       
       // Check ahead/behind status
       let aheadBehind = { ahead: 0, behind: 0 };
       try {
-        const aheadResult = await this.gitService.command(task.worktree_path, 
+        const aheadResult = await gitService.command(task.worktree_path, 
           `git rev-list --count origin/${project.base_branch}..HEAD`);
-        const behindResult = await this.gitService.command(task.worktree_path,
+        const behindResult = await gitService.command(task.worktree_path,
           `git rev-list --count HEAD..origin/${project.base_branch}`);
         
         aheadBehind.ahead = parseInt(aheadResult.output.trim()) || 0;
@@ -77,12 +80,12 @@ export class TaskGitController {
       }
 
       // Get detailed status including staged/unstaged counts
-      const detailedStatus = await this.gitService.getDetailedStatus(task.worktree_path);
+      const detailedStatus = await gitService.getDetailedStatus(task.worktree_path);
 
       // Check if branch has remote tracking
       let hasRemoteTracking = false;
       try {
-        const remoteCheckResult = await this.gitService.command(
+        const remoteCheckResult = await gitService.command(
           task.worktree_path,
           `git rev-parse --verify origin/${task.branch} 2>/dev/null`
         );
@@ -162,14 +165,17 @@ export class TaskGitController {
       
       const project = await this.models.projects.findById(projectId);
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Get all changes using the new git service method
-      const allChanges = await this.gitService.getAllChanges(
+      const allChanges = await gitService.getAllChanges(
         task.worktree_path,
         `origin/${project.base_branch}`
       );
       
       // Get unpushed commits info
-      const unpushedInfo = await this.gitService.getUnpushedCommitsInfo(
+      const unpushedInfo = await gitService.getUnpushedCommitsInfo(
         task.worktree_path,
         task.branch
       );
@@ -216,9 +222,12 @@ export class TaskGitController {
 
       const project = await this.models.projects.findById(projectId);
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Use unified diff method
       const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
-      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+      const diffResult = await gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
       
       // Convert Map to array and include diffs for working directory comparisons
       const files = [];
@@ -289,13 +298,15 @@ export class TaskGitController {
         compareTarget = 'working';
       }
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
       
       // Get file info first to know its state
-      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+      const diffResult = await gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
       const fileInfo = diffResult.files.get(file);
       
       // Get the diff content
-      const diff = await this.gitService.getFileDiffContent(
+      const diff = await gitService.getFileDiffContent(
         task.worktree_path, 
         file, 
         compareTarget, 
@@ -325,8 +336,11 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Get commit history
-      const logResult = await this.gitService.log(
+      const logResult = await gitService.log(
         task.worktree_path, 
         '--pretty=format:%H|%s|%an|%ar|%P --max-count=50'
       );
@@ -364,7 +378,11 @@ export class TaskGitController {
       }
 
       const project = await this.models.projects.findById(projectId);
-      const conflicts = await this.gitService.checkMergeConflicts(
+      
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
+      const conflicts = await gitService.checkMergeConflicts(
         task.worktree_path, 
         `origin/${project.base_branch}`
       );
@@ -406,7 +424,7 @@ export class TaskGitController {
       
       // Get git config for this operation
       const gitConfig = await this.getGitConfig();
-      const gitService = new GitService(this.gitService.githubToken, gitConfig);
+      const gitService = new GitService(req.githubToken, gitConfig);
       
       let result;
       

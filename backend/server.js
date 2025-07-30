@@ -283,7 +283,7 @@ async function initializeMonitoring(server, wsEventService, models) {
     console.log('AI monitoring initialized successfully');
     
     // Initialize git status monitoring
-    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService);
+    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService, app.locals.githubTokenService);
     app.locals.gitStatusMonitor = gitStatusMonitor;
     console.log('Git status monitoring initialized');
   } catch (error) {
