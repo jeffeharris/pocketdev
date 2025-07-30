@@ -86,7 +86,7 @@ export function SplitViewContainer({
 
   // Auto-assign terminals to panes if not set
   useEffect(() => {
-    if (layout.mode === 'split' && terminals.length >= 2) {
+    if (layout.mode === 'split' && terminals.length >= 1) {
       let needsUpdate = false;
       let newPrimaryId = layout.primaryTerminalId;
       let newSecondaryId = layout.secondaryTerminalId;
@@ -248,20 +248,39 @@ export function SplitViewContainer({
     return null;
   }
   
-  // If not enough terminals for split view, show a message
-  if (terminals.length < 2) {
+  // Special case: no terminals at all
+  if (terminals.length === 0) {
+    const isHorizontal = layout.orientation === 'horizontal';
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-gray-400">Need at least 2 terminals for split view</div>
-      </div>
-    );
-  }
-  
-  // If terminals not yet assigned, show loading state
-  if (!primaryTerminal || !secondaryTerminal) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-900">
-        <div className="text-gray-400">Initializing split view...</div>
+      <div 
+        className="w-full h-full"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: !isHorizontal ? '1fr 1fr' : '1fr',
+          gridTemplateRows: isHorizontal ? '1fr 1fr' : '1fr',
+          gap: '1px',
+          backgroundColor: '#1f2937',
+          height: '100%',
+          width: '100%'
+        }}
+      >
+        {/* Both panes show add terminal */}
+        <div className="flex items-center justify-center bg-gray-900">
+          <button
+            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+          >
+            + Add Terminal
+          </button>
+        </div>
+        <div className="flex items-center justify-center bg-gray-900">
+          <button
+            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+          >
+            + Add Terminal
+          </button>
+        </div>
       </div>
     );
   }
@@ -420,80 +439,104 @@ export function SplitViewContainer({
       }}
     >
       {/* Primary Pane (left in vertical, top in horizontal) */}
-      <TerminalPane
-        ref={primaryRef}
-        terminal={primaryTerminal}
-        terminals={terminals}
-        taskId={taskId}
-        worktreePath={worktreePath}
-        isVisible={isVisible}
-        hasFocus={focusedTerminalId === primaryTerminal?.dbSessionId}
-        showControls={isHorizontal} // Show controls in top pane for horizontal split
-        controlButtons={controlButtons}
-        showDropdown={showPrimaryDropdown}
-        onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
-        onTerminalSelect={(terminalId) => {
-          setPrimaryTerminal(taskId, terminalId);
-          setShowPrimaryDropdown(false);
-        }}
-        onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
-        onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-        onSwap={() => swapPanes(taskId)}
-        position="primary"
-        getStateColor={getStateColor}
-        otherTerminalId={secondaryTerminal?.dbSessionId}
-      />
+      {primaryTerminal ? (
+        <TerminalPane
+          ref={primaryRef}
+          terminal={primaryTerminal}
+          terminals={terminals}
+          taskId={taskId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          hasFocus={focusedTerminalId === primaryTerminal?.dbSessionId}
+          showControls={isHorizontal} // Show controls in top pane for horizontal split
+          controlButtons={controlButtons}
+          showDropdown={showPrimaryDropdown}
+          onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
+          onTerminalSelect={(terminalId) => {
+            setPrimaryTerminal(taskId, terminalId);
+            setShowPrimaryDropdown(false);
+          }}
+          onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
+          onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
+          onSwap={() => swapPanes(taskId)}
+          position="primary"
+          getStateColor={getStateColor}
+          otherTerminalId={secondaryTerminal?.dbSessionId}
+        />
+      ) : (
+        <div className="flex items-center justify-center bg-gray-900">
+          <button
+            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+          >
+            + Add Terminal
+          </button>
+        </div>
+      )}
 
-      {/* Resizer - positioned in the grid gap */}
-      <div
-        ref={resizerRef}
-        className={`
-          absolute ${!isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}
-          ${isDragging ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/50'}
-          transition-colors z-10
-        `}
-        style={{
-          ...(!isHorizontal ? {
-            left: `calc(${layout.splitRatio * 100}% - 2px)`,
-            top: 0,
-            width: '4px',
-            height: '100%'
-          } : {
-            top: `calc(${layout.splitRatio * 100}% - 2px)`,
-            left: 0,
-            height: '4px', 
-            width: '100%'
-          })
-        }}
-        onMouseDown={handleMouseDown}
-        onDoubleClick={handleDoubleClick}
-        title="Drag to resize, double-click to reset to 50/50"
-      />
+      {/* Resizer - only show when both terminals are present */}
+      {primaryTerminal && secondaryTerminal && (
+        <div
+          ref={resizerRef}
+          className={`
+            absolute ${!isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}
+            ${isDragging ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/50'}
+            transition-colors z-10
+          `}
+          style={{
+            ...(!isHorizontal ? {
+              left: `calc(${layout.splitRatio * 100}% - 2px)`,
+              top: 0,
+              width: '4px',
+              height: '100%'
+            } : {
+              top: `calc(${layout.splitRatio * 100}% - 2px)`,
+              left: 0,
+              height: '4px', 
+              width: '100%'
+            })
+          }}
+          onMouseDown={handleMouseDown}
+          onDoubleClick={handleDoubleClick}
+          title="Drag to resize, double-click to reset to 50/50"
+        />
+      )}
 
       {/* Secondary Pane (right in vertical, bottom in horizontal) */}
-      <TerminalPane
-        ref={secondaryRef}
-        terminal={secondaryTerminal}
-        terminals={terminals}
-        taskId={taskId}
-        worktreePath={worktreePath}
-        isVisible={isVisible}
-        hasFocus={focusedTerminalId === secondaryTerminal?.dbSessionId}
-        showControls={!isHorizontal} // Show controls in right pane for vertical split
-        controlButtons={controlButtons}
-        showDropdown={showSecondaryDropdown}
-        onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
-        onTerminalSelect={(terminalId) => {
-          setSecondaryTerminal(taskId, terminalId);
-          setShowSecondaryDropdown(false);
-        }}
-        onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
-        onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-        onSwap={() => swapPanes(taskId)}
-        position="secondary"
-        getStateColor={getStateColor}
-        otherTerminalId={primaryTerminal?.dbSessionId}
-      />
+      {secondaryTerminal ? (
+        <TerminalPane
+          ref={secondaryRef}
+          terminal={secondaryTerminal}
+          terminals={terminals}
+          taskId={taskId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          hasFocus={focusedTerminalId === secondaryTerminal?.dbSessionId}
+          showControls={!isHorizontal} // Show controls in right pane for vertical split
+          controlButtons={controlButtons}
+          showDropdown={showSecondaryDropdown}
+          onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
+          onTerminalSelect={(terminalId) => {
+            setSecondaryTerminal(taskId, terminalId);
+            setShowSecondaryDropdown(false);
+          }}
+          onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
+          onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
+          onSwap={() => swapPanes(taskId)}
+          position="secondary"
+          getStateColor={getStateColor}
+          otherTerminalId={primaryTerminal?.dbSessionId}
+        />
+      ) : (
+        <div className="flex items-center justify-center bg-gray-900">
+          <button
+            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
+            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+          >
+            + Add Terminal
+          </button>
+        </div>
+      )}
     </div>
   );
 }

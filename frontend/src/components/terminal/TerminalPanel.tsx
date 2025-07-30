@@ -511,8 +511,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   // Render control buttons (reusable for both tab mode and split view)
   const renderControlButtons = () => (
     <>
-      {/* Split View Toggle - only show if split view enabled and 2+ terminals */}
-      {splitViewEnabled && terminals.length >= 2 && (
+      {/* Split View Toggle - show if split view enabled (allow with 1+ terminals) */}
+      {splitViewEnabled && terminals.length >= 1 && (
         <button 
           onClick={() => {
             if (layout.mode === 'tab') {
