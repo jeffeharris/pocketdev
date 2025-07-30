@@ -58,7 +58,15 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
-    console.error('[Git Service] Command failed:', error.message);
+    // Don't log expected failures for branch existence checks
+    const isExpectedFailure = 
+      command.includes('git rev-parse --verify') ||
+      command.includes('git ls-remote') ||
+      (command.includes('git merge-tree') && error.message.includes('merge-tree'));
+    
+    if (!isExpectedFailure) {
+      console.error('[Git Service] Command failed:', error.message);
+    }
     
     // Check for authentication errors
     if (error.message.includes('could not read Username') || 
