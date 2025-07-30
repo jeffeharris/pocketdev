@@ -87,37 +87,35 @@ export function SplitViewContainer({
   // Auto-assign terminals to panes if not set
   useEffect(() => {
     if (layout.mode === 'split' && terminals.length >= 1) {
-      let needsUpdate = false;
-      let newPrimaryId = layout.primaryTerminalId;
-      let newSecondaryId = layout.secondaryTerminalId;
-      
       // If primary not set or doesn't exist, use active tab or first terminal
-      if (!newPrimaryId || !terminals.find(t => t.dbSessionId === newPrimaryId)) {
+      if (!layout.primaryTerminalId || !terminals.find(t => t.dbSessionId === layout.primaryTerminalId)) {
         const primaryTerminal = terminals.find(t => t.dbSessionId === activeTabId) || terminals[0];
-        newPrimaryId = primaryTerminal.dbSessionId;
-        setPrimaryTerminal(taskId, newPrimaryId);
-        needsUpdate = true;
+        if (primaryTerminal) {
+          setPrimaryTerminal(taskId, primaryTerminal.dbSessionId);
+        }
       }
       
-      // If secondary not set or doesn't exist, use next available terminal
-      if (!newSecondaryId || !terminals.find(t => t.dbSessionId === newSecondaryId)) {
-        // Find a terminal that's not the primary
-        const secondaryTerminal = terminals.find(t => 
-          t.dbSessionId !== newPrimaryId
-        );
+      // For secondary, only assign if we have 2+ terminals and it's not already set correctly
+      if (terminals.length >= 2) {
+        const validSecondary = layout.secondaryTerminalId && 
+                             terminals.find(t => t.dbSessionId === layout.secondaryTerminalId) &&
+                             layout.secondaryTerminalId !== layout.primaryTerminalId;
         
-        if (secondaryTerminal) {
-          newSecondaryId = secondaryTerminal.dbSessionId;
-          setSecondaryTerminal(taskId, newSecondaryId);
-          needsUpdate = true;
+        if (!validSecondary) {
+          // Find a terminal that's not the primary
+          const secondaryTerminal = terminals.find(t => 
+            t.dbSessionId !== layout.primaryTerminalId
+          );
+          
+          if (secondaryTerminal) {
+            setSecondaryTerminal(taskId, secondaryTerminal.dbSessionId);
+          }
         }
-        // If no second terminal available, leave secondary as null for placeholder
       }
       
       // Ensure at least one terminal has focus if none is set
-      if (!focusedTerminalId && newPrimaryId) {
-        // Immediate focus setting if terminals are already loaded
-        setFocusedTerminal(taskId, newPrimaryId);
+      if (!focusedTerminalId && layout.primaryTerminalId) {
+        setFocusedTerminal(taskId, layout.primaryTerminalId);
       }
     } else if (layout.mode === 'split-4') {
       // Auto-assign for quad view
@@ -178,6 +176,30 @@ export function SplitViewContainer({
       }
     }
   }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, focusedTerminalId, setFocusedTerminal]);
+
+  // Separate effect to clear invalid terminal assignments
+  useEffect(() => {
+    // In split mode with only 1 terminal, clear secondary if it's set
+    if (layout.mode === 'split' && terminals.length === 1 && layout.secondaryTerminalId) {
+      setSecondaryTerminal(taskId, null);
+    }
+    
+    // In split-4 mode, clear terminals based on available count
+    if (layout.mode === 'split-4') {
+      if (terminals.length < 4 && layout.quaternaryTerminalId) {
+        setQuaternaryTerminal(taskId, null);
+      }
+      if (terminals.length < 3 && layout.tertiaryTerminalId) {
+        setTertiaryTerminal(taskId, null);
+      }
+      if (terminals.length < 2 && layout.secondaryTerminalId) {
+        setSecondaryTerminal(taskId, null);
+      }
+      if (terminals.length < 1 && layout.primaryTerminalId) {
+        setPrimaryTerminal(taskId, null);
+      }
+    }
+  }, [terminals.length, layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

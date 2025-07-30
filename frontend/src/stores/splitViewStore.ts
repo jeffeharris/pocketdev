@@ -29,10 +29,10 @@ interface SplitViewState {
   setActivePane: (taskId: string, pane: 'primary' | 'secondary') => void;
   setResizing: (resizing: boolean) => void;
   swapPanes: (taskId: string) => void;
-  setPrimaryTerminal: (taskId: string, terminalId: string) => void;
-  setSecondaryTerminal: (taskId: string, terminalId: string) => void;
-  setTertiaryTerminal: (taskId: string, terminalId: string) => void;
-  setQuaternaryTerminal: (taskId: string, terminalId: string) => void;
+  setPrimaryTerminal: (taskId: string, terminalId: string | null) => void;
+  setSecondaryTerminal: (taskId: string, terminalId: string | null) => void;
+  setTertiaryTerminal: (taskId: string, terminalId: string | null) => void;
+  setQuaternaryTerminal: (taskId: string, terminalId: string | null) => void;
   
   // Computed
   getLayout: (taskId: string) => SplitLayoutConfig;
