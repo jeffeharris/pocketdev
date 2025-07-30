@@ -65,10 +65,6 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   // Track if we've already created the terminal to prevent re-creation
   const [terminalCreated, setTerminalCreated] = useState(false);
 
-  // Debug focus state
-  useEffect(() => {
-    console.log('[DirectTerminal] Render:', { dbSessionId, hasFocus });
-  }, [dbSessionId, hasFocus]);
 
   // Update ready state when connected
   useEffect(() => {
@@ -145,11 +141,8 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
 
   // Handle click to focus
   const handleContainerClick = () => {
-    console.log('[DirectTerminal] Click detected, hasFocus:', hasFocus, 'dbSessionId:', dbSessionId, 'onFocusRequest:', !!onFocusRequest);
     if (onFocusRequest) {
       onFocusRequest();
-    } else {
-      console.log('[DirectTerminal] No onFocusRequest handler provided');
     }
   };
   

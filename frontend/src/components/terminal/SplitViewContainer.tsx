@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
+import type { DirectTerminalHandle } from './DirectTerminal';
+import { TerminalPane } from './TerminalPane';
 import { useSplitViewStore, useSplitLayout, persistLayout } from '../../stores/splitViewStore';
 import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
@@ -12,6 +13,7 @@ interface SplitViewContainerProps {
   isVisible: boolean;
   onSessionStatus: (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => void;
   activeTabId: string;
+  controlButtons?: React.ReactNode;
 }
 
 export function SplitViewContainer({
@@ -20,10 +22,11 @@ export function SplitViewContainer({
   worktreePath,
   isVisible,
   onSessionStatus,
-  activeTabId
+  activeTabId,
+  controlButtons
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, updateLayout } = useSplitViewStore();
+  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
@@ -33,6 +36,39 @@ export function SplitViewContainer({
   const secondaryRef = useRef<DirectTerminalHandle>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const rafRef = useRef<number | null>(null);
+  const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
+  const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
+  
+  
+  
+  // Helper to get AI state color
+  const getStateColor = (state?: string) => {
+    switch (state) {
+      case 'waiting':
+        return 'bg-purple-400';
+      case 'working':
+        return 'bg-yellow-400';
+      case 'idle':
+        return 'bg-blue-400';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.dropdown-container')) {
+        setShowPrimaryDropdown(false);
+        setShowSecondaryDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   // Persist layout changes with debounce
   useEffect(() => {
@@ -48,25 +84,40 @@ export function SplitViewContainer({
 
   // Auto-assign terminals to panes if not set
   useEffect(() => {
-    if (layout.mode === 'split' && terminals.length > 0) {
+    if (layout.mode === 'split' && terminals.length >= 2) {
+      let needsUpdate = false;
+      let newPrimaryId = layout.primaryTerminalId;
+      let newSecondaryId = layout.secondaryTerminalId;
+      
       // If primary not set or doesn't exist, use active tab or first terminal
-      if (!layout.primaryTerminalId || !terminals.find(t => t.dbSessionId === layout.primaryTerminalId)) {
+      if (!newPrimaryId || !terminals.find(t => t.dbSessionId === newPrimaryId)) {
         const primaryTerminal = terminals.find(t => t.dbSessionId === activeTabId) || terminals[0];
-        setPrimaryTerminal(taskId, primaryTerminal.dbSessionId);
+        newPrimaryId = primaryTerminal.dbSessionId;
+        setPrimaryTerminal(taskId, newPrimaryId);
+        needsUpdate = true;
       }
       
       // If secondary not set or doesn't exist, use next available terminal
-      if (!layout.secondaryTerminalId || !terminals.find(t => t.dbSessionId === layout.secondaryTerminalId)) {
+      if (!newSecondaryId || !terminals.find(t => t.dbSessionId === newSecondaryId)) {
+        // Find a terminal that's not the primary
         const secondaryTerminal = terminals.find(t => 
-          t.dbSessionId !== layout.primaryTerminalId && t.dbSessionId !== activeTabId
+          t.dbSessionId !== newPrimaryId
         ) || terminals[1];
         
         if (secondaryTerminal) {
-          setSecondaryTerminal(taskId, secondaryTerminal.dbSessionId);
+          newSecondaryId = secondaryTerminal.dbSessionId;
+          setSecondaryTerminal(taskId, newSecondaryId);
+          needsUpdate = true;
         }
       }
+      
+      // Ensure at least one terminal has focus if none is set
+      if (!focusedTerminalId && newPrimaryId) {
+        // Immediate focus setting if terminals are already loaded
+        setFocusedTerminal(taskId, newPrimaryId);
+      }
     }
-  }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal]);
+  }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal, focusedTerminalId, setFocusedTerminal]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -85,23 +136,35 @@ export function SplitViewContainer({
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      
-      const rect = containerRef.current.getBoundingClientRect();
-      let newRatio: number;
-      
-      if (layout.orientation === 'horizontal') {
-        newRatio = (e.clientX - rect.left) / rect.width;
-      } else {
-        newRatio = (e.clientY - rect.top) / rect.height;
+      // Cancel any pending animation frame
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
       }
       
-      // Clamp between 0.1 and 0.9
-      newRatio = Math.max(0.1, Math.min(0.9, newRatio));
-      setSplitRatio(taskId, newRatio);
+      // Schedule update on next animation frame
+      rafRef.current = requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        
+        const rect = containerRef.current.getBoundingClientRect();
+        let newRatio: number;
+        
+        if (layout.orientation === 'vertical') {
+          newRatio = (e.clientX - rect.left) / rect.width;
+        } else {
+          newRatio = (e.clientY - rect.top) / rect.height;
+        }
+        
+        // Clamp between 0.1 and 0.9
+        newRatio = Math.max(0.1, Math.min(0.9, newRatio));
+        setSplitRatio(taskId, newRatio);
+      });
     };
 
     const handleMouseUp = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       setIsDragging(false);
       setResizing(false);
     };
@@ -119,108 +182,122 @@ export function SplitViewContainer({
   const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
   const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
 
-  // If in tab mode or no terminals, render single view
-  if (layout.mode === 'tab' || !primaryTerminal || terminals.length < 2) {
-    const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
-    if (!activeTerminal) return null;
-    
+  // If in tab mode, we don't render anything here - the TerminalPanel handles it
+  if (layout.mode === 'tab') {
+    return null;
+  }
+  
+  // If not enough terminals for split view, show a message
+  if (terminals.length < 2) {
     return (
-      <div className="w-full h-full">
-        <DirectTerminal
-          key={activeTerminal.dbSessionId}
-          ref={primaryRef}
-          taskId={taskId}
-          dbSessionId={activeTerminal.dbSessionId}
-          shelltenderSessionId={activeTerminal.shelltenderSessionId || activeTerminal.sessionId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === activeTerminal.dbSessionId}
-          onSessionStatus={(status) => onSessionStatus(activeTerminal.dbSessionId, status)}
-          onFocusRequest={() => setFocusedTerminal(taskId, activeTerminal.dbSessionId)}
-        />
+      <div className="w-full h-full flex items-center justify-center bg-gray-900">
+        <div className="text-gray-400">Need at least 2 terminals for split view</div>
+      </div>
+    );
+  }
+  
+  // If terminals not yet assigned, show loading state
+  if (!primaryTerminal || !secondaryTerminal) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900">
+        <div className="text-gray-400">Initializing split view...</div>
       </div>
     );
   }
 
-  // Calculate styles based on orientation and ratio
+  // Calculate styles based on orientation
   const isHorizontal = layout.orientation === 'horizontal';
-  const primarySize = `${layout.splitRatio * 100}%`;
-  const secondarySize = `${(1 - layout.splitRatio) * 100}%`;
 
   return (
     <div 
       ref={containerRef}
-      className={`w-full h-full flex ${isHorizontal ? 'flex-row' : 'flex-col'}`}
+      className={`w-full h-full relative ${isDragging ? 'select-none' : ''}`}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: !isHorizontal ? `${layout.splitRatio}fr ${1 - layout.splitRatio}fr` : '1fr',
+        gridTemplateRows: isHorizontal ? `${layout.splitRatio}fr ${1 - layout.splitRatio}fr` : '1fr',
+        gap: '0px', // Gap handled by resizer
+        height: '100%',
+        width: '100%',
+        // Disable transitions during dragging for smoother resize
+        transition: isDragging ? 'none' : undefined
+      }}
     >
-      {/* Primary Pane */}
-      <div 
-        className="relative overflow-hidden"
-        style={{ 
-          [isHorizontal ? 'width' : 'height']: primarySize,
-          minWidth: isHorizontal ? '100px' : undefined,
-          minHeight: !isHorizontal ? '100px' : undefined
+      {/* Primary Pane (left in vertical, top in horizontal) */}
+      <TerminalPane
+        ref={primaryRef}
+        terminal={primaryTerminal}
+        terminals={terminals}
+        taskId={taskId}
+        worktreePath={worktreePath}
+        isVisible={isVisible}
+        hasFocus={focusedTerminalId === primaryTerminal?.dbSessionId}
+        showControls={isHorizontal} // Show controls in top pane for horizontal split
+        controlButtons={controlButtons}
+        showDropdown={showPrimaryDropdown}
+        onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
+        onTerminalSelect={(terminalId) => {
+          setPrimaryTerminal(taskId, terminalId);
+          setShowPrimaryDropdown(false);
         }}
-      >
-        {primaryTerminal && (
-          <DirectTerminal
-            key={primaryTerminal.dbSessionId}
-            ref={primaryRef}
-            taskId={taskId}
-            dbSessionId={primaryTerminal.dbSessionId}
-            shelltenderSessionId={primaryTerminal.shelltenderSessionId || primaryTerminal.sessionId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
-            onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-          />
-        )}
-      </div>
+        onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
+        onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
+        onSwap={() => swapPanes(taskId)}
+        position="primary"
+        getStateColor={getStateColor}
+        otherTerminalId={secondaryTerminal?.dbSessionId}
+      />
 
-      {/* Resizer */}
+      {/* Resizer - positioned in the grid gap */}
       <div
         ref={resizerRef}
         className={`
-          ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-          bg-gray-700 hover:bg-blue-500 transition-colors
-          ${isDragging ? 'bg-blue-500' : ''}
-          relative group
+          absolute ${!isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}
+          ${isDragging ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/50'}
+          transition-colors z-10
         `}
+        style={{
+          ...(!isHorizontal ? {
+            left: `calc(${layout.splitRatio * 100}% - 2px)`,
+            top: 0,
+            width: '4px',
+            height: '100%'
+          } : {
+            top: `calc(${layout.splitRatio * 100}% - 2px)`,
+            left: 0,
+            height: '4px', 
+            width: '100%'
+          })
+        }}
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
         title="Drag to resize, double-click to reset to 50/50"
-      >
-        {/* Hover indicator */}
-        <div className={`
-          absolute ${isHorizontal ? 'inset-y-0 -left-1 -right-1' : 'inset-x-0 -top-1 -bottom-1'}
-          group-hover:bg-blue-500/20
-        `} />
-      </div>
+      />
 
-      {/* Secondary Pane */}
-      <div 
-        className="relative overflow-hidden"
-        style={{ 
-          [isHorizontal ? 'width' : 'height']: secondarySize,
-          minWidth: isHorizontal ? '100px' : undefined,
-          minHeight: !isHorizontal ? '100px' : undefined
+      {/* Secondary Pane (right in vertical, bottom in horizontal) */}
+      <TerminalPane
+        ref={secondaryRef}
+        terminal={secondaryTerminal}
+        terminals={terminals}
+        taskId={taskId}
+        worktreePath={worktreePath}
+        isVisible={isVisible}
+        hasFocus={focusedTerminalId === secondaryTerminal?.dbSessionId}
+        showControls={!isHorizontal} // Show controls in right pane for vertical split
+        controlButtons={controlButtons}
+        showDropdown={showSecondaryDropdown}
+        onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
+        onTerminalSelect={(terminalId) => {
+          setSecondaryTerminal(taskId, terminalId);
+          setShowSecondaryDropdown(false);
         }}
-      >
-        {secondaryTerminal && (
-          <DirectTerminal
-            key={secondaryTerminal.dbSessionId}
-            ref={secondaryRef}
-            taskId={taskId}
-            dbSessionId={secondaryTerminal.dbSessionId}
-            shelltenderSessionId={secondaryTerminal.shelltenderSessionId || secondaryTerminal.sessionId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
-            onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-          />
-        )}
-      </div>
+        onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
+        onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
+        onSwap={() => swapPanes(taskId)}
+        position="secondary"
+        getStateColor={getStateColor}
+        otherTerminalId={primaryTerminal?.dbSessionId}
+      />
     </div>
   );
 }

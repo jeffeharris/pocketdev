@@ -192,9 +192,9 @@ export function SplitViewControls({
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
-            title="Horizontal split"
+            title="Horizontal split (top/bottom)"
           >
-            <Columns className="w-3 h-3" />
+            <Rows className="w-3 h-3" />
           </button>
           <button
             onClick={() => updateLayout(taskId, { orientation: 'vertical' })}
@@ -203,9 +203,9 @@ export function SplitViewControls({
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
-            title="Vertical split"
+            title="Vertical split (side by side)"
           >
-            <Rows className="w-3 h-3" />
+            <Columns className="w-3 h-3" />
           </button>
         </div>
 

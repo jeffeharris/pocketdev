@@ -37,7 +37,7 @@ interface SplitViewState {
 
 const defaultLayout: SplitLayoutConfig = {
   mode: 'tab',
-  orientation: 'horizontal',
+  orientation: 'vertical',
   primaryTerminalId: null,
   secondaryTerminalId: null,
   splitRatio: 0.5

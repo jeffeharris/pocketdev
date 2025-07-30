@@ -167,10 +167,8 @@ export const useTerminalStore = create<TerminalStoreState>()(
         },
         
         setFocusedTerminal: (taskId, dbSessionId) => {
-          console.log('[terminalStore] setFocusedTerminal called:', { taskId, dbSessionId });
           set(state => {
             const taskTerminals = state.terminals.get(taskId);
-            console.log('[terminalStore] taskTerminals:', taskTerminals);
             if (taskTerminals?.has(dbSessionId)) {
               // Clear focus from other terminals in this task
               taskTerminals.forEach(terminal => {
@@ -178,14 +176,10 @@ export const useTerminalStore = create<TerminalStoreState>()(
               });
               // Set focus on the selected terminal
               const terminal = taskTerminals.get(dbSessionId);
-              console.log('[terminalStore] Found terminal:', terminal);
               if (terminal) {
                 terminal.hasFocus = true;
                 state.focusedTerminals.set(taskId, dbSessionId);
-                console.log('[terminalStore] Focus set successfully');
               }
-            } else {
-              console.log('[terminalStore] Terminal not found in task');
             }
           });
         },

@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
-import { Eye, RefreshCw, ExternalLink, Monitor, Columns, Maximize2 } from 'lucide-react';
+import { Eye, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -9,7 +9,6 @@ import { api } from '../../services/api';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
-import { SplitViewControls } from './SplitViewControls';
 import { loadLayout, persistLayout, useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 import { useShortcutContext } from '../../hooks/keyboard';
@@ -509,6 +508,87 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     showToast(message, 5000);
   };
 
+  // Render control buttons (reusable for both tab mode and split view)
+  const renderControlButtons = () => (
+    <>
+      {/* Split View Toggle - only show if split view enabled and 2+ terminals */}
+      {splitViewEnabled && terminals.length >= 2 && (
+        <button 
+          onClick={() => {
+            if (layout.mode === 'tab') {
+              // Switch to vertical split
+              updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+              // Ensure focus remains on the active terminal
+              if (activeTabId && !focusedTerminalId) {
+                setFocusedTerminal(task.id, activeTabId);
+              }
+            } else if (layout.orientation === 'vertical') {
+              // Switch to horizontal split
+              updateLayout(task.id, { orientation: 'horizontal' });
+            } else {
+              // Switch back to tab mode
+              updateLayout(task.id, { mode: 'tab' });
+            }
+          }}
+          className={`p-1 transition-colors ${
+            layout.mode === 'split' 
+              ? 'text-blue-400 hover:text-blue-300' 
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+          title={
+            layout.mode === 'tab' 
+              ? 'Enable vertical split view (Alt+D)' 
+              : layout.orientation === 'vertical'
+              ? 'Switch to horizontal split (Alt+D)'
+              : 'Switch to single tab view (Alt+D)'
+          }
+        >
+          {layout.mode === 'tab' 
+            ? <Square className="w-4 h-4" />
+            : layout.orientation === 'vertical'
+            ? <Columns className="w-4 h-4" />  // Columns icon for vertical split (side by side)
+            : <Rows className="w-4 h-4" />     // Rows icon for horizontal split (top/bottom)
+          }
+        </button>
+      )}
+      <button 
+        onClick={onToggleSidebar}
+        className="text-gray-400 hover:text-gray-200 p-1"
+        title="Toggle sidebar"
+      >
+        <Eye className="w-4 h-4" />
+      </button>
+      <button 
+        onClick={handleResetSession}
+        className={`p-1 transition-colors ${
+          isResetting 
+            ? 'text-blue-400 animate-spin' 
+            : Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error')
+            ? 'text-orange-400 hover:text-orange-300'
+            : 'text-gray-400 hover:text-gray-200'
+        }`}
+        disabled={isResetting}
+        title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
+          ? "Reconnect disconnected sessions" 
+          : "Reset session to original state"}
+      >
+        <RefreshCw className="w-4 h-4" />
+      </button>
+      <button 
+        className="text-gray-400 hover:text-gray-200 p-1"
+        title="Open in new window"
+      >
+        <ExternalLink className="w-4 h-4" />
+      </button>
+      <button 
+        onClick={onToggleValidation}
+        className={`p-1 transition-colors ${validationMode ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
+      >
+        <Monitor className="w-4 h-4" />
+      </button>
+    </>
+  );
+
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = terminals.map(t => {
     const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
@@ -572,16 +652,14 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         case 'terminal-toggle-split':
           if (splitViewEnabled) {
             if (layout.mode === 'tab') {
-              // Switch to horizontal split
-              toggleSplitMode(task.id);
-              // Ensure we start with horizontal orientation
-              updateLayout(task.id, { orientation: 'horizontal' });
-            } else if (layout.orientation === 'horizontal') {
               // Switch to vertical split
-              updateLayout(task.id, { orientation: 'vertical' });
+              updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+            } else if (layout.orientation === 'vertical') {
+              // Switch to horizontal split
+              updateLayout(task.id, { orientation: 'horizontal' });
             } else {
               // Switch back to tab mode
-              toggleSplitMode(task.id);
+              updateLayout(task.id, { mode: 'tab' });
             }
           }
           break;
@@ -614,17 +692,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       className="bg-gray-900 flex flex-col"
       style={{ height: validationMode ? '60%' : '100%' }}
     >
-      {/* Terminal Header */}
-      <div className="bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center justify-between">
-          {/* Terminal Tabs or Split View Controls */}
-          {splitViewEnabled && layout.mode === 'split' ? (
-            <SplitViewControls
-              taskId={task.id}
-              activeTabId={activeTabId}
-              onTerminalSelect={handleTabSelect}
-            />
-          ) : (
+      {/* Terminal Header - Only show in tab mode */}
+      {layout.mode === 'tab' && (
+        <div className="bg-gray-800 border-b border-gray-700">
+          <div className="flex items-center justify-between">
             <TerminalTabs
               tabs={tabs}
               activeTabId={activeTabId}
@@ -636,65 +707,17 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               onTabReorder={handleTabReorder}
               maxTabs={6}
             />
-          )}
-
-          {/* Control Buttons */}
-          <div className="flex items-center gap-2 pr-4">
-            {splitViewEnabled && (
-              <button 
-                onClick={() => toggleSplitMode(task.id)}
-                className={`p-1 transition-colors ${
-                  layout.mode === 'split' 
-                    ? 'text-blue-400' 
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-                title={layout.mode === 'split' ? 'Switch to tab view' : 'Enable split view'}
-              >
-                {layout.mode === 'split' ? <Columns className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            )}
-            <button 
-              onClick={onToggleSidebar}
-              className="text-gray-400 hover:text-gray-200 p-1"
-              title="Toggle sidebar"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={handleResetSession}
-              className={`p-1 transition-colors ${
-                isResetting 
-                  ? 'text-blue-400 animate-spin' 
-                  : Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error')
-                  ? 'text-orange-400 hover:text-orange-300'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-              disabled={isResetting}
-              title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
-                ? "Reconnect disconnected sessions" 
-                : "Reset session to original state"}
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button 
-              className="text-gray-400 hover:text-gray-200 p-1"
-              title="Open in new window"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={onToggleValidation}
-              className={`p-1 transition-colors ${validationMode ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
-            >
-              <Monitor className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 pr-4">
+              {/* Control buttons for tab mode */}
+              {renderControlButtons()}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Terminal Content - Split view or single terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {splitViewEnabled ? (
+        {splitViewEnabled && layout.mode === 'split' ? (
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}
@@ -702,9 +725,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             isVisible={isVisible}
             onSessionStatus={handleSessionStatus}
             activeTabId={activeTabId}
+            controlButtons={renderControlButtons()}
           />
         ) : (
-          // Original single terminal view
+          // Tab mode - show single terminal
           (() => {
             const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
             if (!activeTerminal) return null;
