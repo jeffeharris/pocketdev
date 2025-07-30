@@ -32,7 +32,7 @@ export class TaskController {
    */
   async createTask(req, res) {
     const { projectId } = req.params;
-    const { name, branch } = req.body;
+    const { name, branch, useExistingBranch } = req.body;
     
     if (!name || !branch) {
       return res.status(400).json({ error: 'Task name and branch are required' });
@@ -48,7 +48,7 @@ export class TaskController {
       const worktreePath = path.join(this.projectsDir, `${project.id}-task-${taskId}`);
       
       // Create worktree using service
-      await this.worktreeService.create(project.local_path, branch, worktreePath, project.base_branch);
+      await this.worktreeService.create(project.local_path, branch, worktreePath, project.base_branch, useExistingBranch);
       
       // Configure git credentials
       await this.gitService.configureCredentials(worktreePath);
