@@ -1,5 +1,5 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
-import { Eye, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows } from 'lucide-react';
+import { Eye, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows, Grid2x2 } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -522,32 +522,41 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
               if (activeTabId && !focusedTerminalId) {
                 setFocusedTerminal(task.id, activeTabId);
               }
-            } else if (layout.orientation === 'vertical') {
+            } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split
               updateLayout(task.id, { orientation: 'horizontal' });
+            } else if (layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3) {
+              // Switch to quad view (allow with 3+ terminals)
+              updateLayout(task.id, { mode: 'split-4' });
             } else {
               // Switch back to tab mode
               updateLayout(task.id, { mode: 'tab' });
             }
           }}
           className={`p-1 transition-colors ${
-            layout.mode === 'split' 
+            layout.mode !== 'tab' 
               ? 'text-blue-400 hover:text-blue-300' 
               : 'text-gray-400 hover:text-gray-200'
           }`}
           title={
             layout.mode === 'tab' 
               ? 'Enable vertical split view (Alt+D)' 
-              : layout.orientation === 'vertical'
+              : layout.mode === 'split' && layout.orientation === 'vertical'
               ? 'Switch to horizontal split (Alt+D)'
+              : layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3
+              ? 'Switch to quad view (Alt+D)'
+              : layout.mode === 'split-4'
+              ? 'Switch to single tab view (Alt+D)'
               : 'Switch to single tab view (Alt+D)'
           }
         >
           {layout.mode === 'tab' 
             ? <Square className="w-4 h-4" />
-            : layout.orientation === 'vertical'
+            : layout.mode === 'split' && layout.orientation === 'vertical'
             ? <Columns className="w-4 h-4" />  // Columns icon for vertical split (side by side)
-            : <Rows className="w-4 h-4" />     // Rows icon for horizontal split (top/bottom)
+            : layout.mode === 'split' && layout.orientation === 'horizontal'
+            ? <Rows className="w-4 h-4" />     // Rows icon for horizontal split (top/bottom)
+            : <Grid2x2 className="w-4 h-4" />  // Grid icon for quad view
           }
         </button>
       )}
@@ -654,9 +663,12 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             if (layout.mode === 'tab') {
               // Switch to vertical split
               updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
-            } else if (layout.orientation === 'vertical') {
+            } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split
               updateLayout(task.id, { orientation: 'horizontal' });
+            } else if (layout.mode === 'split' && layout.orientation === 'horizontal' && terminals.length >= 3) {
+              // Switch to quad view
+              updateLayout(task.id, { mode: 'split-4' });
             } else {
               // Switch back to tab mode
               updateLayout(task.id, { mode: 'tab' });
@@ -717,7 +729,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
 
       {/* Terminal Content - Split view or single terminal */}
       <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {splitViewEnabled && layout.mode === 'split' ? (
+        {splitViewEnabled && (layout.mode === 'split' || layout.mode === 'split-4') ? (
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}

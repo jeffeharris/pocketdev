@@ -7,10 +7,12 @@ import { enableMapSet } from 'immer';
 enableMapSet();
 
 export interface SplitLayoutConfig {
-  mode: 'tab' | 'split';
+  mode: 'tab' | 'split' | 'split-4';
   orientation: 'horizontal' | 'vertical';
   primaryTerminalId: string | null;
   secondaryTerminalId: string | null;
+  tertiaryTerminalId?: string | null;
+  quaternaryTerminalId?: string | null;
   splitRatio: number;
 }
 
@@ -29,6 +31,8 @@ interface SplitViewState {
   swapPanes: (taskId: string) => void;
   setPrimaryTerminal: (taskId: string, terminalId: string) => void;
   setSecondaryTerminal: (taskId: string, terminalId: string) => void;
+  setTertiaryTerminal: (taskId: string, terminalId: string) => void;
+  setQuaternaryTerminal: (taskId: string, terminalId: string) => void;
   
   // Computed
   getLayout: (taskId: string) => SplitLayoutConfig;
@@ -110,6 +114,20 @@ export const useSplitViewStore = create<SplitViewState>()(
           set(state => {
             const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
             state.layouts.set(taskId, { ...currentLayout, secondaryTerminalId: terminalId });
+          });
+        },
+        
+        setTertiaryTerminal: (taskId, terminalId) => {
+          set(state => {
+            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
+            state.layouts.set(taskId, { ...currentLayout, tertiaryTerminalId: terminalId });
+          });
+        },
+        
+        setQuaternaryTerminal: (taskId, terminalId) => {
+          set(state => {
+            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
+            state.layouts.set(taskId, { ...currentLayout, quaternaryTerminalId: terminalId });
           });
         },
         

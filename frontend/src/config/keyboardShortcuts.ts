@@ -155,7 +155,7 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
   'terminal.split.toggle': {
     id: 'terminal.split.toggle',
     key: 'alt+d',
-    description: 'Toggle split view (single/vertical/horizontal)',
+    description: 'Toggle split view (single/vertical/horizontal/quad)',
     category: 'terminal',
     contexts: [{ name: 'terminal', priority: 10 }],
     handler: () => {

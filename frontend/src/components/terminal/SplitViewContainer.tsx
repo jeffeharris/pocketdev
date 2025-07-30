@@ -26,7 +26,7 @@ export function SplitViewContainer({
   controlButtons
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
+  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
@@ -34,6 +34,8 @@ export function SplitViewContainer({
   const containerRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<DirectTerminalHandle>(null);
   const secondaryRef = useRef<DirectTerminalHandle>(null);
+  const tertiaryRef = useRef<DirectTerminalHandle>(null);
+  const quaternaryRef = useRef<DirectTerminalHandle>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const rafRef = useRef<number | null>(null);
@@ -116,8 +118,65 @@ export function SplitViewContainer({
         // Immediate focus setting if terminals are already loaded
         setFocusedTerminal(taskId, newPrimaryId);
       }
+    } else if (layout.mode === 'split-4' && terminals.length >= 3) {
+      // Auto-assign for quad view
+      let newPrimaryId = layout.primaryTerminalId;
+      let newSecondaryId = layout.secondaryTerminalId;
+      let newTertiaryId = layout.tertiaryTerminalId;
+      let newQuaternaryId = layout.quaternaryTerminalId;
+      
+      // Ensure all 4 positions are filled with unique terminals
+      const usedIds = new Set<string>();
+      
+      // Primary
+      if (!newPrimaryId || !terminals.find(t => t.dbSessionId === newPrimaryId)) {
+        const primaryTerminal = terminals.find(t => t.dbSessionId === activeTabId) || terminals[0];
+        newPrimaryId = primaryTerminal.dbSessionId;
+        setPrimaryTerminal(taskId, newPrimaryId);
+      }
+      usedIds.add(newPrimaryId);
+      
+      // Secondary
+      if (!newSecondaryId || !terminals.find(t => t.dbSessionId === newSecondaryId) || usedIds.has(newSecondaryId)) {
+        const secondaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
+        if (secondaryTerminal) {
+          newSecondaryId = secondaryTerminal.dbSessionId;
+          setSecondaryTerminal(taskId, newSecondaryId);
+          usedIds.add(newSecondaryId);
+        }
+      } else {
+        usedIds.add(newSecondaryId);
+      }
+      
+      // Tertiary
+      if (!newTertiaryId || !terminals.find(t => t.dbSessionId === newTertiaryId) || usedIds.has(newTertiaryId)) {
+        const tertiaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
+        if (tertiaryTerminal) {
+          newTertiaryId = tertiaryTerminal.dbSessionId;
+          setTertiaryTerminal(taskId, newTertiaryId);
+          usedIds.add(newTertiaryId);
+        }
+      } else {
+        usedIds.add(newTertiaryId);
+      }
+      
+      // Quaternary (might be null if only 3 terminals)
+      if (terminals.length >= 4) {
+        if (!newQuaternaryId || !terminals.find(t => t.dbSessionId === newQuaternaryId) || usedIds.has(newQuaternaryId)) {
+          const quaternaryTerminal = terminals.find(t => !usedIds.has(t.dbSessionId));
+          if (quaternaryTerminal) {
+            newQuaternaryId = quaternaryTerminal.dbSessionId;
+            setQuaternaryTerminal(taskId, newQuaternaryId);
+          }
+        }
+      }
+      
+      // Ensure focus
+      if (!focusedTerminalId && newPrimaryId) {
+        setFocusedTerminal(taskId, newPrimaryId);
+      }
     }
-  }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal, focusedTerminalId, setFocusedTerminal]);
+  }, [layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, terminals, taskId, activeTabId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, focusedTerminalId, setFocusedTerminal]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -181,6 +240,8 @@ export function SplitViewContainer({
   // Get the terminal instances
   const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
   const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
+  const tertiaryTerminal = terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId);
+  const quaternaryTerminal = terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId);
 
   // If in tab mode, we don't render anything here - the TerminalPanel handles it
   if (layout.mode === 'tab') {
@@ -205,7 +266,142 @@ export function SplitViewContainer({
     );
   }
 
-  // Calculate styles based on orientation
+  // Handle quad view (split-4)
+  if (layout.mode === 'split-4') {
+    // Check if we have at least 3 terminals
+    if (terminals.length < 3) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+          <div className="text-gray-400">Need at least 3 terminals for quad view</div>
+        </div>
+      );
+    }
+    
+    // Ensure we have at least the first 3 terminals assigned
+    if (!primaryTerminal || !secondaryTerminal || !tertiaryTerminal) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+          <div className="text-gray-400">Initializing quad view...</div>
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        ref={containerRef}
+        className="w-full h-full"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gridTemplateRows: '1fr 1fr',
+          gap: '1px',
+          backgroundColor: '#1f2937', // gray-800 for gap color
+          height: '100%',
+          width: '100%'
+        }}
+      >
+        {/* Top-left quadrant (Primary) */}
+        <TerminalPane
+          ref={primaryRef}
+          terminal={primaryTerminal}
+          terminals={terminals}
+          taskId={taskId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
+          showControls={false}
+          controlButtons={controlButtons}
+          showDropdown={false}
+          onDropdownToggle={() => {}}
+          onTerminalSelect={(terminalId) => setPrimaryTerminal(taskId, terminalId)}
+          onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
+          onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
+          position="primary"
+          getStateColor={getStateColor}
+          otherTerminalId=""
+        />
+        
+        {/* Top-right quadrant (Secondary) - contains control buttons */}
+        <TerminalPane
+          ref={secondaryRef}
+          terminal={secondaryTerminal}
+          terminals={terminals}
+          taskId={taskId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
+          showControls={true} // Show controls in top-right
+          controlButtons={controlButtons}
+          showDropdown={false}
+          onDropdownToggle={() => {}}
+          onTerminalSelect={(terminalId) => setSecondaryTerminal(taskId, terminalId)}
+          onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
+          onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
+          position="secondary"
+          getStateColor={getStateColor}
+          otherTerminalId=""
+        />
+        
+        {/* Bottom-left quadrant (Tertiary) */}
+        <TerminalPane
+          ref={tertiaryRef}
+          terminal={tertiaryTerminal}
+          terminals={terminals}
+          taskId={taskId}
+          worktreePath={worktreePath}
+          isVisible={isVisible}
+          hasFocus={focusedTerminalId === tertiaryTerminal.dbSessionId}
+          showControls={false}
+          controlButtons={controlButtons}
+          showDropdown={false}
+          onDropdownToggle={() => {}}
+          onTerminalSelect={(terminalId) => setTertiaryTerminal(taskId, terminalId)}
+          onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
+          onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
+          position="tertiary"
+          getStateColor={getStateColor}
+          otherTerminalId=""
+        />
+        
+        {/* Bottom-right quadrant (Quaternary) - might be empty */}
+        {quaternaryTerminal ? (
+          <TerminalPane
+            ref={quaternaryRef}
+            terminal={quaternaryTerminal}
+            terminals={terminals}
+            taskId={taskId}
+            worktreePath={worktreePath}
+            isVisible={isVisible}
+            hasFocus={focusedTerminalId === quaternaryTerminal.dbSessionId}
+            showControls={false}
+            controlButtons={controlButtons}
+            showDropdown={false}
+            onDropdownToggle={() => {}}
+            onTerminalSelect={(terminalId) => setQuaternaryTerminal(taskId, terminalId)}
+            onSessionStatus={(status) => onSessionStatus(quaternaryTerminal.dbSessionId, status)}
+            onFocusRequest={() => setFocusedTerminal(taskId, quaternaryTerminal.dbSessionId)}
+            position="quaternary"
+            getStateColor={getStateColor}
+            otherTerminalId=""
+          />
+        ) : (
+          <div className="flex items-center justify-center bg-gray-900">
+            <button
+              onClick={() => {
+                // This will trigger the tab add in TerminalPanel
+                document.dispatchEvent(new CustomEvent('terminal-new-tab'));
+              }}
+              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+            >
+              + Add Terminal
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Calculate styles based on orientation for 2-way split
   const isHorizontal = layout.orientation === 'horizontal';
 
   return (
