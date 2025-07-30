@@ -28,7 +28,7 @@ interface TerminalPanelProps {
   isFullscreen?: boolean;
 }
 
-const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProps>((props, ref) => {
+function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedRef<TerminalPanelHandle>) {
   const {
     task,
     validationMode,
@@ -209,6 +209,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   const handleRefreshSession = async () => {
     setIsResetting(true);
     try {
+      // Tab mode - use the normal logic
       const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
       if (!activeTerminal) {
         showNotification('warning', 'No active terminal to refresh');
@@ -685,7 +686,16 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         {isFullscreen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
       <button 
-        onClick={handleRefreshSession}
+        onClick={(e) => {
+          // In split view mode, let the SplitViewContainer handle it
+          if (layout.mode === 'split' || layout.mode === 'split-4') {
+            // Just mark the button with data-action, the event will bubble up
+            return;
+          }
+          // In tab mode, handle it here
+          handleRefreshSession();
+        }}
+        data-action="refresh"
         className={`p-1 transition-colors ${
           isResetting 
             ? 'text-blue-400 animate-spin' 
@@ -695,8 +705,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         }`}
         disabled={isResetting}
         title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
-          ? "Reconnect and restore terminal session" 
-          : "Refresh terminal (sync state, reload buffer, restore cursor)"}
+          ? "Reconnect and restore terminal session (Ctrl+Shift+R)" 
+          : "Refresh terminal - sync state, reload buffer, restore cursor (Ctrl+Shift+R)"}
       >
         <RefreshCw className="w-4 h-4" />
       </button>
@@ -816,6 +826,13 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
         case 'terminal-toggle-fullscreen':
           onToggleSidebar();
           break;
+        case 'terminal-refresh':
+          // Simulate a click on the refresh button to ensure consistent behavior
+          const refreshButton = document.querySelector('[data-action="refresh"]') as HTMLButtonElement;
+          if (refreshButton) {
+            refreshButton.click();
+          }
+          break;
       }
     };
 
@@ -827,6 +844,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     document.addEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
 
     return () => {
       // Remove event listeners
@@ -837,8 +855,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar]);
+  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession]);
 
 
 
@@ -881,6 +900,8 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             onSessionStatus={handleSessionStatus}
             activeTabId={activeTabId}
             controlButtons={renderControlButtons()}
+            isResetting={isResetting}
+            setIsResetting={setIsResetting}
           />
         ) : (
           // Tab mode - show single terminal
@@ -943,8 +964,9 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       />
     </div>
   );
-});
+}
 
-TerminalPanelComponent.displayName = 'TerminalPanel';
+const TerminalPanelWithRef = forwardRef<TerminalPanelHandle, TerminalPanelProps>(TerminalPanelComponent);
+TerminalPanelWithRef.displayName = 'TerminalPanel';
 
-export const TerminalPanel = TerminalPanelComponent;
+export const TerminalPanel = TerminalPanelWithRef;

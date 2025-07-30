@@ -14,6 +14,8 @@ interface SplitViewContainerProps {
   onSessionStatus: (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => void;
   activeTabId: string;
   controlButtons?: React.ReactNode;
+  isResetting?: boolean;
+  setIsResetting?: (value: boolean) => void;
 }
 
 export function SplitViewContainer({
@@ -23,7 +25,9 @@ export function SplitViewContainer({
   isVisible,
   onSessionStatus,
   activeTabId,
-  controlButtons
+  controlButtons,
+  isResetting,
+  setIsResetting
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
@@ -42,7 +46,61 @@ export function SplitViewContainer({
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
   
+  // Handle refresh button click when control buttons include refresh
+  const handleRefreshClick = useCallback(() => {
+    if (!isResetting && setIsResetting) {
+      setIsResetting(true);
+      
+      // Refresh all terminals in the split view
+      if (layout.mode === 'split-4') {
+        // Refresh all quad view terminals
+        if (primaryRef.current?.refresh) {
+          primaryRef.current.refresh();
+        }
+        if (secondaryRef.current?.refresh) {
+          secondaryRef.current.refresh();
+        }
+        if (tertiaryRef.current?.refresh) {
+          tertiaryRef.current.refresh();
+        }
+        if (quaternaryRef.current?.refresh) {
+          quaternaryRef.current.refresh();
+        }
+      } else if (layout.mode === 'split') {
+        // Refresh both split view terminals
+        if (primaryRef.current?.refresh) {
+          primaryRef.current.refresh();
+        }
+        if (secondaryRef.current?.refresh) {
+          secondaryRef.current.refresh();
+        }
+      }
+      
+      // Reset the flag after a delay
+      setTimeout(() => {
+        if (setIsResetting) setIsResetting(false);
+      }, 1000);
+    }
+  }, [layout.mode, isResetting, setIsResetting]);
   
+  // Listen for refresh button clicks on the control buttons
+  useEffect(() => {
+    if (controlButtons) {
+      const handleClick = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        // Check if the refresh button was clicked
+        const refreshButton = target.closest('[data-action="refresh"]');
+        if (refreshButton) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleRefreshClick();
+        }
+      };
+      
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [controlButtons, handleRefreshClick]);
   
   // Helper to get AI state color
   const getStateColor = (state?: string) => {
@@ -82,6 +140,7 @@ export function SplitViewContainer({
     
     return () => clearTimeout(timeoutId);
   }, [layout, taskId, projectId]);
+  
 
 
   // Simple auto-assignment: just assign available terminals in order
