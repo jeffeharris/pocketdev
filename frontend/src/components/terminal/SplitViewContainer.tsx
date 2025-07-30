@@ -104,13 +104,14 @@ export function SplitViewContainer({
         // Find a terminal that's not the primary
         const secondaryTerminal = terminals.find(t => 
           t.dbSessionId !== newPrimaryId
-        ) || terminals[1];
+        );
         
         if (secondaryTerminal) {
           newSecondaryId = secondaryTerminal.dbSessionId;
           setSecondaryTerminal(taskId, newSecondaryId);
           needsUpdate = true;
         }
+        // If no second terminal available, leave secondary as null for placeholder
       }
       
       // Ensure at least one terminal has focus if none is set
@@ -144,7 +145,7 @@ export function SplitViewContainer({
           setSecondaryTerminal(taskId, newSecondaryId);
           usedIds.add(newSecondaryId);
         }
-      } else {
+      } else if (newSecondaryId) {
         usedIds.add(newSecondaryId);
       }
       
@@ -156,7 +157,7 @@ export function SplitViewContainer({
           setTertiaryTerminal(taskId, newTertiaryId);
           usedIds.add(newTertiaryId);
         }
-      } else {
+      } else if (newTertiaryId) {
         usedIds.add(newTertiaryId);
       }
       
