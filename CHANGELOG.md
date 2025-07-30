@@ -5,10 +5,21 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- **Terminal Refresh Feature**
+  - Refresh button now properly works in all view modes (tab, split, quad)
+  - Tab mode: Refreshes only the active terminal
+  - Split view: Refreshes both visible terminals
+  - Quad view: Refreshes all four visible terminals
+  - Keyboard shortcut: Ctrl+Shift+R to refresh terminals
+  - Reconnects WebSocket if disconnected
+  - Restores terminal buffer and cursor position
+  - Visual feedback with spinning animation during refresh
+
 - **Keyboard Shortcuts System**
   - Comprehensive keyboard shortcut architecture with context-aware activation
   - Quick Access Panel (Ctrl+K / Ctrl+Space) showing available commands based on context
   - Terminal tab navigation shortcuts (Alt+1-6, Alt+T for new, Alt+W to close, Alt+[/] for next/prev)
+  - Terminal refresh shortcut (Ctrl+Shift+R)
   - Modal-aware context system preventing shortcut conflicts
   - Dynamic shortcut registration with priority-based filtering
   - TypeScript types for keyboard management
