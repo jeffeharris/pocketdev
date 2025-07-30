@@ -58,13 +58,15 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
-    // Don't log expected failures for branch existence checks
+    // Log expected failures at info level instead of error
     const isExpectedFailure = 
       command.includes('git rev-parse --verify') ||
       command.includes('git ls-remote') ||
       (command.includes('git merge-tree') && error.message.includes('merge-tree'));
     
-    if (!isExpectedFailure) {
+    if (isExpectedFailure) {
+      console.info('[Git Service] Expected command failure:', command.split(' ').slice(0, 4).join(' ') + '...');
+    } else {
       console.error('[Git Service] Command failed:', error.message);
     }
     
