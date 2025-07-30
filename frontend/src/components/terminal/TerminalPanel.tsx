@@ -13,6 +13,7 @@ import { SplitViewControls } from './SplitViewControls';
 import { loadLayout, persistLayout, useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 import { useShortcutContext } from '../../hooks/keyboard';
+import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 
 export type TerminalPanelHandle = {
   focus: () => void;
@@ -27,13 +28,14 @@ interface TerminalPanelProps {
   isVisible?: boolean;
 }
 
-const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProps>(({
-  task,
-  validationMode,
-  onToggleValidation,
-  onToggleSidebar,
-  isVisible = true
-}, ref) => {
+const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProps>((props, ref) => {
+  const {
+    task,
+    validationMode,
+    onToggleValidation,
+    onToggleSidebar,
+    isVisible = true
+  } = props;
   const [isResetting, setIsResetting] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => {
     // Check if there's a focus request first
@@ -59,7 +61,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
   
   // Split view state
   const layout = useSplitLayout(task.id);
-  const { toggleSplitMode } = useSplitViewStore();
+  const { toggleSplitMode, updateLayout } = useSplitViewStore();
   
   // Load split layout on mount
   useEffect(() => {
@@ -567,6 +569,22 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
             }
           }
           break;
+        case 'terminal-toggle-split':
+          if (splitViewEnabled) {
+            if (layout.mode === 'tab') {
+              // Switch to horizontal split
+              toggleSplitMode(task.id);
+              // Ensure we start with horizontal orientation
+              updateLayout(task.id, { orientation: 'horizontal' });
+            } else if (layout.orientation === 'horizontal') {
+              // Switch to vertical split
+              updateLayout(task.id, { orientation: 'vertical' });
+            } else {
+              // Switch back to tab mode
+              toggleSplitMode(task.id);
+            }
+          }
+          break;
       }
     };
 
@@ -576,6 +594,7 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
     document.addEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
     document.addEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
+    document.addEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
 
     return () => {
       // Remove event listeners
@@ -584,8 +603,10 @@ const TerminalPanelComponent = forwardRef<TerminalPanelHandle, TerminalPanelProp
       document.removeEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
+      document.removeEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId]);
+  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout]);
+
 
 
   return (

@@ -24,6 +24,20 @@ export function SplitViewControls({
   const layout = useSplitLayout(taskId);
   const terminals = useTaskTerminals(taskId);
   const { updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
+  
+  // Helper to get AI state color
+  const getStateColor = (state?: string) => {
+    switch (state) {
+      case 'waiting':
+        return 'bg-purple-400';
+      case 'working':
+        return 'bg-yellow-400';
+      case 'idle':
+        return 'bg-blue-400';
+      default:
+        return 'bg-gray-500';
+    }
+  };
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
   const primaryDropdownRef = useRef<HTMLDivElement>(null);
@@ -67,7 +81,7 @@ export function SplitViewControls({
   }
 
   return (
-    <div className="flex items-center flex-1">
+    <div className="flex items-center flex-1" data-split-view-controls>
       {/* Tab-style Terminal Selectors */}
       <div className="flex items-center">
         {/* Primary Terminal Tab */}
@@ -101,12 +115,13 @@ export function SplitViewControls({
                         }
                       }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
-                        terminal.dbSessionId === layout.primaryTerminalId ? 'bg-gray-700' : ''
+                        terminal.dbSessionId === layout.primaryTerminalId ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
                       }`}
                       disabled={terminal.dbSessionId === layout.secondaryTerminalId}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="truncate">{terminal.tabName}</span>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${getStateColor(terminal.aiState)}`}></div>
+                        <span className="truncate flex-1">{terminal.tabName}</span>
                         {terminal.dbSessionId === layout.secondaryTerminalId && (
                           <span className="text-xs text-gray-500">(in use)</span>
                         )}
@@ -148,12 +163,13 @@ export function SplitViewControls({
                         }
                       }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
-                        terminal.dbSessionId === layout.secondaryTerminalId ? 'bg-gray-700' : ''
+                        terminal.dbSessionId === layout.secondaryTerminalId ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
                       }`}
                       disabled={terminal.dbSessionId === layout.primaryTerminalId}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="truncate">{terminal.tabName}</span>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${getStateColor(terminal.aiState)}`}></div>
+                        <span className="truncate flex-1">{terminal.tabName}</span>
                         {terminal.dbSessionId === layout.primaryTerminalId && (
                           <span className="text-xs text-gray-500">(in use)</span>
                         )}

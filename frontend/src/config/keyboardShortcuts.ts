@@ -150,6 +150,19 @@ export const KEYBOARD_SHORTCUTS: Record<string, KeyboardShortcut> = {
     },
     icon: '⬅️'
   },
+
+  // Split view
+  'terminal.split.toggle': {
+    id: 'terminal.split.toggle',
+    key: 'alt+d',
+    description: 'Toggle split view (single/horizontal/vertical)',
+    category: 'terminal',
+    contexts: [{ name: 'terminal', priority: 10 }],
+    handler: () => {
+      document.dispatchEvent(new CustomEvent('terminal-toggle-split'));
+    },
+    icon: '🔄'
+  }
 };
 
 // Helper function to switch to a tab by index

@@ -23,7 +23,7 @@ export function SplitViewContainer({
   activeTabId
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
+  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, updateLayout } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
@@ -44,6 +44,7 @@ export function SplitViewContainer({
     
     return () => clearTimeout(timeoutId);
   }, [layout, taskId, projectId]);
+
 
   // Auto-assign terminals to panes if not set
   useEffect(() => {
