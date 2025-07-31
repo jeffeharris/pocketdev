@@ -116,10 +116,7 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
       onClick={handleClick}
     >
       <div className="font-medium text-gray-900">#{task.id} {task.name || 'Unnamed Task'}</div>
-      <div 
-        className="text-xs text-gray-500 mt-1"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="text-xs text-gray-500 mt-1">
         <TaskStatusComponent 
           workerStatus={currentSessionState.status}
           gitStatus={currentGitStatus}

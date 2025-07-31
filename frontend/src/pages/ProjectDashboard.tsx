@@ -479,7 +479,11 @@ export const ProjectDashboard: React.FC = () => {
                     <div className="flex-1">
                       <p className="text-gray-900">{item.message}</p>
                       <div className="mt-2 flex items-center gap-2">
-                        {item.actions.map(action => getActionButton(action, item))}
+                        {item.actions.map((action, index) => (
+                          <span key={`${action}-${index}`}>
+                            {getActionButton(action, item)}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -590,17 +594,14 @@ export const ProjectDashboard: React.FC = () => {
             </div>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
               {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
-                <div 
-                  key={task.id} 
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
-                >
-                  <TaskListItem
-                    task={task}
-                    isActive={false}
-                    onSelect={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
-                  />
-                </div>
+                <TaskListItem
+                  key={task.id}
+                  task={task}
+                  isActive={false}
+                  onSelect={(task, focusTabId) => navigate(`/projects/${projectId}/tasks/${task.id}`, { 
+                    state: { focusTabId } 
+                  })}
+                />
               ))}
               {tasks.filter(t => t.taskState === 'active').length === 0 && (
                 <div className="p-4 text-center text-gray-500">

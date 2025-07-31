@@ -347,6 +347,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               workerStatus={currentTask.sessionState.status}
               gitStatus={currentTask.gitStatus}
               isMerged={currentTask.taskState === TaskState.Merged}
+              sessionStates={currentTask.terminals?.map(terminal => ({
+                id: terminal.dbSessionId,
+                tabName: terminal.tabName,
+                aiState: terminal.aiState || 'not-started',
+                lastStateChange: terminal.lastStateChange || null
+              })) || currentTask.sessionStates}
+              onStatusClick={(prioritySessionId) => {
+                onTaskSelect(currentTask, prioritySessionId);
+              }}
             />
           </div>
         </div>
