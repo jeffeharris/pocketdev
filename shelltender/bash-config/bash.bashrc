@@ -16,6 +16,22 @@ pocketdev_relative_path() {
     fi
 }
 
+# Function to get current git branch
+pocketdev_git_branch() {
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        local branch=$(git branch --show-current 2>/dev/null)
+        if [ -n "$branch" ]; then
+            echo "$branch"
+        else
+            # Detached HEAD state
+            local commit=$(git rev-parse --short HEAD 2>/dev/null)
+            if [ -n "$commit" ]; then
+                echo "detached:$commit"
+            fi
+        fi
+    fi
+}
+
 # Track directory changes and commands that fill the screen
 LAST_PWD=""
 SHOW_CONTEXT_NEXT=0
@@ -25,8 +41,15 @@ pocketdev_smart_prompt() {
     
     # Check if we should show context
     if [ "$current_pwd" != "$LAST_PWD" ] || [ "$SHOW_CONTEXT_NEXT" -eq 1 ]; then
-        # Show the context line
-        echo -e "\033[1;35m[$TASK_NAME]\033[0m \033[33m$(pocketdev_relative_path)\033[0m"
+        # Show the context line with better formatting
+        local git_info=$(pocketdev_git_branch)
+        if [ -n "$git_info" ]; then
+            # Format: ⎇ branch-name | task-name | ~/path
+            echo -e "\033[36m⎇ ${git_info}\033[0m \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+        else
+            # No git repo: task-name | ~/path
+            echo -e "\033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+        fi
         LAST_PWD="$current_pwd"
         SHOW_CONTEXT_NEXT=0
     fi
@@ -61,6 +84,11 @@ docker() {
 
 make() {
     command make "$@"
+    SHOW_CONTEXT_NEXT=1
+}
+
+clear() {
+    command clear "$@"
     SHOW_CONTEXT_NEXT=1
 }
 
@@ -133,7 +161,14 @@ if [ -n "$TASK_ID" ]; then
         echo "📜 History: $(wc -l < "$HISTFILE" 2>/dev/null || echo "0") commands available"
     fi
     echo ""
-    # Show initial location
-    echo -e "\033[1;35m[$TASK_NAME]\033[0m \033[33m$(pocketdev_relative_path)\033[0m"
+    # Show initial location with better formatting
+    local git_info=$(pocketdev_git_branch)
+    if [ -n "$git_info" ]; then
+        # Format: ⎇ branch-name | task-name | ~/path
+        echo -e "\033[36m⎇ $git_info\033[0m \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+    else
+        # No git repo: task-name | ~/path
+        echo -e "\033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+    fi
     LAST_PWD=$(pwd)
 fi
