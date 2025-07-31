@@ -211,8 +211,9 @@ export async function createTerminalSession(req, res, next) {
           DB_SESSION_ID: dbSession.id,
           WORKTREE_PATH: task.worktree_path,
           TERM: 'xterm-256color',
-          // Set PS1 to ensure we have a visible prompt
-          PS1: '\\[\\033[01;32m\\]\\u@pocketdev\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ ',
+          // Set simple PS1 - context will be shown by PROMPT_COMMAND
+          PS1: `\\033[32m\\u\\033[0m\\$ `,
+          TASK_NAME: task.name,
           // Task-scoped history file
           HISTFILE: path.join(task.worktree_path, '.pocketdev_task_history'),
           HISTSIZE: '10000',
