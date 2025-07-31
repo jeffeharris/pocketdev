@@ -26,7 +26,7 @@ export const LensSlider: React.FC<LensSliderProps> = ({
     onPhaseChange(newPhase);
     setTimeout(() => {
       setIsTransitioning(false);
-    }, 700);
+    }, 1000);
   };
 
   if (!validationMode) return null;
@@ -48,7 +48,7 @@ export const LensSlider: React.FC<LensSliderProps> = ({
 
         {/* Sliding layer - Validation Panel */}
         <div 
-          className="absolute inset-0 transition-clip-path"
+          className="absolute inset-0 transition-all duration-1000 ease-in-out"
           style={{ 
             clipPath: activePhase === 'validate' 
               ? 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)' // Full coverage
@@ -60,7 +60,7 @@ export const LensSlider: React.FC<LensSliderProps> = ({
 
         {/* Sliding Divider Line with Toggle */}
         <div 
-          className="absolute top-0 bottom-0 transition-all duration-700 ease-in-out z-10"
+          className="absolute top-0 bottom-0 transition-all duration-1000 ease-in-out z-10"
           style={{ 
             left: activePhase === 'validate' ? 'calc(100% - 0.5px)' : '-0.5px'
           }}
@@ -68,26 +68,29 @@ export const LensSlider: React.FC<LensSliderProps> = ({
           {/* Main Divider Line */}
           <div className="absolute top-0 bottom-0 w-1 bg-blue-500 shadow-lg" />
           
-          {/* Toggle Tab - moves with the divider */}
+          {/* Toggle Tab */}
           <button
             onClick={() => handlePhaseSwitch(activePhase === 'validate' ? 'merge' : 'validate')}
-            className={`absolute top-1/2 -translate-y-1/2 px-2 py-8 transition-all duration-300 shadow-lg hover:shadow-xl ${
-              activePhase === 'validate' 
-                ? 'bg-green-600 hover:bg-green-700 -right-8 rounded-l-none' 
-                : 'bg-purple-600 hover:bg-purple-700 -left-8 rounded-r-none'
+            className={`absolute top-1/2 -translate-y-1/2 transition-all duration-300 shadow-lg hover:shadow-xl opacity-70 hover:opacity-100 ${
+              activePhase === 'validate'
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-purple-600 text-white hover:bg-purple-700'
             } ${isTransitioning ? 'pointer-events-none' : ''}`}
             style={{ 
               writingMode: 'vertical-rl', 
               textOrientation: 'mixed',
-              borderRadius: activePhase === 'validate' ? '8px 0 0 8px' : '0 8px 8px 0'
+              width: '2rem',
+              height: '6rem',
+              left: activePhase === 'validate' ? '-2rem' : 'auto',
+              right: activePhase === 'validate' ? 'auto' : '-2rem',
+              borderRadius: activePhase === 'validate' ? '0.5rem 0 0 0.5rem' : '0 0.5rem 0.5rem 0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0.5rem 0.25rem'
             }}
           >
-            <span 
-              className="text-xs font-bold tracking-wider text-white"
-              style={{ 
-                transform: activePhase === 'validate' ? 'rotate(180deg) translateX(-2px)' : 'none' 
-              }}
-            >
+            <span className="text-sm font-bold tracking-wider">
               {activePhase === 'validate' ? 'MERGE' : 'VALIDATE'}
             </span>
           </button>
