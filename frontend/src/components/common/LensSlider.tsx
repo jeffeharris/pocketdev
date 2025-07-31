@@ -82,7 +82,12 @@ export const LensSlider: React.FC<LensSliderProps> = ({
               borderRadius: activePhase === 'validate' ? '8px 0 0 8px' : '0 8px 8px 0'
             }}
           >
-            <span className="text-xs font-bold tracking-wider text-white">
+            <span 
+              className="text-xs font-bold tracking-wider text-white"
+              style={{ 
+                transform: activePhase === 'validate' ? 'rotate(180deg)' : 'none' 
+              }}
+            >
               {activePhase === 'validate' ? 'MERGE' : 'VALIDATE'}
             </span>
           </button>
