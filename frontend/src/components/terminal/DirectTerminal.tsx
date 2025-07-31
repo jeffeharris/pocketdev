@@ -207,6 +207,49 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
     }
   }, [reconnectCounter, onSessionStatus]);
   
+  // Use capture phase to ensure we get the click event before xterm consumes it
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const handleClickCapture = (e: MouseEvent) => {
+      // Check if the click is within the terminal area
+      if (container.contains(e.target as Node)) {
+        if (onFocusRequest) {
+          onFocusRequest();
+        }
+        
+        // Also ensure the terminal itself gets focus
+        if (terminalRef.current?.focus) {
+          terminalRef.current.focus();
+        } else {
+          // Fallback for xterm focus
+          const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+          if (xtermTextarea) {
+            xtermTextarea.focus();
+          }
+        }
+      }
+    };
+    
+    // Also handle mousedown for more immediate response
+    const handleMouseDownCapture = (e: MouseEvent) => {
+      if (container.contains(e.target as Node)) {
+        if (onFocusRequest) {
+          onFocusRequest();
+        }
+      }
+    };
+    
+    // Add listeners in capture phase
+    container.addEventListener('click', handleClickCapture, true);
+    container.addEventListener('mousedown', handleMouseDownCapture, true);
+    
+    return () => {
+      container.removeEventListener('click', handleClickCapture, true);
+      container.removeEventListener('mousedown', handleMouseDownCapture, true);
+    };
+  }, [onFocusRequest]);
 
   // Don't render terminal until WebSocket is connected AND container has dimensions
   if (!isReady || !containerDimensions) {

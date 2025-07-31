@@ -11,6 +11,12 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Updated bash.bashrc to check for PS1_ENV and apply it correctly
   - PS1 isn't inherited as a normal environment variable by bash, so using PS1_ENV works around this limitation
 
+- **Split View Terminal Focus**
+  - Fixed issue where clicking in upper portion of terminals didn't update focus highlight
+  - Added capture phase event listeners to intercept clicks before terminal component
+  - Ensures both visual focus state (blue border) and keyboard focus are synchronized
+  - Works consistently across all click areas in both 2-way split and quad view modes
+
 ### Added
 - **Quad View Mode (Split Views Phase 2)**
   - View 4 terminal sessions in a 2x2 grid layout
