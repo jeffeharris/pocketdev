@@ -98,9 +98,10 @@ PROMPT_COMMAND="pocketdev_smart_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 # Simple prompt - just username and $
 PS1='\[\033[32m\]\u\[\033[0m\]\$ '
 
-# If PS1 was passed from environment, use it instead
-if [ -n "$PS1" ] && [ "$PS1" != '\[\033[32m\]\u\[\033[0m\]\$ ' ]; then
-    PS1="$PS1"
+# Check if PS1_ENV was passed and use it
+# PS1 isn't inherited as a normal environment variable by bash
+if [ -n "$PS1_ENV" ]; then
+    export PS1="$PS1_ENV"
 fi
 
 # If not running interactively, skip the rest

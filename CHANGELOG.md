@@ -4,6 +4,13 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Fixed
+- **Terminal PS1 Configuration**
+  - Fixed PS1 prompt configuration not being applied to terminal sessions
+  - Changed backend to use PS1_ENV environment variable instead of PS1
+  - Updated bash.bashrc to check for PS1_ENV and apply it correctly
+  - PS1 isn't inherited as a normal environment variable by bash, so using PS1_ENV works around this limitation
+
 ### Added
 - **Quad View Mode (Split Views Phase 2)**
   - View 4 terminal sessions in a 2x2 grid layout
