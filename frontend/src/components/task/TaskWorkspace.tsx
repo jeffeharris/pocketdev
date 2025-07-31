@@ -96,6 +96,12 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   
   // Update active task when taskId prop changes and load task details
   useEffect(() => {
+    // Validate taskId before proceeding
+    if (!taskId || taskId === 'undefined') {
+      console.error('Invalid taskId:', taskId);
+      return;
+    }
+    
     // taskId prop changed
     setActiveTaskId(taskId);
     // Mark this terminal as initialized
@@ -117,8 +123,13 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
           const { setTerminals } = useTerminalStore.getState();
           setTerminals(taskId, taskDetails.terminals);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to load task details:', error);
+        // If task not found, show error state
+        if (error.status === 404) {
+          setTasks([]);
+          setLoading(false);
+        }
       }
     };
     
@@ -256,6 +267,23 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         <div className="text-center">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Unable to connect to backend</h2>
           <p className="text-gray-600">Please check that the backend server is running.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tasks.length === 0 || !activeTask) {
+    return (
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Task Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested task could not be found or has been deleted.</p>
+          <button
+            onClick={() => window.location.href = `/projects/${projectId}`}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Back to Project
+          </button>
         </div>
       </div>
     );

@@ -5,6 +5,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Added
+- **Quad View Mode (Split Views Phase 2)**
+  - View 4 terminal sessions in a 2x2 grid layout
+  - Keyboard shortcut: Alt+D to cycle through tab → split → quad view modes
+  - Visual mode indicator showing current layout
+  - Automatic terminal assignment when switching to quad view
+  - All 4 terminals refresh together with Ctrl+Shift+R
+  - Focus management across all 4 panes
+  - Layout persistence includes quad view configuration
+  - Database schema already supports tertiary/quaternary terminal IDs
+
 - **Terminal Refresh Feature**
   - Refresh button now properly works in all view modes (tab, split, quad)
   - Tab mode: Refreshes only the active terminal
@@ -32,25 +42,34 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Icon-only buttons in header for cleaner appearance
   - Quick Access button with keyboard indicator
 
-- **Split Views Feature (Phase 1)**
-  - View 2 terminal sessions side-by-side within a single task
-  - Toggle between traditional tab view and split view modes
-  - Horizontal and vertical split orientations
+- **Split Views Feature (Complete)**
+  - View 2 or 4 terminal sessions simultaneously within a single task
+  - Three view modes: Tab, Split (2-way), and Quad (4-way)
+  - Horizontal and vertical split orientations for 2-way splits
   - Draggable resizer to adjust pane sizes (10%-90% range)
+  - Double-click divider to reset split to 50/50 (REQ-SV-009)
   - Terminal selector dropdowns to choose which terminals to display
   - Swap terminals button for quick pane switching
-  - Layout persistence - split configurations save to backend
+  - Layout persistence - split configurations save to database and restore across browser sessions (REQ-SV-019a)
   - Real-time sync - layout changes broadcast via WebSocket
   - Mobile responsive - automatically disables on screens <768px
+  - Visual focus indicators with blue ring for active terminal (REQ-SV-014)
+  - Terminal disposal system prevents memory leaks (REQ-SV-026)
+  - Keyboard shortcuts: Alt+D to cycle view modes
   - Feature flag support via `VITE_FEATURE_SPLIT_VIEW` environment variable
-  - Backend API endpoints for split layout CRUD operations
-  - Zustand state management following latest best practices
+  - Backend API endpoints for split layout CRUD operations with comprehensive tests
+  - Zustand state management with centralized terminalStore
   - Components: SplitViewContainer, SplitViewControls, splitViewStore
-  - **Phase 2 Improvements**
+  - **Phase 1 Implementation** (2-way splits)
     - Split view toggle moved to terminal header for better accessibility
     - Tab-style terminal selectors replace regular tabs in split mode
     - Unified UI where split controls occupy same space as tabs
     - Color-coded terminals (blue for primary, green for secondary)
+  - **Phase 2 Implementation** (quad view)
+    - 2x2 grid layout for 4 terminals
+    - Mode cycling through tab → split → quad
+    - Automatic terminal assignment
+    - All requirements met including layout persistence
 
 ### Changed
 - **Code Cleanup**

@@ -57,8 +57,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
   
-  // Feature flag for split view
-  const splitViewEnabled = import.meta.env.VITE_FEATURE_SPLIT_VIEW === 'true';
+  // Split view is now enabled by default
+  const splitViewEnabled = true;
   
   // Viewport constraints for split views
   const [canShowQuad, setCanShowQuad] = useState(false);

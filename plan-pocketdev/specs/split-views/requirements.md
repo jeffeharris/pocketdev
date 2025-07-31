@@ -56,7 +56,7 @@ This document defines requirements for enabling split view functionality in Pock
 
 **REQ-SV-019**: **WHERE** the user switches between tasks, **the system SHALL** preserve the split view configuration for each task independently.
 
-**REQ-SV-019a**: **[Priority: Low]** **WHERE** the user has configured a split view layout, **the system SHALL** persist the layout configuration to the database, allowing restoration across browser sessions.
+**REQ-SV-019a**: **[Priority: Low] [Status: COMPLETE ✅]** **WHERE** the user has configured a split view layout, **the system SHALL** persist the layout configuration to the database, allowing restoration across browser sessions.
 
 ### Keyboard Navigation
 

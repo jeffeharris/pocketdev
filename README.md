@@ -154,18 +154,20 @@ simple/server/
 - Individual session tracking and analytics per tab
 
 ### Split Views (NEW)
-- View 2 terminal sessions side-by-side within a single task
-- Toggle between traditional tab view and new split view mode
-- Horizontal and vertical split orientations
+- View 2 or 4 terminal sessions simultaneously within a single task
+- Three view modes: Tab (traditional), Split (2-way), and Quad (4-way)
+- Horizontal and vertical split orientations for 2-way splits
 - Draggable resizer to adjust pane sizes (10%-90% range)
+- Double-click divider to reset split to 50/50
 - Terminal selector dropdowns to choose which terminals to display
 - Swap terminals button for quick pane switching
-- Layout persistence - split configurations save to database
+- Layout persistence - split configurations save to database and restore across sessions
 - Real-time sync - layout changes broadcast to all connected clients
 - Mobile responsive - automatically disables on screens <768px
 - Visual focus indicators - blue ring for active terminal
 - Terminal disposal system prevents memory leaks
 - Centralized state management with terminalStore
+- Keyboard shortcuts: Alt+D to cycle view modes, Ctrl+Shift+R to refresh terminals
 - Enable via `VITE_FEATURE_SPLIT_VIEW=true` environment variable
 
 ### File Attachments
@@ -192,7 +194,7 @@ simple/server/
 - `POST /api/projects/:projectId/tasks/:taskId/git` - Git operations
 - `DELETE /api/projects/:projectId/tasks/:taskId` - Delete task
 - `GET /api/projects/:projectId/tasks/:taskId/split-layout` - Get split view layout
-- `PUT /api/projects/:projectId/tasks/:taskId/split-layout` - Update split view layout
+- `PUT /api/projects/:projectId/tasks/:taskId/split-layout` - Update split view layout (persists to database)
 
 ### Settings & Monitoring
 - `GET /api/settings` - Get settings

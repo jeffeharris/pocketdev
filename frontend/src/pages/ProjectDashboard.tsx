@@ -215,6 +215,10 @@ export const ProjectDashboard: React.FC = () => {
           break;
         
         case 'open-task':
+          if (!item.details?.taskId) {
+            console.error('Cannot open task: taskId is missing in item details', item);
+            break;
+          }
           navigate(`/projects/${projectId}/tasks/${item.details.taskId}`);
           break;
         

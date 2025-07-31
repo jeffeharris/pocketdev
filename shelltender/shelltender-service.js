@@ -30,14 +30,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve admin UI (v0.6.2 includes the admin UI properly)
-app.get('/admin', async (req, res) => {
-  // In v0.6.2, the admin UI is properly included in the package
-  // The createShelltender function will handle serving it automatically
-  res.redirect('/admin/');
-  
-  // Serve the admin HTML file
-  res.sendFile(adminHtmlPath);
+// Serve admin UI manually since the automatic route doesn't seem to work
+app.get('/admin', (req, res) => {
+  const adminPath = path.join(__dirname, 'admin.html');
+  res.sendFile(adminPath);
 });
 
 // Start the server

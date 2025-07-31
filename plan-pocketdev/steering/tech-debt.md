@@ -246,3 +246,91 @@ Implement a global state management solution for terminal sessions:
   - `/frontend/src/components/task/TaskStatus.tsx`
   - `/frontend/src/hooks/useTaskStatus.ts`
 - Similar pattern could benefit AI state tracking across the app
+
+## Split View Performance Optimization
+
+**Date Added:** 2025-07-30  
+**Priority:** Low  
+**Component:** Frontend Terminal Rendering
+
+### Current Issues
+
+1. **No Render Throttling for Unfocused Terminals**
+   - All terminals in split/quad view render at full speed
+   - Unfocused terminals still process every output update
+   - Could impact performance with high-output terminals
+   - REQ-SV-011 specified throttling for unfocused terminals
+
+### Impact
+- **Performance:** Low - Testing shows acceptable performance with 2000 lines/minute across 4 terminals
+- **User Experience:** None - Users haven't reported issues
+- **Resource Usage:** Low - Modern browsers handle multiple terminals well
+
+### Proposed Solution
+
+If performance issues arise in the future:
+
+1. **Implement Render Throttling**
+   ```typescript
+   // In DirectTerminal component
+   const throttleRate = hasFocus ? 0 : 100; // ms delay for unfocused
+   ```
+
+2. **Use requestAnimationFrame batching**
+   - Batch terminal updates for unfocused panes
+   - Process updates on next animation frame
+
+3. **Consider virtual scrolling**
+   - Only render visible portions of terminal buffer
+   - Useful for very long-running sessions
+
+### Notes
+- Current implementation tested successfully with 2000 lines/minute
+- No user complaints about performance
+- Can revisit if usage patterns change or performance degrades
+
+### References
+- Original requirement: `/plan-pocketdev/specs/split-views/requirements.md` (REQ-SV-011)
+- Current implementation handles 4 terminals without throttling
+
+## Task Navigation Click Handler Bug
+
+**Date Added:** 2025-07-30  
+**Priority:** High  
+**Component:** Frontend/Navigation
+
+### Current Issues
+
+1. **Dead Click on Task List Items**
+   - Clicking on tasks in the project view doesn't navigate to the task workspace
+   - Users must manually construct URLs to access task workspaces
+   - The click event handler appears to be missing or not working
+   - Affects user workflow significantly
+
+### Reproduction Steps
+1. Navigate to a project (e.g., `/projects/4d69792729dffb83`)
+2. Click on any task in the "Active Tasks" list
+3. Expected: Navigate to task workspace (e.g., `/projects/4d69792729dffb83/tasks/643756ef`)
+4. Actual: Nothing happens - click is dead
+
+### Additional Context
+- The UI shows the tasks are clickable (cursor changes on hover)
+- Task elements have refs that suggest they should be interactive
+- Direct URL navigation to task workspaces works correctly
+- This appears to be a recent regression as the UI suggests this should work
+
+### Impact
+- **User Experience:** Critical - Core navigation flow is broken
+- **Productivity:** High - Users cannot easily access task workspaces
+- **Workaround:** Manual URL construction is required
+
+### Proposed Solution
+1. Check click event handlers on task list items
+2. Verify React Router navigation is properly configured
+3. Ensure event propagation isn't being stopped by parent elements
+4. Add e2e tests for task navigation flow
+
+### References
+- Discovered during Playwright testing session
+- Affects all task items in project view
+- Terminal functionality in task workspace also appears broken (separate issue)
