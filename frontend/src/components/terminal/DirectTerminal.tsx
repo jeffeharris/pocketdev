@@ -9,7 +9,25 @@ const MemoizedTerminal = memo<{
   onSessionError?: (error: any) => void;
   onSessionDisconnected?: () => void;
   terminalRef: any;
-}>(({ sessionId, onSessionCreated, onSessionError, onSessionDisconnected, terminalRef }) => {
+  containerReady: boolean;
+}>(({ sessionId, onSessionCreated, onSessionError, onSessionDisconnected, terminalRef, containerReady }) => {
+  const [delayedMount, setDelayedMount] = useState(false);
+  
+  // Delay mounting the terminal until after the container is ready
+  useEffect(() => {
+    if (containerReady) {
+      // Use requestAnimationFrame to ensure DOM is painted
+      const frame = requestAnimationFrame(() => {
+        setDelayedMount(true);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [containerReady]);
+  
+  if (!delayedMount) {
+    return null;
+  }
+  
   return (
     <Terminal
       ref={terminalRef}
@@ -23,8 +41,9 @@ const MemoizedTerminal = memo<{
     />
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if sessionId changes
-  return prevProps.sessionId === nextProps.sessionId;
+  // Only re-render if sessionId or containerReady changes
+  return prevProps.sessionId === nextProps.sessionId && 
+         prevProps.containerReady === nextProps.containerReady;
 });
 
 export interface DirectTerminalHandle {
@@ -68,14 +87,39 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   
   // Force re-render counter to trigger reconnection
   const [reconnectCounter, setReconnectCounter] = useState(0);
+  
+  // Track container dimensions
+  const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number } | null>(null);
 
-
-  // Update ready state when connected
+  // Monitor container dimensions
   useEffect(() => {
-    if (isConnected) {
+    if (containerRef.current) {
+      const updateDimensions = () => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) {
+          setContainerDimensions({ width: rect.width, height: rect.height });
+        }
+      };
+      
+      // Initial check
+      updateDimensions();
+      
+      // Use ResizeObserver to detect size changes
+      const resizeObserver = new ResizeObserver(updateDimensions);
+      resizeObserver.observe(containerRef.current);
+      
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+  }, []);
+
+  // Update ready state when connected AND container has dimensions
+  useEffect(() => {
+    if (isConnected && containerDimensions) {
       setIsReady(true);
     }
-  }, [isConnected, shelltenderSessionId]);
+  }, [isConnected, shelltenderSessionId, containerDimensions]);
 
   // Expose methods via imperative handle
   useImperativeHandle(ref, () => ({
@@ -164,19 +208,23 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
   }, [reconnectCounter, onSessionStatus]);
   
 
-  // Don't render terminal until WebSocket is connected
-  if (!isReady) {
+  // Don't render terminal until WebSocket is connected AND container has dimensions
+  if (!isReady || !containerDimensions) {
     return (
       <div 
         ref={containerRef} 
         className={`w-full h-full overflow-hidden ${className}`} 
         style={{ 
           height: '100%',
-          width: '100%'
+          width: '100%',
+          minHeight: '200px',
+          minWidth: '400px'
         }}
       >
         <div className="flex items-center justify-center h-full bg-gray-900">
-          <div className="text-gray-400">Connecting to terminal service...</div>
+          <div className="text-gray-400">
+            {!isConnected ? 'Connecting to terminal service...' : 'Initializing terminal...'}
+          </div>
         </div>
       </div>
     );
@@ -196,7 +244,9 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
       style={{ 
         height: '100%',
         width: '100%',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        minHeight: '200px',
+        minWidth: '400px'
       }}
       onClick={handleContainerClick}
     >
@@ -204,9 +254,13 @@ const DirectTerminalComponent = forwardRef<DirectTerminalHandle, DirectTerminalP
         key={`${shelltenderSessionId}-${reconnectCounter}`}
         terminalRef={terminalRef}
         sessionId={shelltenderSessionId}
+        containerReady={!!containerDimensions}
         onSessionCreated={(sessionId: string) => {
           onSessionStatus?.('connected');
-          // Removed - sending newline doesn't actually show prompt
+          // Fit terminal after initialization
+          if (terminalRef.current?.fit) {
+            terminalRef.current.fit();
+          }
         }}
         onSessionError={(error: any) => {
           onSessionStatus?.('error');
