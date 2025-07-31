@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useEffect } from 'react';
 import { ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { ThrottledTerminal } from './ThrottledTerminal';
 import type { DirectTerminalHandle } from './DirectTerminal';
@@ -44,6 +44,17 @@ export const TerminalPane = forwardRef<DirectTerminalHandle, TerminalPaneProps>(
   otherTerminalId
 }, ref) => {
   const otherPosition = position === 'primary' ? 'secondary' : 'primary';
+  
+  // Focus terminal when it changes and hasFocus is true
+  useEffect(() => {
+    if (terminal && hasFocus && ref && 'current' in ref && ref.current) {
+      // Small delay to ensure terminal is fully mounted
+      const timer = setTimeout(() => {
+        ref.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [terminal?.dbSessionId, hasFocus]);
   
   return (
     <div className="flex flex-col h-full w-full">

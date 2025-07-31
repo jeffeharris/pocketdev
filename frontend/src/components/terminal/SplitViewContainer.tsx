@@ -45,6 +45,7 @@ export function SplitViewContainer({
   const rafRef = useRef<number | null>(null);
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
+  const [isLayoutInitialized, setIsLayoutInitialized] = useState(false);
   
   // Handle refresh button click when control buttons include refresh
   const handleRefreshClick = useCallback(() => {
@@ -130,58 +131,78 @@ export function SplitViewContainer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
+  // Mark layout as initialized after first render
+  useEffect(() => {
+    setIsLayoutInitialized(true);
+  }, []);
+  
   // Persist layout changes with debounce
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !isLayoutInitialized) return;
     
     const timeoutId = setTimeout(() => {
       persistLayout(taskId, projectId);
     }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [layout, taskId, projectId]);
+  }, [layout, taskId, projectId, isLayoutInitialized]);
   
 
 
-  // Simple auto-assignment: just assign available terminals in order
+  // Auto-assignment: assign available terminals when switching to split mode or terminals change
   useEffect(() => {
-    if (layout.mode === 'split' || layout.mode === 'split-4') {
-      const terminalIds = terminals.map(t => t.dbSessionId);
-      
-      // Assign terminals in order: primary, secondary, tertiary, quaternary
-      if (terminalIds[0] && layout.primaryTerminalId !== terminalIds[0]) {
-        setPrimaryTerminal(taskId, terminalIds[0]);
+    // Only run when in split mode and layout is initialized
+    if (!isLayoutInitialized || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+      return;
+    }
+    
+    const terminalIds = terminals.map(t => t.dbSessionId);
+    
+    // Check if we need to do any assignments
+    const needsPrimaryAssignment = terminalIds[0] && !layout.primaryTerminalId;
+    const needsSecondaryAssignment = terminalIds[1] && !layout.secondaryTerminalId && (layout.mode === 'split' || layout.mode === 'split-4');
+    const needsTertiaryAssignment = terminalIds[2] && !layout.tertiaryTerminalId && layout.mode === 'split-4';
+    const needsQuaternaryAssignment = terminalIds[3] && !layout.quaternaryTerminalId && layout.mode === 'split-4';
+    
+    // Only update if something actually needs assignment
+    if (needsPrimaryAssignment) {
+      setPrimaryTerminal(taskId, terminalIds[0]);
+    }
+    
+    if (needsSecondaryAssignment) {
+      setSecondaryTerminal(taskId, terminalIds[1]);
+    }
+    
+    if (layout.mode === 'split-4') {
+      if (needsTertiaryAssignment) {
+        setTertiaryTerminal(taskId, terminalIds[2]);
       }
-      
-      if (layout.mode === 'split') {
-        // For 2-way split, only use 2 terminals max
-        if (terminalIds[1] && layout.secondaryTerminalId !== terminalIds[1]) {
-          setSecondaryTerminal(taskId, terminalIds[1]);
-        } else if (!terminalIds[1] && layout.secondaryTerminalId) {
-          setSecondaryTerminal(taskId, null);
-        }
-      } else {
-        // For quad view, use up to 4 terminals
-        if (terminalIds[1] && layout.secondaryTerminalId !== terminalIds[1]) {
-          setSecondaryTerminal(taskId, terminalIds[1]);
-        } else if (!terminalIds[1] && layout.secondaryTerminalId) {
-          setSecondaryTerminal(taskId, null);
-        }
-        
-        if (terminalIds[2] && layout.tertiaryTerminalId !== terminalIds[2]) {
-          setTertiaryTerminal(taskId, terminalIds[2]);
-        } else if (!terminalIds[2] && layout.tertiaryTerminalId) {
-          setTertiaryTerminal(taskId, null);
-        }
-        
-        if (terminalIds[3] && layout.quaternaryTerminalId !== terminalIds[3]) {
-          setQuaternaryTerminal(taskId, terminalIds[3]);
-        } else if (!terminalIds[3] && layout.quaternaryTerminalId) {
-          setQuaternaryTerminal(taskId, null);
-        }
+      if (needsQuaternaryAssignment) {
+        setQuaternaryTerminal(taskId, terminalIds[3]);
       }
     }
-  }, [layout.mode, terminals, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId]);
+    
+    // Clean up terminals that shouldn't be assigned
+    if (layout.mode === 'split') {
+      // In 2-way split, clear tertiary and quaternary if set
+      if (layout.tertiaryTerminalId) {
+        setTertiaryTerminal(taskId, null);
+      }
+      if (layout.quaternaryTerminalId) {
+        setQuaternaryTerminal(taskId, null);
+      }
+    }
+  }, [
+    // Only depend on mode changes and terminal list changes
+    layout.mode,
+    terminals.length, // Use length instead of full array to avoid unnecessary rerenders
+    taskId,
+    isLayoutInitialized,
+    setPrimaryTerminal,
+    setSecondaryTerminal,
+    setTertiaryTerminal,
+    setQuaternaryTerminal
+  ]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -321,7 +342,10 @@ export function SplitViewContainer({
             controlButtons={controlButtons}
             showDropdown={false}
             onDropdownToggle={() => {}}
-            onTerminalSelect={(terminalId) => setPrimaryTerminal(taskId, terminalId)}
+            onTerminalSelect={(terminalId) => {
+              setPrimaryTerminal(taskId, terminalId);
+              setFocusedTerminal(taskId, terminalId);
+            }}
             onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
             position="primary"
@@ -353,7 +377,10 @@ export function SplitViewContainer({
             controlButtons={controlButtons}
             showDropdown={false}
             onDropdownToggle={() => {}}
-            onTerminalSelect={(terminalId) => setSecondaryTerminal(taskId, terminalId)}
+            onTerminalSelect={(terminalId) => {
+              setSecondaryTerminal(taskId, terminalId);
+              setFocusedTerminal(taskId, terminalId);
+            }}
             onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
             position="secondary"
@@ -391,7 +418,10 @@ export function SplitViewContainer({
             controlButtons={controlButtons}
             showDropdown={false}
             onDropdownToggle={() => {}}
-            onTerminalSelect={(terminalId) => setTertiaryTerminal(taskId, terminalId)}
+            onTerminalSelect={(terminalId) => {
+              setTertiaryTerminal(taskId, terminalId);
+              setFocusedTerminal(taskId, terminalId);
+            }}
             onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
             position="tertiary"
@@ -423,7 +453,10 @@ export function SplitViewContainer({
             controlButtons={controlButtons}
             showDropdown={false}
             onDropdownToggle={() => {}}
-            onTerminalSelect={(terminalId) => setQuaternaryTerminal(taskId, terminalId)}
+            onTerminalSelect={(terminalId) => {
+              setQuaternaryTerminal(taskId, terminalId);
+              setFocusedTerminal(taskId, terminalId);
+            }}
             onSessionStatus={(status) => onSessionStatus(quaternaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, quaternaryTerminal.dbSessionId)}
             position="quaternary"
@@ -482,6 +515,7 @@ export function SplitViewContainer({
           onTerminalSelect={(terminalId) => {
             setPrimaryTerminal(taskId, terminalId);
             setShowPrimaryDropdown(false);
+            setFocusedTerminal(taskId, terminalId);
           }}
           onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
           onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
@@ -546,6 +580,7 @@ export function SplitViewContainer({
           onTerminalSelect={(terminalId) => {
             setSecondaryTerminal(taskId, terminalId);
             setShowSecondaryDropdown(false);
+            setFocusedTerminal(taskId, terminalId);
           }}
           onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
           onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
