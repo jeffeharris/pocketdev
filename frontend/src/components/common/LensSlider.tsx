@@ -85,7 +85,7 @@ export const LensSlider: React.FC<LensSliderProps> = ({
             <span 
               className="text-xs font-bold tracking-wider text-white"
               style={{ 
-                transform: activePhase === 'validate' ? 'rotate(180deg)' : 'none' 
+                transform: activePhase === 'validate' ? 'rotate(180deg) translateX(-2px)' : 'none' 
               }}
             >
               {activePhase === 'validate' ? 'MERGE' : 'VALIDATE'}
