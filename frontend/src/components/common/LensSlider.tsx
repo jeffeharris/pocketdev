@@ -77,7 +77,7 @@ export const LensSlider: React.FC<LensSliderProps> = ({
                 : 'bg-purple-600 hover:bg-purple-700 -left-8 rounded-r-none'
             } ${isTransitioning ? 'pointer-events-none' : ''}`}
             style={{ 
-              writingMode: activePhase === 'validate' ? 'vertical-lr' : 'vertical-rl', 
+              writingMode: 'vertical-rl', 
               textOrientation: 'mixed',
               borderRadius: activePhase === 'validate' ? '8px 0 0 8px' : '0 8px 8px 0'
             }}

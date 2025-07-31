@@ -197,8 +197,9 @@ export class AISessionMonitor {
       },
       
       // Bash prompt - Claude has exited (high priority to clear other states)
+      // Updated to support both legacy (root@container:/path#) and current (username$) formats
       'bash-prompt': {
-        pattern: /root@[\w-]+:[\w/~-]+#\s*$/,
+        pattern: /(?:root@[\w-]+:[\w/~-]+#|\w+\$)\s*$/,
         type: 'context',
         priority: 'high',
         handler: (match, sessionId) => ({
@@ -368,8 +369,9 @@ export class AISessionMonitor {
         // 4. Single-line prompt = 'idle' (AI is ready for input)
         
         // Check 1: Bash prompt detected = 'not-started' (gray)
+        // Updated to support both legacy (root@container:/path#) and current (username$) formats
         let foundBashPrompt = false;
-        if (cleanData.match(/root@[\w-]+:[\w/~-]+#\s*$/)) {
+        if (cleanData.match(/(?:root@[\w-]+:[\w/~-]+#|\w+\$)\s*$/)) {
           foundBashPrompt = true;
         }
         
