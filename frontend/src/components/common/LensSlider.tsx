@@ -68,20 +68,27 @@ export const LensSlider: React.FC<LensSliderProps> = ({
           {/* Main Divider Line */}
           <div className="absolute top-0 bottom-0 w-1 bg-blue-500 shadow-lg" />
           
-          {/* Edge Toggle */}
-          <button
-            onClick={() => handlePhaseSwitch(activePhase === 'validate' ? 'merge' : 'validate')}
-            className={`absolute top-1/2 -translate-y-1/2 px-2 py-8 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl ${
-              activePhase === 'validate'
-                ? 'bg-green-600 text-white hover:bg-green-700 -left-8 rounded-r-none'
-                : 'bg-purple-600 text-white hover:bg-purple-700 -right-8 rounded-l-none'
-            } ${isTransitioning ? 'pointer-events-none' : ''}`}
-            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-          >
-            <span className="text-xs font-bold tracking-wider">
-              {activePhase === 'validate' ? 'MERGE' : 'VALIDATE'}
-            </span>
-          </button>
+          {/* Edge Toggle - Left side when validation active */}
+          {activePhase === 'validate' && (
+            <button
+              onClick={() => handlePhaseSwitch('merge')}
+              className={`absolute top-1/2 -translate-y-1/2 px-2 py-8 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl bg-green-600 text-white hover:bg-green-700 -left-8 rounded-r-none ${isTransitioning ? 'pointer-events-none' : ''}`}
+              style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+            >
+              <span className="text-xs font-bold tracking-wider">MERGE</span>
+            </button>
+          )}
+          
+          {/* Edge Toggle - Right side when merge active */}
+          {activePhase === 'merge' && (
+            <button
+              onClick={() => handlePhaseSwitch('validate')}
+              className={`absolute top-1/2 -translate-y-1/2 px-2 py-8 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl bg-purple-600 text-white hover:bg-purple-700 -right-8 rounded-l-none ${isTransitioning ? 'pointer-events-none' : ''}`}
+              style={{ writingMode: 'vertical-lr', textOrientation: 'mixed' }}
+            >
+              <span className="text-xs font-bold tracking-wider">VALIDATE</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
