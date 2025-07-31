@@ -317,7 +317,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         )}
 
         {/* Main Terminal Area - Split Layout */}
-        <div className="flex-1 flex flex-col bg-gray-900">
+        <div className="flex-1 flex flex-col bg-gray-900 h-full overflow-hidden">
           {/* Render all initialized terminals but only show the active one */}
           {tasks.map(task => {
             const isActive = task.id === activeTaskId;
@@ -331,8 +331,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             return (
               <div
                 key={task.id}
-                style={{ display: isActive ? 'flex' : 'none' }}
-                className="flex-1 flex flex-col"
+                style={{ 
+                  display: isActive ? 'flex' : 'none',
+                  height: validationMode ? '60%' : undefined
+                }}
+                className={`${validationMode ? 'flex-shrink-0' : 'flex-1'} flex flex-col`}
               >
                 <TerminalPanel
                   ref={(ref) => {
@@ -371,14 +374,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             );
           })}
 
-          {/* Resize Handle */}
-          {validationMode && (
-            <div className="h-1 bg-gray-600 cursor-row-resize hover:bg-blue-500 transition-colors flex items-center justify-center">
-              <div className="w-8 h-0.5 bg-gray-400 rounded"></div>
-            </div>
-          )}
-
-          {/* Validation/Merge Panel with Lens Slider */}
+          {/* Validation/Merge Panel with Lens Slider - includes resize handle */}
           <LensSlider
             taskId={activeTaskId}
             validationMode={validationMode}

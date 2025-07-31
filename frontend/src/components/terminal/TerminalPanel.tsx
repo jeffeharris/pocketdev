@@ -887,8 +887,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   return (
     <div 
-      className="bg-gray-900 flex flex-col"
-      style={{ height: validationMode ? '60%' : '100%' }}
+      className="bg-gray-900 flex flex-col h-full"
     >
       {/* Terminal Header - Only show in tab mode */}
       {layout.mode === 'tab' && (
