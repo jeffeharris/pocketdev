@@ -756,16 +756,25 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     const handleTerminalShortcut = (event: CustomEvent) => {
       switch (event.type) {
         case 'terminal-new-tab':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           if (terminals.length < 6) {
             handleTabAdd();
           }
           break;
         case 'terminal-close-tab':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           if (activeTabId && terminals.length > 1) {
             handleTabClose(activeTabId);
           }
           break;
         case 'terminal-next-tab':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           {
             const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
             const nextIndex = (currentIndex + 1) % terminals.length;
@@ -775,6 +784,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           }
           break;
         case 'terminal-previous-tab':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           {
             const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
             const prevIndex = currentIndex === 0 ? terminals.length - 1 : currentIndex - 1;
@@ -784,6 +796,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           }
           break;
         case 'terminal-switch-tab':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           {
             const detail = (event as CustomEvent).detail;
             if (detail && typeof detail.index === 'number' && terminals[detail.index]) {
@@ -792,6 +807,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           }
           break;
         case 'terminal-toggle-split':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           if (splitViewEnabled) {
             if (layout.mode === 'tab') {
               // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
@@ -824,9 +842,15 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           }
           break;
         case 'terminal-toggle-fullscreen':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           onToggleSidebar();
           break;
         case 'terminal-refresh':
+          // Only handle this event if this task is currently visible
+          if (!isVisible) break;
+          
           // Simulate a click on the refresh button to ensure consistent behavior
           const refreshButton = document.querySelector('[data-action="refresh"]') as HTMLButtonElement;
           if (refreshButton) {
@@ -857,7 +881,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       document.removeEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession]);
+  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession, isVisible]);
 
 
 
