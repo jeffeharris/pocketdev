@@ -292,14 +292,14 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   const handleTabAdd = async (options?: SessionOptions) => {
     try {
-      const tabCount = task.terminals?.length || 0;
+      const tabCount = terminals.length;
       
       // Get the currently active terminal to copy history from
-      const activeTerminal = task.terminals?.find(t => t.dbSessionId === activeTabId);
+      const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
       
       // Use provided options or generate next available "Tab #"
       const aiAgent = options?.aiAgent || 'claude';
-      const tabName = options?.tabName || getNextAvailableTabName(task.terminals || []);
+      const tabName = options?.tabName || getNextAvailableTabName(terminals);
       
       const newSession = await api.createTerminalSession(task.id, {
         tabName,
@@ -513,7 +513,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       return newMap;
     });
 
-    const terminal = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
     if (status === 'disconnected') {
@@ -538,7 +538,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Handle tab close
   const handleTabClose = async (dbSessionId: string) => {
     // Find the terminal being closed
-    const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+    const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminalToClose) return;
     
     // Get the real-time state for this session
@@ -561,7 +561,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const performTabClose = async (dbSessionId: string) => {
     try {
       // Find the terminal being closed
-      const terminalToClose = task.terminals?.find(t => t.dbSessionId === dbSessionId);
+      const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
       if (!terminalToClose) return;
       
       // Store next tab id if we need to switch
@@ -569,7 +569,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       
       // If closing the active tab, determine which tab to switch to
       if (dbSessionId === activeTabId) {
-        const remainingTabs = task.terminals?.filter(t => t.dbSessionId !== dbSessionId) || [];
+        const remainingTabs = terminals.filter(t => t.dbSessionId !== dbSessionId);
         if (remainingTabs.length > 0) {
           // Find the next tab
           const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
@@ -580,15 +580,21 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Delete the terminal session
       await api.deleteTerminalSession(dbSessionId);
       
+      // Clear confirm close state if it exists
+      setConfirmClose(null);
+      
       // Reload task to get updated terminals list
       if (task.onReload) {
         await task.onReload();
-      }
-      
-      // Now trigger tab selection after reload completes
-      if (nextTabId) {
-        // Use handleTabSelect to trigger the same flow as clicking a tab
-        handleTabSelect(nextTabId);
+        
+        // After reload completes, trigger tab selection if needed
+        // Use a small timeout to ensure React has processed the state update
+        if (nextTabId) {
+          setTimeout(() => {
+            // The handleTabSelect will verify the tab exists
+            handleTabSelect(nextTabId);
+          }, 50);
+        }
       }
       
       // Skip the success notification to avoid terminal re-render issues
@@ -596,6 +602,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     } catch (error) {
       console.error('[TerminalPanel] Failed to close tab:', error);
       showNotification('error', 'Failed to close tab');
+      // Clear confirm close state on error too
+      setConfirmClose(null);
     }
   };
 

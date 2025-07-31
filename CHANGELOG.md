@@ -19,6 +19,12 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Alt+D cycling skips unavailable modes based on current terminal height
 
 ### Fixed
+- **Terminal Tab Closing**
+  - Fixed tab close button not working due to incorrect reference to task.terminals
+  - Changed to use terminals from zustand store instead of non-existent task prop
+  - Tab closing now properly handles active tab switching and cleanup
+  - Confirmation dialog still appears when AI session is active
+
 - **Terminal PS1 Configuration**
   - Fixed PS1 prompt configuration not being applied to terminal sessions
   - Changed backend to use PS1_ENV environment variable instead of PS1

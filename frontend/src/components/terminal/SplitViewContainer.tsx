@@ -45,6 +45,8 @@ export function SplitViewContainer({
   const rafRef = useRef<number | null>(null);
   const [showPrimaryDropdown, setShowPrimaryDropdown] = useState(false);
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
+  const [showTertiaryDropdown, setShowTertiaryDropdown] = useState(false);
+  const [showQuaternaryDropdown, setShowQuaternaryDropdown] = useState(false);
   const [isLayoutInitialized, setIsLayoutInitialized] = useState(false);
   
   // Handle refresh button click when control buttons include refresh
@@ -124,6 +126,8 @@ export function SplitViewContainer({
       if (!target.closest('.dropdown-container')) {
         setShowPrimaryDropdown(false);
         setShowSecondaryDropdown(false);
+        setShowTertiaryDropdown(false);
+        setShowQuaternaryDropdown(false);
       }
     };
     
@@ -157,6 +161,20 @@ export function SplitViewContainer({
     }
     
     const terminalIds = terminals.map(t => t.dbSessionId);
+    
+    // First, clear any stale terminal assignments that don't exist anymore
+    if (layout.primaryTerminalId && !terminalIds.includes(layout.primaryTerminalId)) {
+      setPrimaryTerminal(taskId, null);
+    }
+    if (layout.secondaryTerminalId && !terminalIds.includes(layout.secondaryTerminalId)) {
+      setSecondaryTerminal(taskId, null);
+    }
+    if (layout.tertiaryTerminalId && !terminalIds.includes(layout.tertiaryTerminalId)) {
+      setTertiaryTerminal(taskId, null);
+    }
+    if (layout.quaternaryTerminalId && !terminalIds.includes(layout.quaternaryTerminalId)) {
+      setQuaternaryTerminal(taskId, null);
+    }
     
     // Check if we need to do any assignments
     const needsPrimaryAssignment = terminalIds[0] && !layout.primaryTerminalId;
@@ -198,6 +216,11 @@ export function SplitViewContainer({
     terminals.length, // Use length instead of full array to avoid unnecessary rerenders
     taskId,
     isLayoutInitialized,
+    // Include the terminal IDs to detect stale assignments
+    layout.primaryTerminalId,
+    layout.secondaryTerminalId,
+    layout.tertiaryTerminalId,
+    layout.quaternaryTerminalId,
     setPrimaryTerminal,
     setSecondaryTerminal,
     setTertiaryTerminal,
@@ -340,17 +363,17 @@ export function SplitViewContainer({
             hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
             showControls={false}
             controlButtons={controlButtons}
-            showDropdown={false}
-            onDropdownToggle={() => {}}
+            showDropdown={showPrimaryDropdown}
+            onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
             onTerminalSelect={(terminalId) => {
               setPrimaryTerminal(taskId, terminalId);
+              setShowPrimaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
             onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
             position="primary"
             getStateColor={getStateColor}
-            otherTerminalId=""
           />
         ) : (
           <div className="flex items-center justify-center bg-gray-900">
@@ -375,17 +398,17 @@ export function SplitViewContainer({
             hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
             showControls={true} // Show controls in top-right
             controlButtons={controlButtons}
-            showDropdown={false}
-            onDropdownToggle={() => {}}
+            showDropdown={showSecondaryDropdown}
+            onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
             onTerminalSelect={(terminalId) => {
               setSecondaryTerminal(taskId, terminalId);
+              setShowSecondaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
             onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
             position="secondary"
             getStateColor={getStateColor}
-            otherTerminalId=""
           />
         ) : (
           <div className="relative flex items-center justify-center bg-gray-900">
@@ -416,17 +439,17 @@ export function SplitViewContainer({
             hasFocus={focusedTerminalId === tertiaryTerminal.dbSessionId}
             showControls={false}
             controlButtons={controlButtons}
-            showDropdown={false}
-            onDropdownToggle={() => {}}
+            showDropdown={showTertiaryDropdown}
+            onDropdownToggle={() => setShowTertiaryDropdown(!showTertiaryDropdown)}
             onTerminalSelect={(terminalId) => {
               setTertiaryTerminal(taskId, terminalId);
+              setShowTertiaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
             onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
             position="tertiary"
             getStateColor={getStateColor}
-            otherTerminalId=""
           />
         ) : (
           <div className="flex items-center justify-center bg-gray-900">
@@ -451,17 +474,17 @@ export function SplitViewContainer({
             hasFocus={focusedTerminalId === quaternaryTerminal.dbSessionId}
             showControls={false}
             controlButtons={controlButtons}
-            showDropdown={false}
-            onDropdownToggle={() => {}}
+            showDropdown={showQuaternaryDropdown}
+            onDropdownToggle={() => setShowQuaternaryDropdown(!showQuaternaryDropdown)}
             onTerminalSelect={(terminalId) => {
               setQuaternaryTerminal(taskId, terminalId);
+              setShowQuaternaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
             onSessionStatus={(status) => onSessionStatus(quaternaryTerminal.dbSessionId, status)}
             onFocusRequest={() => setFocusedTerminal(taskId, quaternaryTerminal.dbSessionId)}
             position="quaternary"
             getStateColor={getStateColor}
-            otherTerminalId=""
           />
         ) : (
           <div className="flex items-center justify-center bg-gray-900">
@@ -522,7 +545,6 @@ export function SplitViewContainer({
           onSwap={() => swapPanes(taskId)}
           position="primary"
           getStateColor={getStateColor}
-          otherTerminalId={secondaryTerminal?.dbSessionId}
         />
       ) : (
         <div className="flex items-center justify-center bg-gray-900">
@@ -587,7 +609,6 @@ export function SplitViewContainer({
           onSwap={() => swapPanes(taskId)}
           position="secondary"
           getStateColor={getStateColor}
-          otherTerminalId={primaryTerminal?.dbSessionId}
         />
       ) : (
         <div className="flex items-center justify-center bg-gray-900">

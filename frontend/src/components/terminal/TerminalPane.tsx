@@ -3,6 +3,7 @@ import { ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { ThrottledTerminal } from './ThrottledTerminal';
 import type { DirectTerminalHandle } from './DirectTerminal';
 import type { TerminalSession } from '../../types/task';
+import { useSplitLayout } from '../../stores/splitViewStore';
 
 interface TerminalPaneProps {
   terminal: TerminalSession | undefined;
@@ -19,9 +20,8 @@ interface TerminalPaneProps {
   onSessionStatus: (status: 'connected' | 'disconnected' | 'error') => void;
   onFocusRequest: () => void;
   onSwap?: () => void;
-  position: 'primary' | 'secondary';
+  position: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
   getStateColor: (state?: string) => string;
-  otherTerminalId?: string;
 }
 
 export const TerminalPane = forwardRef<DirectTerminalHandle, TerminalPaneProps>(({
@@ -40,10 +40,21 @@ export const TerminalPane = forwardRef<DirectTerminalHandle, TerminalPaneProps>(
   onFocusRequest,
   onSwap,
   position,
-  getStateColor,
-  otherTerminalId
+  getStateColor
 }, ref) => {
   const otherPosition = position === 'primary' ? 'secondary' : 'primary';
+  const layout = useSplitLayout(taskId);
+  
+  // Get all terminal IDs that are currently assigned to panes
+  const assignedTerminalIds = [
+    layout.primaryTerminalId,
+    layout.secondaryTerminalId,
+    layout.tertiaryTerminalId,
+    layout.quaternaryTerminalId
+  ].filter(Boolean) as string[];
+  
+  // Filter out the current terminal's ID to get the ones that are "in use" by other panes
+  const terminalsInUse = assignedTerminalIds.filter(id => id !== terminal?.dbSessionId);
   
   // Focus terminal when it changes and hasFocus is true
   useEffect(() => {
@@ -84,12 +95,12 @@ export const TerminalPane = forwardRef<DirectTerminalHandle, TerminalPaneProps>(
                     className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
                       t.dbSessionId === terminal?.dbSessionId ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
                     }`}
-                    disabled={t.dbSessionId === otherTerminalId}
+                    disabled={terminalsInUse.includes(t.dbSessionId)}
                   >
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${getStateColor(t.aiState)}`}></div>
                       <span className="truncate flex-1">{t.tabName}</span>
-                      {t.dbSessionId === otherTerminalId && (
+                      {terminalsInUse.includes(t.dbSessionId) && (
                         <span className="text-xs text-gray-500">(in use)</span>
                       )}
                     </div>
