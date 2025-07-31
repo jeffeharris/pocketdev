@@ -22,14 +22,17 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
       env.GITHUB_TOKEN = githubToken;
       
       // Set git credential helper for ALL operations when token is available
-      try {
-        const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
-        if (!credHelper || !credHelper.includes('gh auth')) {
+      // Skip for clone commands since the directory doesn't exist yet
+      if (!command.includes('git clone')) {
+        try {
+          const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
+          if (!credHelper || !credHelper.includes('gh auth')) {
+            await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+          }
+        } catch (e) {
+          // No credential helper set, configure it
           await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
         }
-      } catch (e) {
-        // No credential helper set, configure it
-        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
       }
     }
     
