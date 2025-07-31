@@ -23,6 +23,8 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   const [activePhase, setActivePhase] = useState<'validate' | 'merge'>('validate');
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(60); // percentage for terminal when validation mode is on
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
   
   // Real data from API
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -333,7 +335,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                 key={task.id}
                 style={{ 
                   display: isActive ? 'flex' : 'none',
-                  height: validationMode ? '60%' : undefined
+                  height: validationMode ? `${terminalHeight}%` : undefined
                 }}
                 className={`${validationMode ? 'flex-shrink-0' : 'flex-1'} flex flex-col`}
               >
@@ -381,6 +383,10 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             activePhase={activePhase}
             onPhaseChange={setActivePhase}
             onClose={() => setValidationMode(false)}
+            panelHeight={100 - terminalHeight}
+            onHeightChange={(newHeight) => setTerminalHeight(100 - newHeight)}
+            isDragging={isDraggingDivider}
+            onDraggingChange={setIsDraggingDivider}
           />
         </div>
       </div>

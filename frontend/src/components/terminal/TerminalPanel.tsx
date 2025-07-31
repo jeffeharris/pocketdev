@@ -51,6 +51,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
+  const terminalContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   const [confirmClose, setConfirmClose] = useState<{ dbSessionId: string; tabName: string } | null>(null);
   
@@ -70,20 +71,38 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const width = window.innerWidth;
       const height = window.innerHeight;
       
-      // Quad view needs large screen (1400x800)
-      setCanShowQuad(width >= 1400 && height >= 800);
+      // Get actual terminal container height if available
+      const terminalHeight = terminalContainerRef.current?.offsetHeight || height;
       
-      // Horizontal split (top/bottom) needs sufficient height
-      setCanShowHorizontal(height >= 600);
+      // Use terminal container height for constraints when in validation mode
+      const effectiveHeight = validationMode ? terminalHeight : height;
       
-      // Vertical split (side by side) needs sufficient width
+      // Quad view needs large screen and sufficient terminal height
+      // Horizontal and quad splits need the same height threshold
+      const minHeightForHorizontalSplits = 600;
+      setCanShowQuad(width >= 1400 && effectiveHeight >= minHeightForHorizontalSplits);
+      
+      // Horizontal split needs sufficient terminal height (same as quad)
+      setCanShowHorizontal(effectiveHeight >= minHeightForHorizontalSplits);
+      
+      // Vertical split only depends on width - works with any height
       setCanShowVertical(width >= 1000);
     };
     
     checkViewport();
     window.addEventListener('resize', checkViewport);
-    return () => window.removeEventListener('resize', checkViewport);
-  }, []);
+    
+    // Also check when validation mode changes
+    const resizeObserver = new ResizeObserver(checkViewport);
+    if (terminalContainerRef.current) {
+      resizeObserver.observe(terminalContainerRef.current);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', checkViewport);
+      resizeObserver.disconnect();
+    };
+  }, [validationMode]);
   
   // Split view state
   const layout = useSplitLayout(task.id);
@@ -913,7 +932,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       )}
 
       {/* Terminal Content - Split view or single terminal */}
-      <div className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
+      <div ref={terminalContainerRef} className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
         {splitViewEnabled && (layout.mode === 'split' || layout.mode === 'split-4') ? (
           <SplitViewContainer
             taskId={task.id}

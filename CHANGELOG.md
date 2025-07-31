@@ -4,6 +4,20 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Added
+- **Resizable Validation/Merge Panel**
+  - Horizontal divider between terminal and validation/merge panels can now be dragged to resize
+  - Visual feedback during drag with percentage indicator
+  - Minimum height constraint of 20% and maximum of 80% for each panel
+  - Smooth animations and hover states for better discoverability
+
+- **Split View Constraints with Validation Mode**
+  - Intelligent viewport constraints when validation panel is active
+  - Vertical split mode works with any terminal height (as little as 20% screen space)
+  - Horizontal and quad splits require minimum 600px terminal height
+  - Auto-downgrade from unavailable modes when terminal space is too small
+  - Alt+D cycling skips unavailable modes based on current terminal height
+
 ### Fixed
 - **Terminal PS1 Configuration**
   - Fixed PS1 prompt configuration not being applied to terminal sessions

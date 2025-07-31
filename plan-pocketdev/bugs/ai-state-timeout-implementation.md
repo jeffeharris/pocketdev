@@ -1,9 +1,15 @@
 # Implementation Plan: Timeout-Based State Detection
 
+## Context
+The AI state monitoring system is getting stuck in incorrect states (idle/working/waiting) when Claude exits. Currently it tries to detect bash prompts to know when to transition to 'not-started' (gray), but this is fragile and not working with current prompt configurations.
+
 ## Summary
 Replace bash prompt detection with a simpler approach:
 1. Remove bash prompt pattern matching entirely
-2. Add timeout mechanism: If no Claude UI patterns detected for X seconds while in an active state → transition to `not-started`
+2. Add timeout mechanism: If no Claude UI patterns detected for 5 seconds while in an active state → transition to `not-started`
+
+## File to Modify
+`/home/jeffh/projects/pocketdev/backend/ai-session-monitor.js`
 
 ## Implementation Details
 
@@ -13,8 +19,10 @@ Replace bash prompt detection with a simpler approach:
 
 ### 2. Add Timeout Mechanism
 
+Find the `setupGlobalMonitoring()` method (around line 244) and add the following:
+
 ```javascript
-// In setupGlobalMonitoring(), enhance the recentPatterns tracking:
+// First, enhance the recentPatterns Map initialization (around line 253):
 this.recentPatterns = new Map(); // sessionId -> { 
   // patterns: Set, 
   // lastUpdate: timestamp, 
@@ -45,9 +53,12 @@ setInterval(() => {
 ```
 
 ### 3. Update Pattern Detection
-When ANY Claude pattern is detected (prompt, thinking, confirmation):
+In the pattern matching section (around lines 310-345), whenever a Claude pattern is detected, add:
 ```javascript
-recent.lastClaudeActivity = Date.now();
+// After detecting any Claude pattern (thinking, prompt, confirmation)
+if (patternName.startsWith('claude-')) {
+  recent.lastClaudeActivity = Date.now();
+}
 ```
 
 ### 4. Claude UI Patterns to Track
@@ -68,3 +79,9 @@ recent.lastClaudeActivity = Date.now();
 2. Exit Claude normally → should transition to `not-started` within 5 seconds
 3. Kill Claude process → should transition to `not-started` within 5 seconds
 4. Test with different shells/prompts → should work consistently
+
+## Important Notes
+- The timeout mechanism should be added AFTER the existing pattern initialization code
+- Make sure to clean up the interval when the monitor is destroyed (if there's a cleanup method)
+- The 5-second timeout is conservative - can be adjusted if needed
+- Don't forget to remove ALL references to bash prompt detection, including the pattern in the patterns object around line 200

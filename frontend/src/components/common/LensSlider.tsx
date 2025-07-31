@@ -8,6 +8,10 @@ interface LensSliderProps {
   activePhase: 'validate' | 'merge';
   onPhaseChange: (phase: 'validate' | 'merge') => void;
   onClose: () => void;
+  panelHeight?: number;
+  onHeightChange?: (height: number) => void;
+  isDragging?: boolean;
+  onDraggingChange?: (dragging: boolean) => void;
 }
 
 export const LensSlider: React.FC<LensSliderProps> = ({
@@ -15,9 +19,19 @@ export const LensSlider: React.FC<LensSliderProps> = ({
   validationMode,
   activePhase,
   onPhaseChange,
-  onClose
+  onClose,
+  panelHeight = 40,
+  onHeightChange,
+  isDragging = false,
+  onDraggingChange
 }) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [localPanelHeight, setLocalPanelHeight] = useState(panelHeight);
+  const [localIsDragging, setLocalIsDragging] = useState(false);
+  
+  // Use props if provided, otherwise use local state
+  const effectivePanelHeight = onHeightChange ? panelHeight : localPanelHeight;
+  const effectiveIsDragging = onDraggingChange ? isDragging : localIsDragging;
 
   const handlePhaseSwitch = (newPhase: 'validate' | 'merge') => {
     if (newPhase === activePhase || isTransitioning) return;
@@ -34,11 +48,55 @@ export const LensSlider: React.FC<LensSliderProps> = ({
   return (
     <div 
       className="flex-shrink-0 flex flex-col"
-      style={{ height: '40%' }}
+      style={{ height: `${effectivePanelHeight}%` }}
     >
       {/* Resize Handle */}
-      <div className="h-1 bg-gray-600 cursor-row-resize hover:bg-blue-500 transition-colors flex items-center justify-center flex-shrink-0">
-        <div className="w-8 h-0.5 bg-gray-400 rounded"></div>
+      <div 
+        className={`relative h-2 cursor-row-resize transition-all flex items-center justify-center flex-shrink-0 group ${
+          effectiveIsDragging ? 'bg-blue-500' : 'bg-gray-700 hover:bg-blue-500'
+        }`}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          if (onDraggingChange) {
+            onDraggingChange(true);
+          } else {
+            setLocalIsDragging(true);
+          }
+          const startY = e.clientY;
+          const startHeight = effectivePanelHeight;
+          const containerHeight = window.innerHeight;
+          
+          const handleMouseMove = (e: MouseEvent) => {
+            const deltaY = startY - e.clientY; // Inverted because we're measuring from bottom
+            const deltaPercent = (deltaY / containerHeight) * 100;
+            const newHeight = Math.max(20, Math.min(80, startHeight + deltaPercent));
+            if (onHeightChange) {
+              onHeightChange(newHeight);
+            } else {
+              setLocalPanelHeight(newHeight);
+            }
+          };
+          
+          const handleMouseUp = () => {
+            if (onDraggingChange) {
+              onDraggingChange(false);
+            } else {
+              setLocalIsDragging(false);
+            }
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+          };
+          
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+        }}
+      >
+        <div className={`w-12 h-1 rounded transition-all ${effectiveIsDragging ? 'bg-white' : 'bg-gray-400 group-hover:bg-gray-300'}`}></div>
+        {effectiveIsDragging && (
+          <div className="absolute left-1/2 -translate-x-1/2 -top-8 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg">
+            {Math.round(effectivePanelHeight)}%
+          </div>
+        )}
       </div>
       
       {/* Panel Content */}
