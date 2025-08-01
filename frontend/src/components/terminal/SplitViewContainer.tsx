@@ -224,7 +224,7 @@ export function SplitViewContainer({
 
   // Render controls overlay for split and quad modes
   return (
-    <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute inset-0 pointer-events-none z-10">
       {/* Quad View Controls */}
       {layout.mode === 'split-4' && (
         <>
@@ -303,17 +303,10 @@ export function SplitViewContainer({
       {/* Split View Controls */}
       {layout.mode === 'split' && (
         <>
-          <div 
-            ref={containerRef}
-            className="absolute inset-0"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: layout.orientation === 'vertical' ? `${layout.splitRatio}% ${100 - layout.splitRatio}%` : '1fr',
-              gridTemplateRows: layout.orientation === 'horizontal' ? `${layout.splitRatio}% ${100 - layout.splitRatio}%` : '1fr',
-            }}
-          >
-            {/* Primary pane controls */}
-            <div className="relative pointer-events-auto">
+          {/* Terminal selection dropdowns - positioned to match grid layout */}
+          <div className="pointer-events-auto">
+            {/* Primary pane dropdown (top-left of first terminal) */}
+            <div className="absolute top-2 left-2">
               {renderTerminalDropdown(
                 primaryTerminal,
                 showPrimaryDropdown,
@@ -325,9 +318,13 @@ export function SplitViewContainer({
                 'primary'
               )}
             </div>
-
-            {/* Secondary pane controls */}
-            <div className="relative pointer-events-auto">
+            
+            {/* Secondary pane dropdown (top-left of second terminal) */}
+            <div className={`absolute ${
+              layout.orientation === 'vertical' 
+                ? 'top-2 left-1/2 pl-2' 
+                : 'top-1/2 left-2 pt-2'
+            }`}>
               {renderTerminalDropdown(
                 secondaryTerminal,
                 showSecondaryDropdown,
@@ -338,12 +335,14 @@ export function SplitViewContainer({
                 },
                 'secondary'
               )}
-              {controlButtons && (
-                <div className="absolute top-2 right-2">
-                  {controlButtons}
-                </div>
-              )}
             </div>
+            
+            {/* Control buttons in top-right */}
+            {controlButtons && (
+              <div className="absolute top-2 right-2">
+                {controlButtons}
+              </div>
+            )}
           </div>
 
           {/* Resizer */}

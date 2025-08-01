@@ -3,6 +3,14 @@
   height: 100%;
   position: relative;
   background: #1f2937;
+  /* Disable animations for instant layout changes */
+  transition: none !important;
+}
+
+/* Disable transitions on all children during layout changes */
+.terminals-container * {
+  transition: none !important;
+  animation: none !important;
 }
 
 /* Tab mode - stack all terminals */
@@ -86,6 +94,9 @@
   height: 100%;
   overflow: hidden;
   background: #0d1117;
+  /* Disable animations/transitions for instant layout changes */
+  transition: none !important;
+  animation: none !important;
 }
 
 /* Ensure DirectTerminal fills its container */
