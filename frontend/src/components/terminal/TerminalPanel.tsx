@@ -9,7 +9,7 @@ import { api } from '../../services/api';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
-import { loadLayout, persistLayout, useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
+import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 import { useShortcutContext } from '../../hooks/keyboard';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
@@ -58,8 +58,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
   
-  // Split view is now enabled by default
-  const splitViewEnabled = true;
   
   // Viewport constraints for split views
   const [canShowQuad, setCanShowQuad] = useState(false);
@@ -105,8 +103,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   }, [validationMode]);
   
   // Split view state
-  const layout = useSplitLayout(task.id);
-  const { toggleSplitMode, updateLayout } = useSplitViewStore();
+  const layout = useSplitLayout();
+  const { toggleSplitMode, updateLayout, setCurrentTask } = useSplitViewStore();
   
   // Auto-downgrade layout if viewport becomes too small
   useEffect(() => {
@@ -114,37 +112,37 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     if (layout.mode === 'split-4' && !canShowQuad) {
       // Try horizontal split first, then vertical, then tab
       if (canShowHorizontal) {
-        updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+        updateLayout( { mode: 'split', orientation: 'horizontal' });
       } else if (canShowVertical) {
-        updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+        updateLayout( { mode: 'split', orientation: 'vertical' });
       } else {
-        updateLayout(task.id, { mode: 'tab' });
+        updateLayout( { mode: 'tab' });
       }
     }
     // If in horizontal split but screen too short, switch to vertical or tab
     else if (layout.mode === 'split' && layout.orientation === 'horizontal' && !canShowHorizontal) {
       if (canShowVertical) {
-        updateLayout(task.id, { orientation: 'vertical' });
+        updateLayout( { orientation: 'vertical' });
       } else {
-        updateLayout(task.id, { mode: 'tab' });
+        updateLayout( { mode: 'tab' });
       }
     }
     // If in vertical split but screen too narrow, switch to horizontal or tab
     else if (layout.mode === 'split' && layout.orientation === 'vertical' && !canShowVertical) {
       if (canShowHorizontal) {
-        updateLayout(task.id, { orientation: 'horizontal' });
+        updateLayout( { orientation: 'horizontal' });
       } else {
-        updateLayout(task.id, { mode: 'tab' });
+        updateLayout( { mode: 'tab' });
       }
     }
   }, [layout.mode, layout.orientation, canShowQuad, canShowHorizontal, canShowVertical, task.id, updateLayout]);
   
-  // Load split layout on mount
+  // Set current task for split view on mount
   useEffect(() => {
-    if (splitViewEnabled && task.project_id) {
-      loadLayout(task.id, task.project_id);
+    if (task.project_id) {
+      setCurrentTask(task.id, task.project_id);
     }
-  }, [task.id, task.project_id, splitViewEnabled]);
+  }, [task.id, task.project_id, setCurrentTask]);
 
   // Get terminals from the store
   const terminals = useTaskTerminals(task.id);
@@ -638,20 +636,20 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Render control buttons (reusable for both tab mode and split view)
   const renderControlButtons = () => (
     <>
-      {/* Split View Toggle - show if split view enabled (allow with 1+ terminals) */}
-      {splitViewEnabled && terminals.length >= 1 && (
+      {/* Split View Toggle - allow with 1+ terminals */}
+      {terminals.length >= 1 && (
         <button 
           onClick={() => {
             if (layout.mode === 'tab') {
               // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
               if (canShowVertical) {
-                updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+                updateLayout( { mode: 'split', orientation: 'vertical' });
                 // Ensure focus remains on the active terminal
                 if (activeTabId && !focusedTerminalId) {
                   setFocusedTerminal(task.id, activeTabId);
                 }
               } else if (canShowHorizontal) {
-                updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+                updateLayout( { mode: 'split', orientation: 'horizontal' });
                 if (activeTabId && !focusedTerminalId) {
                   setFocusedTerminal(task.id, activeTabId);
                 }
@@ -660,23 +658,25 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
               if (canShowHorizontal) {
-                updateLayout(task.id, { orientation: 'horizontal' });
+                updateLayout( { orientation: 'horizontal' });
               } else if (canShowQuad) {
-                updateLayout(task.id, { mode: 'split-4' });
+                updateLayout( { mode: 'split-4' });
               } else {
-                updateLayout(task.id, { mode: 'tab' });
+                updateLayout( { mode: 'tab' });
               }
             } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
               // Switch to quad view if allowed, otherwise back to tab
               if (canShowQuad) {
-                updateLayout(task.id, { mode: 'split-4' });
+                updateLayout( { mode: 'split-4' });
               } else {
-                updateLayout(task.id, { mode: 'tab' });
+                updateLayout( { mode: 'tab' });
               }
             } else {
               // From quad view, always go back to tab mode
-              updateLayout(task.id, { mode: 'tab' });
+              updateLayout( { mode: 'tab' });
             }
+            // Save layout after any changes
+            saveLayout();
           }}
           className={`p-1 transition-colors ${
             layout.mode !== 'tab' 
@@ -837,35 +837,36 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           // Only handle this event if this task is currently visible
           if (!isVisible) break;
           
-          if (splitViewEnabled) {
-            if (layout.mode === 'tab') {
+          if (layout.mode === 'tab') {
               // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
               if (canShowVertical) {
-                updateLayout(task.id, { mode: 'split', orientation: 'vertical' });
+                updateLayout( { mode: 'split', orientation: 'vertical' });
               } else if (canShowHorizontal) {
-                updateLayout(task.id, { mode: 'split', orientation: 'horizontal' });
+                updateLayout( { mode: 'split', orientation: 'horizontal' });
               }
               // If neither split view is possible, stay in tab mode
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
               // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
               if (canShowHorizontal) {
-                updateLayout(task.id, { orientation: 'horizontal' });
+                updateLayout( { orientation: 'horizontal' });
               } else if (canShowQuad) {
-                updateLayout(task.id, { mode: 'split-4' });
+                updateLayout( { mode: 'split-4' });
               } else {
-                updateLayout(task.id, { mode: 'tab' });
+                updateLayout( { mode: 'tab' });
               }
             } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
               // Switch to quad view if allowed, otherwise back to tab
               if (canShowQuad) {
-                updateLayout(task.id, { mode: 'split-4' });
+                updateLayout( { mode: 'split-4' });
               } else {
-                updateLayout(task.id, { mode: 'tab' });
+                updateLayout( { mode: 'tab' });
               }
             } else {
               // From quad view, always go back to tab mode
-              updateLayout(task.id, { mode: 'tab' });
+              updateLayout( { mode: 'tab' });
             }
+            // Save layout after any changes
+            saveLayout();
           }
           break;
         case 'terminal-toggle-fullscreen':
@@ -908,7 +909,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       document.removeEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
       document.removeEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
     };
-  }, [terminals, activeTabId, splitViewEnabled, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession, isVisible]);
+  }, [terminals, activeTabId, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession, isVisible]);
 
 
 
@@ -941,7 +942,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
       {/* Terminal Content - Split view or single terminal */}
       <div ref={terminalContainerRef} className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {splitViewEnabled && (layout.mode === 'split' || layout.mode === 'split-4') ? (
+        {layout.mode === 'split' || layout.mode === 'split-4' ? (
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}

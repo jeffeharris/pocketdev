@@ -6,7 +6,7 @@ import {
   ChevronDown,
   Monitor
 } from 'lucide-react';
-import { useSplitViewStore, useSplitLayout } from '../../stores/splitViewStore';
+import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTaskTerminals } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 
@@ -21,7 +21,7 @@ export function SplitViewControls({
   activeTabId,
   onTerminalSelect
 }: SplitViewControlsProps) {
-  const layout = useSplitLayout(taskId);
+  const layout = useSplitLayout();
   const terminals = useTaskTerminals(taskId);
   const { updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
   
@@ -108,7 +108,8 @@ export function SplitViewControls({
                     <button
                       key={terminal.dbSessionId}
                       onClick={() => {
-                        setPrimaryTerminal(taskId, terminal.dbSessionId);
+                        setPrimaryTerminal(terminal.dbSessionId);
+                        saveLayout();
                         setShowPrimaryDropdown(false);
                         if (onTerminalSelect) {
                           onTerminalSelect(terminal.dbSessionId);
@@ -156,7 +157,8 @@ export function SplitViewControls({
                     <button
                       key={terminal.dbSessionId}
                       onClick={() => {
-                        setSecondaryTerminal(taskId, terminal.dbSessionId);
+                        setSecondaryTerminal(terminal.dbSessionId);
+                        saveLayout();
                         setShowSecondaryDropdown(false);
                         if (onTerminalSelect) {
                           onTerminalSelect(terminal.dbSessionId);
@@ -186,7 +188,10 @@ export function SplitViewControls({
         {/* Orientation Toggle */}
         <div className="flex items-center bg-gray-700 rounded text-xs">
           <button
-            onClick={() => updateLayout(taskId, { orientation: 'horizontal' })}
+            onClick={() => {
+              updateLayout({ orientation: 'horizontal' });
+              saveLayout();
+            }}
             className={`p-1 rounded-l transition-colors ${
               layout.orientation === 'horizontal'
                 ? 'bg-blue-600 text-white'
@@ -197,7 +202,10 @@ export function SplitViewControls({
             <Rows className="w-3 h-3" />
           </button>
           <button
-            onClick={() => updateLayout(taskId, { orientation: 'vertical' })}
+            onClick={() => {
+              updateLayout({ orientation: 'vertical' });
+              saveLayout();
+            }}
             className={`p-1 rounded-r transition-colors ${
               layout.orientation === 'vertical'
                 ? 'bg-blue-600 text-white'
@@ -211,7 +219,10 @@ export function SplitViewControls({
 
         {/* Swap Button */}
         <button
-          onClick={() => swapPanes(taskId)}
+          onClick={() => {
+            swapPanes();
+            saveLayout();
+          }}
           className="p-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors text-gray-400 hover:text-gray-200"
           title="Swap terminals"
         >

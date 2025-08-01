@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { DirectTerminalHandle } from './DirectTerminal';
 import { TerminalPane } from './TerminalPane';
-import { useSplitViewStore, useSplitLayout, persistLayout } from '../../stores/splitViewStore';
+import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout } from '../../stores/splitViewStore';
 import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 import type { Task } from '../../types/task';
@@ -29,9 +29,9 @@ export function SplitViewContainer({
   isResetting,
   setIsResetting
 }: SplitViewContainerProps) {
-  const layout = useSplitLayout(taskId);
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes, isLayoutLoading } = useSplitViewStore();
-  const isLoading = isLayoutLoading(taskId);
+  const layout = useSplitLayout();
+  const layoutState = useLayoutState();
+  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
@@ -48,7 +48,6 @@ export function SplitViewContainer({
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
   const [showTertiaryDropdown, setShowTertiaryDropdown] = useState(false);
   const [showQuaternaryDropdown, setShowQuaternaryDropdown] = useState(false);
-  const [isLayoutInitialized, setIsLayoutInitialized] = useState(false);
   
   // Handle refresh button click when control buttons include refresh
   const handleRefreshClick = useCallback(() => {
@@ -136,29 +135,10 @@ export function SplitViewContainer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // Mark layout as initialized after first render
-  useEffect(() => {
-    setIsLayoutInitialized(true);
-  }, []);
-  
-  // Persist layout changes with debounce
-  useEffect(() => {
-    // Don't persist if we're still loading the layout from backend
-    if (!projectId || !isLayoutInitialized || isLoading) return;
-    
-    const timeoutId = setTimeout(() => {
-      persistLayout(taskId, projectId);
-    }, 500);
-    
-    return () => clearTimeout(timeoutId);
-  }, [layout, taskId, projectId, isLayoutInitialized, isLoading]);
-  
-
-
   // Auto-assignment: assign available terminals when switching to split mode or terminals change
   useEffect(() => {
-    // Only run when in split mode and layout is initialized and not loading
-    if (!isLayoutInitialized || isLoading || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+    // Only run when in split mode and layout is loaded
+    if (layoutState !== 'loaded' || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
       return;
     }
     
@@ -166,16 +146,16 @@ export function SplitViewContainer({
     
     // First, clear any stale terminal assignments that don't exist anymore
     if (layout.primaryTerminalId && !terminalIds.includes(layout.primaryTerminalId)) {
-      setPrimaryTerminal(taskId, null);
+      setPrimaryTerminal( null);
     }
     if (layout.secondaryTerminalId && !terminalIds.includes(layout.secondaryTerminalId)) {
-      setSecondaryTerminal(taskId, null);
+      setSecondaryTerminal( null);
     }
     if (layout.tertiaryTerminalId && !terminalIds.includes(layout.tertiaryTerminalId)) {
-      setTertiaryTerminal(taskId, null);
+      setTertiaryTerminal( null);
     }
     if (layout.quaternaryTerminalId && !terminalIds.includes(layout.quaternaryTerminalId)) {
-      setQuaternaryTerminal(taskId, null);
+      setQuaternaryTerminal( null);
     }
     
     // Check if we need to do any assignments
@@ -186,19 +166,19 @@ export function SplitViewContainer({
     
     // Only update if something actually needs assignment
     if (needsPrimaryAssignment) {
-      setPrimaryTerminal(taskId, terminalIds[0]);
+      setPrimaryTerminal( terminalIds[0]);
     }
     
     if (needsSecondaryAssignment) {
-      setSecondaryTerminal(taskId, terminalIds[1]);
+      setSecondaryTerminal( terminalIds[1]);
     }
     
     if (layout.mode === 'split-4') {
       if (needsTertiaryAssignment) {
-        setTertiaryTerminal(taskId, terminalIds[2]);
+        setTertiaryTerminal( terminalIds[2]);
       }
       if (needsQuaternaryAssignment) {
-        setQuaternaryTerminal(taskId, terminalIds[3]);
+        setQuaternaryTerminal( terminalIds[3]);
       }
     }
     
@@ -206,18 +186,17 @@ export function SplitViewContainer({
     if (layout.mode === 'split') {
       // In 2-way split, clear tertiary and quaternary if set
       if (layout.tertiaryTerminalId) {
-        setTertiaryTerminal(taskId, null);
+        setTertiaryTerminal( null);
       }
       if (layout.quaternaryTerminalId) {
-        setQuaternaryTerminal(taskId, null);
+        setQuaternaryTerminal( null);
       }
     }
   }, [
     // Only depend on mode changes and terminal list changes
     layout.mode,
     terminals.length, // Use length instead of full array to avoid unnecessary rerenders
-    taskId,
-    isLayoutInitialized,
+    layoutState,
     // Include the terminal IDs to detect stale assignments
     layout.primaryTerminalId,
     layout.secondaryTerminalId,
@@ -239,8 +218,9 @@ export function SplitViewContainer({
   // Handle double-click to reset to 50/50
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setSplitRatio(taskId, 0.5);
-  }, [taskId, setSplitRatio]);
+    setSplitRatio(0.5);
+    saveLayout();
+  }, [setSplitRatio]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -266,7 +246,7 @@ export function SplitViewContainer({
         
         // Clamp between 0.1 and 0.9
         newRatio = Math.max(0.1, Math.min(0.9, newRatio));
-        setSplitRatio(taskId, newRatio);
+        setSplitRatio( newRatio);
       });
     };
 
@@ -277,6 +257,8 @@ export function SplitViewContainer({
       }
       setIsDragging(false);
       setResizing(false);
+      // Save layout after resize is complete
+      saveLayout();
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -286,7 +268,7 @@ export function SplitViewContainer({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, layout.orientation, taskId, setSplitRatio, setResizing]);
+  }, [isDragging, layout.orientation, setSplitRatio, setResizing]);
 
   // Get the terminal instances
   const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
@@ -368,7 +350,7 @@ export function SplitViewContainer({
             showDropdown={showPrimaryDropdown}
             onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
             onTerminalSelect={(terminalId) => {
-              setPrimaryTerminal(taskId, terminalId);
+              setPrimaryTerminal( terminalId);
               setShowPrimaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
@@ -403,7 +385,7 @@ export function SplitViewContainer({
             showDropdown={showSecondaryDropdown}
             onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
             onTerminalSelect={(terminalId) => {
-              setSecondaryTerminal(taskId, terminalId);
+              setSecondaryTerminal( terminalId);
               setShowSecondaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
@@ -444,7 +426,7 @@ export function SplitViewContainer({
             showDropdown={showTertiaryDropdown}
             onDropdownToggle={() => setShowTertiaryDropdown(!showTertiaryDropdown)}
             onTerminalSelect={(terminalId) => {
-              setTertiaryTerminal(taskId, terminalId);
+              setTertiaryTerminal( terminalId);
               setShowTertiaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
@@ -479,7 +461,7 @@ export function SplitViewContainer({
             showDropdown={showQuaternaryDropdown}
             onDropdownToggle={() => setShowQuaternaryDropdown(!showQuaternaryDropdown)}
             onTerminalSelect={(terminalId) => {
-              setQuaternaryTerminal(taskId, terminalId);
+              setQuaternaryTerminal( terminalId);
               setShowQuaternaryDropdown(false);
               setFocusedTerminal(taskId, terminalId);
             }}
@@ -538,13 +520,13 @@ export function SplitViewContainer({
           showDropdown={showPrimaryDropdown}
           onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
           onTerminalSelect={(terminalId) => {
-            setPrimaryTerminal(taskId, terminalId);
+            setPrimaryTerminal( terminalId);
             setShowPrimaryDropdown(false);
             setFocusedTerminal(taskId, terminalId);
           }}
           onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
           onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-          onSwap={() => swapPanes(taskId)}
+          onSwap={() => swapPanes()}
           position="primary"
           getStateColor={getStateColor}
         />
@@ -602,13 +584,13 @@ export function SplitViewContainer({
           showDropdown={showSecondaryDropdown}
           onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
           onTerminalSelect={(terminalId) => {
-            setSecondaryTerminal(taskId, terminalId);
+            setSecondaryTerminal( terminalId);
             setShowSecondaryDropdown(false);
             setFocusedTerminal(taskId, terminalId);
           }}
           onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
           onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-          onSwap={() => swapPanes(taskId)}
+          onSwap={() => swapPanes()}
           position="secondary"
           getStateColor={getStateColor}
         />

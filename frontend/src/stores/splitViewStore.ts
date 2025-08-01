@@ -1,10 +1,6 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { enableMapSet } from 'immer';
-
-// Enable Map/Set support in Immer
-enableMapSet();
 
 export interface SplitLayoutConfig {
   mode: 'tab' | 'split' | 'split-4';
@@ -17,28 +13,35 @@ export interface SplitLayoutConfig {
 }
 
 interface SplitViewState {
-  // State
-  layouts: Map<string, SplitLayoutConfig>;
-  activePanes: Map<string, 'primary' | 'secondary'>;
+  // Current task context
+  currentTaskId: string | null;
+  currentProjectId: string | null;
+  
+  // Layout state
+  currentLayout: SplitLayoutConfig | null;
+  activePane: 'primary' | 'secondary';
+  
+  // UI state
   resizing: boolean;
-  loadingLayouts: Set<string>; // Track which layouts are being loaded
+  
+  // Loading state
+  layoutState: 'idle' | 'loading' | 'loaded' | 'error';
+  layoutError: string | null;
   
   // Actions
-  updateLayout: (taskId: string, config: Partial<SplitLayoutConfig>) => void;
-  toggleSplitMode: (taskId: string) => void;
-  setSplitRatio: (taskId: string, ratio: number) => void;
-  setActivePane: (taskId: string, pane: 'primary' | 'secondary') => void;
+  setCurrentTask: (taskId: string, projectId: string) => Promise<void>;
+  updateLayout: (changes: Partial<SplitLayoutConfig>) => void;
+  toggleSplitMode: () => void;
+  cycleSplitMode: () => void;
+  setSplitRatio: (ratio: number) => void;
+  setActivePane: (pane: 'primary' | 'secondary') => void;
   setResizing: (resizing: boolean) => void;
-  swapPanes: (taskId: string) => void;
-  setPrimaryTerminal: (taskId: string, terminalId: string | null) => void;
-  setSecondaryTerminal: (taskId: string, terminalId: string | null) => void;
-  setTertiaryTerminal: (taskId: string, terminalId: string | null) => void;
-  setQuaternaryTerminal: (taskId: string, terminalId: string | null) => void;
-  
-  // Computed
-  getLayout: (taskId: string) => SplitLayoutConfig;
-  getActivePane: (taskId: string) => 'primary' | 'secondary';
-  isLayoutLoading: (taskId: string) => boolean;
+  swapPanes: () => void;
+  setPrimaryTerminal: (terminalId: string | null) => void;
+  setSecondaryTerminal: (terminalId: string | null) => void;
+  setTertiaryTerminal: (terminalId: string | null) => void;
+  setQuaternaryTerminal: (terminalId: string | null) => void;
+  clearLayout: () => void;
 }
 
 const defaultLayout: SplitLayoutConfig = {
@@ -49,176 +52,225 @@ const defaultLayout: SplitLayoutConfig = {
   splitRatio: 0.5
 };
 
-// 2025 Pattern: Combine middleware for better DX
 export const useSplitViewStore = create<SplitViewState>()(
   devtools(
     subscribeWithSelector(
       immer((set, get) => ({
-        layouts: new Map(),
-        activePanes: new Map(),
+        // Initial state
+        currentTaskId: null,
+        currentProjectId: null,
+        currentLayout: null,
+        activePane: 'primary',
         resizing: false,
-        loadingLayouts: new Set(),
+        layoutState: 'idle',
+        layoutError: null,
         
-        updateLayout: (taskId, config) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, ...config });
+        // Set current task and load its layout
+        setCurrentTask: async (taskId, projectId) => {
+          const state = get();
+          
+          // Skip if already current task
+          if (state.currentTaskId === taskId) return;
+          
+          set(draft => {
+            draft.currentTaskId = taskId;
+            draft.currentProjectId = projectId;
+            draft.layoutState = 'loading';
+            draft.layoutError = null;
           });
+          
+          try {
+            const response = await fetch(
+              `/api/projects/${projectId}/tasks/${taskId}/split-layout`
+            );
+            
+            if (response.ok) {
+              const layout = await response.json();
+              set(draft => {
+                draft.currentLayout = layout;
+                draft.layoutState = 'loaded';
+              });
+            } else {
+              // Use default layout if none exists
+              set(draft => {
+                draft.currentLayout = { ...defaultLayout };
+                draft.layoutState = 'loaded';
+              });
+            }
+          } catch (error) {
+            console.error('Error loading split layout:', error);
+            set(draft => {
+              draft.currentLayout = { ...defaultLayout };
+              draft.layoutState = 'error';
+              draft.layoutError = error instanceof Error ? error.message : 'Failed to load layout';
+            });
+          }
         },
         
-        toggleSplitMode: (taskId) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            const newMode = currentLayout.mode === 'tab' ? 'split' : 'tab';
-            state.layouts.set(taskId, { ...currentLayout, mode: newMode });
-          });
-        },
-        
-        setSplitRatio: (taskId, ratio) => {
-          // Clamp ratio between 0.1 and 0.9
-          const clampedRatio = Math.max(0.1, Math.min(0.9, ratio));
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, splitRatio: clampedRatio });
-          });
-        },
-        
-        setActivePane: (taskId, pane) => {
-          set(state => {
-            state.activePanes.set(taskId, pane);
-          });
-        },
-        
-        setResizing: (resizing) => {
-          set(state => {
-            state.resizing = resizing;
-          });
-        },
-        
-        swapPanes: (taskId) => {
-          set(state => {
-            const layout = state.layouts.get(taskId);
-            if (layout) {
-              const temp = layout.primaryTerminalId;
-              layout.primaryTerminalId = layout.secondaryTerminalId;
-              layout.secondaryTerminalId = temp;
+        updateLayout: (changes) => {
+          set(draft => {
+            if (draft.currentLayout) {
+              Object.assign(draft.currentLayout, changes);
             }
           });
         },
         
-        setPrimaryTerminal: (taskId, terminalId) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, primaryTerminalId: terminalId });
+        toggleSplitMode: () => {
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.mode = draft.currentLayout.mode === 'tab' ? 'split' : 'tab';
+            }
           });
         },
         
-        setSecondaryTerminal: (taskId, terminalId) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, secondaryTerminalId: terminalId });
+        cycleSplitMode: () => {
+          set(draft => {
+            if (!draft.currentLayout) return;
+            
+            // Cycle through: tab -> split -> split-4 -> tab
+            switch (draft.currentLayout.mode) {
+              case 'tab':
+                draft.currentLayout.mode = 'split';
+                break;
+              case 'split':
+                draft.currentLayout.mode = 'split-4';
+                break;
+              case 'split-4':
+                draft.currentLayout.mode = 'tab';
+                break;
+            }
           });
         },
         
-        setTertiaryTerminal: (taskId, terminalId) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, tertiaryTerminalId: terminalId });
+        setSplitRatio: (ratio) => {
+          const clampedRatio = Math.max(0.1, Math.min(0.9, ratio));
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.splitRatio = clampedRatio;
+            }
           });
         },
         
-        setQuaternaryTerminal: (taskId, terminalId) => {
-          set(state => {
-            const currentLayout = state.layouts.get(taskId) || { ...defaultLayout };
-            state.layouts.set(taskId, { ...currentLayout, quaternaryTerminalId: terminalId });
+        setActivePane: (pane) => {
+          set(draft => {
+            draft.activePane = pane;
           });
         },
         
-        getLayout: (taskId) => {
-          return get().layouts.get(taskId) || { ...defaultLayout };
+        setResizing: (resizing) => {
+          set(draft => {
+            draft.resizing = resizing;
+          });
         },
         
-        getActivePane: (taskId) => {
-          return get().activePanes.get(taskId) || 'primary';
+        swapPanes: () => {
+          set(draft => {
+            if (!draft.currentLayout) return;
+            
+            if (draft.currentLayout.mode === 'split-4') {
+              // For quad view, swap all four in a rotation
+              const temp = draft.currentLayout.primaryTerminalId;
+              draft.currentLayout.primaryTerminalId = draft.currentLayout.secondaryTerminalId;
+              draft.currentLayout.secondaryTerminalId = draft.currentLayout.quaternaryTerminalId;
+              draft.currentLayout.quaternaryTerminalId = draft.currentLayout.tertiaryTerminalId;
+              draft.currentLayout.tertiaryTerminalId = temp;
+            } else {
+              // For split view, just swap primary and secondary
+              const temp = draft.currentLayout.primaryTerminalId;
+              draft.currentLayout.primaryTerminalId = draft.currentLayout.secondaryTerminalId;
+              draft.currentLayout.secondaryTerminalId = temp;
+            }
+          });
         },
         
-        isLayoutLoading: (taskId) => {
-          return get().loadingLayouts.has(taskId);
+        setPrimaryTerminal: (terminalId) => {
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.primaryTerminalId = terminalId;
+            }
+          });
+        },
+        
+        setSecondaryTerminal: (terminalId) => {
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.secondaryTerminalId = terminalId;
+            }
+          });
+        },
+        
+        setTertiaryTerminal: (terminalId) => {
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.tertiaryTerminalId = terminalId;
+            }
+          });
+        },
+        
+        setQuaternaryTerminal: (terminalId) => {
+          set(draft => {
+            if (draft.currentLayout) {
+              draft.currentLayout.quaternaryTerminalId = terminalId;
+            }
+          });
+        },
+        
+        clearLayout: () => {
+          set(draft => {
+            draft.currentTaskId = null;
+            draft.currentProjectId = null;
+            draft.currentLayout = null;
+            draft.layoutState = 'idle';
+            draft.layoutError = null;
+            draft.activePane = 'primary';
+          });
         }
       }))
     ),
-    { name: 'split-view-store' } // DevTools name
+    { name: 'split-view-store' }
   )
 );
 
-// 2025 Pattern: Non-reactive access for effects
-export const splitViewStore = useSplitViewStore.getState;
-
-// 2025 Pattern: Selective subscriptions
-export const useSplitLayout = (taskId: string) => {
-  return useSplitViewStore(
-    state => state.getLayout(taskId)
-  );
+// Selectors for components
+export const useSplitLayout = () => {
+  return useSplitViewStore(state => state.currentLayout || defaultLayout);
 };
 
-export const useSplitMode = (taskId: string) => {
-  return useSplitViewStore(
-    state => state.getLayout(taskId).mode
-  );
+export const useSplitMode = () => {
+  return useSplitViewStore(state => state.currentLayout?.mode || 'tab');
 };
 
 export const useIsResizing = () => {
   return useSplitViewStore(state => state.resizing);
 };
 
-// Helper to persist layout to backend
-export const persistLayout = async (taskId: string, projectId: string) => {
-  const layout = splitViewStore().getLayout(taskId);
+export const useLayoutState = () => {
+  return useSplitViewStore(state => state.layoutState);
+};
+
+// Helper to save layout to backend
+export const saveLayout = async () => {
+  const state = useSplitViewStore.getState();
+  const { currentTaskId, currentProjectId, currentLayout } = state;
+  
+  if (!currentTaskId || !currentProjectId || !currentLayout) {
+    return;
+  }
   
   try {
     const response = await fetch(
-      `/api/projects/${projectId}/tasks/${taskId}/split-layout`,
+      `/api/projects/${currentProjectId}/tasks/${currentTaskId}/split-layout`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(layout)
+        body: JSON.stringify(currentLayout)
       }
     );
     
     if (!response.ok) {
-      throw new Error('Failed to persist layout');
+      console.error('Failed to save split layout');
     }
   } catch (error) {
-    console.error('Error persisting split layout:', error);
-  }
-};
-
-// Helper to load layout from backend
-export const loadLayout = async (taskId: string, projectId: string) => {
-  
-  // Mark as loading
-  useSplitViewStore.setState(state => {
-    state.loadingLayouts.add(taskId);
-  });
-  
-  try {
-    const response = await fetch(
-      `/api/projects/${projectId}/tasks/${taskId}/split-layout`
-    );
-    
-    if (response.ok) {
-      const layout = await response.json();
-      // Use full layout replacement instead of update to ensure we get exact backend state
-      useSplitViewStore.setState(state => {
-        state.layouts.set(taskId, layout);
-      });
-    }
-  } catch (error) {
-    console.error('Error loading split layout:', error);
-  } finally {
-    // Remove from loading set
-    useSplitViewStore.setState(state => {
-      state.loadingLayouts.delete(taskId);
-    });
+    console.error('Error saving split layout:', error);
   }
 };
