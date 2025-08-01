@@ -1,9 +1,0 @@
-{
-  "watch": ["*.js", "db/**/*.js", "lib/**/*.js"],
-  "ext": "js,json",
-  "ignore": ["__tests__/**", "*.test.js", "node_modules/**"],
-  "delay": "1000",
-  "env": {
-    "NODE_ENV": "development"
-  }
-}

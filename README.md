@@ -51,12 +51,12 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - **Container**: Docker with Docker Compose
 - **Git**: Requires Git 2.38+ for merge conflict detection
 
-## Server Architecture (New Modular Design)
+## Backend Architecture
 
-The server has been refactored from a monolithic 2000+ line file into a clean modular architecture:
+The backend follows a clean modular architecture:
 
 ```
-simple/server/
+backend/
 ├── server.js                    # Server initialization & startup
 ├── app.js                       # Express app configuration
 ├── config/
