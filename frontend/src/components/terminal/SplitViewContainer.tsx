@@ -14,6 +14,7 @@ interface SplitViewContainerProps {
   controlButtons?: React.ReactNode;
   isResetting?: boolean;
   setIsResetting?: (value: boolean) => void;
+  onTerminalReorder?: (reorderedTerminals: TerminalSession[]) => void;
 }
 
 export function SplitViewContainer({
@@ -25,14 +26,15 @@ export function SplitViewContainer({
   activeTabId,
   controlButtons,
   isResetting,
-  setIsResetting
+  setIsResetting,
+  onTerminalReorder
 }: SplitViewContainerProps) {
   const layout = useSplitLayout();
   const layoutState = useLayoutState();
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
-  const { setFocusedTerminal, setTerminals } = useTerminalStore();
+  const { setFocusedTerminal } = useTerminalStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
@@ -205,7 +207,18 @@ export function SplitViewContainer({
                 showPrimaryDropdown,
                 () => setShowPrimaryDropdown(!showPrimaryDropdown),
                 (terminalId) => {
-                  setPrimaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the primary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex > 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[0], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[0]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowPrimaryDropdown(false);
                 },
                 'primary',
@@ -221,7 +234,18 @@ export function SplitViewContainer({
                 showSecondaryDropdown,
                 () => setShowSecondaryDropdown(!showSecondaryDropdown),
                 (terminalId) => {
-                  setSecondaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the secondary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex !== 1 && selectedIndex >= 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[1], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[1]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowSecondaryDropdown(false);
                 },
                 'secondary',
@@ -242,7 +266,18 @@ export function SplitViewContainer({
                 showTertiaryDropdown,
                 () => setShowTertiaryDropdown(!showTertiaryDropdown),
                 (terminalId) => {
-                  setTertiaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the tertiary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex !== 2 && selectedIndex >= 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[2], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[2]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowTertiaryDropdown(false);
                 },
                 'tertiary',
@@ -258,7 +293,18 @@ export function SplitViewContainer({
                 showQuaternaryDropdown,
                 () => setShowQuaternaryDropdown(!showQuaternaryDropdown),
                 (terminalId) => {
-                  setQuaternaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the quaternary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex !== 3 && selectedIndex >= 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[3], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[3]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowQuaternaryDropdown(false);
                 },
                 'quaternary',
@@ -288,7 +334,18 @@ export function SplitViewContainer({
                 showPrimaryDropdown,
                 () => setShowPrimaryDropdown(!showPrimaryDropdown),
                 (terminalId) => {
-                  setPrimaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the primary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex > 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[0], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[0]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowPrimaryDropdown(false);
                 },
                 'primary',
@@ -308,7 +365,18 @@ export function SplitViewContainer({
                 showSecondaryDropdown,
                 () => setShowSecondaryDropdown(!showSecondaryDropdown),
                 (terminalId) => {
-                  setSecondaryTerminal(taskId, terminalId);
+                  // Swap the selected terminal to the secondary position
+                  const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminalId);
+                  if (selectedIndex !== 1 && selectedIndex >= 0 && onTerminalReorder) {
+                    const newTerminals = [...terminals];
+                    [newTerminals[1], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[1]];
+                    // Update tabOrder to match new positions
+                    const reorderedTerminals = newTerminals.map((t, index) => ({
+                      ...t,
+                      tabOrder: index
+                    }));
+                    onTerminalReorder(reorderedTerminals);
+                  }
                   setShowSecondaryDropdown(false);
                 },
                 'secondary',

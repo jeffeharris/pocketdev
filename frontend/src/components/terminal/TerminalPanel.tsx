@@ -1046,6 +1046,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             controlButtons={renderControlButtons()}
             isResetting={isResetting}
             setIsResetting={setIsResetting}
+            onTerminalReorder={handleTabReorder}
           />
         )}
       </div>
