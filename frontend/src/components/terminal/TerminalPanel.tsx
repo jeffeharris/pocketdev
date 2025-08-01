@@ -916,30 +916,13 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       case 'tab':
         return terminal.dbSessionId === activeTabId;
       case 'split':
-        // Check if terminal is explicitly assigned to a slot
-        if (layout.primaryTerminalId === terminal.dbSessionId || 
-            layout.secondaryTerminalId === terminal.dbSessionId) {
-          return true;
-        }
-        // Otherwise, show first 2 terminals by default
-        if (!layout.primaryTerminalId && !layout.secondaryTerminalId) {
-          return terminalIndex >= 0 && terminalIndex < 2;
-        }
-        return false;
+        // Always show first 2 terminals in split mode, regardless of assignments
+        // This ensures we always have 2 panels visible
+        return terminalIndex >= 0 && terminalIndex < 2;
       case 'split-4':
-        // Check if terminal is explicitly assigned to a slot
-        if (layout.primaryTerminalId === terminal.dbSessionId || 
-            layout.secondaryTerminalId === terminal.dbSessionId ||
-            layout.tertiaryTerminalId === terminal.dbSessionId ||
-            layout.quaternaryTerminalId === terminal.dbSessionId) {
-          return true;
-        }
-        // Otherwise, show first 4 terminals by default
-        if (!layout.primaryTerminalId && !layout.secondaryTerminalId && 
-            !layout.tertiaryTerminalId && !layout.quaternaryTerminalId) {
-          return terminalIndex >= 0 && terminalIndex < 4;
-        }
-        return false;
+        // Always show first 4 terminals in quad mode, regardless of assignments
+        // This ensures we always have 4 panels visible
+        return terminalIndex >= 0 && terminalIndex < 4;
       default:
         return false;
     }
@@ -952,20 +935,14 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   ): string => {
     if (layout.mode === 'tab') return 'terminal terminal-tab';
     
-    // Check explicit assignments first
-    if (terminal.dbSessionId === layout.primaryTerminalId) return 'terminal terminal-primary';
-    if (terminal.dbSessionId === layout.secondaryTerminalId) return 'terminal terminal-secondary';
-    if (terminal.dbSessionId === layout.tertiaryTerminalId) return 'terminal terminal-tertiary';
-    if (terminal.dbSessionId === layout.quaternaryTerminalId) return 'terminal terminal-quaternary';
-    
-    // If no explicit assignments, use order-based defaults
     const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
     
-    if (layout.mode === 'split' && !layout.primaryTerminalId && !layout.secondaryTerminalId) {
+    // For split/quad modes, always use order-based positioning
+    // The dropdowns will handle which terminal appears in which position
+    if (layout.mode === 'split') {
       if (terminalIndex === 0) return 'terminal terminal-primary';
       if (terminalIndex === 1) return 'terminal terminal-secondary';
-    } else if (layout.mode === 'split-4' && !layout.primaryTerminalId && !layout.secondaryTerminalId && 
-               !layout.tertiaryTerminalId && !layout.quaternaryTerminalId) {
+    } else if (layout.mode === 'split-4') {
       if (terminalIndex === 0) return 'terminal terminal-primary';
       if (terminalIndex === 1) return 'terminal terminal-secondary';
       if (terminalIndex === 2) return 'terminal terminal-tertiary';
