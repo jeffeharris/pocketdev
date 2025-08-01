@@ -916,11 +916,30 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       case 'tab':
         return terminal.dbSessionId === activeTabId;
       case 'split':
-        // Show first 2 terminals
-        return terminalIndex >= 0 && terminalIndex < 2;
+        // Check if terminal is explicitly assigned to a slot
+        if (layout.primaryTerminalId === terminal.dbSessionId || 
+            layout.secondaryTerminalId === terminal.dbSessionId) {
+          return true;
+        }
+        // Otherwise, show first 2 terminals by default
+        if (!layout.primaryTerminalId && !layout.secondaryTerminalId) {
+          return terminalIndex >= 0 && terminalIndex < 2;
+        }
+        return false;
       case 'split-4':
-        // Show first 4 terminals
-        return terminalIndex >= 0 && terminalIndex < 4;
+        // Check if terminal is explicitly assigned to a slot
+        if (layout.primaryTerminalId === terminal.dbSessionId || 
+            layout.secondaryTerminalId === terminal.dbSessionId ||
+            layout.tertiaryTerminalId === terminal.dbSessionId ||
+            layout.quaternaryTerminalId === terminal.dbSessionId) {
+          return true;
+        }
+        // Otherwise, show first 4 terminals by default
+        if (!layout.primaryTerminalId && !layout.secondaryTerminalId && 
+            !layout.tertiaryTerminalId && !layout.quaternaryTerminalId) {
+          return terminalIndex >= 0 && terminalIndex < 4;
+        }
+        return false;
       default:
         return false;
     }
@@ -933,13 +952,20 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   ): string => {
     if (layout.mode === 'tab') return 'terminal terminal-tab';
     
+    // Check explicit assignments first
+    if (terminal.dbSessionId === layout.primaryTerminalId) return 'terminal terminal-primary';
+    if (terminal.dbSessionId === layout.secondaryTerminalId) return 'terminal terminal-secondary';
+    if (terminal.dbSessionId === layout.tertiaryTerminalId) return 'terminal terminal-tertiary';
+    if (terminal.dbSessionId === layout.quaternaryTerminalId) return 'terminal terminal-quaternary';
+    
+    // If no explicit assignments, use order-based defaults
     const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
     
-    // Assign grid positions based on terminal order
-    if (layout.mode === 'split') {
+    if (layout.mode === 'split' && !layout.primaryTerminalId && !layout.secondaryTerminalId) {
       if (terminalIndex === 0) return 'terminal terminal-primary';
       if (terminalIndex === 1) return 'terminal terminal-secondary';
-    } else if (layout.mode === 'split-4') {
+    } else if (layout.mode === 'split-4' && !layout.primaryTerminalId && !layout.secondaryTerminalId && 
+               !layout.tertiaryTerminalId && !layout.quaternaryTerminalId) {
       if (terminalIndex === 0) return 'terminal terminal-primary';
       if (terminalIndex === 1) return 'terminal terminal-secondary';
       if (terminalIndex === 2) return 'terminal terminal-tertiary';

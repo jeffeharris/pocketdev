@@ -43,11 +43,19 @@ export function SplitViewContainer({
   const [showTertiaryDropdown, setShowTertiaryDropdown] = useState(false);
   const [showQuaternaryDropdown, setShowQuaternaryDropdown] = useState(false);
 
-  // Get the terminal instances
-  const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
-  const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
-  const tertiaryTerminal = terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId);
-  const quaternaryTerminal = terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId);
+  // Get the terminal instances - use explicit assignments or fall back to order
+  const primaryTerminal = layout.primaryTerminalId 
+    ? terminals.find(t => t.dbSessionId === layout.primaryTerminalId)
+    : terminals[0];
+  const secondaryTerminal = layout.secondaryTerminalId 
+    ? terminals.find(t => t.dbSessionId === layout.secondaryTerminalId)
+    : terminals[1];
+  const tertiaryTerminal = layout.tertiaryTerminalId 
+    ? terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId)
+    : terminals[2];
+  const quaternaryTerminal = layout.quaternaryTerminalId 
+    ? terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId)
+    : terminals[3];
 
   // Close dropdowns when clicking outside
   useEffect(() => {
