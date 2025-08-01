@@ -12,8 +12,14 @@ export class TaskController {
   constructor(models, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
     this.projectsDir = projectsDir;
-    this.gitService = new GitService();
     this.worktreeService = new WorktreeService();
+  }
+
+  /**
+   * Get GitService instance with token from request
+   */
+  getGitService(req) {
+    return new GitService(req.githubToken);
   }
 
   /**
@@ -32,7 +38,7 @@ export class TaskController {
    */
   async createTask(req, res) {
     const { projectId } = req.params;
-    const { name, branch } = req.body;
+    const { name, branch, useExistingBranch } = req.body;
     
     if (!name || !branch) {
       return res.status(400).json({ error: 'Task name and branch are required' });
@@ -48,10 +54,11 @@ export class TaskController {
       const worktreePath = path.join(this.projectsDir, `${project.id}-task-${taskId}`);
       
       // Create worktree using service
-      await this.worktreeService.create(project.local_path, branch, worktreePath, project.base_branch);
+      await this.worktreeService.create(project.local_path, branch, worktreePath, project.base_branch, useExistingBranch);
       
       // Configure git credentials
-      await this.gitService.configureCredentials(worktreePath);
+      const gitService = this.getGitService(req);
+      await gitService.configureCredentials(worktreePath);
       
       // Create task in database
       const task = await this.models.tasks.create(project.id, {
@@ -136,13 +143,16 @@ export class TaskController {
       const project = await this.models.projects.findById(projectId);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Enrich tasks with git status and session state
       const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
         let gitStatus = null;
         
         if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
           try {
-            gitStatus = await this.gitService.getBranchStatus(
+            gitStatus = await gitService.getBranchStatus(
               task.worktree_path, 
               task.branch, 
               baseBranch
@@ -230,7 +240,8 @@ export class TaskController {
         const project = await this.models.projects.findById(task.project_id);
         if (project) {
           const baseBranch = `origin/${project.base_branch || 'main'}`;
-          gitStatus = await this.gitService.getBranchStatus(
+          const gitService = this.getGitService(req);
+          gitStatus = await gitService.getBranchStatus(
             task.worktree_path, 
             task.branch, 
             baseBranch
@@ -270,13 +281,25 @@ export class TaskController {
       // Get project for base branch info
       const project = await this.models.projects.findById(projectId);
       
+      // Get terminal sessions for this task (limit to 6 most recent)
+      const allTerminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+      const terminals = allTerminals.slice(0, 6);
+      
+      // Log warning if too many terminals
+      if (allTerminals.length > 6) {
+        console.warn(`Task ${taskId} has ${allTerminals.length} terminals - showing only first 6`);
+      }
+      
       // Get git status for this task's worktree
       let gitInfo = null;
       let mergeInfo = null;
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       if (fsSync.existsSync(task.worktree_path)) {
-        const status = await this.gitService.getStatus(task.worktree_path);
-        const diff = await this.gitService.getDiff(task.worktree_path, '--stat');
+        const status = await gitService.getStatus(task.worktree_path);
+        const diff = await gitService.getDiff(task.worktree_path, '--stat');
         
         gitInfo = {
           status: status.output,
@@ -293,15 +316,48 @@ export class TaskController {
         
         // Check for commits since merge if task was merged
         if (task.merge_commit_sha) {
-          mergeInfo = await this._checkMergeStatus(task, project);
+          mergeInfo = await this._checkMergeStatus(task, project, gitService);
         }
       }
+      
+      // Check Shelltender status for each terminal
+      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+      const terminalsWithStatus = await Promise.all(
+        terminals.map(async (terminal) => {
+          let shelltenderStatus = 'not-found';
+          
+          try {
+            const sessionId = terminal.session_id || terminal.shelltender_session_id;
+            if (sessionId) {
+              const response = await fetch(`${shelltenderUrl}/api/sessions/${sessionId}`);
+              if (response.ok) {
+                const session = await response.json();
+                shelltenderStatus = session.status === 'active' ? 'active' : 'inactive';
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to check Shelltender status for session ${terminal.id}:`, error.message);
+          }
+          
+          return {
+            sessionId: terminal.session_id || terminal.shelltender_session_id,
+            dbSessionId: terminal.id,
+            shelltenderSessionId: terminal.session_id || terminal.shelltender_session_id,
+            tabName: terminal.tab_name,
+            tabOrder: terminal.tab_order,
+            aiState: terminal.ai_state,
+            aiAgent: terminal.ai_agent,
+            shelltenderStatus
+          };
+        })
+      );
       
       res.json({
         ...task,
         git: gitInfo,
         mergeInfo: mergeInfo,
-        claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`
+        claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`,
+        terminals: terminalsWithStatus
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -341,6 +397,97 @@ export class TaskController {
   }
 
   /**
+   * Get split layout configuration for a task
+   */
+  async getSplitLayout(req, res) {
+    const { projectId, taskId } = req.params;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Verify task belongs to project
+      if (task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found in this project' });
+      }
+      
+      // Return split layout or default configuration
+      const defaultLayout = {
+        mode: 'tab',
+        orientation: 'horizontal',
+        primaryTerminalId: null,
+        secondaryTerminalId: null,
+        splitRatio: 0.5
+      };
+      
+      res.json(task.split_layout || defaultLayout);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Update split layout configuration for a task
+   */
+  async updateSplitLayout(req, res) {
+    const { projectId, taskId } = req.params;
+    const splitLayout = req.body;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      // Verify task belongs to project
+      if (task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found in this project' });
+      }
+      
+      // Validate split layout structure
+      const validModes = ['tab', 'split', 'split-4'];
+      const validOrientations = ['horizontal', 'vertical'];
+      
+      if (splitLayout.mode && !validModes.includes(splitLayout.mode)) {
+        return res.status(400).json({ error: 'Invalid mode. Must be "tab", "split", or "split-4"' });
+      }
+      
+      if (splitLayout.orientation && !validOrientations.includes(splitLayout.orientation)) {
+        return res.status(400).json({ error: 'Invalid orientation. Must be "horizontal" or "vertical"' });
+      }
+      
+      if (splitLayout.splitRatio !== undefined) {
+        const ratio = parseFloat(splitLayout.splitRatio);
+        if (isNaN(ratio) || ratio < 0.1 || ratio > 0.9) {
+          return res.status(400).json({ error: 'Invalid splitRatio. Must be between 0.1 and 0.9' });
+        }
+        splitLayout.splitRatio = ratio;
+      }
+      
+      // Update the task with new split layout
+      const updatedTask = await this.models.tasks.update(taskId, {
+        split_layout: splitLayout
+      });
+      
+      // Broadcast layout change via WebSocket
+      if (req.app.locals.wsEventService) {
+        req.app.locals.wsEventService.broadcastToTask(taskId, {
+          type: 'split-layout-changed',
+          data: {
+            splitLayout: splitLayout
+          }
+        });
+      }
+      
+      res.json(splitLayout);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
    * Check if task can be safely deleted
    */
   async checkDelete(req, res) {
@@ -353,13 +500,14 @@ export class TaskController {
       }
       
       // Check for uncommitted changes
-      const status = await this.gitService.getStatus(task.worktree_path);
+      const gitService = this.getGitService(req);
+      const status = await gitService.getStatus(task.worktree_path);
       const hasUncommittedChanges = status.output.trim().length > 0;
       
       // Check for unpushed commits
       let hasUnpushedCommits = false;
       try {
-        const unpushed = await this.gitService.getUnpushedCommits(task.worktree_path, task.branch);
+        const unpushed = await gitService.getUnpushedCommits(task.worktree_path, task.branch);
         hasUnpushedCommits = unpushed.output.trim().length > 0;
       } catch (e) {
         hasUnpushedCommits = true;
@@ -368,7 +516,7 @@ export class TaskController {
       // Get diff summary if changes exist
       let diffSummary = '';
       if (hasUncommittedChanges) {
-        const diff = await this.gitService.getDiff(task.worktree_path, '--stat');
+        const diff = await gitService.getDiff(task.worktree_path, '--stat');
         diffSummary = diff.output;
       }
       
@@ -400,6 +548,9 @@ export class TaskController {
       }
       
       const project = await this.models.projects.findById(task.project_id);
+      
+      // Clean up all Shelltender sessions for this task
+      await this.cleanupTaskSessions(taskId);
       
       if (softDelete && !force) {
         // Soft delete - archive the task
@@ -445,7 +596,8 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for uncommitted changes
-      const statusResult = await this.gitService.getStatus(task.worktree_path);
+      const gitService = this.getGitService(req);
+      const statusResult = await gitService.getStatus(task.worktree_path);
       if (statusResult.output.trim()) {
         return res.status(400).json({ 
           error: 'Cannot update: You have uncommitted changes',
@@ -500,16 +652,16 @@ export class TaskController {
         // Perform update directly
         let result;
         if (method === 'rebase') {
-          result = await this.gitService.rebase(task.worktree_path, `origin/${project.base_branch}`);
+          result = await gitService.rebase(task.worktree_path, `origin/${project.base_branch}`);
         } else {
-          result = await this.gitService.merge(task.worktree_path, `origin/${project.base_branch}`);
+          result = await gitService.merge(task.worktree_path, `origin/${project.base_branch}`);
         }
         
         await this.models.projects.updateLastAccessed(project.id);
         
         // After rebase, check if branches became identical
         if (result.success && method === 'rebase' && task.status === 'merged') {
-          const diffResult = await this.gitService.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
+          const diffResult = await gitService.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
           if (!diffResult.output.trim()) {
             // Branches are now identical, clear the "needs re-merge" flag
             await this.models.tasks.update(task.id, {
@@ -549,7 +701,8 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for conflicts using git service
-      const conflicts = await this.gitService.checkMergeConflicts(
+      const gitService = this.getGitService(req);
+      const conflicts = await gitService.checkMergeConflicts(
         task.worktree_path, 
         `origin/${project.base_branch}`
       );
@@ -654,10 +807,10 @@ Original task: ${task.name}`;
         
         // Now ensure we're on the base branch and up to date
         await this.gitService.checkout(project.local_path, project.base_branch);
-        await this.gitService.pull(project.local_path, 'origin', project.base_branch);
+        await gitService.pull(project.local_path, 'origin', project.base_branch);
         
         // Merge the task branch
-        const mergeResult = await this.gitService.merge(
+        const mergeResult = await gitService.merge(
           project.local_path, 
           `origin/${task.branch}`,
           `Merge branch '${task.branch}' into ${project.base_branch}`
@@ -671,15 +824,15 @@ Original task: ${task.name}`;
         }
         
         // Get the merge commit SHA
-        const mergeCommitResult = await this.gitService.getHeadCommit(project.local_path);
+        const mergeCommitResult = await gitService.getHeadCommit(project.local_path);
         const mergeCommitSha = mergeCommitResult.output.trim();
         
         // Push the merged changes to origin
         console.log(`Pushing merged changes in ${project.base_branch} to origin...`);
-        const pushBaseResult = await this.gitService.push(project.local_path, project.base_branch);
+        const pushBaseResult = await gitService.push(project.local_path, project.base_branch);
         if (!pushBaseResult.success) {
           // If push fails, we need to reset the merge
-          await this.gitService.command(project.local_path, `git reset --hard HEAD~1`);
+          await gitService.command(project.local_path, `git reset --hard HEAD~1`);
           return res.status(500).json({ 
             error: 'Failed to push merged changes to origin', 
             details: pushBaseResult.error 
@@ -702,8 +855,8 @@ Original task: ${task.name}`;
         await this.triggerStatusUpdate(taskId, req);
         
         // Send task state change via WebSocket
-        if (req.app.locals.websocketService) {
-          req.app.locals.websocketService.sendTaskStateChange(taskId, 'merged');
+        if (req.app.locals.wsEventService) {
+          req.app.locals.wsEventService.sendTaskStateChange(taskId, 'merged');
         }
         
         res.json({
@@ -721,23 +874,23 @@ Original task: ${task.name}`;
   /**
    * Private helper to check merge status
    */
-  async _checkMergeStatus(task, project) {
+  async _checkMergeStatus(task, project, gitService) {
     try {
       // Get current HEAD
-      const headResult = await this.gitService.getHeadCommit(task.worktree_path);
+      const headResult = await gitService.getHeadCommit(task.worktree_path);
       const currentHead = headResult.output.trim();
       
       // Check if we have commits since merge
       let hasCommitsSinceMerge = false;
       if (currentHead !== task.merge_commit_sha) {
         // Count commits since merge
-        const countResult = await this.gitService.command(task.worktree_path, 
+        const countResult = await gitService.command(task.worktree_path, 
           `git rev-list ${task.merge_commit_sha}..HEAD --count 2>/dev/null || echo 0`);
         const commitsSinceMerge = parseInt(countResult.output.trim()) || 0;
         
         // Check if there are actual differences with the base branch
         if (project.base_branch) {
-          const diffResult = await this.gitService.getDiff(task.worktree_path,
+          const diffResult = await gitService.getDiff(task.worktree_path,
             `${project.base_branch}..HEAD --name-only`);
           const hasDifferences = diffResult.output.trim().length > 0;
           hasCommitsSinceMerge = hasDifferences;
@@ -767,6 +920,47 @@ Original task: ${task.name}`;
         mergeCommitSha: task.merge_commit_sha,
         error: 'Could not verify merge status'
       };
+    }
+  }
+
+  /**
+   * Clean up all Shelltender sessions for a task
+   */
+  async cleanupTaskSessions(taskId) {
+    try {
+      // Get all active sessions for this task
+      const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+      
+      if (sessions.length === 0) {
+        console.log(`No active sessions found for task ${taskId}`);
+        return;
+      }
+      
+      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+      
+      // Terminate each Shelltender session
+      for (const session of sessions) {
+        if (session.shelltender_session_id) {
+          try {
+            console.log(`Terminating Shelltender session: ${session.shelltender_session_id}`);
+            const response = await fetch(`${shelltenderUrl}/api/sessions/${session.shelltender_session_id}`, {
+              method: 'DELETE'
+            });
+            
+            if (!response.ok) {
+              console.error(`Failed to terminate session ${session.shelltender_session_id}:`, response.statusText);
+            }
+          } catch (error) {
+            console.error(`Error terminating session ${session.shelltender_session_id}:`, error.message);
+            // Continue with other sessions even if one fails
+          }
+        }
+      }
+      
+      console.log(`Cleaned up ${sessions.length} sessions for task ${taskId}`);
+    } catch (error) {
+      console.error(`Error cleaning up sessions for task ${taskId}:`, error);
+      // Don't throw - we don't want session cleanup failure to prevent task deletion
     }
   }
 }

@@ -18,11 +18,33 @@ const execAsync = promisify(exec);
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function initializeWorktree(options) {
-  const { mainRepoPath, worktreePath, branch, baseBranch, githubToken } = options;
+  const { mainRepoPath, worktreePath, branch, baseBranch, githubToken, useExistingBranch } = options;
   
   try {
     // Create worktree
-    await execAsync(`git worktree add -b ${branch} ${worktreePath} ${baseBranch}`, { 
+    let worktreeCommand;
+    if (useExistingBranch) {
+      // Check if branch exists locally
+      try {
+        await execAsync(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath });
+        // Branch exists locally
+        worktreeCommand = `git worktree add ${worktreePath} ${branch}`;
+      } catch (error) {
+        // Branch doesn't exist locally, check remote
+        try {
+          await execAsync(`git rev-parse --verify origin/${branch}`, { cwd: mainRepoPath });
+          // Branch exists on remote, create local tracking branch
+          worktreeCommand = `git worktree add --track -b ${branch} ${worktreePath} origin/${branch}`;
+        } catch (remoteError) {
+          throw new Error(`Branch '${branch}' not found locally or on remote`);
+        }
+      }
+    } else {
+      // For new branches, create from base branch
+      worktreeCommand = `git worktree add -b ${branch} ${worktreePath} ${baseBranch}`;
+    }
+    
+    await execAsync(worktreeCommand, { 
       cwd: mainRepoPath 
     });
     
@@ -197,13 +219,14 @@ export class WorktreeService {
     this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
   }
 
-  async create(mainRepoPath, branch, worktreePath, baseBranch) {
+  async create(mainRepoPath, branch, worktreePath, baseBranch, useExistingBranch = false) {
     const result = await initializeWorktree({
       mainRepoPath,
       worktreePath,
       branch,
       baseBranch,
-      githubToken: this.githubToken
+      githubToken: this.githubToken,
+      useExistingBranch
     });
     
     if (!result.success) {

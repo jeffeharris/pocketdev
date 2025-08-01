@@ -1,0 +1,101 @@
+.terminals-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #1f2937;
+}
+
+/* Tab mode - stack all terminals */
+.terminals-container.mode-tab {
+  position: relative;
+}
+
+.terminals-container.mode-tab .terminal-wrapper {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Split mode - 2x1 grid */
+.terminals-container.mode-split {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+}
+
+.terminals-container.mode-split.orientation-vertical {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "primary secondary";
+}
+
+.terminals-container.mode-split.orientation-horizontal {
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 
+    "primary"
+    "secondary";
+}
+
+/* Quad mode - 2x2 grid */
+.terminals-container.mode-split-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 
+    "primary secondary"
+    "tertiary quaternary";
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+}
+
+/* Terminal positioning in grid */
+.terminal-wrapper.terminal-primary { 
+  grid-area: primary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-secondary { 
+  grid-area: secondary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-tertiary { 
+  grid-area: tertiary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-quaternary { 
+  grid-area: quaternary;
+  position: relative !important;
+}
+
+/* Hidden terminals - keep mounted but off-screen */
+.terminal-wrapper.terminal-hidden {
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Terminal wrapper base styles */
+.terminal-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+/* Ensure DirectTerminal fills its container */
+.terminal-wrapper > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* Hidden terminals should not be visible or interactive */
+.terminal-wrapper[style*="display: none"] {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}

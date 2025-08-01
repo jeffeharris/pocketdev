@@ -14,7 +14,7 @@ interface SidebarProps {
   projectId: string;
   currentTask: Task;
   allTasks: Task[];
-  onTaskSelect: (task: Task) => void;
+  onTaskSelect: (task: Task, focusTabId?: string) => void;
   collapsed?: boolean;
   onCreateTask?: () => void;
   onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
@@ -347,6 +347,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               workerStatus={currentTask.sessionState.status}
               gitStatus={currentTask.gitStatus}
               isMerged={currentTask.taskState === TaskState.Merged}
+              sessionStates={currentTask.terminals?.map(terminal => ({
+                id: terminal.dbSessionId,
+                tabName: terminal.tabName,
+                aiState: terminal.aiState || 'not-started',
+                lastStateChange: terminal.lastStateChange || null
+              })) || currentTask.sessionStates}
+              onStatusClick={(prioritySessionId) => {
+                onTaskSelect(currentTask, prioritySessionId);
+              }}
             />
           </div>
         </div>
@@ -408,19 +417,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Changes</span>
               <div className="text-xs">
-                {(currentTask.gitStatus && (currentTask.gitStatus.staged || currentTask.gitStatus.unstaged)) ? (
-                  <>
-                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && (
-                      <span className="text-green-600">{currentTask.gitStatus.staged} staged</span>
-                    )}
-                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && ' • '}
-                    {currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && (
-                      <span className="text-amber-600">{currentTask.gitStatus.unstaged} unstaged</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-gray-500">No changes</span>
-                )}
+                {(() => {
+                  const staged = currentTask.gitStatus?.staged || 0;
+                  const unstaged = currentTask.gitStatus?.unstaged || 0;
+                  const untracked = currentTask.gitStatus?.untracked || 0;
+                  const uncommittedTotal = unstaged + untracked;
+                  
+                  if (staged === 0 && uncommittedTotal === 0) {
+                    return <span className="text-gray-500">No changes</span>;
+                  }
+                  
+                  return (
+                    <>
+                      {staged > 0 && (
+                        <span className="text-green-600">{staged} staged</span>
+                      )}
+                      {staged > 0 && uncommittedTotal > 0 && <span className="text-gray-400"> • </span>}
+                      {uncommittedTotal > 0 && (
+                        <span className="text-amber-600">{uncommittedTotal} uncommitted</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

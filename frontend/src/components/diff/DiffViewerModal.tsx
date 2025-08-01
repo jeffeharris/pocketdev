@@ -5,6 +5,7 @@ import { DiffEditor } from '@monaco-editor/react';
 import { ThreeStateToggle, type ToggleOption } from './ThreeStateToggle';
 import { StatusIcon } from './StatusIcon';
 import { SearchInput, HighlightedPath } from './SearchInput';
+import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
 
 interface DiffFile {
   path: string;
@@ -273,52 +274,59 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     [groupedFiles]
   );
 
+  // Activate diff viewer keyboard context when modal is open (high priority for modal)
+  useShortcutContext('diffViewer', { enabled: isOpen, priority: 30 });
+  
   // Keyboard shortcuts
-  // Note: This effect must be defined AFTER filteredFiles to avoid "Cannot access before initialization" error.
-  // The keyboard handler uses filteredFiles for arrow key navigation, so it needs to be in scope.
-  // We don't call loadFileDiff here because it's defined later and would cause another initialization error.
-  // Instead, diff loading is handled by the existing useEffect that watches selectedFile changes.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      
-      // Skip shortcuts if user is typing in an input field
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
-      }
-      
-      // Toggle view mode with 'v' key (only if split view is available)
-      if (e.key === 'v' && !e.ctrlKey && !e.metaKey && canUseSplitView) {
-        setViewMode(prev => prev === 'split' ? 'unified' : 'split');
-      }
-      
-      // Toggle sidebar with 's' key
-      if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
-        setSidebarCollapsed(prev => !prev);
-      }
-      
-      // Navigate files with arrow keys
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        const direction = e.key === 'ArrowUp' ? -1 : 1;
-        const newIndex = Math.max(0, Math.min(filteredFiles.length - 1, selectedFileIndex + direction));
-        if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
-          setSelectedFile(filteredFiles[newIndex]);
-          setSelectedFileIndex(newIndex);
-          // Note: Diff loading is handled by the useEffect that watches selectedFile changes
-        }
-      }
-      
-      // Close modal with Escape
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, canUseSplitView, filteredFiles, selectedFileIndex]);
+  useKeyboardShortcut('v', () => {
+    if (canUseSplitView) {
+      setViewMode(prev => prev === 'split' ? 'unified' : 'split');
+    }
+  }, {
+    contexts: ['diffViewer'],
+    description: 'Toggle split/unified view',
+    enabled: isOpen && canUseSplitView
+  });
+  
+  useKeyboardShortcut('s', () => {
+    setSidebarCollapsed(prev => !prev);
+  }, {
+    contexts: ['diffViewer'],
+    description: 'Toggle sidebar',
+    enabled: isOpen
+  });
+  
+  useKeyboardShortcut('arrowup', () => {
+    const newIndex = Math.max(0, selectedFileIndex - 1);
+    if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
+      setSelectedFile(filteredFiles[newIndex]);
+      setSelectedFileIndex(newIndex);
+    }
+  }, {
+    contexts: ['diffViewer'],
+    description: 'Previous file',
+    enabled: isOpen && selectedFileIndex > 0
+  });
+  
+  useKeyboardShortcut('arrowdown', () => {
+    const newIndex = Math.min(filteredFiles.length - 1, selectedFileIndex + 1);
+    if (newIndex !== selectedFileIndex && filteredFiles[newIndex]) {
+      setSelectedFile(filteredFiles[newIndex]);
+      setSelectedFileIndex(newIndex);
+    }
+  }, {
+    contexts: ['diffViewer'],
+    description: 'Next file',
+    enabled: isOpen && selectedFileIndex < filteredFiles.length - 1
+  });
+  
+  useKeyboardShortcut('escape', () => {
+    onClose();
+  }, {
+    contexts: ['diffViewer'],
+    description: 'Close diff viewer',
+    enabled: isOpen
+  });
 
   // Auto-show search when many files (only if user hasn't manually toggled)
   useEffect(() => {

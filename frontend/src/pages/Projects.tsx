@@ -82,7 +82,6 @@ export const Projects: React.FC = () => {
               key={project.id}
               to={`/projects/${project.id}`}
               className="block bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
-              onClick={() => console.log('Navigating to project:', project.id)}
             >
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">

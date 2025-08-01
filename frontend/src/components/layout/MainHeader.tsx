@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Bell, MoreHorizontal, Settings, AlertCircle, GitBranch } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Bell, Settings, AlertCircle, GitBranch, Command } from 'lucide-react';
 import type { Task } from '../../types/task';
 import { WorkerStatus } from '../../types/task';
 import type { Project } from '../../types/project';
 import { TaskListItem } from '../task/TaskListItem';
 import { SettingsModal } from '../settings/SettingsModal';
+import { useQuickAccess } from '../../hooks/keyboard';
 
 interface MainHeaderProps {
   project: Project;
   tasks: Task[];
   activeTaskId: string;
-  onTaskSelect: (taskId: string) => void;
+  onTaskSelect: (taskId: string, focusTabId?: string) => void;
   notifications?: number;
 }
 
@@ -24,12 +25,13 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
   const navigate = useNavigate();
   const [showTaskSwitcher, setShowTaskSwitcher] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const { toggleQuickAccess } = useQuickAccess();
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const pendingValidation = tasks.filter(t => t.sessionState?.status === WorkerStatus.Waiting).length;
 
   return (
     <div className="bg-white border-b border-gray-200">
-      <div className="px-4 py-3">
+      <div className="px-1 py-1">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button 
@@ -73,8 +75,8 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                         key={task.id}
                         task={task}
                         isActive={task.id === activeTaskId}
-                        onSelect={(task) => {
-                          onTaskSelect(task.id);
+                        onSelect={(task, focusTabId) => {
+                          onTaskSelect(task.id, focusTabId);
                           setShowTaskSwitcher(false);
                         }}
                       />
@@ -88,19 +90,22 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
           <div className="flex items-center gap-3">
             {/* Notification Bell */}
             <NotificationButton count={pendingValidation} />
-            
-            {/* Task Actions Menu */}
-            <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
-              <MoreHorizontal className="w-4 h-4" />
-              <span className="hidden sm:inline">Task Actions</span>
+
+            {/* Quick Access Button */}
+            <button 
+              onClick={toggleQuickAccess}
+              className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              title="Quick Access (Ctrl+K)"
+            >
+              <Command className="w-5 h-5" />
             </button>
 
             <button 
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer"
+              className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+              title="Settings"
             >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
+              <Settings className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -123,9 +128,11 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
 // Sub-components
 const NotificationButton: React.FC<{ count: number }> = ({ count }) => (
   <div className="relative">
-    <button className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors cursor-pointer">
-      <Bell className="w-4 h-4" />
-      <span className="hidden sm:inline">Notifications</span>
+    <button 
+      className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+      title={count > 0 ? `${count} task${count > 1 ? 's' : ''} need attention` : "Notifications"}
+    >
+      <Bell className="w-5 h-5" />
     </button>
     {count > 0 && <NotificationBadge count={count} />}
   </div>

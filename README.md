@@ -8,6 +8,8 @@ This system allows you to:
 - Manage multiple projects (git repositories) remotely with persistent storage
 - Create isolated tasks using git worktrees
 - Launch Claude terminal sessions for each task with session analytics
+- **NEW: Create multiple terminal tabs per task (up to 6 concurrent AI sessions)**
+- **NEW: Auto-launch Claude in new tabs with one click**
 - Connect JetBrains IDEs to worktrees
 - Perform git operations through the web UI
 - Track Claude session usage and costs
@@ -45,16 +47,16 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 - **Backend**: Node.js with Express (ES modules) - Modular architecture
 - **Database**: SQLite with prepared statements
 - **Frontend**: Vanilla JavaScript with modern ES6+
-- **Terminal**: Shelltender v0.6.1 for web-based terminal access with AI monitoring
+- **Terminal**: Shelltender v0.6.2 for web-based terminal access with AI monitoring
 - **Container**: Docker with Docker Compose
 - **Git**: Requires Git 2.38+ for merge conflict detection
 
-## Server Architecture (New Modular Design)
+## Backend Architecture
 
-The server has been refactored from a monolithic 2000+ line file into a clean modular architecture:
+The backend follows a clean modular architecture:
 
 ```
-simple/server/
+backend/
 ├── server.js                    # Server initialization & startup
 ├── app.js                       # Express app configuration
 ├── config/
@@ -142,6 +144,32 @@ simple/server/
 - Native fullscreen API support for terminal viewing
 - Optimized for iPhone and other mobile browsers
 
+### Multi-Terminal Tabs
+- Create up to 6 concurrent terminal sessions per task
+- Each tab runs an independent AI session with its own context
+- Real-time AI state indicators (idle, working, waiting)
+- Auto-launch Claude in new tabs with configurable delay
+- Tab persistence across page reloads
+- WebSocket-based command execution via Shelltender v0.6.2
+- Individual session tracking and analytics per tab
+
+### Split Views (NEW)
+- View 2 or 4 terminal sessions simultaneously within a single task
+- Three view modes: Tab (traditional), Split (2-way), and Quad (4-way)
+- Horizontal and vertical split orientations for 2-way splits
+- Draggable resizer to adjust pane sizes (10%-90% range)
+- Double-click divider to reset split to 50/50
+- Terminal selector dropdowns to choose which terminals to display
+- Swap terminals button for quick pane switching
+- Layout persistence - split configurations save to database and restore across sessions
+- Real-time sync - layout changes broadcast to all connected clients
+- Mobile responsive - automatically disables on screens <768px
+- Visual focus indicators - blue ring for active terminal
+- Terminal disposal system prevents memory leaks
+- Centralized state management with terminalStore
+- Keyboard shortcuts: Alt+D to cycle view modes, Ctrl+Shift+R to refresh terminals
+- Enable via `VITE_FEATURE_SPLIT_VIEW=true` environment variable
+
 ### File Attachments
 - Upload files directly to task workspaces
 - Support for images, documents, code files, config files, and archives
@@ -165,6 +193,8 @@ simple/server/
 - `GET /api/projects/:projectId/tasks/:taskId` - Get task details
 - `POST /api/projects/:projectId/tasks/:taskId/git` - Git operations
 - `DELETE /api/projects/:projectId/tasks/:taskId` - Delete task
+- `GET /api/projects/:projectId/tasks/:taskId/split-layout` - Get split view layout
+- `PUT /api/projects/:projectId/tasks/:taskId/split-layout` - Update split view layout (persists to database)
 
 ### Settings & Monitoring
 - `GET /api/settings` - Get settings
@@ -175,7 +205,8 @@ simple/server/
 ### Terminal Sessions
 - `GET /api/sessions` - List all terminal sessions
 - `POST /api/projects/:projectId/tasks/:taskId/terminal` - Create terminal session
-- `POST /api/sessions/:sessionId/execute` - Execute command in session
+- `GET /api/projects/:projectId/tasks/:taskId/terminals` - List terminals for task
+- `POST /api/sessions/:sessionId/execute` - Execute command in session (WebSocket-based)
 
 ### File Uploads
 - `POST /api/projects/:projectId/tasks/:taskId/upload` - Upload file to task
@@ -211,3 +242,13 @@ npm test
 # Build for production
 docker-compose build
 ```
+
+## Debugging Tools
+
+PocketDev includes terminal debugging tools for troubleshooting WebSocket and buffer restoration issues:
+
+- **Terminal Buffer Test** (`/test/terminal-buffer`) - Test terminal buffer restoration with debug logging
+- **Raw WebSocket Test** (`/test/terminal-raw`) - Low-level WebSocket testing bypassing the client library
+- **Debug Terminal Component** - Swap DirectTerminal with DirectTerminalDebug for verbose logging
+
+See [docs/terminal-debugging.md](docs/terminal-debugging.md) for detailed usage instructions.

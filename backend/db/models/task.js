@@ -66,6 +66,14 @@ class TaskModel {
       }
     }
 
+    if (task && task.split_layout) {
+      try {
+        task.split_layout = JSON.parse(task.split_layout);
+      } catch (e) {
+        task.split_layout = null;
+      }
+    }
+
     return task;
   }
 
@@ -93,6 +101,13 @@ class TaskModel {
           t.metadata = {};
         }
       }
+      if (t.split_layout) {
+        try {
+          t.split_layout = JSON.parse(t.split_layout);
+        } catch (e) {
+          t.split_layout = null;
+        }
+      }
       return t;
     });
   }
@@ -118,16 +133,20 @@ class TaskModel {
     if (taskIds.length === 0) return [];
     
     const sessions = await this.db.all(`
-      SELECT task_id, id, ai_state, ai_state_updated_at, shelltender_session_id
+      SELECT task_id, id, ai_state, ai_state_updated_at, shelltender_session_id, tab_name
       FROM terminal_sessions
       WHERE task_id IN (${taskIds.map(() => '?').join(',')}) 
         AND is_active = 1
+      ORDER BY task_id, tab_order ASC
     `, taskIds);
 
-    // Create a map of task_id to session for quick lookup
+    // Create a map of task_id to sessions array for quick lookup
     const sessionMap = new Map();
     sessions.forEach(session => {
-      sessionMap.set(session.task_id, session);
+      if (!sessionMap.has(session.task_id)) {
+        sessionMap.set(session.task_id, []);
+      }
+      sessionMap.get(session.task_id).push(session);
     });
 
     // Enrich tasks with session state and parse metadata
@@ -139,9 +158,16 @@ class TaskModel {
           t.metadata = {};
         }
       }
+      if (t.split_layout) {
+        try {
+          t.split_layout = JSON.parse(t.split_layout);
+        } catch (e) {
+          t.split_layout = null;
+        }
+      }
       
-      // Add session state
-      const session = sessionMap.get(t.id);
+      // Add session state with aggregation for multiple sessions
+      const sessions = sessionMap.get(t.id) || [];
       
       /**
        * Task State Machine
@@ -178,16 +204,49 @@ class TaskModel {
         taskState = 'archived';
       }
 
+      // Calculate aggregated session state for multiple terminals
+      let aggregatedState = 'not-started';
+      let latestStateChange = null;
+      
+      if (sessions.length > 0) {
+        // Get all AI states
+        const states = sessions.map(s => s.ai_state || 'not-started');
+        
+        // Priority: waiting > working > idle > not-started
+        if (states.includes('waiting')) {
+          aggregatedState = 'waiting';
+        } else if (states.includes('working')) {
+          aggregatedState = 'working';
+        } else if (states.includes('idle')) {
+          aggregatedState = 'idle';
+        } else {
+          aggregatedState = 'not-started';
+        }
+        
+        // Get the most recent state change time
+        const stateChangeTimes = sessions
+          .filter(s => s.ai_state_updated_at)
+          .map(s => new Date(s.ai_state_updated_at).getTime());
+        
+        if (stateChangeTimes.length > 0) {
+          latestStateChange = new Date(Math.max(...stateChangeTimes)).toISOString();
+        }
+      }
+
       return {
         ...t,
         taskState,
-        sessionState: session ? {
-          status: mapAIStateToTaskStatus(session.ai_state),
-          lastStateChange: session.ai_state_updated_at
-        } : {
-          status: 'not-started',
-          lastStateChange: null
-        }
+        sessionState: {
+          status: mapAIStateToTaskStatus(aggregatedState),
+          lastStateChange: latestStateChange
+        },
+        // Include individual session states for frontend
+        sessionStates: sessions.map(s => ({
+          id: s.id,
+          shelltenderSessionId: s.shelltender_session_id,
+          tabName: s.tab_name,
+          aiState: s.ai_state || 'not-started'
+        }))
       };
     });
   }
@@ -227,6 +286,10 @@ class TaskModel {
     if (data.metadata !== undefined) {
       updates.push('metadata = ?');
       values.push(typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata));
+    }
+    if (data.split_layout !== undefined) {
+      updates.push('split_layout = ?');
+      values.push(typeof data.split_layout === 'string' ? data.split_layout : JSON.stringify(data.split_layout));
     }
     
     if (updates.length > 0) {
@@ -278,13 +341,12 @@ class TaskModel {
     const task = await this.findById(id);
     if (!task) return null;
 
-    // Get active session state if exists
-    const session = await this.db.get(`
-      SELECT id, ai_state, ai_state_updated_at, shelltender_session_id
+    // Get all active sessions for aggregated state
+    const sessions = await this.db.all(`
+      SELECT id, ai_state, ai_state_updated_at, shelltender_session_id, tab_name
       FROM terminal_sessions
       WHERE task_id = ? AND is_active = 1
-      ORDER BY created_at DESC
-      LIMIT 1
+      ORDER BY tab_order ASC
     `, [id]);
 
     // Calculate task state based on status
@@ -295,17 +357,51 @@ class TaskModel {
       taskState = 'archived';
     }
 
+    // Calculate aggregated session state
+    let aggregatedState = 'not-started';
+    let latestStateChange = null;
+    
+    if (sessions.length > 0) {
+      // Get all AI states
+      const states = sessions.map(s => s.ai_state || 'not-started');
+      
+      // Priority: waiting > working > idle > not-started
+      if (states.includes('waiting')) {
+        aggregatedState = 'waiting';
+      } else if (states.includes('working')) {
+        aggregatedState = 'working';
+      } else if (states.includes('idle')) {
+        aggregatedState = 'idle';
+      } else {
+        aggregatedState = 'not-started';
+      }
+      
+      // Get the most recent state change time
+      const stateChangeTimes = sessions
+        .filter(s => s.ai_state_updated_at)
+        .map(s => new Date(s.ai_state_updated_at).getTime());
+      
+      if (stateChangeTimes.length > 0) {
+        latestStateChange = new Date(Math.max(...stateChangeTimes)).toISOString();
+      }
+    }
+
     // Add session state to task
     return {
       ...task,
       taskState,
-      sessionState: session ? {
-        status: mapAIStateToTaskStatus(session.ai_state),
-        lastStateChange: session.ai_state_updated_at
-      } : {
-        status: 'not-started',
-        lastStateChange: null
-      }
+      sessionState: {
+        status: mapAIStateToTaskStatus(aggregatedState),
+        lastStateChange: latestStateChange
+      },
+      // Include individual session states for tooltip
+      sessionStates: sessions.map(s => ({
+        id: s.id,
+        shelltenderSessionId: s.shelltender_session_id,
+        tabName: s.tab_name,
+        aiState: s.ai_state || 'not-started',
+        lastStateChange: s.ai_state_updated_at
+      }))
     };
   }
 

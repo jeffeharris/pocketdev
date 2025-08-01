@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { useSplitViewStore } from '../stores/splitViewStore';
+import { handleTerminalWebSocketEvent } from '../stores/terminalStore';
 
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -46,7 +48,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
         setStatus('connected');
         reconnectAttemptsRef.current = 0;
         
@@ -63,6 +64,28 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // Handle split layout changes
+          if (data.type === 'split-layout-changed' && data.taskId) {
+            const { updateLayout } = useSplitViewStore.getState();
+            if (data.data?.splitLayout) {
+              updateLayout(data.taskId, data.data.splitLayout);
+            }
+          }
+          
+          // Handle terminal-related events
+          const terminalEvents = [
+            'terminal-created',
+            'terminal-updated',
+            'terminal-deleted',
+            'terminal-state-changed',
+            'terminal-renamed',
+            'terminals-reordered'
+          ];
+          
+          if (terminalEvents.includes(data.type) && data.taskId) {
+            handleTerminalWebSocketEvent(data.type, data);
+          }
           
           // Route message to appropriate handlers
           if (data.taskId) {
@@ -84,14 +107,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected');
         setStatus('disconnected');
         wsRef.current = null;
 
         // Attempt reconnection if under max attempts
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++;
-          console.log(`Reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
           reconnectTimeoutRef.current = window.setTimeout(connect, reconnectDelay);
         }
       };

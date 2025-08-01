@@ -6,7 +6,7 @@ import { GitService } from '../services/git.service.js';
 export class TaskPullRequestController {
   constructor(models) {
     this.models = models;
-    this.gitService = new GitService();
+    // Don't create a default GitService - we'll create one per request with the token
   }
 
   /**
@@ -24,8 +24,11 @@ export class TaskPullRequestController {
 
       const project = await this.models.projects.findById(projectId);
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // First ensure the branch is pushed
-      const pushResult = await this.gitService.push(task.worktree_path, task.branch, { setUpstream: true });
+      const pushResult = await gitService.push(task.worktree_path, task.branch, { setUpstream: true });
       if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
         return res.status(500).json({ 
           error: 'Failed to push branch', 
@@ -44,7 +47,7 @@ export class TaskPullRequestController {
       const prTitle = task.name || `Updates from task: ${task.branch}`;
       const prBody = description || `Task: ${task.name}\nBranch: ${task.branch}\n\nCreated by PocketDev`;
       
-      const prResult = await this.gitService.createPullRequest(
+      const prResult = await gitService.createPullRequest(
         task.worktree_path,
         prTitle,
         prBody,
@@ -104,8 +107,11 @@ export class TaskPullRequestController {
         return res.status(400).json({ error: 'No pull request found for this task' });
       }
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Merge PR using GitHub CLI
-      const mergeResult = await this.gitService.command(task.worktree_path,
+      const mergeResult = await gitService.command(task.worktree_path,
         `gh pr merge ${task.pr_number} --squash --delete-branch`);
       
       if (!mergeResult.success) {
@@ -154,8 +160,11 @@ export class TaskPullRequestController {
         return res.status(404).json({ error: 'No pull request found for this task' });
       }
       
+      // Create GitService with token from middleware
+      const gitService = new GitService(req.githubToken);
+      
       // Get PR status using GitHub CLI
-      const prResult = await this.gitService.command(task.worktree_path,
+      const prResult = await gitService.command(task.worktree_path,
         `gh pr view ${task.pr_number} --json state,mergeable,title,url`);
       
       if (!prResult.success) {

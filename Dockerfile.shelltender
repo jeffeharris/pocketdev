@@ -21,8 +21,12 @@ COPY scripts/pocketdev-shell.sh /usr/local/bin/pocketdev-shell
 COPY scripts/pocketdev-run.sh /usr/local/bin/pocketdev-run
 RUN chmod +x /usr/local/bin/pocketdev-shell /usr/local/bin/pocketdev-run
 
+# Copy system-wide bash configuration
+COPY shelltender/bash-config/bash.bashrc /etc/bash.bashrc
+
 # Setup pocketdev user's home directory (already created in base image)
-RUN echo 'export PS1="\u@\h:\w\$ "' >> /home/pocketdev/.bashrc && \
+# The system-wide bashrc will handle the prompt, so we just ensure the file exists
+RUN touch /home/pocketdev/.bashrc && \
     chown pocketdev:pocketdev /home/pocketdev/.bashrc
 
 # Switch back to non-root user

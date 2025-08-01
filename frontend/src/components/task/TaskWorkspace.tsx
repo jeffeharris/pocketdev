@@ -8,6 +8,7 @@ import type { Task, CreateTaskDTO } from '../../types/task';
 import type { Project } from '../../types/project';
 import { api } from '../../services/api';
 import { useWebSocketContext } from '../../contexts/WebSocketContext';
+import { useTerminalStore } from '../../stores/terminalStore';
 
 interface TaskWorkspaceProps {
   projectId: string;
@@ -17,10 +18,13 @@ interface TaskWorkspaceProps {
 export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId }) => {
   const [activeTaskId, setActiveTaskId] = useState(taskId);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
   const [validationMode, setValidationMode] = useState(false);
   const [activePhase, setActivePhase] = useState<'validate' | 'merge'>('validate');
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(60); // percentage for terminal when validation mode is on
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
   
   // Real data from API
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -92,24 +96,56 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     };
   }, [tasks, subscribe, unsubscribe]);
   
-  // Update active task when taskId prop changes
+  // Update active task when taskId prop changes and load task details
   useEffect(() => {
+    // Validate taskId before proceeding
+    if (!taskId || taskId === 'undefined') {
+      console.error('Invalid taskId:', taskId);
+      return;
+    }
+    
     // taskId prop changed
     setActiveTaskId(taskId);
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
     
+    // Load detailed task data to get terminals
+    const loadTaskDetails = async () => {
+      try {
+        const taskDetails = await api.getTask(projectId, taskId);
+        // Update the task in our state with the detailed version that includes terminals
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { ...task, terminals: taskDetails.terminals } : task
+          )
+        );
+        
+        // Also update the terminal store
+        if (taskDetails.terminals) {
+          const { setTerminals } = useTerminalStore.getState();
+          setTerminals(taskId, taskDetails.terminals);
+        }
+      } catch (error: any) {
+        console.error('Failed to load task details:', error);
+        // If task not found, show error state
+        if (error.status === 404) {
+          setTasks([]);
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadTaskDetails();
+    
     // Focus the terminal using ref
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', taskId);
         terminalRef.focus();
       } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', taskId);
       }
     }, 100);
-  }, [taskId]);
+  }, [taskId, projectId]);
   
   // Focus terminal when page becomes visible (tab switch, modal close, etc)
   useEffect(() => {
@@ -148,16 +184,13 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log(`[TaskWorkspace] Focusing terminal for task: ${taskId} (reason: ${reason})`);
         terminalRef.focus();
       } else {
-        console.log(`[TaskWorkspace] Terminal ref not found for task: ${taskId} (reason: ${reason})`);
       }
     }, 200); // Slightly longer delay for modal close animations
   };
 
-  const handleTaskSelect = (newTaskId: string) => {
-    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId);
+  const handleTaskSelect = (newTaskId: string, focusTabId?: string) => {
     setActiveTaskId(newTaskId);
     // Reset validation mode when switching tasks
     setValidationMode(false);
@@ -165,20 +198,23 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(newTaskId));
     
+    // Store the tab to focus for when TerminalPanel mounts
+    if (focusTabId) {
+      sessionStorage.setItem(`focus-tab-${newTaskId}`, focusTabId);
+    }
+    
     // Focus the terminal using ref
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(newTaskId);
       if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', newTaskId);
         terminalRef.focus();
       } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', newTaskId);
       }
     }, 100);
   };
 
-  const handleTaskChange = (task: Task) => {
-    handleTaskSelect(task.id);
+  const handleTaskChange = (task: Task, focusTabId?: string) => {
+    handleTaskSelect(task.id, focusTabId);
   };
 
   const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
@@ -238,31 +274,52 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     );
   }
 
+  if (tasks.length === 0 || !activeTask) {
+    return (
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Task Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested task could not be found or has been deleted.</p>
+          <button
+            onClick={() => window.location.href = `/projects/${projectId}`}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Back to Project
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
-      <MainHeader 
-        project={project} 
-        tasks={tasks} 
-        activeTaskId={activeTaskId}
-        onTaskSelect={handleTaskSelect}
-      />
+      {!fullscreenMode && (
+        <MainHeader 
+          project={project} 
+          tasks={tasks} 
+          activeTaskId={activeTaskId}
+          onTaskSelect={handleTaskSelect}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <Sidebar
-          projectId={projectId}
-          currentTask={activeTask}
-          allTasks={tasks}
-          onTaskSelect={handleTaskChange}
-          collapsed={sidebarCollapsed}
-          onCreateTask={() => setShowCreateModal(true)}
-          onTaskUpdate={handleTaskUpdate}
-          baseBranch={project?.baseBranch}
-        />
+        {!fullscreenMode && (
+          <Sidebar
+            projectId={projectId}
+            currentTask={activeTask}
+            allTasks={tasks}
+            onTaskSelect={handleTaskChange}
+            collapsed={sidebarCollapsed}
+            onCreateTask={() => setShowCreateModal(true)}
+            onTaskUpdate={handleTaskUpdate}
+            baseBranch={project?.baseBranch}
+          />
+        )}
 
         {/* Main Terminal Area - Split Layout */}
-        <div className="flex-1 flex flex-col bg-gray-900">
+        <div className="flex-1 flex flex-col bg-gray-900 h-full overflow-hidden">
           {/* Render all initialized terminals but only show the active one */}
           {tasks.map(task => {
             const isActive = task.id === activeTaskId;
@@ -276,8 +333,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             return (
               <div
                 key={task.id}
-                style={{ display: isActive ? 'flex' : 'none' }}
-                className="flex-1 flex flex-col"
+                style={{ 
+                  display: isActive ? 'flex' : 'none',
+                  height: validationMode ? `${terminalHeight}%` : undefined
+                }}
+                className={`${validationMode ? 'flex-shrink-0' : 'flex-1'} flex flex-col`}
               >
                 <TerminalPanel
                   ref={(ref) => {
@@ -287,30 +347,46 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                       terminalRefs.current.delete(task.id);
                     }
                   }}
-                  task={task}
+                  task={{
+                    ...task,
+                    onReload: () => {
+                      // Reload task details to get updated terminals
+                      api.getTask(projectId, task.id).then(taskDetails => {
+                        setTasks(prevTasks => 
+                          prevTasks.map(t => 
+                            t.id === task.id ? { ...t, terminals: taskDetails.terminals } : t
+                          )
+                        );
+                        
+                        // Also update the terminal store
+                        if (taskDetails.terminals) {
+                          const { setTerminals } = useTerminalStore.getState();
+                          setTerminals(task.id, taskDetails.terminals);
+                        }
+                      });
+                    }
+                  }}
                   validationMode={validationMode}
                   onToggleValidation={() => setValidationMode(!validationMode)}
-                  onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  onToggleSidebar={() => setFullscreenMode(!fullscreenMode)}
                   isVisible={isActive}
+                  isFullscreen={fullscreenMode}
                 />
               </div>
             );
           })}
 
-          {/* Resize Handle */}
-          {validationMode && (
-            <div className="h-1 bg-gray-600 cursor-row-resize hover:bg-blue-500 transition-colors flex items-center justify-center">
-              <div className="w-8 h-0.5 bg-gray-400 rounded"></div>
-            </div>
-          )}
-
-          {/* Validation/Merge Panel with Lens Slider */}
+          {/* Validation/Merge Panel with Lens Slider - includes resize handle */}
           <LensSlider
             taskId={activeTaskId}
             validationMode={validationMode}
             activePhase={activePhase}
             onPhaseChange={setActivePhase}
             onClose={() => setValidationMode(false)}
+            panelHeight={100 - terminalHeight}
+            onHeightChange={(newHeight) => setTerminalHeight(100 - newHeight)}
+            isDragging={isDraggingDivider}
+            onDraggingChange={setIsDraggingDivider}
           />
         </div>
       </div>

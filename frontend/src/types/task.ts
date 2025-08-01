@@ -34,6 +34,14 @@ export interface SessionState {
   lastStateChange: string | null;
 }
 
+export interface IndividualSessionState {
+  id: string;
+  shelltenderSessionId: string;
+  tabName: string;
+  aiState: WorkerStatus;
+  lastStateChange?: string;
+}
+
 export interface GitStatus {
   ahead: number;
   behind: number;
@@ -43,6 +51,17 @@ export interface GitStatus {
   untracked?: number;
   hasRemoteTracking?: boolean;
   unpushed?: number;
+}
+
+export interface TerminalSession {
+  sessionId: string;           // Shelltender session ID (for backward compatibility)
+  dbSessionId: string;         // Database session ID (stable identifier)
+  shelltenderSessionId: string; // Shelltender session ID (explicit)
+  tabName: string;
+  tabOrder: number;
+  aiState: WorkerStatus;
+  aiAgent: string;
+  shelltenderStatus?: 'active' | 'inactive' | 'not-found';
 }
 
 export interface Task {
@@ -56,8 +75,11 @@ export interface Task {
   // Task lifecycle state
   taskState: TaskState;
   
-  // AI session state
+  // AI session state (aggregated)
   sessionState: SessionState;
+  
+  // Individual session states (for multi-tab support)
+  sessionStates?: IndividualSessionState[];
   
   // Git status (optional, added by frontend)
   gitStatus?: GitStatus;
@@ -73,6 +95,12 @@ export interface Task {
   is_archived?: boolean;
   merged_at?: string;
   has_uncommitted_changes?: boolean;
+  
+  // Terminal sessions (multiple tabs)
+  terminals?: TerminalSession[];
+  
+  // Callback to reload task data (used by TerminalPanel)
+  onReload?: () => void;
 }
 
 export interface ExtendedTask extends Task {

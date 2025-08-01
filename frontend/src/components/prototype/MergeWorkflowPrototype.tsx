@@ -3,6 +3,7 @@ import { GitBranch, CheckCircle, AlertCircle, Clock, Activity, User, FileCheck, 
 import { clsx } from 'clsx';
 import { TaskStatus } from '../task/TaskStatus';
 import { WorkerStatus } from '../../types/task';
+import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
 
 // Mock data for different task states
 const mockTasks = [
@@ -243,6 +244,9 @@ export const MergeWorkflowPrototype: React.FC = () => {
   const updateOptionsRef = useRef<HTMLDivElement>(null);
   const commitOptionsRef = useRef<HTMLDivElement>(null);
   const taskListRef = useRef<HTMLDivElement>(null);
+  
+  // Activate merge workflow keyboard context
+  useShortcutContext('mergeWorkflow');
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -262,75 +266,103 @@ export const MergeWorkflowPrototype: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Keyboard navigation for task list and dropdowns
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // If a dropdown is open, handle dropdown navigation
-      if (showCommitOptions || showUpdateOptions) {
-        const optionCount = showCommitOptions ? 4 : showUpdateOptions ? 4 : 0;
-        
-        if (event.key === 'ArrowUp' && selectedDropdownOption > 0) {
-          event.preventDefault();
-          setSelectedDropdownOption(selectedDropdownOption - 1);
-        } else if (event.key === 'ArrowDown' && selectedDropdownOption < optionCount - 1) {
-          event.preventDefault();
-          setSelectedDropdownOption(selectedDropdownOption + 1);
-        } else if (event.key === 'Enter') {
-          event.preventDefault();
-          // Execute the selected option
-          console.log('Execute option:', selectedDropdownOption);
-          setShowCommitOptions(false);
-          setShowUpdateOptions(false);
-        } else if (event.key === 'Escape') {
-          event.preventDefault();
-          setShowCommitOptions(false);
-          setShowUpdateOptions(false);
-        }
-        return;
-      }
-      
-      // Task list navigation
+  // Keyboard navigation - Dropdown navigation
+  const dropdownIsOpen = showCommitOptions || showUpdateOptions;
+  const optionCount = showCommitOptions ? 4 : showUpdateOptions ? 4 : 0;
+  
+  useKeyboardShortcut('arrowup', () => {
+    if (dropdownIsOpen && selectedDropdownOption > 0) {
+      setSelectedDropdownOption(selectedDropdownOption - 1);
+    } else {
       const currentIndex = mockTasks.findIndex(task => task.id === selectedTask.id);
-      
-      if (event.key === 'ArrowUp' && currentIndex > 0) {
-        event.preventDefault();
+      if (currentIndex > 0) {
         setSelectedTask(mockTasks[currentIndex - 1]);
-      } else if (event.key === 'ArrowDown' && currentIndex < mockTasks.length - 1) {
-        event.preventDefault();
-        setSelectedTask(mockTasks[currentIndex + 1]);
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        // Open the appropriate dropdown based on task state
-        if (selectedTask.gitStatus?.staged > 0 || selectedTask.gitStatus?.unstaged > 0) {
-          setShowCommitOptions(true);
-          setSelectedDropdownOption(0);
-        } else if (selectedTask.gitStatus?.behind > 0) {
-          setShowUpdateOptions(true);
-          setSelectedDropdownOption(0);
-        }
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        // Close any open dropdown
-        setShowCommitOptions(false);
-        setShowUpdateOptions(false);
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        // Execute the primary action for the current task
-        if (selectedTask.gitStatus?.hasConflicts) {
-          console.log('Execute: Resolve Conflicts');
-        } else if (selectedTask.gitStatus?.staged > 0 || selectedTask.gitStatus?.unstaged > 0) {
-          console.log('Execute: Commit Staged/Stage & Commit');
-        } else if (selectedTask.gitStatus?.behind > 0) {
-          console.log('Execute: Update Branch (Merge)');
-        } else if (selectedTask.gitStatus?.ahead > 0) {
-          console.log('Execute: Create Pull Request');
-        }
       }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedTask, showCommitOptions, showUpdateOptions, selectedDropdownOption]);
+    }
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: dropdownIsOpen ? 'Previous option' : 'Previous task',
+    enabled: true,
+    preventDefault: true
+  });
+  
+  useKeyboardShortcut('arrowdown', () => {
+    if (dropdownIsOpen && selectedDropdownOption < optionCount - 1) {
+      setSelectedDropdownOption(selectedDropdownOption + 1);
+    } else {
+      const currentIndex = mockTasks.findIndex(task => task.id === selectedTask.id);
+      if (currentIndex < mockTasks.length - 1) {
+        setSelectedTask(mockTasks[currentIndex + 1]);
+      }
+    }
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: dropdownIsOpen ? 'Next option' : 'Next task',
+    enabled: true,
+    preventDefault: true
+  });
+  
+  useKeyboardShortcut('arrowright', () => {
+    if (!dropdownIsOpen) {
+      // Open the appropriate dropdown based on task state
+      if (selectedTask.gitStatus?.staged > 0 || selectedTask.gitStatus?.unstaged > 0) {
+        setShowCommitOptions(true);
+        setSelectedDropdownOption(0);
+      } else if (selectedTask.gitStatus?.behind > 0) {
+        setShowUpdateOptions(true);
+        setSelectedDropdownOption(0);
+      }
+    }
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: 'Open action menu',
+    enabled: !dropdownIsOpen,
+    preventDefault: true
+  });
+  
+  useKeyboardShortcut('arrowleft', () => {
+    // Close any open dropdown
+    setShowCommitOptions(false);
+    setShowUpdateOptions(false);
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: 'Close action menu',
+    enabled: dropdownIsOpen,
+    preventDefault: true
+  });
+  
+  useKeyboardShortcut('enter', () => {
+    if (dropdownIsOpen) {
+      // Execute the selected option
+      console.log('Execute option:', selectedDropdownOption);
+      setShowCommitOptions(false);
+      setShowUpdateOptions(false);
+    } else {
+      // Execute the primary action for the current task
+      if (selectedTask.gitStatus?.hasConflicts) {
+        console.log('Execute: Resolve Conflicts');
+      } else if (selectedTask.gitStatus?.staged > 0 || selectedTask.gitStatus?.unstaged > 0) {
+        console.log('Execute: Commit Staged/Stage & Commit');
+      } else if (selectedTask.gitStatus?.behind > 0) {
+        console.log('Execute: Update Branch (Merge)');
+      } else if (selectedTask.gitStatus?.ahead > 0) {
+        console.log('Execute: Create Pull Request');
+      }
+    }
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: dropdownIsOpen ? 'Select option' : 'Execute action',
+    enabled: true
+  });
+  
+  useKeyboardShortcut('escape', () => {
+    setShowCommitOptions(false);
+    setShowUpdateOptions(false);
+  }, {
+    contexts: ['mergeWorkflow'],
+    description: 'Close menu',
+    enabled: dropdownIsOpen
+  });
 
   // Scroll selected task into view
   useEffect(() => {

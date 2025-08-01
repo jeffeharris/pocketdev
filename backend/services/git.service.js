@@ -15,6 +15,26 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
   try {
     const env = { ...process.env };
     
+    // ALWAYS set GitHub token in environment if provided
+    // This ensures gh CLI and git commands have access to credentials
+    if (githubToken) {
+      env.GH_TOKEN = githubToken;
+      env.GITHUB_TOKEN = githubToken;
+      
+      // Set git credential helper for ALL operations when token is available
+      // Skip for clone commands since the directory doesn't exist yet
+      if (!command.includes('git clone')) {
+        try {
+          const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
+          if (!credHelper || !credHelper.includes('gh auth')) {
+            await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+          }
+        } catch (e) {
+          // No credential helper set, configure it
+          await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
+        }
+      }
+    }
     
     // Handle git clone commands with authentication
     if (githubToken && command.includes('git clone') && command.includes('github.com')) {
@@ -32,25 +52,6 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
         command = command.replace(originalUrl, authUrl);
       }
     }
-    // Separate check for push/pull/fetch commands that need auth
-    if (githubToken && (command.includes('push') || command.includes('pull') || command.includes('fetch'))) {
-      // Set GitHub token in environment for gh CLI
-      env.GH_TOKEN = githubToken;
-      env.GITHUB_TOKEN = githubToken;
-      
-      // Check if credential helper is configured
-      try {
-        const { stdout: credHelper } = await execAsync('git config credential.helper', { cwd: projectPath });
-        if (!credHelper || !credHelper.includes('gh auth')) {
-          await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
-        }
-      } catch (e) {
-        // No credential helper set, configure it
-        await execAsync(`git config credential.helper "!gh auth git-credential"`, { cwd: projectPath });
-      }
-    }
-    
-    // For non-auth commands or non-GitHub repos, just run normally
     
     const { stdout, stderr } = await execAsync(command, { 
       cwd: projectPath,
@@ -60,7 +61,17 @@ export async function executeGitCommand(projectPath, command, githubToken = '') 
     
     return { success: true, output: stdout, error: stderr };
   } catch (error) {
-    console.error('[Git Service] Command failed:', error.message);
+    // Log expected failures at info level instead of error
+    const isExpectedFailure = 
+      command.includes('git rev-parse --verify') ||
+      command.includes('git ls-remote') ||
+      (command.includes('git merge-tree') && error.message.includes('merge-tree'));
+    
+    if (isExpectedFailure) {
+      console.info('[Git Service] Expected command failure:', command.split(' ').slice(0, 4).join(' ') + '...');
+    } else {
+      console.error('[Git Service] Command failed:', error.message);
+    }
     
     // Check for authentication errors
     if (error.message.includes('could not read Username') || 
@@ -233,6 +244,7 @@ export class GitService {
   }
 
   async command(projectPath, command) {
+    // Always pass the token to executeGitCommand
     return executeGitCommand(projectPath, command, this.githubToken);
   }
 
@@ -579,6 +591,7 @@ export class GitService {
   }
 
   async createPullRequest(projectPath, title, body, baseBranch) {
+    // Use command() which ensures token is passed
     return this.command(projectPath, 
       `gh pr create --title "${title}" --body "${body}" --base ${baseBranch}`
     );

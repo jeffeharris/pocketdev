@@ -14,6 +14,19 @@ router.post('/projects/:projectId/tasks/:taskId/terminal',
   terminalController.createTerminalSession
 );
 
+// Multi-terminal support
+router.post('/tasks/:taskId/terminals',
+  terminalController.createTerminalSession
+);
+
+router.patch('/terminals/:sessionId/tab',
+  terminalController.updateTerminalTab
+);
+
+router.delete('/terminals/:sessionId',
+  terminalController.deleteTerminalSession
+);
+
 router.post('/sessions/:sessionId/execute', 
   terminalController.executeInSession
 );
@@ -35,6 +48,15 @@ router.post('/sessions/:sessionId/respond',
 // Shelltender integration
 router.get('/tasks/:taskId/shelltender-session', 
   terminalController.getShelltenderSession
+);
+
+// AI agents configuration
+router.get('/ai-agents',
+  terminalController.getAIAgents
+);
+
+router.post('/ai-agents/:agentId/launch-command',
+  terminalController.getAgentLaunchCommandHandler
 );
 
 export default router;

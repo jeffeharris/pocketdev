@@ -2,14 +2,14 @@
   "name": "pocketdev-shelltender",
   "version": "1.0.0",
   "type": "module",
-  "description": "PocketDev Shelltender Terminal Service",
+  "description": "PocketDev Shelltender Terminal Service - PS1 fix",
   "main": "shelltender-service.js",
   "scripts": {
     "start": "node shelltender-service.js",
     "dev": "nodemon shelltender-service.js"
   },
   "dependencies": {
-    "@shelltender/server": "^0.6.1",
+    "@shelltender/server": "^0.6.2",
     "cors": "^2.8.5",
     "express": "^4.21.2"
   },

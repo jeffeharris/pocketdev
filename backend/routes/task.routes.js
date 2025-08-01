@@ -39,6 +39,10 @@ export default function createTaskRoutes(models, projectsDir) {
   // Get task status (for real-time updates)
   router.get('/:taskId/status', (req, res) => taskController.getTaskStatus(req, res));
 
+  // Split layout endpoints
+  router.get('/:taskId/split-layout', (req, res) => taskController.getSplitLayout(req, res));
+  router.put('/:taskId/split-layout', (req, res) => taskController.updateSplitLayout(req, res));
+
   // Git operations on task (legacy endpoint)
   router.post('/:taskId/git', (req, res) => gitController.gitOperation(req, res));
 

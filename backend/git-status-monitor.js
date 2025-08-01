@@ -6,10 +6,10 @@ import fsSync from 'fs';
  * and broadcasts updates via WebSocket
  */
 export class GitStatusMonitor {
-  constructor(models, wsEventService, checkInterval = 30000) { // Check every 30 seconds
+  constructor(models, wsEventService, githubTokenService, checkInterval = 30000) { // Check every 30 seconds
     this.models = models;
     this.wsEventService = wsEventService;
-    this.gitService = new GitService();
+    this.githubTokenService = githubTokenService;
     this.checkInterval = checkInterval;
     this.isRunning = false;
     this.intervalId = null;
@@ -69,7 +69,22 @@ export class GitStatusMonitor {
         console.log(`[GitStatusMonitor] Checking merged task ${task.id}, branch: ${task.branch}, base: ${baseBranch}`);
       }
       
-      const status = await this.gitService.getBranchStatus(
+      // Check if githubTokenService exists
+      if (!this.githubTokenService) {
+        console.error('[GitStatusMonitor] githubTokenService is not initialized');
+        return;
+      }
+      
+      // Get token and create GitService instance
+      const token = await this.githubTokenService.getToken();
+      const gitService = new GitService(token);
+      
+      if (!gitService || !gitService.getBranchStatus) {
+        console.error('[GitStatusMonitor] GitService not properly initialized or missing getBranchStatus method');
+        return;
+      }
+      
+      const status = await gitService.getBranchStatus(
         task.worktree_path,
         task.branch,
         baseBranch
@@ -116,8 +131,8 @@ export class GitStatusMonitor {
 /**
  * Initialize the Git Status Monitor
  */
-export function initializeGitStatusMonitor(models, wsEventService) {
-  const monitor = new GitStatusMonitor(models, wsEventService);
+export function initializeGitStatusMonitor(models, wsEventService, githubTokenService) {
+  const monitor = new GitStatusMonitor(models, wsEventService, githubTokenService);
   monitor.start();
   
   // Graceful shutdown

@@ -9,7 +9,6 @@ data-snapshot/
 
 # Node modules
 node_modules/
-server/node_modules/
 
 # Environment files
 .env

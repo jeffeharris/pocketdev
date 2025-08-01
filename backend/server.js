@@ -17,6 +17,7 @@ import { NotificationService } from './notification-service.js';
 import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
+import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
@@ -85,6 +86,42 @@ async function initializeDatabase() {
     console.error('Lifecycle migration check failed:', error);
   }
   
+  // Check if multi-terminal sessions migration needs to run
+  try {
+    const needsMultiTerminalMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('terminal_sessions') 
+       WHERE name='tab_name'`
+    );
+    
+    if (needsMultiTerminalMigration.count === 0) {
+      console.log('Running multi-terminal sessions migration...');
+      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/003_multi_terminal_sessions.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Multi-terminal sessions migration completed');
+    }
+  } catch (error) {
+    console.error('Multi-terminal sessions migration check failed:', error);
+  }
+
+  // Check if split view layouts migration needs to run
+  try {
+    const needsSplitViewMigration = await db.get(
+      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
+       WHERE name='split_layout'`
+    );
+    
+    if (needsSplitViewMigration.count === 0) {
+      console.log('Running split view layouts migration...');
+      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/004_split_view_layouts.sql');
+      const migration = await fs.readFile(migrationPath, 'utf8');
+      await db.exec(migration);
+      console.log('Split view layouts migration completed');
+    }
+  } catch (error) {
+    console.error('Split view layouts migration check failed:', error);
+  }
+  
   // Store models in app locals for access in routes
   app.locals.models = models;
   app.locals.db = db;
@@ -96,6 +133,11 @@ async function initializeDatabase() {
   
   // Run cleanup on startup
   await cleanupOrphanedWorktrees(models);
+  
+  // Initialize session cleanup service
+  const sessionCleanupService = new SessionCleanupService(db, models);
+  app.locals.sessionCleanupService = sessionCleanupService;
+  sessionCleanupService.start();
 }
 
 // Load settings
@@ -241,7 +283,7 @@ async function initializeMonitoring(server, wsEventService, models) {
     console.log('AI monitoring initialized successfully');
     
     // Initialize git status monitoring
-    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService);
+    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService, app.locals.githubTokenService);
     app.locals.gitStatusMonitor = gitStatusMonitor;
     console.log('Git status monitoring initialized');
   } catch (error) {
@@ -326,6 +368,12 @@ async function start() {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
+  
+  // Stop session cleanup service
+  if (app.locals.sessionCleanupService) {
+    app.locals.sessionCleanupService.stop();
+    console.log('Session cleanup service stopped');
+  }
   
   if (db) {
     await db.close();

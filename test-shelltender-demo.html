@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shelltender Command Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        #log {
+            background: #2d2d30;
+            padding: 20px;
+            margin-top: 20px;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #3e3e42;
+        }
+        .error { color: #f48771; }
+        .success { color: #4ec9b0; }
+        .info { color: #dcdcaa; }
+        input {
+            background: #2d2d30;
+            color: #d4d4d4;
+            border: 1px solid #3e3e42;
+            padding: 8px;
+            margin: 5px;
+            width: 300px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Shelltender Command Execution Test</h1>
+    
+    <div>
+        <h2>Test Controls</h2>
+        <div>
+            <input type="text" id="sessionId" placeholder="Session ID (e.g., task-123)" value="test-session-1">
+            <button onclick="testCreateSession()">1. Create Session</button>
+            <button onclick="testListSessions()">2. List Sessions</button>
+        </div>
+        <div>
+            <input type="text" id="command" placeholder="Command to execute" value="echo 'Hello from test'">
+            <button onclick="testExecuteCommand()">3. Execute Command</button>
+            <button onclick="testLaunchClaude()">4. Launch Claude</button>
+        </div>
+        <div>
+            <button onclick="testFullSequence()">Run Full Auto-Launch Sequence</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3005/api';
+        const log = document.getElementById('log');
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function makeRequest(url, options = {}) {
+            try {
+                addLog(`Making request to: ${url}`, 'info');
+                const response = await fetch(API_BASE + url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    },
+                    ...options
+                });
+
+                const text = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    data = text;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${JSON.stringify(data)}`);
+                }
+
+                addLog(`Response: ${JSON.stringify(data, null, 2)}`, 'success');
+                return data;
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        async function testCreateSession() {
+            const sessionId = document.getElementById('sessionId').value;
+            addLog(`Creating session: ${sessionId}`);
+            
+            try {
+                // First, let's see what endpoint we should use
+                // Based on PocketDev, it might be /tasks/:taskId/terminals
+                const taskId = 'test-task-1';
+                const result = await makeRequest(`/tasks/${taskId}/terminals`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tabName: 'Test Tab',
+                        aiAgent: 'claude'
+                    })
+                });
+                addLog(`Session created successfully!`, 'success');
+            } catch (error) {
+                addLog(`Failed to create session`, 'error');
+            }
+        }
+
+        async function testListSessions() {
+            addLog('Listing all sessions...');
+            try {
+                const sessions = await makeRequest('/sessions');
+                addLog(`Found ${sessions.length} sessions`, 'success');
+            } catch (error) {
+                addLog('Failed to list sessions', 'error');
+            }
+        }
+
+        async function testExecuteCommand() {
+            const sessionId = document.getElementById('sessionId').value;
+            const command = document.getElementById('command').value;
+            
+            addLog(`Executing command "${command}" in session ${sessionId}`);
+            
+            try {
+                const result = await makeRequest(`/sessions/${sessionId}/execute`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command })
+                });
+                addLog('Command executed successfully!', 'success');
+            } catch (error) {
+                addLog('Failed to execute command', 'error');
+            }
+        }
+
+        async function testLaunchClaude() {
+            const sessionId = document.getElementById('sessionId').value;
+            addLog(`Launching Claude in session ${sessionId}`);
+            
+            try {
+                // First send newline to ensure prompt
+                await makeRequest(`/sessions/${sessionId}/execute`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command: '' })
+                });
+                
+                addLog('Sent newline, waiting 500ms...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Then send claude command
+                await makeRequest(`/sessions/${sessionId}/execute`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command: 'claude' })
+                });
+                
+                addLog('Claude command sent!', 'success');
+            } catch (error) {
+                addLog('Failed to launch Claude', 'error');
+            }
+        }
+
+        async function testFullSequence() {
+            addLog('Starting full auto-launch sequence...', 'info');
+            
+            try {
+                // Step 1: Create session
+                const taskId = 'test-task-' + Date.now();
+                addLog(`Creating session for task ${taskId}...`);
+                
+                const session = await makeRequest(`/tasks/${taskId}/terminals`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        tabName: 'Auto Test',
+                        aiAgent: 'claude'
+                    })
+                });
+                
+                const sessionId = session.sessionId;
+                addLog(`Session created: ${sessionId}`, 'success');
+                
+                // Step 2: Wait for terminal to be ready
+                addLog('Waiting 3 seconds for terminal to be ready...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Step 3: Send newline to force prompt
+                addLog('Sending newline to force prompt...', 'info');
+                await makeRequest(`/sessions/${sessionId}/execute`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command: '' })
+                });
+                
+                // Step 4: Wait a bit more
+                addLog('Waiting 500ms...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Step 5: Launch Claude
+                addLog('Sending claude command...', 'info');
+                await makeRequest(`/sessions/${sessionId}/execute`, {
+                    method: 'POST',
+                    body: JSON.stringify({ command: 'claude' })
+                });
+                
+                addLog('Full sequence completed successfully!', 'success');
+                addLog(`Check Shelltender UI at http://localhost:8080 to see if Claude started in session ${sessionId}`, 'info');
+                
+            } catch (error) {
+                addLog('Full sequence failed', 'error');
+            }
+        }
+
+        function clearLog() {
+            log.innerHTML = '';
+            addLog('Log cleared', 'info');
+        }
+
+        // Initial log entry
+        addLog('Test page loaded. Use the buttons above to test Shelltender integration.', 'info');
+        addLog('Make sure PocketDev backend is running on port 3005', 'info');
+        addLog('You can also check Shelltender admin at http://localhost:8080/admin', 'info');
+    </script>
+</body>
+</html>
