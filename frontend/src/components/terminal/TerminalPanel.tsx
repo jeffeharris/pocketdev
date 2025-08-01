@@ -639,9 +639,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Render control buttons (reusable for both tab mode and split view)
   const renderControlButtons = () => (
     <>
-      {/* Split View Toggle - allow with 1+ terminals */}
-      {terminals.length >= 1 && (
-        <button 
+      {/* Split View Toggle */}
+      <button 
           onClick={() => {
             if (layout.mode === 'tab') {
               // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
@@ -707,7 +706,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             : <Grid2x2 className="w-4 h-4" />  // Grid icon for quad view
           }
         </button>
-      )}
       <button 
         onClick={onToggleSidebar}
         className="text-gray-400 hover:text-gray-200 p-1"
