@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainHeader } from '../layout/MainHeader';
 import { Sidebar } from '../layout/Sidebar';
 import { TerminalPanel, type TerminalPanelHandle } from '../terminal/TerminalPanel';
@@ -16,7 +17,7 @@ interface TaskWorkspaceProps {
 }
 
 export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId }) => {
-  const [activeTaskId, setActiveTaskId] = useState(taskId);
+  const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
   const [validationMode, setValidationMode] = useState(false);
@@ -39,7 +40,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   // WebSocket for real-time updates
   const { subscribe, unsubscribe } = useWebSocketContext();
   
-  const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0];
+  const activeTask = tasks.find(t => t.id === taskId) || tasks[0];
   
   // Load project and tasks on mount
   useEffect(() => {
@@ -104,8 +105,6 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       return;
     }
     
-    // taskId prop changed
-    setActiveTaskId(taskId);
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
     
@@ -150,13 +149,13 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   // Focus terminal when page becomes visible (tab switch, modal close, etc)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && activeTaskId) {
+      if (!document.hidden && taskId) {
         focusActiveTerminal('visibility change');
       }
     };
     
     const handleFocus = () => {
-      if (activeTaskId) {
+      if (taskId) {
         focusActiveTerminal('window focus');
       }
     };
@@ -166,7 +165,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     window.addEventListener('focus', handleFocus);
     
     // Focus on mount
-    if (activeTaskId) {
+    if (taskId) {
       focusActiveTerminal('component mount');
     }
     
@@ -174,11 +173,10 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [activeTaskId]);
+  }, [taskId]);
 
   // Helper function to focus the active terminal
   const focusActiveTerminal = (reason: string) => {
-    const taskId = activeTaskId;
     if (!taskId) return;
     
     setTimeout(() => {
@@ -191,26 +189,18 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   };
 
   const handleTaskSelect = (newTaskId: string, focusTabId?: string) => {
-    setActiveTaskId(newTaskId);
-    // Reset validation mode when switching tasks
-    setValidationMode(false);
-    
-    // Mark this terminal as initialized
-    setInitializedTerminals(prev => new Set(prev).add(newTaskId));
+    // Don't do anything if we're already on this task
+    if (newTaskId === taskId) {
+      return;
+    }
     
     // Store the tab to focus for when TerminalPanel mounts
     if (focusTabId) {
       sessionStorage.setItem(`focus-tab-${newTaskId}`, focusTabId);
     }
     
-    // Focus the terminal using ref
-    setTimeout(() => {
-      const terminalRef = terminalRefs.current.get(newTaskId);
-      if (terminalRef) {
-        terminalRef.focus();
-      } else {
-      }
-    }, 100);
+    // Navigate to the new task URL - this will trigger a re-render with new taskId prop
+    navigate(`/projects/${projectId}/tasks/${newTaskId}`);
   };
 
   const handleTaskChange = (task: Task, focusTabId?: string) => {
@@ -227,11 +217,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       // Add the new task to our list
       setTasks(prevTasks => [...prevTasks, newTask]);
       
-      // Switch to the new task
-      setActiveTaskId(newTask.id);
-      
       // Close the modal
       setShowCreateModal(false);
+      
+      // Navigate to the new task
+      navigate(`/projects/${projectId}/tasks/${newTask.id}`);
     } catch (error: any) {
       console.error('Failed to create task:', error);
       
@@ -297,7 +287,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         <MainHeader 
           project={project} 
           tasks={tasks} 
-          activeTaskId={activeTaskId}
+          activeTaskId={taskId}
           onTaskSelect={handleTaskSelect}
         />
       )}
@@ -322,7 +312,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         <div className="flex-1 flex flex-col bg-gray-900 h-full overflow-hidden">
           {/* Render all initialized terminals but only show the active one */}
           {tasks.map(task => {
-            const isActive = task.id === activeTaskId;
+            const isActive = task.id === taskId;
             const isInitialized = initializedTerminals.has(task.id);
             
             // Only render if this is the active task or it has been initialized before
@@ -378,7 +368,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
 
           {/* Validation/Merge Panel with Lens Slider - includes resize handle */}
           <LensSlider
-            taskId={activeTaskId}
+            taskId={taskId}
             validationMode={validationMode}
             activePhase={activePhase}
             onPhaseChange={setActivePhase}

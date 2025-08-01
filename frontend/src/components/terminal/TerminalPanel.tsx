@@ -148,18 +148,33 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   }, [task.id, task.project_id, setCurrentTask]);
 
   // Get terminals from the store
-  const terminals = useTaskTerminals(task.id);
+  const terminalsFromStore = useTaskTerminals(task.id);
   const activeTerminalId = useActiveTerminalId(task.id);
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal, setFocusedTerminal } = useTerminalStore();
   
+  // Use terminals from task prop if store is empty (handles initial load and view switches)
+  const terminals = terminalsFromStore.length > 0 ? terminalsFromStore : (task.terminals || []);
+  
   // Activate terminal keyboard context only when visible (priority 10 for feature-level)
   useShortcutContext('terminal', { enabled: isVisible, priority: 10 });
   
+  // Force sync terminals when layout changes (fixes terminals not showing when switching views)
+  useEffect(() => {
+    if (task.terminals && task.terminals.length > 0 && terminalsFromStore.length === 0) {
+      setTerminals(task.id, task.terminals);
+    }
+  }, [layout.mode, task.id, task.terminals, terminalsFromStore.length, setTerminals]);
+  
   // Initialize terminals from task prop on mount or when task changes
   useEffect(() => {
+    // Always sync terminals from task prop to store when available
     if (task.terminals && task.terminals.length > 0) {
-      setTerminals(task.id, task.terminals);
+      // Check if store is empty or out of sync
+      const currentStoreTerminals = useTerminalStore.getState().getTerminals(task.id);
+      if (currentStoreTerminals.length === 0 || currentStoreTerminals.length !== task.terminals.length) {
+        setTerminals(task.id, task.terminals);
+      }
       // Set initial focus to active terminal if no focus set
       if (!focusedTerminalId && activeTabId) {
         setFocusedTerminal(task.id, activeTabId);
