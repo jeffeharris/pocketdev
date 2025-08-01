@@ -32,7 +32,7 @@ export function SplitViewContainer({
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
-  const { setFocusedTerminal } = useTerminalStore();
+  const { setFocusedTerminal, setTerminals } = useTerminalStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
@@ -43,19 +43,11 @@ export function SplitViewContainer({
   const [showTertiaryDropdown, setShowTertiaryDropdown] = useState(false);
   const [showQuaternaryDropdown, setShowQuaternaryDropdown] = useState(false);
 
-  // Get the terminal instances - use explicit assignments or fall back to order
-  const primaryTerminal = layout.primaryTerminalId 
-    ? terminals.find(t => t.dbSessionId === layout.primaryTerminalId)
-    : terminals[0];
-  const secondaryTerminal = layout.secondaryTerminalId 
-    ? terminals.find(t => t.dbSessionId === layout.secondaryTerminalId)
-    : terminals[1];
-  const tertiaryTerminal = layout.tertiaryTerminalId 
-    ? terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId)
-    : terminals[2];
-  const quaternaryTerminal = layout.quaternaryTerminalId 
-    ? terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId)
-    : terminals[3];
+  // Get the terminal instances - always use order-based assignment to match display
+  const primaryTerminal = terminals[0];
+  const secondaryTerminal = terminals[1];
+  const tertiaryTerminal = terminals[2];
+  const quaternaryTerminal = terminals[3];
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -73,32 +65,8 @@ export function SplitViewContainer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Auto-assign terminals if slots are empty
-  useEffect(() => {
-    if (terminals.length === 0) return;
-
-    if (layout.mode === 'split') {
-      if (!layout.primaryTerminalId && terminals.length > 0) {
-        setPrimaryTerminal(taskId, terminals[0].dbSessionId);
-      }
-      if (!layout.secondaryTerminalId && terminals.length > 1) {
-        setSecondaryTerminal(taskId, terminals[1].dbSessionId);
-      }
-    } else if (layout.mode === 'split-4') {
-      if (!layout.primaryTerminalId && terminals.length > 0) {
-        setPrimaryTerminal(taskId, terminals[0].dbSessionId);
-      }
-      if (!layout.secondaryTerminalId && terminals.length > 1) {
-        setSecondaryTerminal(taskId, terminals[1].dbSessionId);
-      }
-      if (!layout.tertiaryTerminalId && terminals.length > 2) {
-        setTertiaryTerminal(taskId, terminals[2].dbSessionId);
-      }
-      if (!layout.quaternaryTerminalId && terminals.length > 3) {
-        setQuaternaryTerminal(taskId, terminals[3].dbSessionId);
-      }
-    }
-  }, [terminals, layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal]);
+  // Note: We're using order-based display, so terminal assignments in the store aren't used
+  // The dropdowns allow reordering by swapping terminals in the array
 
   const handleSwapPanes = useCallback(() => {
     swapPanes(taskId);
