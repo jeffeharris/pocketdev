@@ -978,10 +978,48 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         </div>
       )}
 
-      {/* Terminal Content - Render based on current layout mode */}
+      {/* Terminal Content - All terminals rendered persistently */}
       <div ref={terminalContainerRef} className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {layout.mode === 'split' || layout.mode === 'split-4' ? (
-          // For split modes, keep existing SplitViewContainer behavior
+        {/* Render all terminals with CSS-based visibility */}
+        <div className={`terminals-container mode-${layout.mode} ${layout.mode === 'split' ? `orientation-${layout.orientation}` : ''}`}>
+          {terminals.map(terminal => {
+            const isVisibleTerminal = shouldShowTerminal(terminal, layout, activeTabId);
+            const terminalClassName = getTerminalClassName(terminal, layout);
+            
+            return (
+              <div
+                key={terminal.dbSessionId}
+                className={`terminal-wrapper ${terminalClassName}`}
+                style={{ 
+                  display: isVisibleTerminal ? 'block' : 'none'
+                }}
+              >
+                <DirectTerminal
+                  ref={(el) => {
+                    if (el) {
+                      terminalRefs.current.set(terminal.dbSessionId, el);
+                    } else {
+                      terminalRefs.current.delete(terminal.dbSessionId);
+                    }
+                  }}
+                  taskId={task.id}
+                  dbSessionId={terminal.dbSessionId}
+                  shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
+                  worktreePath={task.worktree_path}
+                  isVisible={isVisibleTerminal && isVisible}
+                  hasFocus={focusedTerminalId === terminal.dbSessionId}
+                  onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
+                  onFocusRequest={() => {
+                    setFocusedTerminal(task.id, terminal.dbSessionId);
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Overlay split view controls when in split/quad modes */}
+        {(layout.mode === 'split' || layout.mode === 'split-4') && (
           <SplitViewContainer
             taskId={task.id}
             projectId={task.project_id}
@@ -993,48 +1031,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             isResetting={isResetting}
             setIsResetting={setIsResetting}
           />
-        ) : (
-          // For tab mode, render all terminals persistently with CSS visibility
-          <div className="terminals-container mode-tab">
-            {terminals.map(terminal => {
-              const isVisibleTerminal = terminal.dbSessionId === activeTabId;
-              
-              return (
-                <div
-                  key={terminal.dbSessionId}
-                  className="terminal-wrapper terminal terminal-tab"
-                  style={{ 
-                    display: isVisibleTerminal ? 'block' : 'none',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%'
-                  }}
-                >
-                  <DirectTerminal
-                    ref={(el) => {
-                      if (el) {
-                        terminalRefs.current.set(terminal.dbSessionId, el);
-                      } else {
-                        terminalRefs.current.delete(terminal.dbSessionId);
-                      }
-                    }}
-                    taskId={task.id}
-                    dbSessionId={terminal.dbSessionId}
-                    shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
-                    worktreePath={task.worktree_path}
-                    isVisible={isVisibleTerminal && isVisible}
-                    hasFocus={focusedTerminalId === terminal.dbSessionId}
-                    onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
-                    onFocusRequest={() => {
-                      setFocusedTerminal(task.id, terminal.dbSessionId);
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
 
