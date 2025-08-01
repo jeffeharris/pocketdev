@@ -1,10 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import type { DirectTerminalHandle } from './DirectTerminal';
-import { TerminalPane } from './TerminalPane';
-import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout, useCurrentTaskId } from '../../stores/splitViewStore';
+import { ChevronDown, ArrowLeftRight } from 'lucide-react';
+import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout } from '../../stores/splitViewStore';
 import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
-import type { Task } from '../../types/task';
 
 interface SplitViewContainerProps {
   taskId: string;
@@ -31,17 +29,12 @@ export function SplitViewContainer({
 }: SplitViewContainerProps) {
   const layout = useSplitLayout();
   const layoutState = useLayoutState();
-  const currentTaskId = useCurrentTaskId();
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const primaryRef = useRef<DirectTerminalHandle>(null);
-  const secondaryRef = useRef<DirectTerminalHandle>(null);
-  const tertiaryRef = useRef<DirectTerminalHandle>(null);
-  const quaternaryRef = useRef<DirectTerminalHandle>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const rafRef = useRef<number | null>(null);
@@ -49,81 +42,17 @@ export function SplitViewContainer({
   const [showSecondaryDropdown, setShowSecondaryDropdown] = useState(false);
   const [showTertiaryDropdown, setShowTertiaryDropdown] = useState(false);
   const [showQuaternaryDropdown, setShowQuaternaryDropdown] = useState(false);
-  
-  // Handle refresh button click when control buttons include refresh
-  const handleRefreshClick = useCallback(() => {
-    if (!isResetting && setIsResetting) {
-      setIsResetting(true);
-      
-      // Refresh all terminals in the split view
-      if (layout.mode === 'split-4') {
-        // Refresh all quad view terminals
-        if (primaryRef.current?.refresh) {
-          primaryRef.current.refresh();
-        }
-        if (secondaryRef.current?.refresh) {
-          secondaryRef.current.refresh();
-        }
-        if (tertiaryRef.current?.refresh) {
-          tertiaryRef.current.refresh();
-        }
-        if (quaternaryRef.current?.refresh) {
-          quaternaryRef.current.refresh();
-        }
-      } else if (layout.mode === 'split') {
-        // Refresh both split view terminals
-        if (primaryRef.current?.refresh) {
-          primaryRef.current.refresh();
-        }
-        if (secondaryRef.current?.refresh) {
-          secondaryRef.current.refresh();
-        }
-      }
-      
-      // Reset the flag after a delay
-      setTimeout(() => {
-        if (setIsResetting) setIsResetting(false);
-      }, 1000);
-    }
-  }, [layout.mode, isResetting, setIsResetting]);
-  
-  // Listen for refresh button clicks on the control buttons
-  useEffect(() => {
-    if (controlButtons) {
-      const handleClick = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        // Check if the refresh button was clicked
-        const refreshButton = target.closest('[data-action="refresh"]');
-        if (refreshButton) {
-          e.preventDefault();
-          e.stopPropagation();
-          handleRefreshClick();
-        }
-      };
-      
-      document.addEventListener('click', handleClick);
-      return () => document.removeEventListener('click', handleClick);
-    }
-  }, [controlButtons, handleRefreshClick]);
-  
-  // Helper to get AI state color
-  const getStateColor = (state?: string) => {
-    switch (state) {
-      case 'waiting':
-        return 'bg-purple-400';
-      case 'working':
-        return 'bg-yellow-400';
-      case 'idle':
-        return 'bg-blue-400';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-  
+
+  // Get the terminal instances
+  const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
+  const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
+  const tertiaryTerminal = terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId);
+  const quaternaryTerminal = terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
       if (!target.closest('.dropdown-container')) {
         setShowPrimaryDropdown(false);
         setShowSecondaryDropdown(false);
@@ -131,506 +60,321 @@ export function SplitViewContainer({
         setShowQuaternaryDropdown(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  
-  // Auto-assignment: assign available terminals when switching to split mode or terminals change
-  useEffect(() => {
-    // Only run when in split mode and layout is loaded
-    if (layoutState !== 'loaded' || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
-      return;
-    }
-    
-    // Skip if we're not viewing the current task (prevents loops during task switches)
-    if (currentTaskId && currentTaskId !== taskId) {
-      return;
-    }
-    
-    const terminalIds = terminals.map(t => t.dbSessionId);
-    
-    // First, clear any stale terminal assignments that don't exist anymore
-    if (layout.primaryTerminalId && !terminalIds.includes(layout.primaryTerminalId)) {
-      setPrimaryTerminal( null);
-    }
-    if (layout.secondaryTerminalId && !terminalIds.includes(layout.secondaryTerminalId)) {
-      setSecondaryTerminal( null);
-    }
-    if (layout.tertiaryTerminalId && !terminalIds.includes(layout.tertiaryTerminalId)) {
-      setTertiaryTerminal( null);
-    }
-    if (layout.quaternaryTerminalId && !terminalIds.includes(layout.quaternaryTerminalId)) {
-      setQuaternaryTerminal( null);
-    }
-    
-    // Check if we need to do any assignments
-    // Important: Only assign if we have enough unique terminals
-    const needsPrimaryAssignment = terminalIds[0] && !layout.primaryTerminalId;
-    const needsSecondaryAssignment = terminalIds.length >= 2 && terminalIds[1] && !layout.secondaryTerminalId && (layout.mode === 'split' || layout.mode === 'split-4');
-    const needsTertiaryAssignment = terminalIds.length >= 3 && terminalIds[2] && !layout.tertiaryTerminalId && layout.mode === 'split-4';
-    const needsQuaternaryAssignment = terminalIds.length >= 4 && terminalIds[3] && !layout.quaternaryTerminalId && layout.mode === 'split-4';
-    
-    // Also check if we have a primary assignment but it doesn't exist in our terminals (stale)
-    const primaryIsStale = layout.primaryTerminalId && !primaryTerminal && terminalIds[0];
-    const secondaryIsStale = layout.secondaryTerminalId && !secondaryTerminal && terminalIds.length >= 2;
-    
-    // Track if we made any changes
-    let madeChanges = false;
-    
-    // Only update if something actually needs assignment
-    if (needsPrimaryAssignment || primaryIsStale) {
-      setPrimaryTerminal( terminalIds[0]);
-      madeChanges = true;
-    }
-    
-    if (needsSecondaryAssignment || secondaryIsStale) {
-      setSecondaryTerminal( terminalIds[1]);
-      madeChanges = true;
-    }
-    
-    if (layout.mode === 'split-4') {
-      if (needsTertiaryAssignment) {
-        setTertiaryTerminal( terminalIds[2]);
-        madeChanges = true;
-      }
-      if (needsQuaternaryAssignment) {
-        setQuaternaryTerminal( terminalIds[3]);
-        madeChanges = true;
-      }
-    }
-    
-    // Clean up terminals that shouldn't be assigned
-    if (layout.mode === 'split') {
-      // In 2-way split, clear tertiary and quaternary if set
-      if (layout.tertiaryTerminalId) {
-        setTertiaryTerminal( null);
-        madeChanges = true;
-      }
-      if (layout.quaternaryTerminalId) {
-        setQuaternaryTerminal( null);
-        madeChanges = true;
-      }
-    }
-    
-    // Save layout if we made any auto-assignments
-    if (madeChanges) {
-      saveLayout();
-    }
-  }, [
-    // Only depend on mode changes and terminal list changes
-    layout.mode,
-    terminals.length, // Use length instead of full array to avoid unnecessary rerenders
-    layoutState,
-    currentTaskId,
-    taskId,
-    // Include the terminal IDs to detect stale assignments
-    layout.primaryTerminalId,
-    layout.secondaryTerminalId,
-    layout.tertiaryTerminalId,
-    layout.quaternaryTerminalId,
-    setPrimaryTerminal,
-    setSecondaryTerminal,
-    setTertiaryTerminal,
-    setQuaternaryTerminal
-  ]);
 
-  // Handle resize
+  // Auto-assign terminals if slots are empty
+  useEffect(() => {
+    if (terminals.length === 0) return;
+
+    if (layout.mode === 'split') {
+      if (!layout.primaryTerminalId && terminals.length > 0) {
+        setPrimaryTerminal(taskId, terminals[0].dbSessionId);
+      }
+      if (!layout.secondaryTerminalId && terminals.length > 1) {
+        setSecondaryTerminal(taskId, terminals[1].dbSessionId);
+      }
+    } else if (layout.mode === 'split-4') {
+      if (!layout.primaryTerminalId && terminals.length > 0) {
+        setPrimaryTerminal(taskId, terminals[0].dbSessionId);
+      }
+      if (!layout.secondaryTerminalId && terminals.length > 1) {
+        setSecondaryTerminal(taskId, terminals[1].dbSessionId);
+      }
+      if (!layout.tertiaryTerminalId && terminals.length > 2) {
+        setTertiaryTerminal(taskId, terminals[2].dbSessionId);
+      }
+      if (!layout.quaternaryTerminalId && terminals.length > 3) {
+        setQuaternaryTerminal(taskId, terminals[3].dbSessionId);
+      }
+    }
+  }, [terminals, layout.mode, layout.primaryTerminalId, layout.secondaryTerminalId, layout.tertiaryTerminalId, layout.quaternaryTerminalId, taskId, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal]);
+
+  const handleSwapPanes = useCallback(() => {
+    swapPanes(taskId);
+  }, [taskId, swapPanes]);
+
+  const handleDoubleClick = useCallback(() => {
+    setSplitRatio(50);
+    saveLayout();
+  }, [setSplitRatio]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
     setResizing(true);
-  }, [setResizing]);
-
-  // Handle double-click to reset to 50/50
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setSplitRatio(0.5);
-    saveLayout();
-  }, [setSplitRatio]);
-
-  useEffect(() => {
-    if (!isDragging) return;
+    
+    const container = containerRef.current;
+    if (!container) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Cancel any pending animation frame
-      if (rafRef.current) {
+      if (!isDragging && e.buttons !== 1) return;
+      
+      if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
       }
       
-      // Schedule update on next animation frame
       rafRef.current = requestAnimationFrame(() => {
-        if (!containerRef.current) return;
+        const rect = container.getBoundingClientRect();
+        const isHorizontal = layout.orientation === 'horizontal';
         
-        const rect = containerRef.current.getBoundingClientRect();
-        let newRatio: number;
-        
-        if (layout.orientation === 'vertical') {
-          newRatio = (e.clientX - rect.left) / rect.width;
+        let percentage: number;
+        if (isHorizontal) {
+          percentage = ((e.clientY - rect.top) / rect.height) * 100;
         } else {
-          newRatio = (e.clientY - rect.top) / rect.height;
+          percentage = ((e.clientX - rect.left) / rect.width) * 100;
         }
         
-        // Clamp between 0.1 and 0.9
-        newRatio = Math.max(0.1, Math.min(0.9, newRatio));
-        setSplitRatio( newRatio);
+        percentage = Math.max(20, Math.min(80, percentage));
+        setSplitRatio(percentage);
       });
     };
 
     const handleMouseUp = () => {
-      if (rafRef.current) {
+      setIsDragging(false);
+      setResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      setIsDragging(false);
-      setResizing(false);
-      // Save layout after resize is complete
       saveLayout();
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
   }, [isDragging, layout.orientation, setSplitRatio, setResizing]);
 
-  // Get the terminal instances
-  const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
-  const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
-  const tertiaryTerminal = terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId);
-  const quaternaryTerminal = terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId);
-  
+  // Helper to render terminal dropdown
+  const renderTerminalDropdown = (
+    terminal: TerminalSession | undefined,
+    showDropdown: boolean,
+    onToggle: () => void,
+    onSelect: (terminalId: string) => void,
+    position: 'primary' | 'secondary' | 'tertiary' | 'quaternary'
+  ) => {
+    const getStateColor = (state?: string) => {
+      switch (state) {
+        case 'idle':
+        case 'ready':
+          return 'bg-green-500';
+        case 'working':
+        case 'thinking':
+          return 'bg-yellow-500';
+        case 'waiting':
+          return 'bg-blue-500';
+        case 'error':
+          return 'bg-red-500';
+        default:
+          return 'bg-gray-500';
+      }
+    };
 
-  // If in tab mode, we don't render anything here - the TerminalPanel handles it
+    return (
+      <div className="absolute top-2 left-2 z-50 dropdown-container">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-sm text-gray-300 hover:text-white transition-colors"
+        >
+          <div className={`w-2 h-2 rounded-full ${getStateColor(terminal?.state)}`} />
+          <span className="max-w-[150px] truncate">
+            {terminal ? terminal.name : 'Select Terminal'}
+          </span>
+          <ChevronDown className="w-3 h-3" />
+        </button>
+        
+        {showDropdown && (
+          <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded shadow-lg overflow-hidden">
+            {terminals.map(t => (
+              <button
+                key={t.dbSessionId}
+                onClick={() => {
+                  onSelect(t.dbSessionId);
+                  onToggle();
+                }}
+                className={`w-full text-left px-3 py-2 hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                  t.dbSessionId === terminal?.dbSessionId ? 'bg-gray-700' : ''
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStateColor(t.state)}`} />
+                <span className="text-sm text-gray-300 truncate">{t.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Don't render anything in tab mode
   if (layout.mode === 'tab') {
     return null;
   }
-  
-  // Special case: no terminals at all
-  if (terminals.length === 0) {
-    const isHorizontal = layout.orientation === 'horizontal';
-    return (
-      <div 
-        className="w-full h-full"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: !isHorizontal ? '1fr 1fr' : '1fr',
-          gridTemplateRows: isHorizontal ? '1fr 1fr' : '1fr',
-          gap: '1px',
-          backgroundColor: '#1f2937',
-          height: '100%',
-          width: '100%'
-        }}
-      >
-        {/* Both panes show add terminal */}
-        <div className="flex items-center justify-center bg-gray-900">
-          <button
-            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-          >
-            + Add Terminal
-          </button>
-        </div>
-        <div className="flex items-center justify-center bg-gray-900">
-          <button
-            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-          >
-            + Add Terminal
-          </button>
-        </div>
-      </div>
-    );
-  }
 
-  // Handle quad view (split-4)
-  if (layout.mode === 'split-4') {
-    
-    return (
-      <div 
-        ref={containerRef}
-        className="w-full h-full"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gridTemplateRows: '1fr 1fr',
-          gap: '1px',
-          backgroundColor: '#1f2937', // gray-800 for gap color
-          height: '100%',
-          width: '100%'
-        }}
-      >
-        {/* Top-left quadrant (Primary) */}
-        {primaryTerminal ? (
-          <TerminalPane
-            ref={primaryRef}
-            terminal={primaryTerminal}
-            terminals={terminals}
-            taskId={taskId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === primaryTerminal.dbSessionId}
-            showControls={false}
-            controlButtons={controlButtons}
-            showDropdown={showPrimaryDropdown}
-            onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
-            onTerminalSelect={(terminalId) => {
-              setPrimaryTerminal( terminalId);
-              setShowPrimaryDropdown(false);
-              setFocusedTerminal(taskId, terminalId);
-            }}
-            onSessionStatus={(status) => onSessionStatus(primaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-            position="primary"
-            getStateColor={getStateColor}
-          />
-        ) : (
-          <div className="flex items-center justify-center bg-gray-900">
-            <button
-              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-            >
-              + Add Terminal
-            </button>
-          </div>
-        )}
-        
-        {/* Top-right quadrant (Secondary) - contains control buttons */}
-        {secondaryTerminal ? (
-          <TerminalPane
-            ref={secondaryRef}
-            terminal={secondaryTerminal}
-            terminals={terminals}
-            taskId={taskId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === secondaryTerminal.dbSessionId}
-            showControls={true} // Show controls in top-right
-            controlButtons={controlButtons}
-            showDropdown={showSecondaryDropdown}
-            onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
-            onTerminalSelect={(terminalId) => {
-              setSecondaryTerminal( terminalId);
-              setShowSecondaryDropdown(false);
-              setFocusedTerminal(taskId, terminalId);
-            }}
-            onSessionStatus={(status) => onSessionStatus(secondaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-            position="secondary"
-            getStateColor={getStateColor}
-          />
-        ) : (
-          <div className="relative flex items-center justify-center bg-gray-900">
-            {/* Control buttons at top of empty pane */}
-            <div className="absolute top-2 right-2">
-              <div className="flex items-center gap-2">
-                {controlButtons}
-              </div>
-            </div>
-            <button
-              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-            >
-              + Add Terminal
-            </button>
-          </div>
-        )}
-        
-        {/* Bottom-left quadrant (Tertiary) */}
-        {tertiaryTerminal ? (
-          <TerminalPane
-            ref={tertiaryRef}
-            terminal={tertiaryTerminal}
-            terminals={terminals}
-            taskId={taskId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === tertiaryTerminal.dbSessionId}
-            showControls={false}
-            controlButtons={controlButtons}
-            showDropdown={showTertiaryDropdown}
-            onDropdownToggle={() => setShowTertiaryDropdown(!showTertiaryDropdown)}
-            onTerminalSelect={(terminalId) => {
-              setTertiaryTerminal( terminalId);
-              setShowTertiaryDropdown(false);
-              setFocusedTerminal(taskId, terminalId);
-            }}
-            onSessionStatus={(status) => onSessionStatus(tertiaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, tertiaryTerminal.dbSessionId)}
-            position="tertiary"
-            getStateColor={getStateColor}
-          />
-        ) : (
-          <div className="flex items-center justify-center bg-gray-900">
-            <button
-              onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-            >
-              + Add Terminal
-            </button>
-          </div>
-        )}
-        
-        {/* Bottom-right quadrant (Quaternary) - might be empty */}
-        {quaternaryTerminal ? (
-          <TerminalPane
-            ref={quaternaryRef}
-            terminal={quaternaryTerminal}
-            terminals={terminals}
-            taskId={taskId}
-            worktreePath={worktreePath}
-            isVisible={isVisible}
-            hasFocus={focusedTerminalId === quaternaryTerminal.dbSessionId}
-            showControls={false}
-            controlButtons={controlButtons}
-            showDropdown={showQuaternaryDropdown}
-            onDropdownToggle={() => setShowQuaternaryDropdown(!showQuaternaryDropdown)}
-            onTerminalSelect={(terminalId) => {
-              setQuaternaryTerminal( terminalId);
-              setShowQuaternaryDropdown(false);
-              setFocusedTerminal(taskId, terminalId);
-            }}
-            onSessionStatus={(status) => onSessionStatus(quaternaryTerminal.dbSessionId, status)}
-            onFocusRequest={() => setFocusedTerminal(taskId, quaternaryTerminal.dbSessionId)}
-            position="quaternary"
-            getStateColor={getStateColor}
-          />
-        ) : (
-          <div className="flex items-center justify-center bg-gray-900">
-            <button
-              onClick={() => {
-                // This will trigger the tab add in TerminalPanel
-                document.dispatchEvent(new CustomEvent('terminal-new-tab'));
-              }}
-              className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-            >
-              + Add Terminal
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Calculate styles based on orientation for 2-way split
-  const isHorizontal = layout.orientation === 'horizontal';
-
+  // Render controls overlay for split and quad modes
   return (
-    <div 
-      ref={containerRef}
-      className={`w-full h-full relative ${isDragging ? 'select-none' : ''}`}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: !isHorizontal ? `${layout.splitRatio}fr ${1 - layout.splitRatio}fr` : '1fr',
-        gridTemplateRows: isHorizontal ? `${layout.splitRatio}fr ${1 - layout.splitRatio}fr` : '1fr',
-        gap: '0px', // Gap handled by resizer
-        height: '100%',
-        width: '100%',
-        // Disable transitions during dragging for smoother resize
-        transition: isDragging ? 'none' : undefined
-      }}
-    >
-      {/* Primary Pane (left in vertical, top in horizontal) */}
-      {primaryTerminal ? (
-        <TerminalPane
-          ref={primaryRef}
-          terminal={primaryTerminal}
-          terminals={terminals}
-          taskId={taskId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === primaryTerminal?.dbSessionId}
-          showControls={isHorizontal} // Show controls in top pane for horizontal split
-          controlButtons={controlButtons}
-          showDropdown={showPrimaryDropdown}
-          onDropdownToggle={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
-          onTerminalSelect={(terminalId) => {
-            setPrimaryTerminal( terminalId);
-            setShowPrimaryDropdown(false);
-            setFocusedTerminal(taskId, terminalId);
-          }}
-          onSessionStatus={(status) => primaryTerminal && onSessionStatus(primaryTerminal.dbSessionId, status)}
-          onFocusRequest={() => primaryTerminal && setFocusedTerminal(taskId, primaryTerminal.dbSessionId)}
-          onSwap={() => swapPanes()}
-          position="primary"
-          getStateColor={getStateColor}
-        />
-      ) : (
-        <div className="flex items-center justify-center bg-gray-900">
-          <button
-            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
-          >
-            + Add Terminal
-          </button>
-        </div>
+    <div className="absolute inset-0 pointer-events-none">
+      {/* Quad View Controls */}
+      {layout.mode === 'split-4' && (
+        <>
+          {/* Terminal selection dropdowns */}
+          <div className="pointer-events-auto">
+            {/* Primary (top-left) dropdown */}
+            <div className="absolute top-0 left-0 w-1/2 h-1/2">
+              {renderTerminalDropdown(
+                primaryTerminal,
+                showPrimaryDropdown,
+                () => setShowPrimaryDropdown(!showPrimaryDropdown),
+                (terminalId) => {
+                  setPrimaryTerminal(taskId, terminalId);
+                  setShowPrimaryDropdown(false);
+                },
+                'primary'
+              )}
+            </div>
+
+            {/* Secondary (top-right) dropdown with control buttons */}
+            <div className="absolute top-0 right-0 w-1/2 h-1/2">
+              {renderTerminalDropdown(
+                secondaryTerminal,
+                showSecondaryDropdown,
+                () => setShowSecondaryDropdown(!showSecondaryDropdown),
+                (terminalId) => {
+                  setSecondaryTerminal(taskId, terminalId);
+                  setShowSecondaryDropdown(false);
+                },
+                'secondary'
+              )}
+              {controlButtons && (
+                <div className="absolute top-2 right-2">
+                  {controlButtons}
+                </div>
+              )}
+            </div>
+
+            {/* Tertiary (bottom-left) dropdown */}
+            <div className="absolute bottom-0 left-0 w-1/2 h-1/2">
+              {renderTerminalDropdown(
+                tertiaryTerminal,
+                showTertiaryDropdown,
+                () => setShowTertiaryDropdown(!showTertiaryDropdown),
+                (terminalId) => {
+                  setTertiaryTerminal(taskId, terminalId);
+                  setShowTertiaryDropdown(false);
+                },
+                'tertiary'
+              )}
+            </div>
+
+            {/* Quaternary (bottom-right) dropdown */}
+            <div className="absolute bottom-0 right-0 w-1/2 h-1/2">
+              {renderTerminalDropdown(
+                quaternaryTerminal,
+                showQuaternaryDropdown,
+                () => setShowQuaternaryDropdown(!showQuaternaryDropdown),
+                (terminalId) => {
+                  setQuaternaryTerminal(taskId, terminalId);
+                  setShowQuaternaryDropdown(false);
+                },
+                'quaternary'
+              )}
+            </div>
+          </div>
+
+          {/* Grid dividers */}
+          <div className="pointer-events-auto">
+            <div className="absolute top-0 left-1/2 w-px h-full bg-gray-700 -translate-x-1/2" />
+            <div className="absolute left-0 top-1/2 w-full h-px bg-gray-700 -translate-y-1/2" />
+          </div>
+        </>
       )}
 
-      {/* Resizer - only show when both terminals are present */}
-      {primaryTerminal && secondaryTerminal && (
-        <div
-          ref={resizerRef}
-          className={`
-            absolute ${!isHorizontal ? 'cursor-col-resize' : 'cursor-row-resize'}
-            ${isDragging ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/50'}
-            transition-colors z-10
-          `}
-          style={{
-            ...(!isHorizontal ? {
-              left: `calc(${layout.splitRatio * 100}% - 2px)`,
+      {/* Split View Controls */}
+      {layout.mode === 'split' && (
+        <>
+          <div 
+            ref={containerRef}
+            className="absolute inset-0"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: layout.orientation === 'vertical' ? `${layout.splitRatio}% ${100 - layout.splitRatio}%` : '1fr',
+              gridTemplateRows: layout.orientation === 'horizontal' ? `${layout.splitRatio}% ${100 - layout.splitRatio}%` : '1fr',
+            }}
+          >
+            {/* Primary pane controls */}
+            <div className="relative pointer-events-auto">
+              {renderTerminalDropdown(
+                primaryTerminal,
+                showPrimaryDropdown,
+                () => setShowPrimaryDropdown(!showPrimaryDropdown),
+                (terminalId) => {
+                  setPrimaryTerminal(taskId, terminalId);
+                  setShowPrimaryDropdown(false);
+                },
+                'primary'
+              )}
+            </div>
+
+            {/* Secondary pane controls */}
+            <div className="relative pointer-events-auto">
+              {renderTerminalDropdown(
+                secondaryTerminal,
+                showSecondaryDropdown,
+                () => setShowSecondaryDropdown(!showSecondaryDropdown),
+                (terminalId) => {
+                  setSecondaryTerminal(taskId, terminalId);
+                  setShowSecondaryDropdown(false);
+                },
+                'secondary'
+              )}
+              {controlButtons && (
+                <div className="absolute top-2 right-2">
+                  {controlButtons}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Resizer */}
+          <div
+            ref={resizerRef}
+            className={`absolute bg-gray-700 hover:bg-blue-500 transition-colors cursor-${layout.orientation === 'vertical' ? 'col' : 'row'}-resize pointer-events-auto group`}
+            style={layout.orientation === 'vertical' ? {
+              left: `${layout.splitRatio}%`,
               top: 0,
-              width: '4px',
-              height: '100%'
+              bottom: 0,
+              width: '1px',
+              transform: 'translateX(-50%)',
             } : {
-              top: `calc(${layout.splitRatio * 100}% - 2px)`,
+              top: `${layout.splitRatio}%`,
               left: 0,
-              height: '4px', 
-              width: '100%'
-            })
-          }}
-          onMouseDown={handleMouseDown}
-          onDoubleClick={handleDoubleClick}
-          title="Drag to resize, double-click to reset to 50/50"
-        />
-      )}
-
-      {/* Secondary Pane (right in vertical, bottom in horizontal) */}
-      {secondaryTerminal ? (
-        <TerminalPane
-          ref={secondaryRef}
-          terminal={secondaryTerminal}
-          terminals={terminals}
-          taskId={taskId}
-          worktreePath={worktreePath}
-          isVisible={isVisible}
-          hasFocus={focusedTerminalId === secondaryTerminal?.dbSessionId}
-          showControls={!isHorizontal} // Show controls in right pane for vertical split
-          controlButtons={controlButtons}
-          showDropdown={showSecondaryDropdown}
-          onDropdownToggle={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
-          onTerminalSelect={(terminalId) => {
-            setSecondaryTerminal( terminalId);
-            setShowSecondaryDropdown(false);
-            setFocusedTerminal(taskId, terminalId);
-          }}
-          onSessionStatus={(status) => secondaryTerminal && onSessionStatus(secondaryTerminal.dbSessionId, status)}
-          onFocusRequest={() => secondaryTerminal && setFocusedTerminal(taskId, secondaryTerminal.dbSessionId)}
-          onSwap={() => swapPanes()}
-          position="secondary"
-          getStateColor={getStateColor}
-        />
-      ) : (
-        <div className="flex items-center justify-center bg-gray-900">
-          <button
-            onClick={() => document.dispatchEvent(new CustomEvent('terminal-new-tab'))}
-            className="text-gray-400 hover:text-gray-200 px-4 py-2 border border-gray-600 rounded hover:border-gray-400 transition-colors"
+              right: 0,
+              height: '1px',
+              transform: 'translateY(-50%)',
+            }}
+            onMouseDown={handleMouseDown}
+            onDoubleClick={handleDoubleClick}
           >
-            + Add Terminal
-          </button>
-        </div>
+            {/* Swap button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSwapPanes();
+              }}
+              className={`absolute ${
+                layout.orientation === 'vertical' 
+                  ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' 
+                  : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
+              } opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 hover:bg-blue-600 text-white p-1 rounded`}
+              title="Swap panes"
+            >
+              <ArrowLeftRight className="w-3 h-3" />
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

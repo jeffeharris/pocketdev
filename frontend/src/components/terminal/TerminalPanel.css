@@ -10,7 +10,7 @@
   position: relative;
 }
 
-.terminals-container.mode-tab .terminal {
+.terminals-container.mode-tab .terminal-wrapper {
   position: absolute !important;
   top: 0;
   left: 0;
@@ -22,6 +22,8 @@
 .terminals-container.mode-split {
   display: grid;
   gap: 1px;
+  width: 100%;
+  height: 100%;
 }
 
 .terminals-container.mode-split.orientation-vertical {
@@ -45,30 +47,55 @@
     "primary secondary"
     "tertiary quaternary";
   gap: 1px;
+  width: 100%;
+  height: 100%;
 }
 
-/* Terminal positioning */
-.terminal-primary { grid-area: primary; }
-.terminal-secondary { grid-area: secondary; }
-.terminal-tertiary { grid-area: tertiary; }
-.terminal-quaternary { grid-area: quaternary; }
+/* Terminal positioning in grid */
+.terminal-wrapper.terminal-primary { 
+  grid-area: primary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-secondary { 
+  grid-area: secondary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-tertiary { 
+  grid-area: tertiary;
+  position: relative !important;
+}
+.terminal-wrapper.terminal-quaternary { 
+  grid-area: quaternary;
+  position: relative !important;
+}
 
 /* Hidden terminals - keep mounted but off-screen */
-.terminal-hidden {
+.terminal-wrapper.terminal-hidden {
   position: absolute !important;
   left: -9999px !important;
-  pointer-events: none;
+  top: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
 }
 
-/* Terminal wrapper for proper sizing */
+/* Terminal wrapper base styles */
 .terminal-wrapper {
   width: 100%;
   height: 100%;
-  position: relative;
   overflow: hidden;
+  background: #0d1117;
 }
 
-/* Tab mode specific - ensure only visible terminal is interactive */
-.terminals-container.mode-tab .terminal-wrapper[style*="display: none"] {
-  pointer-events: none;
+/* Ensure DirectTerminal fills its container */
+.terminal-wrapper > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* Hidden terminals should not be visible or interactive */
+.terminal-wrapper[style*="display: none"] {
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
