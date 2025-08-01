@@ -1,0 +1,74 @@
+.terminals-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #1f2937;
+}
+
+/* Tab mode - stack all terminals */
+.terminals-container.mode-tab {
+  position: relative;
+}
+
+.terminals-container.mode-tab .terminal {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Split mode - 2x1 grid */
+.terminals-container.mode-split {
+  display: grid;
+  gap: 1px;
+}
+
+.terminals-container.mode-split.orientation-vertical {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "primary secondary";
+}
+
+.terminals-container.mode-split.orientation-horizontal {
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 
+    "primary"
+    "secondary";
+}
+
+/* Quad mode - 2x2 grid */
+.terminals-container.mode-split-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 
+    "primary secondary"
+    "tertiary quaternary";
+  gap: 1px;
+}
+
+/* Terminal positioning */
+.terminal-primary { grid-area: primary; }
+.terminal-secondary { grid-area: secondary; }
+.terminal-tertiary { grid-area: tertiary; }
+.terminal-quaternary { grid-area: quaternary; }
+
+/* Hidden terminals - keep mounted but off-screen */
+.terminal-hidden {
+  position: absolute !important;
+  left: -9999px !important;
+  pointer-events: none;
+}
+
+/* Terminal wrapper for proper sizing */
+.terminal-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Tab mode specific - ensure only visible terminal is interactive */
+.terminals-container.mode-tab .terminal-wrapper[style*="display: none"] {
+  pointer-events: none;
+}
