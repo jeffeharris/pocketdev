@@ -1,42 +1,64 @@
 # Bug Prioritization & Status
 
 ## Overview
-This document tracks the prioritization and status of all filed bugs in the PocketDev project. A clear pattern has emerged: **massive files with mixed responsibilities** throughout the codebase, indicating a systemic architectural issue.
+This document tracks the prioritization and status of all filed bugs in the PocketDev project. A clear pattern has emerged: **shallow modules with complex interfaces** throughout the codebase, violating Ousterhout's principles. File size is a symptom - the real disease is poor interface design and missing architectural boundaries.
 
 ## Prioritization Table
 
 | Bug ID | Title | Type | Lines | Priority | Impact | Status | Target Date |
 |--------|-------|------|-------|----------|---------|---------|-------------|
 | BUG-003 | Terminal sessions not loading on task open | Functional | N/A | **Critical** | Blocks core functionality | Open | 2025-08-05 |
-| BUG-001 | AI state monitoring stuck state | Functional | N/A | **High** | Poor UX, unreliable state | Open | 2025-08-08 |
-| BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-10 |
-| BUG-010 | task.controller.js needs modularization | Technical Debt | 965 | **High** | Core API maintainability | Open | 2025-08-15 |
-| BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | All git operations affected | Open | 2025-08-20 |
-| BUG-011 | api.ts needs domain splitting | Technical Debt | 848 | **High** | API layer affects all features | Open | 2025-08-22 |
-| BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-25 |
-| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-08-30 |
-| BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-05 |
-| BUG-004 | project.controller.js needs modularization | Technical Debt | 1,117 | **Medium** | Less frequently modified | Open | 2025-09-10 |
-| BUG-008 | Refactor MergeWorkflowPrototype | Technical Debt | 1,173 | **Low** | Prototype cleanup | Open | 2025-09-15 |
+| BUG-012 | Extract Migration System from server.js | Architecture | 400 | **Critical** | Blocks proper initialization | Open | 2025-08-06 |
+| BUG-013 | Implement Service Layer Architecture | Architecture | N/A | **Critical** | Missing architectural layer | Open | 2025-08-07 |
+| BUG-011 | api.ts needs domain splitting (44 methods!) | Technical Debt | 848 | **Critical** | Worst interface complexity | Open | 2025-08-08 |
+| BUG-001 | AI state monitoring stuck state | Functional | N/A | **High** | Poor UX, unreliable state | Open | 2025-08-10 |
+| BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-12 |
+| BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | Open | 2025-08-14 |
+| BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087 | **High** | Complex god component | Open | 2025-08-16 |
+| BUG-010 | task.controller.js needs modularization | Technical Debt | 965 | **High** | 17 methods mixing concerns | Open | 2025-08-18 |
+| BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | Open | 2025-08-20 |
+| BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-22 |
+| BUG-017 | Consolidate Session Identity Abstraction | Technical Debt | N/A | **High** | Leaky abstraction in 21+ files | Open | 2025-08-24 |
+| BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | Open | 2025-08-26 |
+| BUG-019 | WebSocket Event System Needs Deep Module | Technical Debt | N/A | **High** | 10 methods for 1 operation | Open | 2025-08-28 |
+| BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | Open | 2025-08-30 |
+| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-09-01 |
+| BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
+| BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | Open | 2025-09-05 |
+| BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
+| BUG-016 | Remove Mock Code from Production | Code Quality | N/A | **Medium** | Mixed concerns in api.ts | Open | 2025-09-10 |
+| BUG-004 | project.controller.js needs modularization | Technical Debt | 1,117 | **Low** | Less critical than others | Open | 2025-09-05 |
+| BUG-008 | Refactor MergeWorkflowPrototype | Technical Debt | 1,173 | **Low** | Prototype cleanup | Open | 2025-09-10 |
 
 ## Priority Rationale
 
 ### Critical (Fix Immediately)
 - **BUG-003**: Users cannot open terminals = cannot work. This is a showstopper.
+- **BUG-012**: Migration system in server.js blocks proper architecture
+- **BUG-013**: Missing service layer causes all other modularization issues
+- **BUG-011**: api.ts has 44 public methods - worst interface in codebase
 
 ### High (Fix Soon)
 - **BUG-001 & BUG-002**: AI state issues cause frustration and wasted resources
-- **BUG-010**: task.controller.js is touched by every task operation (965 lines)
-- **BUG-007**: git.service.js affects every git operation in the system (985 lines)
-- **BUG-011**: api.ts is the frontend's gateway to all backend operations (848 lines)
-- **BUG-009**: Sidebar is the main UI component users interact with constantly (903 lines)
+- **BUG-014**: app.locals global state makes testing/modularity difficult
+- **BUG-015**: TerminalPanel is a god component with 20+ state variables
+- **BUG-010**: task.controller.js has 17 public methods mixing multiple concerns
+- **BUG-007**: git.service.js has 32+ public methods instead of 4-5 deep operations
+- **BUG-009**: Sidebar has 188-line if/else chain and mixed abstractions
+- **BUG-017**: Session ID proliferation creates confusion in 21+ files
+- **BUG-018**: Terminal state aggregation duplicated across components
+- **BUG-019**: WebSocket events has 10 methods doing the same thing
+- **BUG-020**: Terminal store exposes implementation with 30+ methods
 
 ### Medium (Plan to Fix)
 - **BUG-005**: DiffViewerModal is huge (1,207 lines) but contained to one feature
 - **BUG-006**: PrototypeMergeConflict needs simplification before production use
-- **BUG-004**: project.controller.js is large (1,117 lines) but more stable/less modified
+- **BUG-016**: Mock code mixed with production violates separation of concerns
+- **BUG-021**: Database models query each other's tables (coupling)
+- **BUG-022**: useTaskStatus hook doing too many things
 
 ### Low (Nice to Have)
+- **BUG-004**: project.controller.js (1,117 lines) less critical after service layer
 - **BUG-008**: MergeWorkflowPrototype is just prototype cleanup, not production code
 
 ## Overarching Patterns Identified
@@ -70,27 +92,42 @@ Every large file exhibits the same problems:
 ## Root Cause Analysis
 
 The codebase lacks:
-1. **File size limits** - No linting rules to prevent growth
-2. **Clear architecture guidelines** - Developers unsure where code belongs
-3. **Code review standards** - Large files get merged without splitting
-4. **Refactoring culture** - Features added without cleanup
+1. **Deep module design** - Interfaces are as complex as implementations
+2. **Service layer architecture** - Controllers doing business logic
+3. **Proper abstractions** - Information leaking across boundaries
+4. **Interface complexity limits** - No guidelines on module depth
+5. **Dependency injection** - Global state via app.locals
+
+### Ousterhout's Key Insight
+The fundamental problem is **shallow modules everywhere**. Nearly every major component exposes an interface that's almost as complex as its implementation. This creates massive cognitive load because developers must understand everything to use anything.
+
+**Examples of Interface Complexity:**
+- api.ts: 44 public methods (should be ~8)
+- git.service.js: 32+ methods (should be 4-5)
+- terminalStore: 30+ methods (should be ~10)
+- WebSocket events: 10 methods (should be 1)
+
+The solution is creating **deep modules** - simple interfaces that hide significant complexity.
 
 ## Recommended Action Plan
 
-### Week 1 (Aug 1-7): Emergency Fixes
+### Week 1 (Aug 1-7): Architecture & Emergency Fixes
 1. Fix BUG-003 (terminal sessions) - critical functionality
-2. Establish coding standards to prevent new bloat
-3. Add ESLint rule: warn on files > 400 lines
+2. Design service layer architecture (BUG-013)
+3. Extract migration system (BUG-012)
+4. Start api.ts decomposition (BUG-011)
 
 ### Week 2 (Aug 8-14): Core Stability
 1. Fix BUG-001 & BUG-002 (AI state issues)
-2. Begin BUG-010 (task.controller.js) - highest impact backend file
+2. Implement dependency injection (BUG-014)
+3. Begin service layer implementation
+4. Continue api.ts domain splitting
 
-### Week 3-4 (Aug 15-28): Architecture Refactoring
-1. Complete BUG-010 and establish controller patterns
-2. Tackle BUG-007 (git.service.js) - core service layer
-3. Refactor BUG-011 (api.ts) - critical frontend infrastructure
-4. Start BUG-009 (Sidebar) - improve UI performance
+### Week 3-4 (Aug 15-28): Deep Module Creation
+1. Extract TerminalPanel components (BUG-015)
+2. Refactor task.controller.js with service layer (BUG-010)
+3. Create deep git service modules (BUG-007)
+4. Decompose Sidebar component (BUG-009)
 
 ### Month 2 (September): Systematic Cleanup
 1. Apply established patterns to remaining files
@@ -98,11 +135,13 @@ The codebase lacks:
 3. Clean up technical debt systematically
 
 ## Success Metrics
+- **Interface complexity**: No module with >10 public methods (currently api.ts has 44)
+- **Module depth**: Average 5:1 implementation-to-interface ratio
 - **File size**: No production file over 400 lines (currently 8 over 848)
-- **Method size**: No method over 50 lines (currently multiple over 100)
-- **Test coverage**: Increase by 30% (smaller files easier to test)
-- **Performance**: 25% reduction in UI re-renders
-- **Developer velocity**: 40% faster feature development
+- **Service layer**: 100% of business logic moved from controllers
+- **Dependency injection**: Zero uses of app.locals
+- **Test coverage**: Increase by 40% (deep modules easier to test)
+- **Developer velocity**: 50% faster feature development
 
 ## Review Schedule
 - **Daily**: Check progress on critical bugs
@@ -120,5 +159,27 @@ The codebase lacks:
 ---
 
 *Created: 2025-08-01*  
-*Last Updated: 2025-08-01*  
+*Last Updated: 2025-08-01 (Comprehensive Ousterhout analysis complete)*
+
+## Architectural Guidance
+
+### What Makes a Deep Module
+1. **Simple interface**: 5-10 public methods maximum
+2. **Hidden complexity**: Implementation significantly more complex than interface
+3. **Clear abstraction**: Users don't need to know how it works
+4. **Minimal cognitive load**: Can understand interface in <1 minute
+
+### Red Flags for Shallow Modules
+- More than 10 public methods
+- Exposing data structures (Maps, arrays)
+- Multiple responsibilities in one module
+- Users need implementation knowledge
+- Lots of configuration options
+
+### Refactoring Priority
+1. **Fix interfaces first**: Reduce public methods before splitting files
+2. **Hide implementations**: Never expose data structures
+3. **Single responsibility**: One module, one job
+4. **Push complexity down**: Common cases should be simple
+5. **Design twice**: The second design is usually better  
 *Next Review: 2025-08-08*

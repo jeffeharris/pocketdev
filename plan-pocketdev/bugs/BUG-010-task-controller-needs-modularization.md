@@ -1,7 +1,7 @@
 # BUG-010: task.controller.js needs modularization
 
 ## Issue
-The `task.controller.js` has grown to 965 lines and violates the single responsibility principle. Despite the comment saying "Git, PR, and Container operations are handled by separate controllers", it still contains extensive git and merge operations.
+The `task.controller.js` has grown to 965 lines with 17 public methods mixing git operations, sessions, websockets, and CRUD operations. This creates a shallow module where the interface is complex and implementation details leak throughout. The controller should be a thin HTTP layer but instead contains extensive business logic.
 
 ## Current Problems
 1. **God controller anti-pattern**: Handles CRUD, git ops, worktrees, sessions, layouts, and merges

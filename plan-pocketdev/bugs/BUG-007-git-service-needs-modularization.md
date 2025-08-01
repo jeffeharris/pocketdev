@@ -1,7 +1,7 @@
 # BUG-007: git.service.js needs modularization
 
 ## Issue
-The `git.service.js` file has grown to 985 lines, mixing multiple paradigms and responsibilities. It exports both standalone functions AND a GitService class that wraps those same functions, creating confusion and maintenance burden.
+The `git.service.js` file has grown to 985 lines with 32+ public methods in the GitService class, creating a shallow module that violates Ousterhout's deep module principle. The interface is far too complex - it should expose 4-5 high-level operations instead of dozens of low-level git commands.
 
 ## Current Problems
 1. **Mixed paradigms**: Exports both standalone functions and a class that wraps the same functions
@@ -139,7 +139,7 @@ export class GitService {
 - [ ] Total line reduction of ~28% through DRY principles
 
 ## Priority
-High - Core service used throughout the application, affects all git operations
+High - Not just about file size, but about interface complexity. 32+ public methods should be 4-5 deep operations like `synchronize()`, `analyzeChanges()`, `performCommit()`. This shallow interface forces every caller to understand git internals.
 
 ## Estimated Impact
 - Current: 985 lines in one file

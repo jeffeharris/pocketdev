@@ -1,7 +1,7 @@
 # BUG-011: api.ts needs domain splitting
 
 ## Issue
-The `api.ts` file is 848 lines with a single `ApiService` class containing 44 methods across 7 different domains. It mixes production code with mocking logic and has inconsistent patterns throughout.
+The `api.ts` file is 848 lines with a single `ApiService` class containing 44 methods across 7 different domains. This creates an extremely shallow module with the worst interface-to-implementation ratio in the codebase - the interface (44 public methods) is nearly as complex as the implementation itself, violating Ousterhout's deep module principle.
 
 ## Current Problems
 1. **God object pattern**: Single class handles projects, tasks, git, containers, settings, terminals, and images
@@ -188,7 +188,7 @@ export const api = {
 - [ ] No `any` types in public APIs
 
 ## Priority
-High - API layer is critical infrastructure affecting all features
+**Critical** - This has the worst interface complexity in the entire codebase (44 public methods). Every frontend operation goes through this shallow module, making it a bottleneck for development and testing.
 
 ## Estimated Impact
 - **Code reduction**: ~2% (mock extraction)
