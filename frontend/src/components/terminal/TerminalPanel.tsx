@@ -646,15 +646,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
               if (canShowVertical) {
                 updateLayout( { mode: 'split', orientation: 'vertical' });
-                // Ensure focus remains on the active terminal
-                if (activeTabId && !focusedTerminalId) {
-                  setFocusedTerminal(task.id, activeTabId);
-                }
               } else if (canShowHorizontal) {
                 updateLayout( { mode: 'split', orientation: 'horizontal' });
-                if (activeTabId && !focusedTerminalId) {
-                  setFocusedTerminal(task.id, activeTabId);
-                }
               }
               // If neither split view is possible, stay in tab mode
             } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
@@ -917,17 +910,17 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     layout: SplitLayoutConfig, 
     activeTabId: string
   ): boolean => {
+    const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
+    
     switch (layout.mode) {
       case 'tab':
         return terminal.dbSessionId === activeTabId;
       case 'split':
-        return terminal.dbSessionId === layout.primaryTerminalId ||
-               terminal.dbSessionId === layout.secondaryTerminalId;
+        // Show first 2 terminals
+        return terminalIndex >= 0 && terminalIndex < 2;
       case 'split-4':
-        return terminal.dbSessionId === layout.primaryTerminalId ||
-               terminal.dbSessionId === layout.secondaryTerminalId ||
-               terminal.dbSessionId === layout.tertiaryTerminalId ||
-               terminal.dbSessionId === layout.quaternaryTerminalId;
+        // Show first 4 terminals
+        return terminalIndex >= 0 && terminalIndex < 4;
       default:
         return false;
     }
@@ -940,11 +933,18 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   ): string => {
     if (layout.mode === 'tab') return 'terminal terminal-tab';
     
-    // Assign grid positions for split modes
-    if (terminal.dbSessionId === layout.primaryTerminalId) return 'terminal terminal-primary';
-    if (terminal.dbSessionId === layout.secondaryTerminalId) return 'terminal terminal-secondary';
-    if (terminal.dbSessionId === layout.tertiaryTerminalId) return 'terminal terminal-tertiary';
-    if (terminal.dbSessionId === layout.quaternaryTerminalId) return 'terminal terminal-quaternary';
+    const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
+    
+    // Assign grid positions based on terminal order
+    if (layout.mode === 'split') {
+      if (terminalIndex === 0) return 'terminal terminal-primary';
+      if (terminalIndex === 1) return 'terminal terminal-secondary';
+    } else if (layout.mode === 'split-4') {
+      if (terminalIndex === 0) return 'terminal terminal-primary';
+      if (terminalIndex === 1) return 'terminal terminal-secondary';
+      if (terminalIndex === 2) return 'terminal terminal-tertiary';
+      if (terminalIndex === 3) return 'terminal terminal-quaternary';
+    }
     
     return 'terminal terminal-hidden';
   };
