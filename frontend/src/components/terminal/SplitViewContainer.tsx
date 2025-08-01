@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { DirectTerminalHandle } from './DirectTerminal';
 import { TerminalPane } from './TerminalPane';
-import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout } from '../../stores/splitViewStore';
+import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout, useCurrentTaskId } from '../../stores/splitViewStore';
 import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
 import type { TerminalSession } from '../../types/task';
 import type { Task } from '../../types/task';
@@ -31,6 +31,7 @@ export function SplitViewContainer({
 }: SplitViewContainerProps) {
   const layout = useSplitLayout();
   const layoutState = useLayoutState();
+  const currentTaskId = useCurrentTaskId();
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
@@ -137,8 +138,8 @@ export function SplitViewContainer({
   
   // Auto-assignment: assign available terminals when switching to split mode or terminals change
   useEffect(() => {
-    // Only run when in split mode and layout is loaded
-    if (layoutState !== 'loaded' || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+    // Only run when in split mode and layout is loaded and we're viewing the correct task
+    if (layoutState !== 'loaded' || currentTaskId !== taskId || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
       return;
     }
     
@@ -159,10 +160,11 @@ export function SplitViewContainer({
     }
     
     // Check if we need to do any assignments
+    // Important: Only assign if we have enough unique terminals
     const needsPrimaryAssignment = terminalIds[0] && !layout.primaryTerminalId;
-    const needsSecondaryAssignment = terminalIds[1] && !layout.secondaryTerminalId && (layout.mode === 'split' || layout.mode === 'split-4');
-    const needsTertiaryAssignment = terminalIds[2] && !layout.tertiaryTerminalId && layout.mode === 'split-4';
-    const needsQuaternaryAssignment = terminalIds[3] && !layout.quaternaryTerminalId && layout.mode === 'split-4';
+    const needsSecondaryAssignment = terminalIds.length >= 2 && terminalIds[1] && !layout.secondaryTerminalId && (layout.mode === 'split' || layout.mode === 'split-4');
+    const needsTertiaryAssignment = terminalIds.length >= 3 && terminalIds[2] && !layout.tertiaryTerminalId && layout.mode === 'split-4';
+    const needsQuaternaryAssignment = terminalIds.length >= 4 && terminalIds[3] && !layout.quaternaryTerminalId && layout.mode === 'split-4';
     
     // Only update if something actually needs assignment
     if (needsPrimaryAssignment) {
@@ -197,6 +199,8 @@ export function SplitViewContainer({
     layout.mode,
     terminals.length, // Use length instead of full array to avoid unnecessary rerenders
     layoutState,
+    currentTaskId,
+    taskId,
     // Include the terminal IDs to detect stale assignments
     layout.primaryTerminalId,
     layout.secondaryTerminalId,

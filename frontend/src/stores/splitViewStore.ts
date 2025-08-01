@@ -248,6 +248,10 @@ export const useLayoutState = () => {
   return useSplitViewStore(state => state.layoutState);
 };
 
+export const useCurrentTaskId = () => {
+  return useSplitViewStore(state => state.currentTaskId);
+};
+
 // Helper to save layout to backend
 export const saveLayout = async () => {
   const state = useSplitViewStore.getState();
