@@ -138,8 +138,13 @@ export function SplitViewContainer({
   
   // Auto-assignment: assign available terminals when switching to split mode or terminals change
   useEffect(() => {
-    // Only run when in split mode and layout is loaded and we're viewing the correct task
-    if (layoutState !== 'loaded' || currentTaskId !== taskId || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+    // Only run when in split mode and layout is loaded
+    if (layoutState !== 'loaded' || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+      return;
+    }
+    
+    // Skip if we're not viewing the current task (prevents loops during task switches)
+    if (currentTaskId && currentTaskId !== taskId) {
       return;
     }
     
@@ -166,21 +171,32 @@ export function SplitViewContainer({
     const needsTertiaryAssignment = terminalIds.length >= 3 && terminalIds[2] && !layout.tertiaryTerminalId && layout.mode === 'split-4';
     const needsQuaternaryAssignment = terminalIds.length >= 4 && terminalIds[3] && !layout.quaternaryTerminalId && layout.mode === 'split-4';
     
+    // Also check if we have a primary assignment but it doesn't exist in our terminals (stale)
+    const primaryIsStale = layout.primaryTerminalId && !primaryTerminal && terminalIds[0];
+    const secondaryIsStale = layout.secondaryTerminalId && !secondaryTerminal && terminalIds.length >= 2;
+    
+    // Track if we made any changes
+    let madeChanges = false;
+    
     // Only update if something actually needs assignment
-    if (needsPrimaryAssignment) {
+    if (needsPrimaryAssignment || primaryIsStale) {
       setPrimaryTerminal( terminalIds[0]);
+      madeChanges = true;
     }
     
-    if (needsSecondaryAssignment) {
+    if (needsSecondaryAssignment || secondaryIsStale) {
       setSecondaryTerminal( terminalIds[1]);
+      madeChanges = true;
     }
     
     if (layout.mode === 'split-4') {
       if (needsTertiaryAssignment) {
         setTertiaryTerminal( terminalIds[2]);
+        madeChanges = true;
       }
       if (needsQuaternaryAssignment) {
         setQuaternaryTerminal( terminalIds[3]);
+        madeChanges = true;
       }
     }
     
@@ -189,10 +205,17 @@ export function SplitViewContainer({
       // In 2-way split, clear tertiary and quaternary if set
       if (layout.tertiaryTerminalId) {
         setTertiaryTerminal( null);
+        madeChanges = true;
       }
       if (layout.quaternaryTerminalId) {
         setQuaternaryTerminal( null);
+        madeChanges = true;
       }
+    }
+    
+    // Save layout if we made any auto-assignments
+    if (madeChanges) {
+      saveLayout();
     }
   }, [
     // Only depend on mode changes and terminal list changes
@@ -279,6 +302,7 @@ export function SplitViewContainer({
   const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
   const tertiaryTerminal = terminals.find(t => t.dbSessionId === layout.tertiaryTerminalId);
   const quaternaryTerminal = terminals.find(t => t.dbSessionId === layout.quaternaryTerminalId);
+  
 
   // If in tab mode, we don't render anything here - the TerminalPanel handles it
   if (layout.mode === 'tab') {
