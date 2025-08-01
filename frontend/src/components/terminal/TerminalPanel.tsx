@@ -838,36 +838,35 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           if (!isVisible) break;
           
           if (layout.mode === 'tab') {
-              // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
-              if (canShowVertical) {
-                updateLayout( { mode: 'split', orientation: 'vertical' });
-              } else if (canShowHorizontal) {
-                updateLayout( { mode: 'split', orientation: 'horizontal' });
-              }
-              // If neither split view is possible, stay in tab mode
-            } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
-              // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
-              if (canShowHorizontal) {
-                updateLayout( { orientation: 'horizontal' });
-              } else if (canShowQuad) {
-                updateLayout( { mode: 'split-4' });
-              } else {
-                updateLayout( { mode: 'tab' });
-              }
-            } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
-              // Switch to quad view if allowed, otherwise back to tab
-              if (canShowQuad) {
-                updateLayout( { mode: 'split-4' });
-              } else {
-                updateLayout( { mode: 'tab' });
-              }
+            // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
+            if (canShowVertical) {
+              updateLayout( { mode: 'split', orientation: 'vertical' });
+            } else if (canShowHorizontal) {
+              updateLayout( { mode: 'split', orientation: 'horizontal' });
+            }
+            // If neither split view is possible, stay in tab mode
+          } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
+            // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
+            if (canShowHorizontal) {
+              updateLayout( { orientation: 'horizontal' });
+            } else if (canShowQuad) {
+              updateLayout( { mode: 'split-4' });
             } else {
-              // From quad view, always go back to tab mode
               updateLayout( { mode: 'tab' });
             }
-            // Save layout after any changes
-            saveLayout();
+          } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
+            // Switch to quad view if allowed, otherwise back to tab
+            if (canShowQuad) {
+              updateLayout( { mode: 'split-4' });
+            } else {
+              updateLayout( { mode: 'tab' });
+            }
+          } else {
+            // From quad view, always go back to tab mode
+            updateLayout( { mode: 'tab' });
           }
+          // Save layout after any changes
+          saveLayout();
           break;
         case 'terminal-toggle-fullscreen':
           // Only handle this event if this task is currently visible

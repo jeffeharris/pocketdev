@@ -37,6 +37,18 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Ensures both visual focus state (blue border) and keyboard focus are synchronized
   - Works consistently across all click areas in both 2-way split and quad view modes
 
+- **Split View Terminal Assignment**
+  - Fixed issue where terminals weren't being assigned to panes when switching to split view modes
+  - Cleared stale terminal IDs from persisted layouts that no longer exist in current session
+  - Auto-assignment now properly detects and fills empty panes with available terminals
+  - Works correctly when switching between tab, vertical split, horizontal split, and quad view modes
+
+- **Quad View Terminal Dropdown**
+  - Fixed terminal selection dropdowns not working in quad view mode
+  - Added proper state management for all four dropdown menus in quad view
+  - Terminal dropdowns now correctly show which terminals are "in use" by reading from zustand store
+  - Consistent dropdown behavior across all split view modes (2-way and quad)
+
 ### Added
 - **Quad View Mode (Split Views Phase 2)**
   - View 4 terminal sessions in a 2x2 grid layout
