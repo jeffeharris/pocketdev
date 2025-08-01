@@ -30,7 +30,8 @@ export function SplitViewContainer({
   setIsResetting
 }: SplitViewContainerProps) {
   const layout = useSplitLayout(taskId);
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
+  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes, isLayoutLoading } = useSplitViewStore();
+  const isLoading = isLayoutLoading(taskId);
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const { setFocusedTerminal } = useTerminalStore();
@@ -142,21 +143,22 @@ export function SplitViewContainer({
   
   // Persist layout changes with debounce
   useEffect(() => {
-    if (!projectId || !isLayoutInitialized) return;
+    // Don't persist if we're still loading the layout from backend
+    if (!projectId || !isLayoutInitialized || isLoading) return;
     
     const timeoutId = setTimeout(() => {
       persistLayout(taskId, projectId);
     }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [layout, taskId, projectId, isLayoutInitialized]);
+  }, [layout, taskId, projectId, isLayoutInitialized, isLoading]);
   
 
 
   // Auto-assignment: assign available terminals when switching to split mode or terminals change
   useEffect(() => {
-    // Only run when in split mode and layout is initialized
-    if (!isLayoutInitialized || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
+    // Only run when in split mode and layout is initialized and not loading
+    if (!isLayoutInitialized || isLoading || (layout.mode !== 'split' && layout.mode !== 'split-4')) {
       return;
     }
     

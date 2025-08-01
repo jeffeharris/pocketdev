@@ -21,6 +21,7 @@ interface SplitViewState {
   layouts: Map<string, SplitLayoutConfig>;
   activePanes: Map<string, 'primary' | 'secondary'>;
   resizing: boolean;
+  loadingLayouts: Set<string>; // Track which layouts are being loaded
   
   // Actions
   updateLayout: (taskId: string, config: Partial<SplitLayoutConfig>) => void;
@@ -37,6 +38,7 @@ interface SplitViewState {
   // Computed
   getLayout: (taskId: string) => SplitLayoutConfig;
   getActivePane: (taskId: string) => 'primary' | 'secondary';
+  isLayoutLoading: (taskId: string) => boolean;
 }
 
 const defaultLayout: SplitLayoutConfig = {
@@ -55,6 +57,7 @@ export const useSplitViewStore = create<SplitViewState>()(
         layouts: new Map(),
         activePanes: new Map(),
         resizing: false,
+        loadingLayouts: new Set(),
         
         updateLayout: (taskId, config) => {
           set(state => {
@@ -137,6 +140,10 @@ export const useSplitViewStore = create<SplitViewState>()(
         
         getActivePane: (taskId) => {
           return get().activePanes.get(taskId) || 'primary';
+        },
+        
+        isLayoutLoading: (taskId) => {
+          return get().loadingLayouts.has(taskId);
         }
       }))
     ),
@@ -188,6 +195,12 @@ export const persistLayout = async (taskId: string, projectId: string) => {
 
 // Helper to load layout from backend
 export const loadLayout = async (taskId: string, projectId: string) => {
+  
+  // Mark as loading
+  useSplitViewStore.setState(state => {
+    state.loadingLayouts.add(taskId);
+  });
+  
   try {
     const response = await fetch(
       `/api/projects/${projectId}/tasks/${taskId}/split-layout`
@@ -195,9 +208,17 @@ export const loadLayout = async (taskId: string, projectId: string) => {
     
     if (response.ok) {
       const layout = await response.json();
-      splitViewStore().updateLayout(taskId, layout);
+      // Use full layout replacement instead of update to ensure we get exact backend state
+      useSplitViewStore.setState(state => {
+        state.layouts.set(taskId, layout);
+      });
     }
   } catch (error) {
     console.error('Error loading split layout:', error);
+  } finally {
+    // Remove from loading set
+    useSplitViewStore.setState(state => {
+      state.loadingLayouts.delete(taskId);
+    });
   }
 };
