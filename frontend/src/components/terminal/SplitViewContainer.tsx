@@ -162,20 +162,17 @@ export function SplitViewContainer({
     showDropdown: boolean,
     onToggle: () => void,
     onSelect: (terminalId: string) => void,
-    position: 'primary' | 'secondary' | 'tertiary' | 'quaternary'
+    position: 'primary' | 'secondary' | 'tertiary' | 'quaternary',
+    excludeIds: string[] = []
   ) => {
     const getStateColor = (state?: string) => {
       switch (state) {
-        case 'idle':
-        case 'ready':
-          return 'bg-green-500';
-        case 'working':
-        case 'thinking':
-          return 'bg-yellow-500';
         case 'waiting':
-          return 'bg-blue-500';
-        case 'error':
-          return 'bg-red-500';
+          return 'bg-purple-400';
+        case 'working':
+          return 'bg-yellow-400';
+        case 'idle':
+          return 'bg-blue-400';
         default:
           return 'bg-gray-500';
       }
@@ -187,16 +184,19 @@ export function SplitViewContainer({
           onClick={onToggle}
           className="flex items-center gap-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-sm text-gray-300 hover:text-white transition-colors"
         >
-          <div className={`w-2 h-2 rounded-full ${getStateColor(terminal?.state)}`} />
+          <div className={`w-2 h-2 rounded-full ${getStateColor(terminal?.aiState)}`} />
           <span className="max-w-[150px] truncate">
-            {terminal ? terminal.name : 'Select Terminal'}
+            {terminal ? terminal.tabName : `Select ${position} Terminal`}
           </span>
           <ChevronDown className="w-3 h-3" />
         </button>
         
         {showDropdown && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded shadow-lg overflow-hidden">
-            {terminals.map(t => (
+            {terminals.filter(t => 
+              // Always show the currently selected terminal, or terminals not assigned elsewhere
+              t.dbSessionId === terminal?.dbSessionId || !excludeIds.includes(t.dbSessionId)
+            ).map(t => (
               <button
                 key={t.dbSessionId}
                 onClick={() => {
@@ -207,8 +207,8 @@ export function SplitViewContainer({
                   t.dbSessionId === terminal?.dbSessionId ? 'bg-gray-700' : ''
                 }`}
               >
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStateColor(t.state)}`} />
-                <span className="text-sm text-gray-300 truncate">{t.name}</span>
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStateColor(t.aiState)}`} />
+                <span className="text-sm text-gray-300 truncate">{t.tabName}</span>
               </button>
             ))}
           </div>
@@ -240,7 +240,9 @@ export function SplitViewContainer({
                   setPrimaryTerminal(taskId, terminalId);
                   setShowPrimaryDropdown(false);
                 },
-                'primary'
+                'primary',
+                // Exclude other assigned terminals
+                [secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
               )}
             </div>
 
@@ -254,7 +256,9 @@ export function SplitViewContainer({
                   setSecondaryTerminal(taskId, terminalId);
                   setShowSecondaryDropdown(false);
                 },
-                'secondary'
+                'secondary',
+                // Exclude other assigned terminals
+                [primaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
               )}
               {controlButtons && (
                 <div className="absolute top-2 right-2">
@@ -273,7 +277,9 @@ export function SplitViewContainer({
                   setTertiaryTerminal(taskId, terminalId);
                   setShowTertiaryDropdown(false);
                 },
-                'tertiary'
+                'tertiary',
+                // Exclude other assigned terminals
+                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
               )}
             </div>
 
@@ -287,7 +293,9 @@ export function SplitViewContainer({
                   setQuaternaryTerminal(taskId, terminalId);
                   setShowQuaternaryDropdown(false);
                 },
-                'quaternary'
+                'quaternary',
+                // Exclude other assigned terminals
+                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId].filter(Boolean) as string[]
               )}
             </div>
           </div>
@@ -315,7 +323,9 @@ export function SplitViewContainer({
                   setPrimaryTerminal(taskId, terminalId);
                   setShowPrimaryDropdown(false);
                 },
-                'primary'
+                'primary',
+                // Exclude the secondary terminal from primary dropdown
+                secondaryTerminal ? [secondaryTerminal.dbSessionId] : []
               )}
             </div>
             
@@ -333,7 +343,9 @@ export function SplitViewContainer({
                   setSecondaryTerminal(taskId, terminalId);
                   setShowSecondaryDropdown(false);
                 },
-                'secondary'
+                'secondary',
+                // Exclude the primary terminal from secondary dropdown
+                primaryTerminal ? [primaryTerminal.dbSessionId] : []
               )}
             </div>
             
