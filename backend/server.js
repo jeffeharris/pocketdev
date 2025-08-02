@@ -23,7 +23,9 @@ import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
 import { ServiceRegistry, serviceMiddleware } from './services/index.js';
 import { GitStatusService } from './services/git-status.service.js';
+import GitOperationService from './services/git-operation.service.js';
 import { TaskService } from './services/task.service.js';
+import { ProjectService } from './services/project.service.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -139,7 +141,9 @@ async function initializeDatabase() {
   
   // Register services
   serviceRegistry.register('GitStatusService', GitStatusService, ['models', 'githubTokenService']);
+  serviceRegistry.register('GitOperationService', GitOperationService, ['models', 'githubTokenService']);
   serviceRegistry.register('TaskService', TaskService, ['models', 'githubTokenService']);
+  serviceRegistry.register('ProjectService', ProjectService, ['models', 'githubTokenService']);
   
   // Set app.locals reference for transitional dependencies
   serviceRegistry.setAppLocals(app.locals);

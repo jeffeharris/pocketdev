@@ -1,6 +1,5 @@
 import path from 'path';
 import { promises as fs } from 'fs';
-import crypto from 'crypto';
 import config from '../config/index.js';
 import * as gitService from '../services/git.service.js';
 
@@ -25,168 +24,18 @@ export async function listProjects(req, res, next) {
 export async function createProject(req, res, next) {
   try {
     const { repoUrl, branch = 'main', projectName } = req.body;
-    const models = req.app.locals.models;
-    const github = req.app.locals.github;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
     if (!repoUrl) {
       return res.status(400).json({ error: 'Repository URL is required' });
     }
     
-    // Generate project ID and paths
-    const projectId = crypto.randomBytes(8).toString('hex');
-    const projectPath = path.join(config.projectsDir, projectId);
-    
-    // Extract project name from URL if not provided
-    const finalProjectName = projectName || repoUrl.split('/').pop().replace('.git', '');
-    
-    // Clone repository using token from middleware
-    console.log(`Cloning ${repoUrl} to ${projectPath}...`);
-    const cloneResult = await gitService.executeGitCommand(
-      config.projectsDir,
-      `git clone ${repoUrl} ${projectId}`,
+    const result = await projectService.createProject(
+      { repoUrl, branch, projectName },
       req.githubToken
     );
     
-    if (!cloneResult.success) {
-      return res.status(500).json({ error: `Failed to clone repository: ${cloneResult.error}` });
-    }
-    
-    // Configure git credentials
-    await gitService.configureGitCredentials(projectPath, req.githubToken);
-    
-    // Checkout branch if different from default
-    if (branch && branch !== 'main') {
-      const checkoutResult = await gitService.executeGitCommand(
-        projectPath,
-        `git checkout ${branch}`,
-        req.githubToken
-      );
-      
-      if (!checkoutResult.success) {
-        // Clean up on failure
-        await fs.rm(projectPath, { recursive: true, force: true });
-        return res.status(500).json({ error: `Failed to checkout branch ${branch}: ${checkoutResult.error}` });
-      }
-    }
-    
-    // Save project to database
-    const project = await models.projects.create({
-      id: projectId,
-      name: finalProjectName,
-      repoUrl: repoUrl,
-      baseBranch: branch,
-      localPath: projectPath
-    });
-    
-    // Create default PLANNING.md in .pocketdev directory using GitHub API
-    try {
-      const planningTemplate = `# Project Planning: ${finalProjectName}
-
-## 🎯 Project Overview
-${finalProjectName} - Created on ${new Date().toLocaleDateString()}
-
-## 🐛 Bugs & Issues
-<!-- Track bugs that need to be fixed -->
-- [ ] 
-
-## 💡 Feature Ideas
-<!-- New features and enhancements to implement -->
-- [ ] 
-
-## 🔧 Technical Debt
-<!-- Code improvements, refactoring needs, and optimization tasks -->
-- [ ] 
-
-## 📋 Current Sprint
-<!-- Tasks currently being worked on or planned for the current sprint -->
-- [ ] 
-
-## 🏗️ Architecture Decisions
-<!-- Important technical decisions and their rationale -->
-- 
-
-## 📝 Notes & Context
-<!-- Any additional context, links, or information relevant to the project -->
-- Repository: ${repoUrl}
-- Base Branch: ${branch}
-
----
-*This file is maintained by PocketDev to track project planning and context across all tasks.*
-`;
-
-      // Extract owner and repo from GitHub URL
-      if (repoUrl.includes('github.com')) {
-        const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
-        
-        // Create the file using GitHub API via gh CLI
-        const base64Content = Buffer.from(planningTemplate).toString('base64');
-        const createFileCommand = `gh api repos/${owner}/${repo}/contents/.pocketdev/PLANNING.md \
-          -X PUT \
-          -f message="Add PocketDev project planning file" \
-          -f content="${base64Content}" \
-          -f branch="${branch}"`;
-        
-        const createResult = await gitService.executeGitCommand(
-          projectPath,
-          createFileCommand,
-          req.githubToken
-        );
-        
-        if (createResult.success) {
-          console.log('Created default PLANNING.md on GitHub for project:', finalProjectName);
-          
-          // Pull the changes to sync local repository
-          await gitService.executeGitCommand(
-            projectPath,
-            `git pull origin ${branch}`,
-            req.githubToken
-          );
-        } else {
-          console.error('Failed to create PLANNING.md via GitHub API:', createResult.error);
-          // Fall back to local file creation
-          const planningPath = path.join(projectPath, '.pocketdev', 'PLANNING.md');
-          await fs.mkdir(path.dirname(planningPath), { recursive: true });
-          await fs.writeFile(planningPath, planningTemplate, 'utf8');
-        }
-      } else {
-        // Non-GitHub repositories - create locally
-        const planningPath = path.join(projectPath, '.pocketdev', 'PLANNING.md');
-        await fs.mkdir(path.dirname(planningPath), { recursive: true });
-        await fs.writeFile(planningPath, planningTemplate, 'utf8');
-      }
-    } catch (error) {
-      // Don't fail project creation if planning file creation fails
-      console.error('Failed to create default PLANNING.md:', error);
-    }
-    
-    // Get GitHub metadata if available
-    if (github && repoUrl.includes('github.com')) {
-      try {
-        const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
-        const repoData = await github.getRepository(owner, repo);
-        
-        // Update project with GitHub metadata
-        await models.projects.update(projectId, {
-          metadata: {
-            github_owner: owner,
-            github_repo: repo,
-            description: repoData.description,
-            default_branch: repoData.default_branch
-          }
-        });
-        
-        project.github_owner = owner;
-        project.github_repo = repo;
-        project.description = repoData.description;
-      } catch (error) {
-        console.error('Failed to fetch GitHub metadata:', error);
-      }
-    }
-    
-    res.status(201).json({ 
-      success: true, 
-      project: project 
-    });
+    res.status(201).json(result);
   } catch (error) {
     next(error);
   }
@@ -241,24 +90,12 @@ export async function updateProject(req, res, next) {
 export async function deleteProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const { force } = req.body; // Allow force deletion via request body
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const result = await projectService.deleteProject(projectId, { force });
     
-    // Delete project directory
-    try {
-      await fs.rm(project.local_path, { recursive: true, force: true });
-    } catch (error) {
-      console.error('Failed to delete project directory:', error);
-    }
-    
-    // Delete from database
-    await models.projects.archive(projectId);
-    
-    res.json({ message: 'Project deleted successfully' });
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -629,98 +466,11 @@ export async function pushBaseBranch(req, res, next) {
 export async function getUpdateStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const result = await projectService.getProjectTasksUpdateStatus(projectId, req.githubToken);
     
-    const tasks = await models.tasks.findByProjectId(project.id);
-    const updateStatus = [];
-    
-    for (const task of tasks) {
-      if (!await fs.access(task.worktree_path).then(() => true).catch(() => false)) continue;
-      
-      try {
-        // Check if branch is behind origin/base_branch
-        const behindResult = await gitService.executeGitCommand(
-          task.worktree_path,
-          `git rev-list --count HEAD..origin/${project.base_branch}`,
-          req.githubToken
-        );
-        const behind = parseInt(behindResult.output.trim()) || 0;
-        
-        // Check if branch has unpushed commits to its own remote
-        let ahead = 0;
-        try {
-          // First check if remote tracking branch exists
-          const remoteCheckResult = await gitService.executeGitCommand(
-            task.worktree_path,
-            `git rev-parse --verify origin/${task.branch} 2>/dev/null`,
-            req.githubToken
-          );
-          
-          if (remoteCheckResult.success) {
-            // Remote branch exists, count unpushed commits
-            const aheadResult = await gitService.executeGitCommand(
-              task.worktree_path,
-              `git rev-list --count origin/${task.branch}..HEAD`,
-              req.githubToken
-            );
-            ahead = parseInt(aheadResult.output.trim()) || 0;
-          } else {
-            // No remote branch, count all commits ahead of base branch
-            const aheadResult = await gitService.executeGitCommand(
-              task.worktree_path,
-              `git rev-list --count origin/${project.base_branch}..HEAD`,
-              req.githubToken
-            );
-            ahead = parseInt(aheadResult.output.trim()) || 0;
-          }
-        } catch (e) {
-          // Fallback to comparing with base branch
-          const aheadResult = await gitService.executeGitCommand(
-            task.worktree_path,
-            `git rev-list --count origin/${project.base_branch}..HEAD`,
-            req.githubToken
-          );
-          ahead = parseInt(aheadResult.output.trim()) || 0;
-        }
-        
-        // Check for uncommitted changes
-        const statusResult = await gitService.executeGitCommand(
-          task.worktree_path,
-          'git status --porcelain',
-          req.githubToken
-        );
-        const hasUncommitted = statusResult.output.trim().length > 0;
-        
-        updateStatus.push({
-          taskId: task.id,
-          taskName: task.name,
-          branch: task.branch,
-          behind,
-          ahead,
-          hasUncommitted,
-          needsUpdate: behind > 0
-        });
-      } catch (error) {
-        // Task might not have tracking set up
-        updateStatus.push({
-          taskId: task.id,
-          taskName: task.name,
-          branch: task.branch,
-          behind: 0,
-          ahead: 0,
-          hasUncommitted: false,
-          needsUpdate: false,
-          error: error.message
-        });
-      }
-    }
-    
-    res.json({ updateStatus });
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -732,51 +482,11 @@ export async function getUpdateStatus(req, res, next) {
 export async function getProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const planning = await projectService.getProjectPlanning(projectId, req.githubToken);
     
-    // First try to read from the filesystem directly (for newly created projects)
-    const planningPath = path.join(project.local_path, '.pocketdev', 'PLANNING.md');
-    try {
-      const fileContent = await fs.readFile(planningPath, 'utf8');
-      return res.json({ 
-        exists: true, 
-        content: fileContent 
-      });
-    } catch (fsError) {
-      // File doesn't exist on filesystem, try git
-    }
-    
-    // Try to read PLANNING.md from .pocketdev directory in base branch
-    const result = await gitService.executeGitCommand(
-      project.local_path,
-      `git show ${project.base_branch}:.pocketdev/PLANNING.md`,
-      req.githubToken
-    );
-    
-    if (result.success) {
-      res.json({ 
-        exists: true, 
-        content: result.output 
-      });
-    } else {
-      // File doesn't exist or other error
-      if (result.error.includes('does not exist') || result.error.includes('pathspec') || result.error.includes('exists on disk')) {
-        res.json({ 
-          exists: false, 
-          content: null 
-        });
-      } else {
-        // Some other git error
-        res.status(500).json({ 
-          error: `Failed to read PLANNING.md: ${result.error}` 
-        });
-      }
-    }
+    res.json(planning);
   } catch (error) {
     next(error);
   }
@@ -789,53 +499,11 @@ export async function updateProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
     const { content } = req.body;
-    const models = req.app.locals.models;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const result = await projectService.updateProjectPlanning(projectId, content, req.githubToken);
     
-    // First, ensure we're on the base branch
-    await gitService.executeGitCommand(
-      project.local_path,
-      `git checkout ${project.base_branch}`,
-      req.githubToken
-    );
-    
-    // Create .pocketdev directory if it doesn't exist
-    await gitService.executeGitCommand(
-      project.local_path,
-      'mkdir -p .pocketdev',
-      req.githubToken
-    );
-    
-    // Write the PLANNING.md file using fs instead of echo to handle content properly
-    const planningPath = path.join(project.local_path, '.pocketdev', 'PLANNING.md');
-    try {
-      await fs.writeFile(planningPath, content, 'utf8');
-    } catch (error) {
-      return res.status(500).json({ error: 'Failed to write PLANNING.md: ' + error.message });
-    }
-    
-    // Add and commit the file
-    await gitService.executeGitCommand(
-      project.local_path,
-      'git add .pocketdev/PLANNING.md',
-      req.githubToken
-    );
-    
-    const commitResult = await gitService.executeGitCommand(
-      project.local_path,
-      `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`,
-      req.githubToken
-    );
-    
-    res.json({ 
-      success: true, 
-      message: 'PLANNING.md updated successfully',
-      needsPush: commitResult.output.includes('file changed')
-    });
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -874,70 +542,15 @@ export async function getProjectMinimal(req, res, next) {
 export async function getProjectDashboardCached(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const dashboard = await projectService.getProjectDashboard(
+      projectId, 
+      req.githubToken, 
+      { cached: true }
+    );
     
-    // Get all active tasks for this project
-    const tasks = await models.tasks.findByProjectId(projectId, { includeArchived: false });
-    
-    const needsAttention = [];
-    
-    // 1. Check base branch sync status WITHOUT FETCH (use cached data)
-    try {
-      // Just check current status without fetching
-      const behindResult = await gitService.executeGitCommand(
-        project.local_path,
-        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
-        req.githubToken
-      );
-      const behind = parseInt(behindResult.output.trim()) || 0;
-      
-      const aheadResult = await gitService.executeGitCommand(
-        project.local_path,
-        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
-        req.githubToken
-      );
-      const ahead = parseInt(aheadResult.output.trim()) || 0;
-      
-      if (behind > 0) {
-        needsAttention.push({
-          type: 'base-behind',
-          severity: 'warning',
-          message: `Base branch is ${behind} commits behind origin`,
-          details: { behind, branch: project.base_branch },
-          actions: ['pull']
-        });
-      }
-      
-      if (ahead > 0) {
-        needsAttention.push({
-          type: 'base-ahead',
-          severity: 'info',
-          message: `Local base is ${ahead} commits ahead of origin`,
-          details: { ahead, branch: project.base_branch },
-          actions: ['push']
-        });
-      }
-    } catch (error) {
-      // Git error, but continue with other checks
-      console.error('Git status check failed:', error);
-    }
-    
-    // Skip expensive checks like stale tasks, merge conflicts, and PR checks
-    // These can be loaded progressively or on-demand
-    
-    res.json({
-      project,
-      needsAttention,
-      tasksCount: tasks.length,
-      activeTasks: tasks.filter(t => t.status === 'active').length,
-      cached: true,
-      lastUpdated: new Date().toISOString()
-    });
+    res.json(dashboard);
   } catch (error) {
     next(error);
   }
@@ -978,140 +591,15 @@ export async function refreshProjectStatus(req, res, next) {
 export async function getProjectDashboard(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
     
-    const project = await models.projects.findById(projectId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
+    const dashboard = await projectService.getProjectDashboard(
+      projectId, 
+      req.githubToken, 
+      { cached: false }
+    );
     
-    // Get all active tasks for this project
-    const tasks = await models.tasks.findByProjectId(projectId, { includeArchived: false });
-    
-    const needsAttention = [];
-    
-    // 1. Check base branch sync status
-    try {
-      await gitService.executeGitCommand(project.local_path, 'git fetch origin', req.githubToken);
-      
-      const behindResult = await gitService.executeGitCommand(
-        project.local_path,
-        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
-        req.githubToken
-      );
-      const behind = parseInt(behindResult.output.trim()) || 0;
-      
-      const aheadResult = await gitService.executeGitCommand(
-        project.local_path,
-        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
-        req.githubToken
-      );
-      const ahead = parseInt(aheadResult.output.trim()) || 0;
-      
-      if (behind > 0) {
-        needsAttention.push({
-          type: 'base-behind',
-          severity: 'warning',
-          message: `Base branch is ${behind} commits behind origin`,
-          details: { behind, branch: project.base_branch },
-          actions: ['pull']
-        });
-      }
-      
-      if (ahead > 0) {
-        needsAttention.push({
-          type: 'base-ahead',
-          severity: 'info',
-          message: `Local base is ${ahead} commits ahead of origin`,
-          details: { ahead, branch: project.base_branch },
-          actions: ['push']
-        });
-      }
-    } catch (error) {
-      // Git error, but continue with other checks
-      console.error('Git status check failed:', error);
-    }
-    
-    // 2. Check for stale tasks (no commits in 7+ days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    for (const task of tasks) {
-      if (task.status === 'active' && task.updated < sevenDaysAgo) {
-        const daysSinceUpdate = Math.floor((Date.now() - new Date(task.updated).getTime()) / (1000 * 60 * 60 * 24));
-        needsAttention.push({
-          type: 'stale-task',
-          severity: 'warning',
-          message: `Task "${task.name}" inactive for ${daysSinceUpdate} days`,
-          details: { taskId: task.id, taskName: task.name, daysSinceUpdate },
-          actions: ['open-task', 'archive']
-        });
-      }
-      
-      // 3. Check for merge conflicts
-      if (task.status === 'active' && task.worktree_path) {
-        try {
-          // Try to merge base branch into task branch (dry run)
-          const mergeResult = await gitService.executeGitCommand(
-            task.worktree_path,
-            `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`,
-            req.githubToken
-          );
-          
-          if (mergeResult.output && mergeResult.output.includes('<<<<<<< ')) {
-            needsAttention.push({
-              type: 'merge-conflict',
-              severity: 'error',
-              message: `Task "${task.name}" has merge conflicts with base branch`,
-              details: { taskId: task.id, taskName: task.name },
-              actions: ['open-task', 'resolve-conflicts']
-            });
-          }
-        } catch (error) {
-          // Skip conflict check for this task
-        }
-      }
-    }
-    
-    // 4. Check for open PRs (using gh CLI)
-    if (req.githubToken) {
-      try {
-        const prResult = await gitService.executeGitCommand(
-          project.local_path,
-          `gh pr list --state open --json number,title,url,author,createdAt`,
-          req.githubToken
-        );
-        
-        if (prResult.success && prResult.output) {
-          const prs = JSON.parse(prResult.output);
-          for (const pr of prs) {
-            needsAttention.push({
-              type: 'open-pr',
-              severity: 'info',
-              message: `PR #${pr.number}: ${pr.title}`,
-              details: { 
-                prNumber: pr.number, 
-                prUrl: pr.url,
-                title: pr.title,
-                author: pr.author.login,
-                createdAt: pr.createdAt
-              },
-              actions: ['view-pr', 'merge-pr']
-            });
-          }
-        }
-      } catch (error) {
-        // gh CLI might not be available or configured
-        console.error('PR check failed:', error);
-      }
-    }
-    
-    res.json({
-      project,
-      needsAttention,
-      tasksCount: tasks.length,
-      activeTasks: tasks.filter(t => t.status === 'active').length
-    });
+    res.json(dashboard);
   } catch (error) {
     next(error);
   }
