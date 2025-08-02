@@ -34,78 +34,17 @@ export class TaskGitController {
     const { projectId, taskId } = req.params;
     
     try {
+      // Validate task belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Create GitService with token from middleware
-      const gitService = new GitService(req.githubToken);
+      // Use GitStatusService from service registry
+      const gitStatusService = req.services.get('GitStatusService');
+      const gitStatus = await gitStatusService.getTaskGitStatus(taskId, req.githubToken);
       
-      // Debug logging for merged tasks with changes
-      if (task.status === 'merged' || task.merged_at) {
-        console.log(`[GitStatus] Checking merged task ${taskId} on branch ${task.branch}`);
-        const statusResult = await gitService.command(task.worktree_path, 'git status --porcelain');
-        if (statusResult.output.trim()) {
-          console.log(`[GitStatus] Merged task has changes:`, statusResult.output);
-          const branchResult = await gitService.command(task.worktree_path, 'git branch --show-current');
-          console.log(`[GitStatus] Task worktree is on branch:`, branchResult.output.trim());
-        }
-      }
-
-      const project = await this.models.projects.findById(projectId);
-      
-      // Get detailed git status
-      const statusResult = await gitService.getStatus(task.worktree_path);
-      const cleanStatus = statusResult.output.trim().length === 0;
-      
-      // Check ahead/behind status
-      let aheadBehind = { ahead: 0, behind: 0 };
-      try {
-        const aheadResult = await gitService.command(task.worktree_path, 
-          `git rev-list --count origin/${project.base_branch}..HEAD`);
-        const behindResult = await gitService.command(task.worktree_path,
-          `git rev-list --count HEAD..origin/${project.base_branch}`);
-        
-        aheadBehind.ahead = parseInt(aheadResult.output.trim()) || 0;
-        aheadBehind.behind = parseInt(behindResult.output.trim()) || 0;
-      } catch (error) {
-        console.warn('Could not get ahead/behind status:', error);
-      }
-
-      // Count changed files
-      let filesChanged = 0;
-      if (!cleanStatus) {
-        filesChanged = statusResult.output.split('\n').filter(line => line.trim()).length;
-      }
-
-      // Get detailed status including staged/unstaged counts
-      const detailedStatus = await gitService.getDetailedStatus(task.worktree_path);
-
-      // Check if branch has remote tracking
-      let hasRemoteTracking = false;
-      try {
-        const remoteCheckResult = await gitService.command(
-          task.worktree_path,
-          `git rev-parse --verify origin/${task.branch} 2>/dev/null`
-        );
-        hasRemoteTracking = remoteCheckResult.success;
-      } catch (error) {
-        // No remote tracking branch
-        hasRemoteTracking = false;
-      }
-
-      res.json({
-        clean: cleanStatus,
-        ahead: aheadBehind.ahead,
-        behind: aheadBehind.behind,
-        filesChanged,
-        staged: detailedStatus.staged,
-        unstaged: detailedStatus.unstaged,
-        untracked: detailedStatus.untracked,
-        hasRemoteTracking,
-        rawStatus: statusResult.output
-      });
+      res.json(gitStatus);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -119,31 +58,15 @@ export class TaskGitController {
     const { compareWith = 'working' } = req.query;
     
     try {
+      // Validate task belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      const project = await this.models.projects.findById(projectId);
-      
-      // Use comprehensive diff method to get proper line counts
-      const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
-      const diffResult = await this.gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
-      
-      // Convert Map to array
-      const changedFiles = [];
-      for (const [path, fileInfo] of diffResult.files) {
-        changedFiles.push({
-          path: fileInfo.path,
-          type: fileInfo.type,
-          additions: fileInfo.additions,
-          deletions: fileInfo.deletions,
-          staged: fileInfo.staged || false,
-          unstaged: fileInfo.unstaged || false,
-          untracked: fileInfo.untracked || false,
-          committed: fileInfo.diffType === 'committed'
-        });
-      }
+      // Use GitStatusService from service registry
+      const gitStatusService = req.services.get('GitStatusService');
+      const changedFiles = await gitStatusService.getTaskChangedFiles(taskId, req.githubToken, compareWith);
       
       res.json(changedFiles);
     } catch (error) {
@@ -158,48 +81,15 @@ export class TaskGitController {
     const { projectId, taskId } = req.params;
     
     try {
+      // Validate task belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      const project = await this.models.projects.findById(projectId);
-      
-      // Create GitService with token from middleware
-      const gitService = new GitService(req.githubToken);
-      
-      // Get all changes using the new git service method
-      const allChanges = await gitService.getAllChanges(
-        task.worktree_path,
-        `origin/${project.base_branch}`
-      );
-      
-      // Get unpushed commits info
-      const unpushedInfo = await gitService.getUnpushedCommitsInfo(
-        task.worktree_path,
-        task.branch
-      );
-      
-      // Format response with categorized files
-      const response = {
-        files: allChanges.files.map(file => ({
-          path: file.path,
-          type: file.type,
-          additions: file.additions,
-          deletions: file.deletions,
-          category: file.category,
-          status: file.status,
-          staged: file.staged || false,
-          unstaged: file.unstaged || false,
-          untracked: file.untracked || false,
-          committed: file.category === 'committed'
-        })),
-        summary: {
-          ...allChanges.summary,
-          unpushedCommits: unpushedInfo.count
-        },
-        unpushedCommits: unpushedInfo.commits
-      };
+      // Use GitStatusService from service registry
+      const gitStatusService = req.services.get('GitStatusService');
+      const response = await gitStatusService.getTaskAllChanges(taskId, req.githubToken);
       
       res.json(response);
     } catch (error) {
@@ -372,25 +262,17 @@ export class TaskGitController {
     const { projectId, taskId } = req.params;
     
     try {
+      // Validate task belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      const project = await this.models.projects.findById(projectId);
+      // Use GitStatusService from service registry
+      const gitStatusService = req.services.get('GitStatusService');
+      const conflictInfo = await gitStatusService.getTaskConflicts(taskId, req.githubToken);
       
-      // Create GitService with token from middleware
-      const gitService = new GitService(req.githubToken);
-      
-      const conflicts = await gitService.checkMergeConflicts(
-        task.worktree_path, 
-        `origin/${project.base_branch}`
-      );
-      
-      res.json({
-        hasConflicts: conflicts.hasConflicts,
-        conflicts: conflicts.conflicts || []
-      });
+      res.json(conflictInfo);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

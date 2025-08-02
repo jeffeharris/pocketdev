@@ -21,6 +21,8 @@ import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
+import { ServiceRegistry, serviceMiddleware } from './services/index.js';
+import { GitStatusService } from './services/git-status.service.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -130,6 +132,18 @@ async function initializeDatabase() {
   // Initialize GitHub token service
   const githubTokenService = getGitHubTokenService(db);
   app.locals.githubTokenService = githubTokenService;
+  
+  // Initialize Service Registry
+  const serviceRegistry = new ServiceRegistry();
+  
+  // Register services
+  serviceRegistry.register('GitStatusService', GitStatusService, ['models', 'githubTokenService']);
+  
+  // Set app.locals reference for transitional dependencies
+  serviceRegistry.setAppLocals(app.locals);
+  
+  // Store service registry in app.locals
+  app.locals.serviceRegistry = serviceRegistry;
   
   // Run cleanup on startup
   await cleanupOrphanedWorktrees(models);
@@ -298,6 +312,9 @@ async function start() {
     await ensureProjectsDir();
     await initializeDatabase();
     await loadSettings();
+    
+    // Add service middleware before routes
+    app.use(serviceMiddleware(app.locals.serviceRegistry));
     
     // Mount routes after models are initialized
     const routes = createRoutes(app);

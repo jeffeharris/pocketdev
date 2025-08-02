@@ -27,6 +27,8 @@ app.get('/api/health', (req, res) => {
 // Routes will be mounted after models are initialized in server.js
 // This is handled by calling app.use('/api', createRoutes(app)) after initialization
 
+// Service middleware will be added after service registry is initialized
+
 export default app;
 
 // Note: Error handling middleware is added dynamically after routes are mounted
