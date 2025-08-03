@@ -62,6 +62,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   const [originalCode, setOriginalCode] = useState<string>('');
   const [modifiedCode, setModifiedCode] = useState<string>('');
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
+  const [shouldRenderEditor, setShouldRenderEditor] = useState(true);
   const [canUseSplitView, setCanUseSplitView] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
@@ -161,25 +162,35 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   // Load diff data when modal opens
   useEffect(() => {
     if (isOpen && taskId) {
+      setShouldRenderEditor(true);
       loadDiffData();
     } else if (!isOpen) {
-      // Clear data when modal closes (but NOT originalCode/modifiedCode to avoid Monaco disposal errors)
-      setFiles([]);
-      setSelectedFile(null);
-      setError(null);
-      // Reset comparison mode to working
-      setCompareWith('working');
-      // Reset search state
-      setSearchTerm('');
-      setShowSearch(false);
-      hasManuallyToggledSearch.current = false;
-      // Clear pending operations
-      setPendingOperations(new Set());
-      // Clear toast
-      setToast(null);
-      // Clear caches when modal closes
-      diffCache.current = {};
-      fileDiffCache.current = {};
+      // First unmount the editor to prevent disposal errors
+      setShouldRenderEditor(false);
+      
+      // Clear data after a small delay to let Monaco clean up
+      const timer = setTimeout(() => {
+        setFiles([]);
+        setSelectedFile(null);
+        setOriginalCode('');
+        setModifiedCode('');
+        setError(null);
+        // Reset comparison mode to working
+        setCompareWith('working');
+        // Reset search state
+        setSearchTerm('');
+        setShowSearch(false);
+        hasManuallyToggledSearch.current = false;
+        // Clear pending operations
+        setPendingOperations(new Set());
+        // Clear toast
+        setToast(null);
+        // Clear caches when modal closes
+        diffCache.current = {};
+        fileDiffCache.current = {};
+      }, 100);
+      
+      return () => clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskId]);
@@ -1105,7 +1116,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       <div className="text-gray-500">Loading...</div>
                     </div>
                   )}
-                  {!loading && originalCode !== undefined && modifiedCode !== undefined && !selectedFile.loading && (
+                  {!loading && originalCode !== undefined && modifiedCode !== undefined && !selectedFile.loading && shouldRenderEditor && (
                     <DiffEditor
                       key={selectedFile.path}
                       height="100%"
