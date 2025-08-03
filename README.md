@@ -53,42 +53,65 @@ The SQLite database will be created at `simple/data/pocketdev.db` and all projec
 
 ## Backend Architecture
 
-The backend follows a clean modular architecture:
+The backend follows a clean service-oriented architecture with deep modules (Level 2 Complete ✅):
 
 ```
 backend/
-├── server.js                    # Server initialization & startup
-├── app.js                       # Express app configuration
+├── server.js                     # Server initialization & service registry setup
+├── app.js                        # Express app configuration
 ├── config/
-│   └── index.js                # Centralized configuration
-├── controllers/                 # HTTP request handlers
-│   ├── project.controller.js   # Project CRUD operations
-│   ├── task.controller.js      # Task management
-│   ├── settings.controller.js  # Settings & GitHub token
-│   ├── monitoring.controller.js # AI monitoring endpoints
-│   ├── terminal.controller.js  # Terminal session management
-│   └── upload.controller.js    # File upload handling
-├── services/                    # Business logic layer
-│   ├── git.service.js          # Git operations
-│   ├── cleanup.service.js      # Orphaned resource cleanup
-│   ├── merge.service.js        # Merge/rebase operations
-│   └── worktree.service.js     # Git worktree management
-├── routes/                      # API route definitions
-│   ├── index.js                # Route aggregator
-│   ├── project.routes.js       # /api/projects
-│   ├── task.routes.js          # /api/projects/:id/tasks
-│   └── ...                     # Other route modules
-├── middleware/                  # Express middleware
-│   ├── error.middleware.js     # Error handling
-│   └── upload.middleware.js    # File upload config
-└── db/                         # Database layer
-    ├── index.js                # Database connection
-    ├── schema.sql              # SQLite schema
-    └── models/                 # Data models
+│   └── index.js                  # Centralized configuration
+├── controllers/                  # Thin HTTP request handlers (10-50 lines each)
+│   ├── project.controller.js    # Project CRUD operations → ProjectService
+│   ├── task.controller.js       # Task management → TaskService
+│   ├── task-git.controller.js   # Git operations → GitOperationService
+│   ├── task-pr.controller.js    # Pull requests → PullRequestService
+│   ├── task-container.controller.js # Docker → ContainerService
+│   ├── settings.controller.js   # Settings & GitHub token → SettingsService
+│   ├── monitoring.controller.js # AI monitoring → MonitoringService
+│   ├── terminal.controller.js   # Terminal sessions → TerminalService
+│   └── upload.controller.js     # File uploads → UploadService
+├── services/                     # Deep module services (simple interfaces, complex implementations)
+│   ├── index.js                  # ServiceRegistry - dependency injection system
+│   ├── git-status.service.js    # Git status operations (4 methods)
+│   ├── git-operation.service.js # Git commands (6 methods)
+│   ├── task.service.js          # Task lifecycle management (8 methods)
+│   ├── project.service.js       # Project operations (12 methods)
+│   ├── terminal.service.js      # Session management, ID chaos handler (8 methods)
+│   ├── pull-request.service.js  # GitHub PR operations (5 methods)
+│   ├── settings.service.js      # Configuration & credentials (6 methods)
+│   ├── container.service.js     # Docker container management (6 methods)
+│   ├── monitoring.service.js    # System monitoring & health (4 methods)
+│   ├── upload.service.js        # File attachment handling (5 methods)
+│   ├── event-emitter.service.js # Central event hub for loose coupling
+│   ├── websocket.service.js     # Event-driven WebSocket broadcasting
+│   ├── git.service.js           # Low-level git operations (legacy)
+│   ├── cleanup.service.js       # Orphaned resource cleanup
+│   ├── merge.service.js         # Merge/rebase operations
+│   └── worktree.service.js      # Git worktree management
+├── routes/                       # API route definitions
+│   ├── index.js                  # Route aggregator
+│   ├── project.routes.js        # /api/projects
+│   ├── task.routes.js           # /api/projects/:id/tasks
+│   └── ...                      # Other route modules
+├── middleware/                   # Express middleware
+│   ├── error.middleware.js      # Error handling
+│   └── upload.middleware.js     # File upload config
+└── db/                          # Database layer
+    ├── index.js                 # Database connection
+    ├── schema.sql               # SQLite schema
+    └── models/                  # Data models
         ├── project.js
         ├── task.js
         └── session.js
 ```
+
+### Architectural Highlights
+- **Deep Modules**: Each service has 4-12 public methods hiding 100-600 lines of complexity
+- **Event-Driven**: Services emit domain events, WebSocket subscribes and broadcasts
+- **Dependency Injection**: Clean service access via `req.services.ServiceName`
+- **No Global State**: Replaced chaotic `app.locals` with ServiceRegistry pattern
+- **Major Bugs Fixed**: Session ID chaos resolved, GitHub tokens no longer exposed in API
 
 ## Key Features
 

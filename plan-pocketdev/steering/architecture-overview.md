@@ -1,99 +1,155 @@
 # PocketDev Architecture Overview
 
-This document provides a comprehensive view of PocketDev's current architecture, its problems, and the target architecture we're working towards.
+This document provides a comprehensive view of PocketDev's architecture after the v2.0.0 service layer transformation.
 
-## Current Architecture
+## Current Architecture (v2.0.0)
 
 ### System Overview
 ```
-┌─────────────────┐     ┌─────────────────────┐     ┌──────────────────┐
-│  Frontend       │────▶│  Backend API        │────▶│  SQLite DB       │
-│  (React/Vite)   │ HTTP│  (Express)          │     │                  │
-│  Port 5173      │     │  Port 3005          │     └──────────────────┘
-└─────────────────┘     └─────────────────────┘              │
-         │                        │                           │
-         │                        └─── HTTP/WS ──────────────┼───┐
-         │                                                    │   │
-         └────────── WebSocket ──────────────────────────────┼───┼───┐
-                                                             │   │   │
-                                                    ┌────────▼───▼───▼────┐
-                                                    │  Shelltender       │
-                                                    │  (Terminal Service) │
-                                                    │  Port 8080         │
-                                                    └────────────────────┘
+┌─────────────────────┐         ┌─────────────────────┐         ┌──────────────────┐
+│  Frontend           │  HTTP   │  Backend API        │         │  SQLite DB       │
+│  (React/Vite)       │────────▶│  (Express)          │────────▶│                  │
+│  Port 5173          │         │  Port 3005          │         └──────────────────┘
+│                     │         │                     │
+│  ┌───────────────┐  │         │  ┌───────────────┐  │
+│  │Service Layer  │  │         │  │Service Layer  │  │
+│  │- 8 Services   │  │         │  │- 10 Services  │  │
+│  │- BaseService  │  │         │  │- DI Registry  │  │
+│  │- Mock Support │  │         │  │- Event-Driven │  │
+│  └───────────────┘  │         │  └───────────────┘  │
+└─────────────────────┘         └─────────────────────┘
+         │                                │
+         │                                └─── HTTP/WS ─────────────┐
+         │                                                          │
+         └────────── WebSocket ─────────────────────────────────────┼───┐
+                                                                    │   │
+                                                           ┌────────▼───▼────┐
+                                                           │  Shelltender    │
+                                                           │  Port 8080      │
+                                                           └─────────────────┘
 ```
 
-### Current Layer Responsibilities (The Problem)
+### Service Layer Architecture
 
-#### Frontend (React)
-- **Should do**: UI rendering, user interactions
-- **Currently does**: Business logic, state aggregation, complex data transformations
+#### Backend Services (10 + Infrastructure)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Backend Service Layer                        │
+├─────────────────────┬─────────────────────┬────────────────────┤
+│  Domain Services    │  Infrastructure     │  Support Services   │
+├─────────────────────┼─────────────────────┼────────────────────┤
+│ • GitStatusService  │ • EventEmitter      │ • MonitoringService │
+│ • GitOperationSvc   │ • WebSocketService  │ • SettingsService   │
+│ • TaskService       │ • ServiceRegistry   │ • UploadService     │
+│ • ProjectService    │                     │ • ContainerService  │
+│ • TerminalService   │                     │                     │
+│ • PullRequestSvc    │                     │                     │
+└─────────────────────┴─────────────────────┴────────────────────┘
+```
 
-#### Backend API (Express)
-- **Should do**: HTTP handling, request/response transformation
-- **Currently does**: Business logic, Git operations, database queries, WebSocket handling
+#### Frontend Services (8 + Infrastructure)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Frontend Service Layer                        │
+├─────────────────────┬─────────────────────┬────────────────────┤
+│  Domain Services    │  Infrastructure     │  Adapters          │
+├─────────────────────┼─────────────────────┼────────────────────┤
+│ • GitService        │ • BaseService       │ • SessionAdapter    │
+│ • TaskService       │ • ServiceProvider   │                     │
+│ • ProjectService    │ • Type System       │                     │
+│ • TerminalService   │                     │                     │
+│ • ContainerService  │                     │                     │
+│ • PullRequestSvc    │                     │                     │
+│ • SettingsService   │                     │                     │
+│ • UploadService     │                     │                     │
+└─────────────────────┴─────────────────────┴────────────────────┘
+```
+
+### Current Layer Responsibilities (v2.0.0)
+
+#### Frontend Components
+- **Does**: UI rendering, user interactions, calling services
+- **Doesn't do**: Business logic, direct API calls, state aggregation
+
+#### Frontend Services
+- **Does**: API communication, data transformation, mock support
+- **Doesn't do**: UI concerns, component state management
+
+#### Backend Controllers (<50 lines each)
+- **Does**: HTTP request/response handling, input validation
+- **Doesn't do**: Business logic, direct database access, git operations
+
+#### Backend Services
+- **Does**: Business logic, orchestration, event emission
+- **Doesn't do**: HTTP concerns, direct database queries (uses models)
 
 #### Database Models
-- **Should do**: Data persistence, schema management
-- **Currently does**: Cross-table queries, business logic, state aggregation
+- **Does**: Data persistence, schema management, queries
+- **Doesn't do**: Business logic, cross-table aggregation
 
-## Architectural Problems
+## Architectural Achievements (v2.0.0)
 
-### 1. Missing Service Layer
-**Impact**: Business logic scattered across controllers, models, and frontend
+### 1. Complete Service Layer ✅
+**Impact**: Clear separation of concerns throughout the stack
 
 ```javascript
-// Current: Controller doing everything
+// Before: Controller doing everything (200+ lines)
 class TaskController {
   async createTask(req, res) {
-    // Validation
-    // Git operations
-    // Database operations
-    // WebSocket notifications
-    // Session management
-    // Error handling
-    // 200+ lines of mixed concerns
+    // Mixed validation, git ops, database, websocket, etc.
+  }
+}
+
+// After: Controller is thin HTTP handler (~10 lines)
+class TaskController {
+  async createTask(req, res) {
+    const taskService = req.services.TaskService;
+    const task = await taskService.createTask(req.params.projectId, req.body);
+    res.json({ success: true, task });
   }
 }
 ```
 
-### 2. Shallow Modules Everywhere
-**Impact**: High cognitive load, difficult to understand and maintain
+### 2. Deep Modules Everywhere ✅
+**Impact**: Low cognitive load, easy to understand interfaces
 
-| Module | Current Methods | Should Be |
-|--------|----------------|-----------|
-| api.ts | 44 | ~8 |
-| git.service.js | 32+ | 4-5 |
-| terminalStore | 30+ | ~10 |
-| WebSocketEvents | 10 | 1 |
+| Module | Before | After |
+|--------|--------|-------|
+| api.ts | 44 methods | 8 services |
+| git.service.js | 32+ methods | GitStatusService (4) + GitOperationService (6) |
+| terminalStore | 30+ methods | TerminalService (8) |
+| WebSocketEvents | 10 methods | EventEmitter pattern |
 
-### 3. Multiple State Representations
-**Impact**: Race conditions, synchronization bugs, complexity
+### 3. Event-Driven State Management ✅
+**Impact**: Single source of truth with event propagation
 
 - Database state (source of truth)
-- Backend in-memory state
-- WebSocket message state
-- Frontend store state
-- Component local state
+- Services emit events for state changes
+- WebSocketService subscribes and broadcasts
+- Frontend receives real-time updates
+- No more state synchronization bugs
 
-### 4. Global State Anti-Pattern
-**Impact**: Hidden dependencies, untestable code
+### 4. Dependency Injection Pattern ✅
+**Impact**: Testable, maintainable code
 
 ```javascript
-// Current: Global state via app.locals
+// Before: Global state via app.locals
 app.locals.models = models;
 app.locals.db = db;
-app.locals.github = github;
-// ... 10+ more
+
+// After: Clean dependency injection
+const serviceRegistry = new ServiceRegistry();
+serviceRegistry.register('TaskService', new TaskService(models, eventEmitter));
+req.services = serviceRegistry;
 ```
 
-### 5. Identity Crisis
-**Impact**: Confusion throughout codebase
+### 5. Session Identity Unified ✅
+**Impact**: No more confusion
 
-Three different IDs for the same session:
-- `sessionId` (Shelltender)
-- `dbSessionId` (Database)
-- `shelltenderSessionId` (Also Shelltender)
+- TerminalService handles all ID complexity internally
+- Frontend uses SessionAdapter for normalization
+- Components see only normalized IDs
+- Three ID types hidden behind service interface
 
 ## Target Architecture
 
@@ -151,28 +207,31 @@ Three different IDs for the same session:
 - **Only**: External system integration
 - **Not**: Business logic, domain knowledge
 
-### Deep Module Examples
+### Real Deep Module Examples from v2.0.0
 
-```typescript
-// Deep Module: Simple interface, complex implementation
-class TaskService {
-  // Only 5 public methods
-  createTask(projectId: string, data: CreateTaskDTO): Promise<Task>
-  updateTask(taskId: string, updates: UpdateTaskDTO): Promise<Task>
-  deleteTask(taskId: string): Promise<void>
-  getTask(taskId: string): Promise<Task>
-  listTasks(projectId: string): Promise<Task[]>
-  
-  // Hundreds of lines of complex implementation hidden inside
+```javascript
+// GitStatusService: 4 methods hiding complex git operations
+class GitStatusService {
+  getTaskGitStatus(projectId, taskId)      // Hides: git status parsing, worktree handling
+  getTaskChangedFiles(projectId, taskId)   // Hides: diff calculation, file categorization
+  getTaskAllChanges(projectId, taskId)     // Hides: content diff generation
+  getTaskConflicts(projectId, taskId)      // Hides: merge-tree analysis
 }
 
-// Deep Module: Git operations
-class GitOperations {
-  synchronize(projectId: string): Promise<SyncResult>
-  commit(projectId: string, message: string): Promise<void>
-  analyzeConflicts(projectId: string): Promise<Conflict[]>
-  
-  // All git complexity hidden
+// TerminalService: 8 methods managing all terminal complexity
+class TerminalService {
+  createSession(taskId, config, context)   // Hides: Shelltender API, session setup
+  executeCommand(sessionId, command)       // Hides: WebSocket communication
+  getTaskSessions(taskId)                  // Hides: ID normalization, state aggregation
+  updateSessionTab(sessionId, updates)     // Hides: database updates, event emission
+  // ... 4 more focused methods
+}
+
+// SessionAdapter: Solves the 3 ID types problem
+class SessionAdapter {
+  static toFrontend(dbSession)             // Normalizes all ID types
+  static toDatabase(frontendSession)       // Handles reverse mapping
+  static normalizeShelltenderId(id)        // Extracts clean ID
 }
 ```
 

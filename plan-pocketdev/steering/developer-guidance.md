@@ -64,12 +64,12 @@ class ProjectController {
 ## 🚫 Anti-Patterns to Avoid
 
 ### 1. Shallow Modules
-**Current Examples** (being refactored):
-- `api.ts`: 44 methods doing simple HTTP calls
-- `websocket-events.js`: 10 methods all doing `broadcast()`
-- `git.service.js`: 32+ methods exposing git commands
+**Examples Fixed in v2.0.0**:
+- `api.ts`: Was 44 methods → Now 8 service delegations ✅
+- `websocket-events.js`: Was 10 methods → Now EventEmitter pattern ✅
+- `git.service.js`: Was 32+ methods → Now split into GitStatusService (4) + GitOperationService (6) ✅
 
-**Fix**: Combine related operations into higher-level abstractions.
+**Fix Applied**: Combined related operations into higher-level abstractions.
 
 ### 2. Pass-Through Methods
 ```javascript
@@ -100,8 +100,8 @@ Don't expose implementation details:
 
 ### 4. God Objects
 Components/classes doing too many things:
-- ❌ `TerminalPanel`: Managing terminals, splits, sessions, keyboard, dropdowns
-- ✅ Split into: `TerminalManager`, `SplitLayout`, `SessionLauncher`
+- ❌ OLD: `TerminalPanel` managing terminals, splits, sessions, keyboard, dropdowns
+- ✅ v2.0.0: Split into services - `TerminalService`, `SplitViewContainer`, dedicated components
 
 ## 🏗️ Design Patterns to Follow
 
@@ -228,14 +228,21 @@ class GitOperations {
 3. **Cognitive Load Reduction**
 4. **Strategic vs Tactical Programming**
 
-## 🚀 Current Refactoring Priorities
+## 🚀 Refactoring Achievements (v2.0.0)
 
-See `/plan-pocketdev/bugs/prioritization.md` for the full list. Key areas:
+See `/plan-pocketdev/bugs/prioritization.md` for details. Completed:
 
-1. **Service Layer** (BUG-013): Separate business logic from controllers
-2. **API Simplification** (BUG-011): 44 methods → ~8 domain services
-3. **Deep Modules** (Multiple bugs): Reduce interface complexity everywhere
-4. **Dependency Injection** (BUG-014): Remove global state patterns
+1. **Service Layer** (BUG-013): ✅ Created 10 backend + 8 frontend services
+2. **API Simplification** (BUG-011): ✅ 44 methods → 8 service delegations
+3. **Deep Modules** (Multiple bugs): ✅ All services have <10 public methods
+4. **Dependency Injection** (BUG-014): ✅ ServiceRegistry replaces app.locals
+
+### Remaining Priorities
+
+1. **Functional Bugs**: BUG-001, BUG-002, BUG-023, BUG-024
+2. **Frontend State Management**: Terminal session state duplication
+3. **Performance**: Connection pooling, render throttling
+4. **UX Improvements**: Visual hierarchy, complexity management
 
 ## 💡 Final Thoughts
 

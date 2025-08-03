@@ -110,10 +110,10 @@ export class GitService {
 
 ## 🔄 Transformation Examples
 
-### Example 1: WebSocket Events (Current Problem)
+### Example 1: WebSocket Events - Fixed in v2.0.0
 
 ```javascript
-// ❌ CURRENT: 10 methods doing the same thing
+// ❌ OLD: 10 methods doing the same thing
 class WebSocketEventService {
   sendTaskCreated(taskId, task) {
     this.broadcast(`task:${taskId}`, { type: 'created', task });
@@ -127,38 +127,47 @@ class WebSocketEventService {
     this.broadcast(`task:${taskId}`, { type: 'deleted' });
   }
   
-  sendAIStateUpdate(taskId, state) {
-    this.broadcast(`task:${taskId}`, { type: 'ai-state', state });
-  }
-  
-  // ... 6 more similar methods
+  // ... 7 more similar methods
 }
 ```
 
 ```javascript
-// ✅ REFACTORED: 1 method with clear purpose
-class EventBroadcaster {
-  // Single method hides all complexity
-  emit(channel: string, event: string, data?: any): void {
-    const message = {
-      type: event,
-      channel,
-      data,
-      timestamp: Date.now(),
-      version: '1.0'
-    };
+// ✅ IMPLEMENTED IN v2.0.0: EventEmitter + WebSocketService
+class EventEmitter extends EventEmitter {
+  // Base EventEmitter provides emit() and on()
+  // Services emit domain events
+}
+
+class WebSocketService {
+  constructor(wsAdapter, eventEmitter) {
+    this.wsAdapter = wsAdapter;
+    this.eventEmitter = eventEmitter;
+    this.subscribeToEvents();
+  }
+  
+  subscribeToEvents() {
+    // Single subscription pattern for all events
+    const events = [
+      'task.created', 'task.updated', 'task.deleted',
+      'terminal.created', 'terminal.updated', 'terminal.deleted',
+      'git.status.changed', 'ai.state.changed'
+    ];
     
-    // Complex implementation hidden:
-    // - Connection management
-    // - Retry logic
-    // - Message queuing
-    // - Error handling
-    this.broadcastWithRetry(message);
+    events.forEach(event => {
+      this.eventEmitter.on(event, (data) => {
+        this.broadcast(event, data);
+      });
+    });
+  }
+  
+  broadcast(event, data) {
+    // All WebSocket complexity hidden here
+    this.wsAdapter.broadcast(event, data);
   }
 }
 
-// Usage remains simple:
-broadcaster.emit('task:123', 'updated', { status: 'complete' });
+// Usage is now event-driven:
+this.eventEmitter.emit('task.updated', { taskId, updates });
 ```
 
 ### Example 2: Terminal Store (Current Problem)
