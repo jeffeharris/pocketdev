@@ -30,6 +30,9 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
 | BUG-023 | API Response Format Inconsistency | API Design | N/A | **Medium** | Inconsistent response formats | Open | 2025-09-09 |
 | BUG-024 | Create Pull Request Fails on Unpushed Branches | Functional | N/A | **Medium** | Common workflow broken | Open | 2025-09-10 |
+| BUG-025 | Terminal Store Shallow Module | Technical Debt | N/A | **High** | 34+ methods, leaky abstraction | Open | 2025-08-04 |
+| BUG-026 | Split View Store Shallow Module | Technical Debt | N/A | **High** | 17 methods, mixed concerns | Open | 2025-08-04 |
+| BUG-027 | Frontend Services Mock Data Pollution | Code Quality | 1000+ | **High** | 30-50% mock code in services | Open | 2025-08-04 |
 | BUG-016 | Remove Mock Code from Production | Code Quality | N/A | **Medium** | Mixed concerns in api.ts | Open | 2025-09-11 |
 | BUG-004 | project.controller.js needs modularization | Technical Debt | 1,117 | **Low** | Less critical than others | **In QA** | 2025-08-03 |
 | BUG-008 | Refactor MergeWorkflowPrototype | Technical Debt | 1,173 | **Low** | Prototype cleanup | Open | 2025-09-10 |
