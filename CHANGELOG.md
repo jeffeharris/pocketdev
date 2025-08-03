@@ -4,6 +4,79 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+## [2.0.0] - 2025-08-03
+
+### 🎉 Major Architectural Transformation
+
+This release represents a complete architectural overhaul of PocketDev, implementing John Ousterhout's deep module principles throughout the entire codebase.
+
+### Added
+- **Complete Backend Service Layer** (10 services + infrastructure)
+  - `GitStatusService` (4 methods) - Git status operations
+  - `GitOperationService` (6 methods) - Git commands and operations
+  - `TaskService` (8 methods) - Task lifecycle management
+  - `ProjectService` (12 methods) - Project operations
+  - `TerminalService` (8 methods) - Terminal session management
+  - `PullRequestService` (5 methods) - GitHub PR operations
+  - `SettingsService` (6 methods) - Configuration management
+  - `MonitoringService` (4 methods) - System monitoring
+  - `ContainerService` (6 methods) - Docker operations
+  - `UploadService` (5 methods) - File attachments
+  - `EventEmitterService` - Centralized event hub
+  - `WebSocketService` - Event-based broadcasting
+
+- **Complete Frontend Service Layer** (8 services + infrastructure)
+  - `BaseService` - Abstract class for all services
+  - `ServiceProvider` - React Context for dependency injection
+  - `SessionAdapter` - Session ID normalization
+  - Full TypeScript interfaces for all services
+  - Mock support for development mode
+  - Same 8 domain services as backend (Settings, Upload, Git, Terminal, Container, PR, Project, Task)
+
+- **Dependency Injection System**
+  - ServiceRegistry replacing global `app.locals`
+  - Clean initialization in server.js
+  - Request-scoped service access
+
+### Changed
+- **BREAKING**: Complete architectural transformation
+  - Controllers reduced by 90%+ (1000+ lines → <50 lines each)
+  - Frontend api.ts split from 44 methods into 8 focused services
+  - All services follow deep module pattern (4-12 methods max)
+  - WebSocket now fully event-driven
+  - Session management completely rewritten
+
+### Fixed
+- **Critical Bugs Resolved**:
+  - BUG-003: Terminal sessions not loading on task open
+  - BUG-013: Service layer architecture implemented
+  - BUG-011: api.ts domain splitting completed
+  - BUG-014: app.locals replaced with dependency injection
+  - BUG-010: task.controller.js modularized
+  - BUG-007: git.service.js split into two focused services
+  - BUG-017: Session ID chaos resolved
+  - BUG-019: WebSocket event system implemented
+  - BUG-004: project.controller.js modularized
+  - **Security**: GitHub tokens no longer exposed in API responses
+
+### Technical Debt Eliminated
+- Shallow modules → Deep modules with simple interfaces
+- Mixed concerns → Clear separation of concerns  
+- Global state → Dependency injection
+- Session ID proliferation → Unified handling
+- WebSocket spaghetti → Event-driven architecture
+- God objects → Single-responsibility services
+
+### Metrics
+- **Code Reduction**: ~70% in controllers/components
+- **Interface Simplicity**: No service >12 methods (avg 6)
+- **Architecture**: 100% service coverage
+- **Bugs Fixed**: 9 major issues resolved
+
+---
+
+## [1.1.0] - Previous Updates
+
 ### Added
 - **Comprehensive Design Analysis Documentation**
   - Added Ousterhout architectural analysis identifying 22 bugs following deep module principles
