@@ -1,4 +1,4 @@
-import { GitService } from './git.service.js';
+import { GitService } from './git-compat.js';
 
 /**
  * PullRequestService - Handles all pull request operations

@@ -1,5 +1,6 @@
 import { executeCommandViaWebSocket, executeCommandViaMonitor } from '../utils/execute-command.js';
 import { getAllAgents, getAgentConfig, getAgentLaunchCommand } from '../config/ai-agents.js';
+import { TERMINAL_EVENTS } from './events.js';
 import path from 'path';
 
 /**
@@ -100,11 +101,11 @@ export class TerminalService {
     
     // Emit terminal created event
     if (this.eventEmitterService) {
-      this.eventEmitterService.emitTerminalCreated({
+      this.eventEmitterService.emit(TERMINAL_EVENTS.CREATED, { terminal: {
         ...dbSession,
         task_id: taskId,
         sessionId: shelltenderSessionId
-      });
+      }});
     }
     
     return result;
@@ -141,9 +142,13 @@ export class TerminalService {
     // Delete from database
     await this.models.sessions.delete(sessionDetails.dbSessionId);
     
-    // Emit terminal closed event
+    // Emit terminal closed event with task ID for proper broadcasting
     if (this.eventEmitterService) {
-      this.eventEmitterService.emitTerminalClosed(sessionDetails.shelltenderSessionId);
+      this.eventEmitterService.emit(TERMINAL_EVENTS.CLOSED, {
+        sessionId: sessionDetails.shelltenderSessionId,
+        dbSessionId: sessionDetails.dbSessionId,
+        taskId: sessionDetails.taskId
+      });
     }
     
     return { 

@@ -1,3 +1,17 @@
+import { generateAcceptAttribute } from '../config/upload.config.js';
+
+/**
+ * Get upload configuration for frontend
+ */
+export async function getUploadConfig(req, res) {
+  res.json({
+    acceptAttribute: generateAcceptAttribute(),
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    maxTotalSize: 100 * 1024 * 1024, // 100MB
+    maxFileCount: 50
+  });
+}
+
 /**
  * Upload image to task
  */

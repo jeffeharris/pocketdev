@@ -65,7 +65,7 @@ export class SessionCleanupService {
       // 5. Find Shelltender sessions without database records (orphaned)
       const dbSessionIds = new Set(dbSessions.map(s => s.shelltender_session_id).filter(Boolean));
       const orphanedSessions = shelltenderSessions.filter(
-        session => session.id.startsWith('task-') && !dbSessionIds.has(session.id)
+        session => !dbSessionIds.has(session.id)
       );
       
       // 6. Terminate orphaned Shelltender sessions

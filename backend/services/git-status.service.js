@@ -1,4 +1,4 @@
-import { GitService } from './git.service.js';
+import { GitService } from './git-compat.js';
 
 /**
  * GitStatusService - Handles all git status operations

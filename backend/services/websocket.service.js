@@ -84,10 +84,23 @@ export class WebSocketService {
     });
 
     this.eventEmitterService.subscribe('terminal.closed', (data) => {
-      this.broadcastToSession(data.sessionId, {
-        type: 'terminal-closed',
-        data: { sessionId: data.sessionId }
-      });
+      // Broadcast to task instead of session (session is already closed)
+      if (data.taskId) {
+        this.broadcastToTask(data.taskId, {
+          type: 'terminal-deleted',
+          taskId: data.taskId,
+          data: { 
+            sessionId: data.sessionId,
+            dbSessionId: data.dbSessionId 
+          }
+        });
+      } else {
+        // Legacy support - if no taskId, try to broadcast to session
+        this.broadcastToSession(data.sessionId, {
+          type: 'terminal-closed',
+          data: { sessionId: data.sessionId }
+        });
+      }
     });
 
     // AI events

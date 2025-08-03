@@ -277,15 +277,18 @@ export async function updateTerminalTab(req, res, next) {
 export async function deleteTerminalSession(req, res, next) {
   try {
     const { sessionId } = req.params;
+    console.log('[TerminalController] DELETE /terminals/:sessionId called with:', sessionId);
     
     // Get TerminalService from service registry
     const terminalService = req.services.get('TerminalService');
     
     // Delete session using service
     const result = await terminalService.deleteSession(sessionId);
+    console.log('[TerminalController] Delete successful:', result);
     
     res.json(result);
   } catch (error) {
+    console.log('[TerminalController] Delete failed:', error.message);
     if (error.message === 'Session not found') {
       return res.status(404).json({ error: error.message });
     }

@@ -1,6 +1,12 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import fsSync from 'fs';
+import { 
+  ALLOWED_MIME_TYPES, 
+  FILE_SIZE_LIMITS, 
+  isFileAllowed, 
+  UPLOAD_ERROR_MESSAGES 
+} from '../config/upload.config.js';
 
 /**
  * UploadService - Handles all file upload and attachment operations
@@ -16,20 +22,7 @@ export class UploadService {
     this.models = models;
     this.eventEmitterService = eventEmitterService;
     
-    // File validation constants
-    this.MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
-    this.MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total per task
-    this.MAX_FILE_COUNT = 50; // Maximum files per task
-    
-    // Allowed MIME types (images for now, extensible)
-    this.ALLOWED_MIME_TYPES = [
-      'image/jpeg',
-      'image/jpg', 
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'image/svg+xml'
-    ];
+    // Use centralized configuration for file validation
   }
 
   /**
@@ -202,18 +195,18 @@ export class UploadService {
       }
 
       // Check file size limit
-      if (fileData.size > this.MAX_FILE_SIZE) {
+      if (fileData.size > FILE_SIZE_LIMITS.MAX_FILE_SIZE) {
         return { 
           isValid: false, 
-          error: `File size must be less than ${this._formatBytes(this.MAX_FILE_SIZE)}` 
+          error: UPLOAD_ERROR_MESSAGES.FILE_TOO_LARGE
         };
       }
 
-      // Check MIME type (if provided)
-      if (fileData.mimetype && !this.ALLOWED_MIME_TYPES.includes(fileData.mimetype)) {
+      // Check if file is allowed (MIME type and extension)
+      if (!isFileAllowed(fileData.originalname || fileData.filename, fileData.mimetype)) {
         return { 
           isValid: false, 
-          error: 'File type not allowed. Only images are supported.' 
+          error: UPLOAD_ERROR_MESSAGES.FILE_TYPE_NOT_ALLOWED
         };
       }
 
@@ -266,10 +259,10 @@ export class UploadService {
       }
 
       // Check file count limit
-      if (existingFiles.length >= this.MAX_FILE_COUNT) {
+      if (existingFiles.length >= FILE_SIZE_LIMITS.MAX_FILE_COUNT) {
         return { 
           isValid: false, 
-          error: `Maximum ${this.MAX_FILE_COUNT} files allowed per task` 
+          error: UPLOAD_ERROR_MESSAGES.TOO_MANY_FILES
         };
       }
 
@@ -281,10 +274,10 @@ export class UploadService {
       }
 
       // Check total size limit
-      if (totalSize + newFileSize > this.MAX_TOTAL_SIZE) {
+      if (totalSize + newFileSize > FILE_SIZE_LIMITS.MAX_TOTAL_SIZE) {
         return { 
           isValid: false, 
-          error: `Total storage limit exceeded (${this._formatBytes(this.MAX_TOTAL_SIZE)} per task)` 
+          error: UPLOAD_ERROR_MESSAGES.STORAGE_LIMIT_EXCEEDED
         };
       }
 

@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
-import { GitService } from './git.service.js';
+import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
 
 /**
@@ -90,7 +90,7 @@ export class TaskService {
       
       // Emit task created event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emitTaskCreated(result.task);
+        this.eventEmitterService.emit(TASK_EVENTS.CREATED, { task: result.task });
       }
       
       return result;
@@ -144,7 +144,7 @@ export class TaskService {
       
       // Emit task state changed event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emitTaskStateChanged(task.id, 'archived', 'active');
+        this.eventEmitterService.emit(TASK_EVENTS.STATE_CHANGED, { taskId: task.id, newState: 'archived', oldState: 'active' });
       }
       
       return {
@@ -160,7 +160,7 @@ export class TaskService {
       
       // Emit task deleted event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emitTaskDeleted(task.id);
+        this.eventEmitterService.emit(TASK_EVENTS.DELETED, { taskId: task.id });
       }
       
       return {
@@ -201,7 +201,7 @@ export class TaskService {
     
     // Emit task updated event
     if (this.eventEmitterService) {
-      this.eventEmitterService.emitTaskUpdated(taskId, filteredUpdates);
+      this.eventEmitterService.emit(TASK_EVENTS.UPDATED, { taskId, changes: filteredUpdates });
     }
     
     return updatedTask;
