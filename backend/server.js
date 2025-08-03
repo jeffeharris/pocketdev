@@ -152,6 +152,10 @@ async function initializeDatabase() {
   // Register EventEmitter service first (other services depend on it)
   serviceRegistry.registerInstance('EventEmitterService', eventEmitterService);
   
+  // Register GitHubTokenService instance
+  serviceRegistry.registerInstance('GitHubTokenService', githubTokenService);
+  serviceRegistry.registerInstance('githubTokenService', githubTokenService); // Also register with lowercase for compatibility
+  
   // Register services with EventEmitter dependency
   serviceRegistry.register('GitStatusService', GitStatusService, ['models', 'githubTokenService']);
   serviceRegistry.register('GitOperationService', GitOperationService, ['models', 'githubTokenService', 'EventEmitterService']);

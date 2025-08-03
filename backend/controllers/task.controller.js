@@ -1,8 +1,10 @@
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
-import { GitService } from '../services/git.service.js';
 import { WorktreeService } from '../services/worktree.service.js';
+import { SPLIT_EVENTS, TASK_EVENTS } from '../services/events.js';
+import { GitService } from '../services/git-compat.js';
+import { GitStatusService } from '../services/git-status.service.js';
 
 /**
  * Core task controller for CRUD operations
@@ -15,12 +17,6 @@ export class TaskController {
     this.worktreeService = new WorktreeService();
   }
 
-  /**
-   * Get GitService instance with token from request
-   */
-  getGitService(req) {
-    return new GitService(req.githubToken);
-  }
 
   /**
    * Trigger git status update after operations that change git state
@@ -120,8 +116,9 @@ export class TaskController {
       const project = await this.models.projects.findById(projectId);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
-      // Create GitService with token from middleware
-      const gitService = new GitService(req.githubToken);
+      // Create GitStatusService
+      const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+      const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
       // Enrich tasks with git status and session state
       const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
@@ -129,11 +126,7 @@ export class TaskController {
         
         if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
           try {
-            gitStatus = await gitService.getBranchStatus(
-              task.worktree_path, 
-              task.branch, 
-              baseBranch
-            );
+            gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
           } catch (error) {
             console.error(`Failed to get git status for task ${task.id}:`, error.message);
           }
@@ -217,12 +210,9 @@ export class TaskController {
         const project = await this.models.projects.findById(task.project_id);
         if (project) {
           const baseBranch = `origin/${project.base_branch || 'main'}`;
-          const gitService = this.getGitService(req);
-          gitStatus = await gitService.getBranchStatus(
-            task.worktree_path, 
-            task.branch, 
-            baseBranch
-          );
+          const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+          const gitStatusService = new GitStatusService(this.models, githubTokenService);
+          gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
         }
       }
       
@@ -271,8 +261,10 @@ export class TaskController {
       let gitInfo = null;
       let mergeInfo = null;
       
-      // Create GitService with token from middleware
+      // Create GitService for basic operations
       const gitService = new GitService(req.githubToken);
+      const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+      const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
       if (fsSync.existsSync(task.worktree_path)) {
         const status = await gitService.getStatus(task.worktree_path);
@@ -424,7 +416,7 @@ export class TaskController {
       
       // Emit split layout changed event
       if (req.services?.EventEmitterService) {
-        req.services.EventEmitterService.emitSplitLayoutChanged(taskId, splitLayout);
+        req.services.EventEmitterService.emit(SPLIT_EVENTS.LAYOUT_CHANGED, { taskId, layout: splitLayout });
       }
       
       res.json(splitLayout);
@@ -506,7 +498,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for uncommitted changes
-      const gitService = this.getGitService(req);
+      const gitService = new GitService(req.githubToken);
       const statusResult = await gitService.getStatus(task.worktree_path);
       if (statusResult.output.trim()) {
         return res.status(400).json({ 
@@ -611,7 +603,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for conflicts using git service
-      const gitService = this.getGitService(req);
+      const gitService = new GitService(req.githubToken);
       const conflicts = await gitService.checkMergeConflicts(
         task.worktree_path, 
         `origin/${project.base_branch}`
@@ -766,7 +758,7 @@ Original task: ${task.name}`;
         
         // Emit task state changed event
         if (req.services?.EventEmitterService) {
-          req.services.EventEmitterService.emitTaskStateChanged(taskId, 'merged', 'active');
+          req.services.EventEmitterService.emit(TASK_EVENTS.STATE_CHANGED, { taskId, newState: 'merged', oldState: 'active' });
         }
         
         res.json({

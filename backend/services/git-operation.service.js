@@ -1,4 +1,5 @@
-import { GitService } from './git.service.js';
+import { GIT_EVENTS } from './events.js';
+import { GitService } from './git-compat.js';
 
 /**
  * GitOperationService - Handles all git operations (commands, diffs, commits)
@@ -145,7 +146,7 @@ export class GitOperationService {
       
       // Emit git operation completed event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emitGitOperationCompleted(taskId, operation, result);
+        this.eventEmitterService.emit(GIT_EVENTS.OPERATION_COMPLETED, { taskId, operation, result });
       }
     }
     

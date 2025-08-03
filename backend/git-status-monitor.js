@@ -1,4 +1,5 @@
-import { GitService } from './services/git.service.js';
+import { GIT_EVENTS } from './services/events.js';
+import { GitStatusService } from './services/git-status.service.js';
 import fsSync from 'fs';
 
 /**
@@ -75,23 +76,17 @@ export class GitStatusMonitor {
         return;
       }
       
-      // Get token and create GitService instance
+      // Get token
       const token = await this.githubTokenService.getToken();
-      const gitService = new GitService(token);
       
-      if (!gitService || !gitService.getBranchStatus) {
-        console.error('[GitStatusMonitor] GitService not properly initialized or missing getBranchStatus method');
-        return;
-      }
+      // Create GitStatusService instance
+      const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
       
-      const status = await gitService.getBranchStatus(
-        task.worktree_path,
-        task.branch,
-        baseBranch
-      );
+      // Get comprehensive git status for the task
+      const status = await gitStatusService.getTaskGitStatus(task.id, token);
       
       // Create status key for comparison (including staged/unstaged/untracked)
-      const statusKey = `${status.ahead}-${status.behind}-${status.hasConflicts}-${status.staged}-${status.unstaged}-${status.untracked}`;
+      const statusKey = `${status.ahead}-${status.behind}-${status.filesChanged}-${status.staged}-${status.unstaged}-${status.untracked}`;
       const lastStatusKey = this.lastStatus.get(task.id);
       
       // Only broadcast if status changed
@@ -100,7 +95,7 @@ export class GitStatusMonitor {
         
         // Emit git status changed event
         if (this.eventEmitterService) {
-          this.eventEmitterService.emitGitStatusChanged(task.id, status);
+          this.eventEmitterService.emit(GIT_EVENTS.STATUS_CHANGED, { taskId: task.id, gitStatus: status });
         }
         
         console.log(`[GitStatusMonitor] Git status changed for task ${task.id}:`, status);
