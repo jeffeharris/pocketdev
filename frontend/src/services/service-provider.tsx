@@ -15,9 +15,12 @@ import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
 import { GitService } from './git.service';
 import { TerminalService } from './terminal.service';
+import { ContainerService } from './container.service';
+import { PullRequestService } from './pull-request.service';
+import { ProjectService } from './project.service';
 
 // Service registry types
-export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload';
+export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload' | 'container' | 'pullRequest';
 
 export interface ServiceConfig {
   mockEnabled?: boolean;
@@ -25,13 +28,15 @@ export interface ServiceConfig {
 }
 
 export interface ServiceRegistry {
-  // Core services (to be implemented)
-  project: any; // Will be ProjectService
-  task: any;    // Will be TaskService
-  git: GitService;        // Phase 2 implemented
-  terminal: TerminalService; // Phase 2 implemented
-  settings: SettingsService; // Phase 1 implemented
-  upload: UploadService;   // Phase 1 implemented
+  // Core services
+  project: ProjectService;     // Phase 3 implemented
+  task: any;                   // Will be TaskService
+  git: GitService;             // Phase 2 implemented
+  terminal: TerminalService;   // Phase 2 implemented
+  settings: SettingsService;   // Phase 1 implemented
+  upload: UploadService;       // Phase 1 implemented
+  container: ContainerService; // Phase 3 implemented
+  pullRequest: PullRequestService; // Phase 3 implemented
   
   // Infrastructure
   sessionAdapter: SessionAdapter;
@@ -117,16 +122,19 @@ export function ServiceProvider({ children, config = {} }: ServiceProviderProps)
       try {
         // Create service instances
         const serviceRegistry: ServiceRegistry = {
-          // For now, we'll use placeholder services for most
-          // These will be replaced with actual service implementations
-          project: createPlaceholderService('project', serviceConfig),
-          task: createPlaceholderService('task', serviceConfig),
+          // Phase 3 services - actual implementations
+          project: new ProjectService(serviceConfig),
+          container: new ContainerService(serviceConfig),
+          pullRequest: new PullRequestService(serviceConfig),
           
           // Phase 1 & 2 services - actual implementations
           git: new GitService(serviceConfig),
           terminal: new TerminalService(serviceConfig),
           settings: new SettingsService(serviceConfig),
           upload: new UploadService(serviceConfig),
+          
+          // Still to be implemented
+          task: createPlaceholderService('task', serviceConfig),
           
           // Infrastructure services
           sessionAdapter: sessionAdapter,

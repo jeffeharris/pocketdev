@@ -10,6 +10,9 @@ import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
 import { GitService } from './git.service';
 import { TerminalService } from './terminal.service';
+import { ContainerService } from './container.service';
+import { PullRequestService } from './pull-request.service';
+import { ProjectService } from './project.service';
 
 const API_BASE = '/api';
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -31,6 +34,21 @@ const gitService = new GitService({
 });
 
 const terminalService = new TerminalService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const containerService = new ContainerService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const pullRequestService = new PullRequestService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const projectService = new ProjectService({ 
   baseUrl: API_BASE, 
   mockEnabled: USE_MOCKS 
 });
@@ -65,144 +83,38 @@ class ApiService {
 
   // Project endpoints
   async getProjectMinimal(id: string): Promise<Project> {
-    if (USE_MOCKS) {
-      const project = mockProjects.find(p => p.id === id);
-      if (!project) throw new Error('Project not found');
-      return project;
-    }
-    const response = await this.fetch<any>(`/projects/${id}/minimal`);
-    // Map backend format to our Project type
-    return {
-      id: response.id,
-      name: response.name,
-      repository: response.repository,
-      baseBranch: response.baseBranch,
-      created: response.created,
-      tasksCount: 0
-    };
+    // Delegated to ProjectService
+    return projectService.getProject(id, { minimal: true });
   }
 
   async getProjects(): Promise<Project[]> {
-    if (USE_MOCKS) return mockProjects;
-    const response = await this.fetch<any[]>('/projects');
-    // Map backend format to our Project type
-    return response.map(p => ({
-      id: p.id,
-      name: p.name,
-      repository: p.repo_url,
-      baseBranch: p.base_branch,
-      created: p.created_at,
-      tasksCount: p.task_count || 0
-    }));
+    // Delegated to ProjectService
+    return projectService.getProjects();
   }
 
   async getProject(id: string): Promise<Project> {
-    if (USE_MOCKS) {
-      const project = mockProjects.find(p => p.id === id);
-      if (!project) throw new Error('Project not found');
-      return project;
-    }
-    const response = await this.fetch<any>(`/projects/${id}`);
-    // Map backend format to our Project type
-    return {
-      id: response.id,
-      name: response.name,
-      repository: response.repo_url,
-      baseBranch: response.base_branch,
-      created: response.created_at,
-      tasksCount: response.task_count || 0
-    };
+    // Delegated to ProjectService
+    return projectService.getProject(id);
   }
 
   async createProject(data: { repoUrl: string; branch: string; projectName: string }): Promise<Project> {
-    if (USE_MOCKS) {
-      const newProject: Project = {
-        id: `proj_${Date.now()}`,
-        name: data.projectName,
-        repository: data.repoUrl,
-        baseBranch: data.branch,
-        created: new Date().toISOString(),
-        tasksCount: 0
-      };
-      mockProjects.push(newProject);
-      return newProject;
-    }
-    const response = await this.fetch<any>('/projects', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-    // Map backend format to our Project type
-    // The backend returns { success: true, project: {...} }
-    const project = response.project || response;
-    return {
-      id: project.id,
-      name: project.name,
-      repository: project.repo_url,
-      baseBranch: project.base_branch,
-      created: project.created_at,
-      tasksCount: 0
-    };
+    // Delegated to ProjectService
+    return projectService.createProject(data);
   }
 
   async getProjectBranches(projectId: string): Promise<string[]> {
-    if (USE_MOCKS) {
-      return ['main', 'develop', 'feature/user-auth', 'feature/api-refactor', 'fix/memory-leak'];
-    }
-    const response = await this.fetch<Array<{ name: string; isRemote: boolean; fullName: string }>>(`/projects/${projectId}/branches`);
-    
-    // Get unique branch names, preferring local over remote
-    const branchMap = new Map<string, boolean>();
-    
-    // First add local branches
-    response
-      .filter(branch => !branch.isRemote)
-      .forEach(branch => branchMap.set(branch.name, true));
-    
-    // Then add remote branches (cleaning up the name)
-    response
-      .filter(branch => branch.isRemote && !branch.name.includes('HEAD'))
-      .forEach(branch => {
-        // Extract clean branch name from remote (e.g., "main" from "remotes/origin/main")
-        const cleanName = branch.fullName.replace(/^remotes\/origin\//, '');
-        if (!branchMap.has(cleanName)) {
-          branchMap.set(cleanName, false);
-        }
-      });
-    
-    return Array.from(branchMap.keys());
+    // Delegated to ProjectService
+    return projectService.getProjectBranches(projectId);
   }
 
   async getProjectPlanning(projectId: string): Promise<{ exists: boolean; content: string | null }> {
-    if (USE_MOCKS) {
-      return {
-        exists: true,
-        content: `# Project Planning
-
-## 🐛 Bugs
-- [ ] Cart total not updating when quantity changes
-- [ ] Login redirect loop on mobile Safari
-
-## 💡 Ideas
-- [ ] AI-powered product recommendations
-- [ ] Wishlist functionality
-- [ ] Guest checkout flow
-
-## 🔧 Tech Debt
-- [ ] Refactor auth system to use middleware
-- [ ] Upgrade to React 18`
-      };
-    }
-    return this.fetch<{ exists: boolean; content: string | null }>(`/projects/${projectId}/planning`);
+    // Delegated to ProjectService
+    return projectService.getProjectPlanning(projectId);
   }
 
   async updateProjectPlanning(projectId: string, content: string): Promise<{ success: boolean; message: string; needsPush?: boolean }> {
-    if (USE_MOCKS) {
-      return { success: true, message: 'Planning updated successfully', needsPush: true };
-    }
-    return this.fetch<any>(`/projects/${projectId}/planning`, {
-      method: 'PUT',
-      body: JSON.stringify({ content })
-    });
+    // Delegated to ProjectService
+    return projectService.updateProjectPlanning(projectId, content);
   }
 
   async getProjectDashboard(projectId: string): Promise<{
@@ -217,48 +129,18 @@ class ApiService {
     tasksCount: number;
     activeTasks: number;
   }> {
-    if (USE_MOCKS) {
-      return {
-        project: mockProjects[0],
-        needsAttention: [
-          {
-            type: 'base-behind',
-            severity: 'warning',
-            message: 'Base branch is 5 commits behind origin',
-            details: { behind: 5, branch: 'main' },
-            actions: ['pull']
-          },
-          {
-            type: 'stale-task',
-            severity: 'warning', 
-            message: 'Task "Auth system" inactive for 12 days',
-            details: { taskId: '1', taskName: 'Auth system', daysSinceUpdate: 12 },
-            actions: ['open-task', 'archive']
-          }
-        ],
-        tasksCount: 3,
-        activeTasks: 2
-      };
-    }
-    return this.fetch<any>(`/projects/${projectId}/dashboard`);
+    // Delegated to ProjectService
+    return projectService.getProjectDashboard(projectId);
   }
 
   async pullBaseBranch(projectId: string): Promise<{ success: boolean; message: string }> {
-    if (USE_MOCKS) {
-      return { success: true, message: 'Successfully pulled updates to main' };
-    }
-    return this.fetch<any>(`/projects/${projectId}/pull-base-branch`, {
-      method: 'POST'
-    });
+    // Delegated to ProjectService
+    return projectService.baseBranchOperation(projectId, 'pull');
   }
 
   async pushBaseBranch(projectId: string): Promise<{ success: boolean; message: string }> {
-    if (USE_MOCKS) {
-      return { success: true, message: 'Successfully pushed main to origin' };
-    }
-    return this.fetch<any>(`/projects/${projectId}/push-base-branch`, {
-      method: 'POST'
-    });
+    // Delegated to ProjectService
+    return projectService.baseBranchOperation(projectId, 'push');
   }
 
   async getTasksMinimal(projectId: string): Promise<Task[]> {
@@ -278,26 +160,13 @@ class ApiService {
   }
 
   async getProjectDashboardCached(projectId: string): Promise<any> {
-    if (USE_MOCKS) {
-      return {
-        project: mockProjects[0],
-        needsAttention: [],
-        tasksCount: 3,
-        activeTasks: 2,
-        cached: true,
-        lastUpdated: new Date().toISOString()
-      };
-    }
-    return this.fetch<any>(`/projects/${projectId}/dashboard/cached`);
+    // Delegated to ProjectService
+    return projectService.getProjectDashboard(projectId, { cached: true });
   }
 
   async refreshProjectStatus(projectId: string): Promise<{ success: boolean; message: string }> {
-    if (USE_MOCKS) {
-      return { success: true, message: 'Refresh triggered' };
-    }
-    return this.fetch<any>(`/projects/${projectId}/refresh`, {
-      method: 'POST'
-    });
+    // Delegated to ProjectService
+    return projectService.baseBranchOperation(projectId, 'refresh');
   }
 
   // Task endpoints
@@ -466,53 +335,24 @@ class ApiService {
   }
 
   async checkConflicts(taskId: string): Promise<boolean> {
-    // Delegated to GitService - Note: This method needs to be added to GitService
-    // For now, using direct fetch until GitService is enhanced
-    if (USE_MOCKS) return Math.random() > 0.7; // 30% chance of conflicts
-    const result = await this.fetch<{ hasConflicts: boolean }>(`/tasks/${taskId}/git/check-conflicts`);
-    return result.hasConflicts;
+    // Delegated to PullRequestService
+    return pullRequestService.checkConflicts(taskId);
   }
 
   async createPR(taskId: string, description: string): Promise<PullRequest> {
-    if (USE_MOCKS) {
-      return {
-        id: Math.floor(Math.random() * 1000),
-        url: `https://github.com/user/repo/pull/${Math.floor(Math.random() * 1000)}`,
-        title: 'Mock PR',
-        description,
-        state: 'open',
-        mergeable: true,
-        conflicts: false,
-      };
-    }
-    return this.fetch<PullRequest>(`/tasks/${taskId}/pr/create`, {
-      method: 'POST',
-      body: JSON.stringify({ description }),
-    });
+    // Delegated to PullRequestService
+    return pullRequestService.createPR(taskId, description);
   }
 
   // Container endpoints
   async deployContainers(taskId: string): Promise<DeploymentResult> {
-    if (USE_MOCKS) {
-      return {
-        success: true,
-        services: [
-          { id: '1', name: 'web-app', port: 9001, status: 'running', autoAssigned: true, type: 'web-app' },
-          { id: '2', name: 'api', port: 9002, status: 'running', autoAssigned: true, type: 'api' },
-          { id: '3', name: 'database', port: 9003, status: 'stopped', autoAssigned: true, type: 'database' },
-        ],
-      };
-    }
-    return this.fetch<DeploymentResult>(`/tasks/${taskId}/deploy`, {
-      method: 'POST',
-    });
+    // Delegated to ContainerService
+    return containerService.deployContainers(taskId);
   }
 
   async stopContainers(taskId: string): Promise<void> {
-    if (USE_MOCKS) return;
-    await this.fetch(`/tasks/${taskId}/containers`, {
-      method: 'DELETE',
-    });
+    // Delegated to ContainerService
+    return containerService.stopContainers(taskId);
   }
 
   // Git operations
@@ -567,16 +407,8 @@ class ApiService {
   }
 
   async getContainerLogs(taskId: string): Promise<string[]> {
-    if (USE_MOCKS) {
-      return [
-        '[10:30:45] Starting container deployment...',
-        '[10:30:46] Building Docker images...',
-        '[10:30:50] Starting web-app service on port 9001',
-        '[10:30:52] Starting api service on port 9002',
-        '[10:30:55] All services started successfully',
-      ];
-    }
-    return this.fetch<string[]>(`/tasks/${taskId}/container-logs`);
+    // Delegated to ContainerService
+    return containerService.getContainerLogs(taskId);
   }
 
   // Terminal endpoint

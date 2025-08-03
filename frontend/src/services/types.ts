@@ -132,6 +132,12 @@ export interface IUploadService {
   deleteTaskImage(projectId: string, taskId: string, filename: string): Promise<void>;
 }
 
+export interface IContainerService {
+  deployContainers(taskId: string): Promise<any>;
+  stopContainers(taskId: string): Promise<void>;
+  getContainerLogs(taskId: string): Promise<string[]>;
+}
+
 export interface ISessionAdapter {
   registerSession(terminalSession: any): string;
   getSessionInfo(normalizedId: string): any;

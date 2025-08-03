@@ -33,6 +33,7 @@ export type {
   ITerminalService,
   ISettingsService,
   IUploadService,
+  IContainerService,
   ISessionAdapter,
   
   // Pattern types
