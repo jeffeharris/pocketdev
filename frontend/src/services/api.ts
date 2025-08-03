@@ -1,11 +1,10 @@
 import type { Task, CreateTaskDTO } from '../types/task';
-import { TaskState, WorkerStatus } from '../types/task';
 import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
 import type { AllChangesResponse, DiffViewerResponse, FileDiffResponse } from '../types/diff';
-import { mockTasks, mockProjects } from './mockData';
+import { mockProjects } from './mockData';
 import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
 import { GitService } from './git.service';
@@ -13,6 +12,7 @@ import { TerminalService } from './terminal.service';
 import { ContainerService } from './container.service';
 import { PullRequestService } from './pull-request.service';
 import { ProjectService } from './project.service';
+import { TaskService } from './task.service';
 
 const API_BASE = '/api';
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -49,6 +49,11 @@ const pullRequestService = new PullRequestService({
 });
 
 const projectService = new ProjectService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const taskService = new TaskService({ 
   baseUrl: API_BASE, 
   mockEnabled: USE_MOCKS 
 });
@@ -144,19 +149,8 @@ class ApiService {
   }
 
   async getTasksMinimal(projectId: string): Promise<Task[]> {
-    if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
-    const response = await this.fetch<any[]>(`/projects/${projectId}/tasks/minimal`);
-    // Minimal response - no git status
-    return response.map(t => ({
-      id: t.id,
-      name: t.name || 'Untitled Task',
-      description: '',
-      branch: t.branch,
-      worktree_path: t.worktree_path,
-      created_at: t.created_at,
-      taskState: t.taskState || 'active',
-      sessionState: t.sessionState || { status: 'not-started', lastStateChange: null }
-    }));
+    // Delegated to TaskService
+    return taskService.getTasks(projectId, { minimal: true });
   }
 
   async getProjectDashboardCached(projectId: string): Promise<any> {
@@ -171,134 +165,33 @@ class ApiService {
 
   // Task endpoints
   async getTasks(projectId: string): Promise<Task[]> {
-    if (USE_MOCKS) return mockTasks.filter(t => t.id.startsWith(projectId.slice(0, 8)));
-    const response = await this.fetch<any[]>(`/projects/${projectId}/tasks`);
-    // Backend now includes sessionState and taskState
-    return response.map(t => ({
-      id: t.id,
-      name: t.name || 'Untitled Task',
-      description: '', // Not in backend yet
-      branch: t.branch,
-      worktree_path: t.worktree_path,
-      created_at: t.created_at,
-      
-      // These come from backend now
-      taskState: t.taskState || 'active',
-      sessionState: t.sessionState || { status: 'not-started', lastStateChange: null },
-      
-      // Optional fields
-      project_id: t.project_id,
-      is_archived: t.is_archived,
-      merged_at: t.merged_at,
-      has_uncommitted_changes: t.has_uncommitted_changes,
-      gitStatus: t.gitStatus
-    }));
+    // Delegated to TaskService
+    return taskService.getTasks(projectId);
   }
 
   async getTask(projectId: string, taskId: string): Promise<Task> {
-    if (USE_MOCKS) {
-      const task = mockTasks.find(t => t.id === taskId);
-      if (!task) throw new Error('Task not found');
-      return task;
-    }
-    const response = await this.fetch<any>(`/projects/${projectId}/tasks/${taskId}`);
-    // Include terminals if present
-    return {
-      ...response,
-      terminals: response.terminals || []
-    };
+    // Delegated to TaskService
+    return taskService.getTask(projectId, taskId);
   }
 
   async createTask(projectId: string, task: CreateTaskDTO): Promise<Task> {
-    if (USE_MOCKS) {
-      const branch = task.useExistingBranch 
-        ? task.branch 
-        : (task.branchPrefix ? `${task.branchPrefix}${task.branch}` : task.branch);
-      
-      const newTask: Task = {
-        id: Math.random().toString(36).substr(2, 8),
-        name: task.name,
-        description: task.description,
-        branch: branch,
-        worktree_path: `/projects/${projectId}-task-${Date.now()}`,
-        created_at: new Date().toISOString(),
-        taskState: TaskState.Active,
-        sessionState: {
-          status: WorkerStatus.NotStarted,
-          lastStateChange: null
-        }
-      };
-      mockTasks.push(newTask);
-      return newTask;
-    }
-    return this.fetch<Task>(`/projects/${projectId}/tasks`, {
-      method: 'POST',
-      body: JSON.stringify(task),
-    });
+    // Delegated to TaskService
+    return taskService.createTask(projectId, task);
   }
 
   async updateTask(projectId: string, taskId: string, updates: { name?: string; description?: string }): Promise<Task> {
-    if (USE_MOCKS) {
-      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
-      if (taskIndex >= 0) {
-        mockTasks[taskIndex] = { ...mockTasks[taskIndex], ...updates };
-        return mockTasks[taskIndex];
-      }
-      throw new Error('Task not found');
-    }
-    return this.fetch<Task>(`/projects/${projectId}/tasks/${taskId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-    });
+    // Delegated to TaskService
+    return taskService.updateTask(projectId, taskId, updates);
   }
 
   async archiveTask(projectId: string, taskId: string): Promise<void> {
-    if (USE_MOCKS) {
-      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
-      if (taskIndex >= 0) {
-        mockTasks[taskIndex].taskState = TaskState.Archived;
-      }
-      return;
-    }
-    await this.fetch<void>(`/projects/${projectId}/tasks/${taskId}/archive`, {
-      method: 'POST',
-    });
+    // Delegated to TaskService
+    return taskService.archiveTask(projectId, taskId);
   }
 
   async getCommitHistory(projectId: string, taskId: string): Promise<any[]> {
-    if (USE_MOCKS) {
-      return [
-        {
-          hash: 'abc123def456',
-          message: 'Fix responsive layout in header',
-          author: 'You',
-          date: '2 hours ago',
-          isMerge: false
-        },
-        {
-          hash: 'def456ghi789',
-          message: 'Add user authentication',
-          author: 'You',
-          date: '4 hours ago',
-          isMerge: false
-        },
-        {
-          hash: 'ghi789jkl012',
-          message: 'Merge branch \'main\' into feature/auth',
-          author: 'You',
-          date: 'Yesterday',
-          isMerge: true
-        },
-        {
-          hash: 'jkl012mno345',
-          message: 'Initial auth setup',
-          author: 'You',
-          date: '2 days ago',
-          isMerge: false
-        }
-      ];
-    }
-    return this.fetch<any[]>(`/projects/${projectId}/tasks/${taskId}/git/commits`);
+    // Delegated to TaskService
+    return taskService.getCommitHistory(projectId, taskId);
   }
 
   // Git endpoints
@@ -381,29 +274,13 @@ class ApiService {
   }
 
   async updateBranch(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
-    // Delegated to GitService - Note: This uses a different endpoint, keeping direct implementation for now
-    if (USE_MOCKS) {
-      return { success: true, output: 'Mock update successful' };
-    }
-    return this.fetch<{ success: boolean; output: string; error?: string }>(
-      `/projects/${projectId}/tasks/${taskId}/update`,
-      {
-        method: 'POST',
-      }
-    );
+    // Delegated to TaskService
+    return taskService.updateBranch(projectId, taskId);
   }
 
   async mergeToBase(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
-    // Delegated to GitService - Note: This uses a different endpoint, keeping direct implementation for now
-    if (USE_MOCKS) {
-      return { success: true, output: 'Mock merge successful' };
-    }
-    return this.fetch<{ success: boolean; output: string; error?: string }>(
-      `/projects/${projectId}/tasks/${taskId}/merge-to-base`,
-      {
-        method: 'POST',
-      }
-    );
+    // Delegated to TaskService
+    return taskService.mergeToBase(projectId, taskId);
   }
 
   async getContainerLogs(taskId: string): Promise<string[]> {

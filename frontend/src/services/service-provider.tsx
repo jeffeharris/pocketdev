@@ -18,6 +18,7 @@ import { TerminalService } from './terminal.service';
 import { ContainerService } from './container.service';
 import { PullRequestService } from './pull-request.service';
 import { ProjectService } from './project.service';
+import { TaskService } from './task.service';
 
 // Service registry types
 export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload' | 'container' | 'pullRequest';
@@ -30,7 +31,7 @@ export interface ServiceConfig {
 export interface ServiceRegistry {
   // Core services
   project: ProjectService;     // Phase 3 implemented
-  task: any;                   // Will be TaskService
+  task: TaskService;           // Phase 4 implemented
   git: GitService;             // Phase 2 implemented
   terminal: TerminalService;   // Phase 2 implemented
   settings: SettingsService;   // Phase 1 implemented
@@ -122,8 +123,9 @@ export function ServiceProvider({ children, config = {} }: ServiceProviderProps)
       try {
         // Create service instances
         const serviceRegistry: ServiceRegistry = {
-          // Phase 3 services - actual implementations
+          // Phase 4 services - actual implementations
           project: new ProjectService(serviceConfig),
+          task: new TaskService(serviceConfig),
           container: new ContainerService(serviceConfig),
           pullRequest: new PullRequestService(serviceConfig),
           
@@ -132,9 +134,6 @@ export function ServiceProvider({ children, config = {} }: ServiceProviderProps)
           terminal: new TerminalService(serviceConfig),
           settings: new SettingsService(serviceConfig),
           upload: new UploadService(serviceConfig),
-          
-          // Still to be implemented
-          task: createPlaceholderService('task', serviceConfig),
           
           // Infrastructure services
           sessionAdapter: sessionAdapter,

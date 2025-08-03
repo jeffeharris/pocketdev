@@ -62,6 +62,16 @@ export {
   NetworkError
 } from './base.service';
 
+// Implemented services (for direct access if needed)
+export { ProjectService } from './project.service';
+export { TaskService } from './task.service';
+export { GitService } from './git.service';
+export { TerminalService } from './terminal.service';
+export { SettingsService } from './settings.service';
+export { UploadService } from './upload.service';
+export { ContainerService } from './container.service';
+export { PullRequestService } from './pull-request.service';
+
 // Legacy API for migration (will be removed)
 export { api } from './api';
 
