@@ -1,6 +1,6 @@
 /**
  * Controller for container-related task operations
- * This is a placeholder for future Docker-in-Docker implementation
+ * Handles HTTP requests and delegates container operations to ContainerService
  */
 export class TaskContainerController {
   constructor(models) {
@@ -12,6 +12,7 @@ export class TaskContainerController {
    */
   async deployContainers(req, res) {
     const { projectId, taskId } = req.params;
+    const { forceRecreate = false, environmentOverrides = {}, portBindings = {} } = req.body;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -19,26 +20,17 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // TODO: Implement actual container deployment
-      // This will involve:
-      // 1. Reading docker-compose.yml or similar from task worktree
-      // 2. Allocating ports from the pool (9001-9010)
-      // 3. Starting containers with proper isolation
-      // 4. Configuring nginx routing for web services
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
       
-      res.json({
-        success: true,
-        services: [
-          { 
-            id: '1', 
-            name: 'web-app', 
-            port: 9001, 
-            status: 'running', 
-            autoAssigned: true, 
-            type: 'web-app' 
-          }
-        ]
+      // Create containers using the service
+      const result = await containerService.createContainer(taskId, {
+        forceRecreate,
+        environmentOverrides,
+        portBindings
       });
+      
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -49,6 +41,7 @@ export class TaskContainerController {
    */
   async stopContainers(req, res) {
     const { projectId, taskId } = req.params;
+    const { removeVolumes = false, force = false } = req.body;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -56,13 +49,16 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // TODO: Implement actual container cleanup
-      // This will involve:
-      // 1. Stopping all containers for this task
-      // 2. Releasing allocated ports back to the pool
-      // 3. Cleaning up nginx routes
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
       
-      res.json({ success: true });
+      // Stop containers using the service
+      const result = await containerService.stopContainer(taskId, {
+        removeVolumes,
+        force
+      });
+      
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -80,9 +76,13 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // TODO: Return actual running services
-      // Query Docker API for containers with task labels
-      res.json([]);
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
+      
+      // Get container status using the service
+      const status = await containerService.getContainerStatus(taskId);
+      
+      res.json(status.services);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -93,6 +93,7 @@ export class TaskContainerController {
    */
   async getPreviewUrl(req, res) {
     const { projectId, taskId } = req.params;
+    const { service } = req.query;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -100,9 +101,13 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // TODO: Return actual preview URL based on deployed services
-      // This will be based on nginx routing configuration
-      res.json({ url: `http://localhost:9001` });
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
+      
+      // Get preview URL using the service
+      const result = await containerService.getPreviewUrl(taskId, service);
+      
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -113,6 +118,7 @@ export class TaskContainerController {
    */
   async getContainerLogs(req, res) {
     const { projectId, taskId } = req.params;
+    const { tail, since, follow, service } = req.query;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -120,14 +126,18 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // TODO: Return actual container logs
-      // Stream logs from Docker API
-      res.json([
-        '[10:30:45] Starting container deployment...',
-        '[10:30:46] Building Docker images...',
-        '[10:30:50] Starting web-app service on port 9001',
-        '[10:30:55] All services started successfully'
-      ]);
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
+      
+      // Get container logs using the service
+      const logs = await containerService.getContainerLogs(taskId, {
+        tail: tail ? parseInt(tail) : 100,
+        since,
+        follow: follow === 'true',
+        service
+      });
+      
+      res.json(logs);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -138,7 +148,7 @@ export class TaskContainerController {
    */
   async debugShell(req, res) {
     const { projectId, taskId } = req.params;
-    const { containerId } = req.body;
+    const { containerId, service } = req.body;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -146,13 +156,70 @@ export class TaskContainerController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
+      
+      // Get container status to verify container exists
+      const status = await containerService.getContainerStatus(taskId);
+      
+      let targetContainer = null;
+      if (containerId) {
+        targetContainer = status.containers.find(c => c.id.startsWith(containerId));
+      } else if (service) {
+        targetContainer = status.containers.find(c => c.service === service);
+      } else if (status.containers.length > 0) {
+        targetContainer = status.containers[0]; // Use first container
+      }
+      
+      if (!targetContainer || !targetContainer.running) {
+        return res.status(400).json({ 
+          error: 'No running container found for debug shell',
+          availableContainers: status.containers.map(c => ({
+            id: c.id.substring(0, 12),
+            service: c.service,
+            running: c.running
+          }))
+        });
+      }
+      
       // TODO: Create a Shelltender session attached to the container
+      // This would involve creating a new terminal session that executes:
       // docker exec -it <containerId> /bin/bash
       
       res.json({
         success: true,
-        shellUrl: `http://localhost:7681/?container=${containerId}`
+        shellUrl: `http://localhost:7681/?container=${targetContainer.id.substring(0, 12)}`,
+        containerId: targetContainer.id.substring(0, 12),
+        service: targetContainer.service
       });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Restart containers for a task
+   */
+  async restartContainers(req, res) {
+    const { projectId, taskId } = req.params;
+    const { service, recreate = false } = req.body;
+    
+    try {
+      const task = await this.models.tasks.findById(taskId);
+      if (!task || task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+
+      // Get ContainerService from request services
+      const containerService = req.services.ContainerService;
+      
+      // Restart containers using the service
+      const result = await containerService.restartContainer(taskId, {
+        service,
+        recreate
+      });
+      
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

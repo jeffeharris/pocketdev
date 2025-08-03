@@ -47,7 +47,10 @@ export class ProjectService {
       // Clone repository
       console.log(`Cloning ${repoUrl} to ${projectPath}...`);
       const gitService = new GitService(githubToken);
-      const cloneResult = await gitService.clone(repoUrl, projectPath);
+      const cloneResult = await gitService.command(
+        this.projectsDir,
+        `git clone ${repoUrl} ${projectId}`
+      );
       
       if (!cloneResult.success) {
         throw new Error(`Failed to clone repository: ${cloneResult.error}`);
@@ -58,7 +61,7 @@ export class ProjectService {
       
       // Checkout branch if different from default
       if (branch && branch !== 'main') {
-        const checkoutResult = await gitService.checkoutBranch(projectPath, branch);
+        const checkoutResult = await gitService.checkout(projectPath, branch);
         
         if (!checkoutResult.success) {
           // Clean up on failure
@@ -203,7 +206,7 @@ export class ProjectService {
     const gitService = new GitService(githubToken);
     
     // Get all branches
-    const branchResult = await gitService.executeCommand(
+    const branchResult = await gitService.command(
       project.local_path,
       'git branch -a'
     );
@@ -258,7 +261,7 @@ export class ProjectService {
     const gitService = new GitService(githubToken);
     
     // Create branch
-    const result = await gitService.executeCommand(
+    const result = await gitService.command(
       project.local_path,
       `git checkout -b ${branchName} ${fromBranch}`
     );
@@ -293,7 +296,7 @@ export class ProjectService {
     const gitService = new GitService(githubToken);
     
     // Fetch from remote
-    const fetchResult = await gitService.executeCommand(
+    const fetchResult = await gitService.command(
       project.local_path,
       'git fetch --all --prune --tags'
     );
@@ -305,7 +308,7 @@ export class ProjectService {
     let pullResult = null;
     if (!fetchOnly) {
       // Pull current branch
-      pullResult = await gitService.executeCommand(
+      pullResult = await gitService.command(
         project.local_path,
         'git pull'
       );
@@ -377,7 +380,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         if (success) {
           // Pull the changes to sync local repository
           const gitService = new GitService(githubToken);
-          await gitService.executeCommand(
+          await gitService.command(
             project.local_path,
             `git pull origin ${branch}`
           );
@@ -412,7 +415,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         -f branch="${branch}"`;
       
       const gitService = new GitService(githubToken);
-      const createResult = await gitService.executeCommand(
+      const createResult = await gitService.command(
         project.local_path,
         createFileCommand
       );
@@ -454,17 +457,17 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       const gitService = new GitService(githubToken);
       
       // Fetch latest from remote to get accurate status
-      await gitService.executeCommand(project.local_path, 'git fetch origin');
+      await gitService.command(project.local_path, 'git fetch origin');
       
       // Check if base branch is behind its remote
-      const behindResult = await gitService.executeCommand(
+      const behindResult = await gitService.command(
         project.local_path,
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
       // Check if base branch has unpushed commits
-      const aheadResult = await gitService.executeCommand(
+      const aheadResult = await gitService.command(
         project.local_path,
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`
       );
@@ -506,7 +509,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     }
     
     // Pull updates for base branch
-    const result = await gitService.executeCommand(
+    const result = await gitService.command(
       project.local_path,
       `git pull origin ${project.base_branch}`
     );
@@ -539,7 +542,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     const gitService = new GitService(githubToken);
     
     // Push base branch
-    const result = await gitService.executeCommand(
+    const result = await gitService.command(
       project.local_path,
       `git push origin ${project.base_branch}`
     );
@@ -625,7 +628,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       if (!cached && task.status === 'active' && task.worktree_path) {
         try {
           const gitService = new GitService(githubToken);
-          const mergeResult = await gitService.executeCommand(
+          const mergeResult = await gitService.command(
             task.worktree_path,
             `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`
           );
@@ -649,7 +652,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     if (!cached && githubToken) {
       try {
         const gitService = new GitService(githubToken);
-        const prResult = await gitService.executeCommand(
+        const prResult = await gitService.command(
           project.local_path,
           `gh pr list --state open --json number,title,url,author,createdAt`
         );
@@ -714,7 +717,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     // Try to read from git
     try {
       const gitService = new GitService(githubToken);
-      const result = await gitService.executeCommand(
+      const result = await gitService.command(
         project.local_path,
         `git show ${project.base_branch}:.pocketdev/PLANNING.md`
       );
@@ -751,7 +754,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     const gitService = new GitService(githubToken);
     
     // Ensure we're on the base branch
-    await gitService.executeCommand(
+    await gitService.command(
       project.local_path,
       `git checkout ${project.base_branch}`
     );
@@ -765,12 +768,12 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     await fs.writeFile(planningPath, content, 'utf8');
     
     // Add and commit the file
-    await gitService.executeCommand(
+    await gitService.command(
       project.local_path,
       'git add .pocketdev/PLANNING.md'
     );
     
-    const commitResult = await gitService.executeCommand(
+    const commitResult = await gitService.command(
       project.local_path,
       `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`
     );
@@ -803,7 +806,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       
       try {
         // Check if branch is behind origin/base_branch
-        const behindResult = await gitService.executeCommand(
+        const behindResult = await gitService.command(
           task.worktree_path,
           `git rev-list --count HEAD..origin/${project.base_branch}`
         );
@@ -813,21 +816,21 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         let ahead = 0;
         try {
           // First check if remote tracking branch exists
-          const remoteCheckResult = await gitService.executeCommand(
+          const remoteCheckResult = await gitService.command(
             task.worktree_path,
             `git rev-parse --verify origin/${task.branch} 2>/dev/null`
           );
           
           if (remoteCheckResult.success) {
             // Remote branch exists, count unpushed commits
-            const aheadResult = await gitService.executeCommand(
+            const aheadResult = await gitService.command(
               task.worktree_path,
               `git rev-list --count origin/${task.branch}..HEAD`
             );
             ahead = parseInt(aheadResult.output.trim()) || 0;
           } else {
             // No remote branch, count all commits ahead of base branch
-            const aheadResult = await gitService.executeCommand(
+            const aheadResult = await gitService.command(
               task.worktree_path,
               `git rev-list --count origin/${project.base_branch}..HEAD`
             );
@@ -835,7 +838,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
           }
         } catch (e) {
           // Fallback to comparing with base branch
-          const aheadResult = await gitService.executeCommand(
+          const aheadResult = await gitService.command(
             task.worktree_path,
             `git rev-list --count origin/${project.base_branch}..HEAD`
           );
@@ -928,7 +931,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         if (success) {
           // Pull the changes to sync local repository
           const gitService = new GitService(githubToken);
-          await gitService.executeCommand(
+          await gitService.command(
             project.local_path,
             `git pull origin ${branch}`
           );
@@ -963,7 +966,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         -f branch="${branch}"`;
       
       const gitService = new GitService(githubToken);
-      const createResult = await gitService.executeCommand(
+      const createResult = await gitService.command(
         project.local_path,
         createFileCommand
       );

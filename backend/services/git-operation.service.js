@@ -9,9 +9,10 @@ import { GitService } from './git.service.js';
  * Following deep module principles: simple interface (6 methods), complex implementation.
  */
 export class GitOperationService {
-  constructor(models, githubTokenService) {
+  constructor(models, githubTokenService, eventEmitterService = null) {
     this.models = models;
     this.githubTokenService = githubTokenService;
+    this.eventEmitterService = eventEmitterService;
   }
 
   /**
@@ -141,6 +142,11 @@ export class GitOperationService {
     // Trigger status update for operations that change git state
     if (result.success && statusUpdateOperations.includes(operation)) {
       await this._triggerStatusUpdate(taskId, appLocals);
+      
+      // Emit git operation completed event
+      if (this.eventEmitterService) {
+        this.eventEmitterService.emitGitOperationCompleted(taskId, operation, result);
+      }
     }
     
     return {
@@ -367,3 +373,5 @@ export class GitOperationService {
     }
   }
 }
+
+export default GitOperationService;

@@ -6,9 +6,9 @@ import fsSync from 'fs';
  * and broadcasts updates via WebSocket
  */
 export class GitStatusMonitor {
-  constructor(models, wsEventService, githubTokenService, checkInterval = 30000) { // Check every 30 seconds
+  constructor(models, eventEmitterService, githubTokenService, checkInterval = 30000) { // Check every 30 seconds
     this.models = models;
-    this.wsEventService = wsEventService;
+    this.eventEmitterService = eventEmitterService;
     this.githubTokenService = githubTokenService;
     this.checkInterval = checkInterval;
     this.isRunning = false;
@@ -98,9 +98,9 @@ export class GitStatusMonitor {
       if (statusKey !== lastStatusKey) {
         this.lastStatus.set(task.id, statusKey);
         
-        // Broadcast the update
-        if (this.wsEventService) {
-          this.wsEventService.sendGitStatusUpdate(task.id, status);
+        // Emit git status changed event
+        if (this.eventEmitterService) {
+          this.eventEmitterService.emitGitStatusChanged(task.id, status);
         }
         
         console.log(`[GitStatusMonitor] Git status changed for task ${task.id}:`, status);
@@ -131,8 +131,8 @@ export class GitStatusMonitor {
 /**
  * Initialize the Git Status Monitor
  */
-export function initializeGitStatusMonitor(models, wsEventService, githubTokenService) {
-  const monitor = new GitStatusMonitor(models, wsEventService, githubTokenService);
+export function initializeGitStatusMonitor(models, eventEmitterService, githubTokenService) {
+  const monitor = new GitStatusMonitor(models, eventEmitterService, githubTokenService);
   monitor.start();
   
   // Graceful shutdown

@@ -29,6 +29,20 @@ export class ServiceRegistry {
   }
 
   /**
+   * Register an existing service instance
+   * @param {string} name - Service name
+   * @param {Object} instance - Existing service instance
+   */
+  registerInstance(name, instance) {
+    this.services.set(name, {
+      factory: null,
+      dependencies: [],
+      instance
+    });
+    this.initialized.add(name);
+  }
+
+  /**
    * Get a service by name, creating it if necessary
    * @param {string} name - Service name
    * @returns {Object} Service instance
@@ -166,7 +180,15 @@ export class ServiceRegistry {
  */
 export function serviceMiddleware(serviceRegistry) {
   return (req, res, next) => {
-    req.services = serviceRegistry;
+    // Create a proxy to access services directly by name
+    req.services = new Proxy(serviceRegistry, {
+      get(target, prop) {
+        if (typeof prop === 'string' && target.hasService(prop)) {
+          return target.get(prop);
+        }
+        return target[prop];
+      }
+    });
     next();
   };
 }

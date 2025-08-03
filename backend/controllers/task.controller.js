@@ -45,57 +45,34 @@ export class TaskController {
     }
     
     try {
-      const project = await this.models.projects.findById(projectId);
-      if (!project) {
-        return res.status(404).json({ error: 'Project not found' });
+      // Get TaskService from service registry
+      const taskService = req.services.get('TaskService');
+      
+      // Create task using service
+      const result = await taskService.createTask(
+        projectId,
+        { name, branch, useExistingBranch },
+        req.githubToken,
+        { 
+          createSession: true, 
+          hostname: req.hostname 
+        }
+      );
+      
+      // Connect session monitor to the new task
+      const sessionMonitor = req.app.locals.wsAdapter;
+      const aiMonitor = req.app.locals.aiMonitor;
+      if (sessionMonitor && aiMonitor && result.session?.sessionId) {
+        try {
+          console.log('Connecting monitor to new task session:', result.session.sessionId);
+          await sessionMonitor.connectToSession(result.session.sessionId);
+          await aiMonitor.registerSessionPatterns(result.session.sessionId);
+        } catch (error) {
+          console.warn('Failed to connect monitors:', error.message);
+        }
       }
       
-      const taskId = this.models.tasks.generateId();
-      const worktreePath = path.join(this.projectsDir, `${project.id}-task-${taskId}`);
-      
-      // Create worktree using service
-      await this.worktreeService.create(project.local_path, branch, worktreePath, project.base_branch, useExistingBranch);
-      
-      // Configure git credentials
-      const gitService = this.getGitService(req);
-      await gitService.configureCredentials(worktreePath);
-      
-      // Create task in database
-      const task = await this.models.tasks.create(project.id, {
-        id: taskId,
-        name,
-        branch,
-        worktree_path: worktreePath
-      });
-      
-      // Update project last accessed
-      await this.models.projects.updateLastAccessed(project.id);
-      
-      // Create shelltender session for this task
-      try {
-        const { createTaskSession } = await import('../../shared/shelltender-client.js');
-        await createTaskSession(taskId, worktreePath);
-        
-        // Connect session monitor to the new task
-        const sessionMonitor = req.app.locals.wsAdapter;
-        const aiMonitor = req.app.locals.aiMonitor;
-        if (sessionMonitor && aiMonitor) {
-          const sessionId = `task-${taskId}`;
-          console.log('Connecting monitor to new task session:', sessionId);
-          await sessionMonitor.connectToSession(sessionId);
-          await aiMonitor.registerSessionPatterns(sessionId);
-        }
-      } catch (error) {
-        console.warn('Failed to create shelltender session:', error.message);
-      }
-      
-      res.json({ 
-        success: true, 
-        task: {
-          ...task,
-          claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(worktreePath)}`
-        }
-      });
+      res.json(result.task);
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
@@ -320,37 +297,12 @@ export class TaskController {
         }
       }
       
-      // Check Shelltender status for each terminal
-      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
-      const terminalsWithStatus = await Promise.all(
-        terminals.map(async (terminal) => {
-          let shelltenderStatus = 'not-found';
-          
-          try {
-            const sessionId = terminal.session_id || terminal.shelltender_session_id;
-            if (sessionId) {
-              const response = await fetch(`${shelltenderUrl}/api/sessions/${sessionId}`);
-              if (response.ok) {
-                const session = await response.json();
-                shelltenderStatus = session.status === 'active' ? 'active' : 'inactive';
-              }
-            }
-          } catch (error) {
-            console.error(`Failed to check Shelltender status for session ${terminal.id}:`, error.message);
-          }
-          
-          return {
-            sessionId: terminal.session_id || terminal.shelltender_session_id,
-            dbSessionId: terminal.id,
-            shelltenderSessionId: terminal.session_id || terminal.shelltender_session_id,
-            tabName: terminal.tab_name,
-            tabOrder: terminal.tab_order,
-            aiState: terminal.ai_state,
-            aiAgent: terminal.ai_agent,
-            shelltenderStatus
-          };
-        })
-      );
+      // Get terminal states using TerminalService
+      const terminalService = req.services.get('TerminalService');
+      const terminalsWithStatus = await terminalService.getTaskSessions(taskId, {
+        aiMonitor: req.app.locals.aiMonitor,
+        wsAdapter: req.app.locals.wsAdapter
+      });
       
       res.json({
         ...task,
@@ -372,23 +324,22 @@ export class TaskController {
     const { name, description } = req.body;
     
     try {
+      // Verify task exists and belongs to project
       const task = await this.models.tasks.findById(taskId);
-      if (!task) {
+      if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Verify task belongs to project
-      if (task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found in this project' });
-      }
+      // Get TaskService from service registry
+      const taskService = req.services.get('TaskService');
       
       // Build update object with only provided fields
       const updates = {};
       if (name !== undefined) updates.name = name;
       if (description !== undefined) updates.description = description;
       
-      // Update the task
-      const updatedTask = await this.models.tasks.update(taskId, updates);
+      // Update task using service
+      const updatedTask = await taskService.updateTaskMetadata(taskId, updates);
       
       res.json(updatedTask);
     } catch (error) {
@@ -471,14 +422,9 @@ export class TaskController {
         split_layout: splitLayout
       });
       
-      // Broadcast layout change via WebSocket
-      if (req.app.locals.wsEventService) {
-        req.app.locals.wsEventService.broadcastToTask(taskId, {
-          type: 'split-layout-changed',
-          data: {
-            splitLayout: splitLayout
-          }
-        });
+      // Emit split layout changed event
+      if (req.services?.EventEmitterService) {
+        req.services.EventEmitterService.emitSplitLayoutChanged(taskId, splitLayout);
       }
       
       res.json(splitLayout);
@@ -494,41 +440,19 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     
     try {
+      // Verify task exists and belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Check for uncommitted changes
-      const gitService = this.getGitService(req);
-      const status = await gitService.getStatus(task.worktree_path);
-      const hasUncommittedChanges = status.output.trim().length > 0;
+      // Get TaskService from service registry
+      const taskService = req.services.get('TaskService');
       
-      // Check for unpushed commits
-      let hasUnpushedCommits = false;
-      try {
-        const unpushed = await gitService.getUnpushedCommits(task.worktree_path, task.branch);
-        hasUnpushedCommits = unpushed.output.trim().length > 0;
-      } catch (e) {
-        hasUnpushedCommits = true;
-      }
+      // Check deletion safety using service
+      const safetyCheck = await taskService.checkTaskDeletionSafety(taskId, req.githubToken);
       
-      // Get diff summary if changes exist
-      let diffSummary = '';
-      if (hasUncommittedChanges) {
-        const diff = await gitService.getDiff(task.worktree_path, '--stat');
-        diffSummary = diff.output;
-      }
-      
-      res.json({
-        canDelete: !hasUncommittedChanges && !hasUnpushedCommits,
-        hasUncommittedChanges,
-        hasUnpushedCommits,
-        diffSummary,
-        warnings: []
-          .concat(hasUncommittedChanges ? ['Task has uncommitted changes that will be lost'] : [])
-          .concat(hasUnpushedCommits ? ['Task has commits that have not been pushed to remote'] : [])
-      });
+      res.json(safetyCheck);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -542,39 +466,25 @@ export class TaskController {
     const { force = false, softDelete = true } = req.query;
     
     try {
+      // Verify task exists and belongs to project
       const task = await this.models.tasks.findById(taskId);
       if (!task || task.project_id !== projectId) {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      const project = await this.models.projects.findById(task.project_id);
+      // Get TaskService from service registry
+      const taskService = req.services.get('TaskService');
       
-      // Clean up all Shelltender sessions for this task
-      await this.cleanupTaskSessions(taskId);
+      // Delete task using service
+      const result = await taskService.deleteTask(taskId, {
+        force: force === 'true' || force === true,
+        softDelete: softDelete === 'true' || softDelete === true
+      });
       
-      if (softDelete && !force) {
-        // Soft delete - archive the task
-        await this.models.tasks.archive(task.id);
-        
-        // Move worktree to archived location
-        const archivePath = path.join(this.projectsDir, '.archived', `${project.id}-task-${task.id}-${Date.now()}`);
-        await fs.mkdir(path.dirname(archivePath), { recursive: true });
-        await this.worktreeService.move(task.worktree_path, archivePath);
-        
-        res.json({ 
-          success: true, 
-          softDeleted: true,
-          message: 'Task archived. Can be restored within 30 days.' 
-        });
-      } else {
-        // Hard delete
-        await this.worktreeService.remove(project.local_path, task.worktree_path);
-        await this.models.tasks.delete(task.id);
-        
-        res.json({ success: true, hardDeleted: true });
-      }
+      // Update project last accessed
+      await this.models.projects.updateLastAccessed(task.project_id);
       
-      await this.models.projects.updateLastAccessed(project.id);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
@@ -854,9 +764,9 @@ Original task: ${task.name}`;
         // Trigger status update for the task
         await this.triggerStatusUpdate(taskId, req);
         
-        // Send task state change via WebSocket
-        if (req.app.locals.wsEventService) {
-          req.app.locals.wsEventService.sendTaskStateChange(taskId, 'merged');
+        // Emit task state changed event
+        if (req.services?.EventEmitterService) {
+          req.services.EventEmitterService.emitTaskStateChanged(taskId, 'merged', 'active');
         }
         
         res.json({
@@ -927,40 +837,8 @@ Original task: ${task.name}`;
    * Clean up all Shelltender sessions for a task
    */
   async cleanupTaskSessions(taskId) {
-    try {
-      // Get all active sessions for this task
-      const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
-      
-      if (sessions.length === 0) {
-        console.log(`No active sessions found for task ${taskId}`);
-        return;
-      }
-      
-      const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
-      
-      // Terminate each Shelltender session
-      for (const session of sessions) {
-        if (session.shelltender_session_id) {
-          try {
-            console.log(`Terminating Shelltender session: ${session.shelltender_session_id}`);
-            const response = await fetch(`${shelltenderUrl}/api/sessions/${session.shelltender_session_id}`, {
-              method: 'DELETE'
-            });
-            
-            if (!response.ok) {
-              console.error(`Failed to terminate session ${session.shelltender_session_id}:`, response.statusText);
-            }
-          } catch (error) {
-            console.error(`Error terminating session ${session.shelltender_session_id}:`, error.message);
-            // Continue with other sessions even if one fails
-          }
-        }
-      }
-      
-      console.log(`Cleaned up ${sessions.length} sessions for task ${taskId}`);
-    } catch (error) {
-      console.error(`Error cleaning up sessions for task ${taskId}:`, error);
-      // Don't throw - we don't want session cleanup failure to prevent task deletion
-    }
+    // Delegate to TerminalService which handles session complexity
+    const terminalService = new (await import('../services/terminal.service.js')).TerminalService(this.models);
+    return await terminalService.cleanupTaskSessions(taskId);
   }
 }

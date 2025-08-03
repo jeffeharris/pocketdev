@@ -186,6 +186,7 @@ export class TaskGitController {
       
       // Use GitOperationService from service registry
       const gitOperationService = req.services.get('GitOperationService');
+      
       const options = {
         message,
         files,
@@ -203,6 +204,7 @@ export class TaskGitController {
       
       res.json(result);
     } catch (error) {
+      
       if (error.message === 'File path required for unstage operation' || 
           error.message === 'Commit message required' || 
           error.message === 'Commit hash required for reset' ||

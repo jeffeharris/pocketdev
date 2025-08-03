@@ -102,6 +102,19 @@ class SessionModel {
     return session;
   }
 
+  async findByShelltenderSessionId(shelltenderSessionId) {
+    const session = await this.db.get(`
+      SELECT * FROM terminal_sessions 
+      WHERE shelltender_session_id = ?
+    `, [shelltenderSessionId]);
+
+    if (session) {
+      session = this._parseSession(session);
+    }
+
+    return session;
+  }
+
   async update(id, data) {
     const updates = [];
     const values = [];

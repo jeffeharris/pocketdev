@@ -20,11 +20,11 @@
 import { AIStateTracker } from './ai-state-tracker.js';
 
 export class AISessionMonitor {
-  constructor(sessionManager, wsServer, notificationService, wsEventService, models) {
+  constructor(sessionManager, wsServer, notificationService, models, eventEmitterService = null) {
     this.sessionManager = sessionManager;
     this.wsServer = wsServer;
     this.notificationService = notificationService;
-    this.wsEventService = wsEventService;
+    this.eventEmitterService = eventEmitterService;
     this.models = models;
     this.stateTrackers = new Map(); // sessionId -> AIStateTracker
     this.patternMatchers = new Map(); // pattern name -> config
@@ -543,9 +543,9 @@ export class AISessionMonitor {
       }
     }
     
-    // Use our WebSocket event service for broadcasting
-    if (this.wsEventService) {
-      this.wsEventService.sendAIStateUpdate(taskId, {
+    // Emit AI state changed event
+    if (this.eventEmitterService) {
+      this.eventEmitterService.emitAIStateChanged(taskId, {
         status: aggregateState,
         lastStateChange: new Date().toISOString(),
         sessionStates: sessionStates // Include individual session states
