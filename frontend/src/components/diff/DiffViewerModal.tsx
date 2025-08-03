@@ -163,11 +163,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     if (isOpen && taskId) {
       loadDiffData();
     } else if (!isOpen) {
-      // Clear data when modal closes
+      // Clear data when modal closes (but NOT originalCode/modifiedCode to avoid Monaco disposal errors)
       setFiles([]);
       setSelectedFile(null);
-      setOriginalCode('');
-      setModifiedCode('');
       setError(null);
       // Reset comparison mode to working
       setCompareWith('working');
@@ -182,14 +180,6 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
       // Clear caches when modal closes
       diffCache.current = {};
       fileDiffCache.current = {};
-    }
-    
-    // Cleanup function to prevent Monaco disposal errors
-    return () => {
-      if (!isOpen) {
-        setOriginalCode('');
-        setModifiedCode('');
-      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskId]);
@@ -278,7 +268,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   useShortcutContext('diffViewer', { enabled: isOpen, priority: 30 });
   
   // Keyboard shortcuts
-  useKeyboardShortcut('v', () => {
+  useKeyboardShortcut('alt+d', () => {
     if (canUseSplitView) {
       setViewMode(prev => prev === 'split' ? 'unified' : 'split');
     }
@@ -288,7 +278,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     enabled: isOpen && canUseSplitView
   });
   
-  useKeyboardShortcut('s', () => {
+  useKeyboardShortcut('alt+f', () => {
     setSidebarCollapsed(prev => !prev);
   }, {
     contexts: ['diffViewer'],
@@ -1117,7 +1107,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                   )}
                   {!loading && originalCode !== undefined && modifiedCode !== undefined && !selectedFile.loading && (
                     <DiffEditor
-                      key={`${selectedFile.path}-${viewMode}`}
+                      key={selectedFile.path}
                       height="100%"
                       language={getLanguageFromPath(selectedFile.path)}
                       original={originalCode}
@@ -1176,14 +1166,16 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
             </span>
             <span className="mx-2">·</span>
             <span className="inline-flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">S</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Alt</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">F</kbd>
               <span>Toggle sidebar</span>
             </span>
             {canUseSplitView && (
               <>
                 <span className="mx-2">·</span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">V</kbd>
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Alt</kbd>
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">D</kbd>
                   <span>Toggle view</span>
                 </span>
               </>

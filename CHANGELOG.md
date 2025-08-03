@@ -26,7 +26,16 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Auto-downgrade from unavailable modes when terminal space is too small
   - Alt+D cycling skips unavailable modes based on current terminal height
 
+- **Diff Viewer Keyboard Shortcuts**
+  - Changed sidebar toggle from S to Alt+F for consistency
+  - Changed split/unified view toggle from V to Alt+D to match split view conventions
+
 ### Fixed
+- **Monaco Editor Disposal Error in Diff Viewer**
+  - Fixed "TextModel got disposed before DiffEditorWidget model got reset" error when switching view modes
+  - Removed viewMode from DiffEditor key prop to prevent component remounting
+  - Monaco now handles view mode changes internally without disposing text models
+
 - **Terminal Tab Closing**
   - Fixed tab close button not working due to incorrect reference to task.terminals
   - Changed to use terminals from zustand store instead of non-existent task prop
