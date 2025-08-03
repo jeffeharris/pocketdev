@@ -8,10 +8,7 @@ export async function gitCommand(projectPath, command) {
   try {
     const env = { ...process.env };
     
-    // Add safe directory config to avoid dubious ownership errors
-    const safeCommand = `git config --global --add safe.directory ${projectPath} 2>/dev/null; ${command}`;
-    
-    const { stdout, stderr } = await exec(safeCommand, { 
+    const { stdout, stderr } = await exec(command, { 
       cwd: projectPath,
       env,
       shell: '/bin/sh'

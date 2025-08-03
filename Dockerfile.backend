@@ -36,19 +36,9 @@ ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
 RUN mkdir -p $NPM_CONFIG_PREFIX && \
     chown -R pocketdev:pocketdev $NPM_CONFIG_PREFIX
 
-# TODO: remove this workaround when the git ownership issue is resolved
-# Configure git to trust all directories (fixes ownership issues)
-RUN git config --global --add safe.directory '*'
-
 # TODO: Remove this from backend, this should just be on the shelltender server where repos are stored
 # Create projects directory
 RUN mkdir -p /projects && chown -R pocketdev:pocketdev /projects
-
-# TODO: remove this workaround when the git ownership issue is resolved
-# Configure git safe directories for pocketdev user
-USER pocketdev
-RUN git config --global --add safe.directory '*'
-USER root
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/

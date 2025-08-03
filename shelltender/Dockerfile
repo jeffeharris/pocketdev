@@ -25,8 +25,9 @@ COPY shelltender/ ./
 # Copy system-wide bash configuration
 COPY shelltender/bash-config/bash.bashrc /etc/bash.bashrc
 
-# Copy pocketdev user's bashrc to override the default
+# Copy user-specific bashrc files to ensure both users source the system config
 COPY shelltender/bash-config/pocketdev.bashrc /home/pocketdev/.bashrc
+COPY shelltender/bash-config/root.bashrc /root/.bashrc
 RUN chown pocketdev:pocketdev /home/pocketdev/.bashrc
 
 # Ensure proper permissions
