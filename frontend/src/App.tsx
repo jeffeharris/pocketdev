@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { ToastProvider, WebSocketProvider as ShelltenderWSProvider } from '@shelltender/client';
 import { KeyboardProvider } from './contexts/KeyboardContext';
+import { ServiceProvider } from './services/service-provider';
 import { Projects } from './pages/Projects';
 import { ProjectDashboard } from './pages/ProjectDashboard';
 import { TaskWorkspace } from './pages/TaskWorkspace';
@@ -35,31 +36,33 @@ function App() {
   }
 
   return (
-    <ToastProvider>
-      <ShelltenderWSProvider config={shelltenderConfig}>
-        <WebSocketProvider>
-          <KeyboardProvider>
-            <Router>
-              <Routes>
-                <Route path="/" element={<Navigate to="/projects" replace />} />
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/projects/:projectId" element={<ProjectDashboard />} />
-                <Route path="/projects/:projectId/tasks/:taskId" element={<TaskWorkspace />} />
-                <Route path="/prototype/merge-workflow" element={<MergeWorkflowPrototype />} />
-                <Route path="/prototype/merge-states" element={<MergeStatesDiagram />} />
-                <Route path="/prototype/diff-viewers" element={<PrototypeDiffViewers />} />
-                <Route path="/prototype/merge-conflict" element={<PrototypeMergeConflict />} />
-                <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
-                <Route path="/test/terminal-buffer" element={<TerminalBufferTest />} />
-                <Route path="/test/terminal-raw" element={<TerminalRawTest />} />
-                <Route path="/terminal/:projectId/:taskId" element={<StandaloneTerminal />} />
-                {/* <Route path="/prototype/components" element={<ComponentPlayground />} /> */}
-              </Routes>
-            </Router>
-          </KeyboardProvider>
-        </WebSocketProvider>
-      </ShelltenderWSProvider>
-    </ToastProvider>
+    <ServiceProvider>
+      <ToastProvider>
+        <ShelltenderWSProvider config={shelltenderConfig}>
+          <WebSocketProvider>
+            <KeyboardProvider>
+              <Router>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/projects" replace />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/:projectId" element={<ProjectDashboard />} />
+                  <Route path="/projects/:projectId/tasks/:taskId" element={<TaskWorkspace />} />
+                  <Route path="/prototype/merge-workflow" element={<MergeWorkflowPrototype />} />
+                  <Route path="/prototype/merge-states" element={<MergeStatesDiagram />} />
+                  <Route path="/prototype/diff-viewers" element={<PrototypeDiffViewers />} />
+                  <Route path="/prototype/merge-conflict" element={<PrototypeMergeConflict />} />
+                  <Route path="/prototype/monaco-merge" element={<PrototypeMonacoMerge />} />
+                  <Route path="/test/terminal-buffer" element={<TerminalBufferTest />} />
+                  <Route path="/test/terminal-raw" element={<TerminalRawTest />} />
+                  <Route path="/terminal/:projectId/:taskId" element={<StandaloneTerminal />} />
+                  {/* <Route path="/prototype/components" element={<ComponentPlayground />} /> */}
+                </Routes>
+              </Router>
+            </KeyboardProvider>
+          </WebSocketProvider>
+        </ShelltenderWSProvider>
+      </ToastProvider>
+    </ServiceProvider>
   );
 }
 

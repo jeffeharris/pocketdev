@@ -7,9 +7,22 @@ import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/setti
 import type { AllChangesResponse, FileCategory, DiffViewerResponse, FileDiffResponse } from '../types/diff';
 import { FileChangeType as FileChangeTypeValues } from '../types/diff';
 import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
+import { SettingsService } from './settings.service';
+import { UploadService } from './upload.service';
 
 const API_BASE = '/api';
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
+
+// Create service instances for delegation
+const settingsService = new SettingsService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const uploadService = new UploadService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
 
 class ApiService {
   private async fetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -663,51 +676,23 @@ index abc123..def456 100644
 
   // Settings endpoints
   async getSettings(): Promise<Settings> {
-    if (USE_MOCKS) {
-      return {
-        hasGithubToken: false,
-        gitUserName: '',
-        gitUserEmail: ''
-      };
-    }
-    return this.fetch<Settings>('/settings');
+    // Delegated to SettingsService
+    return settingsService.getSettings();
   }
 
   async updateSettings(settings: UpdateSettingsDTO): Promise<any> {
-    if (USE_MOCKS) {
-      return { message: 'Settings updated successfully', hasGithubToken: true };
-    }
-    return this.fetch('/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    });
+    // Delegated to SettingsService
+    return settingsService.updateSettings(settings);
   }
 
   async testGithubToken(): Promise<GithubTestResult> {
-    if (USE_MOCKS) {
-      return { 
-        valid: true, 
-        user: { 
-          login: 'mockuser', 
-          name: 'Mock User', 
-          email: 'mock@example.com' 
-        } 
-      };
-    }
-    return this.fetch<GithubTestResult>('/settings/test-github', {
-      method: 'POST',
-    });
+    // Delegated to SettingsService
+    return settingsService.testGithubToken();
   }
 
   async getSystemInfo(): Promise<any> {
-    if (USE_MOCKS) {
-      return { 
-        projectsDir: '/projects',
-        nodeVersion: 'v18.0.0',
-        platform: 'linux'
-      };
-    }
-    return this.fetch('/settings/system-info');
+    // Delegated to SettingsService
+    return settingsService.getSystemInfo();
   }
 
   // Image upload endpoints
@@ -718,40 +703,19 @@ index abc123..def456 100644
     referencePath: string;
     url?: string;
   }> }> {
-    if (USE_MOCKS) {
-      return { images: [] };
-    }
-    return this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/images`);
+    // Delegated to UploadService
+    const images = await uploadService.getTaskImages(projectId, taskId);
+    return { images };
   }
 
   async uploadTaskImage(projectId: string, taskId: string, formData: FormData): Promise<any> {
-    if (USE_MOCKS) {
-      return {
-        success: true,
-        filename: 'mock-image.png',
-        size: 1024,
-        sizeFormatted: '1 KB',
-        referencePath: '@.pocketdev/tmp/images/mock-image.png'
-      };
-    }
-    const response = await fetch(`${API_BASE}/projects/${projectId}/tasks/${taskId}/upload`, {
-      method: 'POST',
-      body: formData,
-      // Don't set Content-Type header - let browser set it with boundary for multipart/form-data
-    });
-
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
-    }
-
-    return response.json();
+    // Delegated to UploadService
+    return uploadService.uploadTaskImage(projectId, taskId, formData);
   }
 
   async deleteTaskImage(projectId: string, taskId: string, filename: string): Promise<void> {
-    if (USE_MOCKS) return;
-    await this.fetch<void>(`/projects/${projectId}/tasks/${taskId}/images/${filename}`, {
-      method: 'DELETE',
-    });
+    // Delegated to UploadService
+    return uploadService.deleteTaskImage(projectId, taskId, filename);
   }
 
   // Terminal session endpoints
@@ -840,7 +804,7 @@ index abc123..def456 100644
 
 export const api = new ApiService();
 
-// Export settings API for convenience
+// Export settings API for convenience (delegated to SettingsService)
 export const settingsApi = {
   getSettings: () => api.getSettings(),
   updateSettings: (settings: UpdateSettingsDTO) => api.updateSettings(settings),
