@@ -278,7 +278,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   useShortcutContext('diffViewer', { enabled: isOpen, priority: 30 });
   
   // Keyboard shortcuts
-  useKeyboardShortcut('v', () => {
+  useKeyboardShortcut('alt+d', () => {
     if (canUseSplitView) {
       setViewMode(prev => prev === 'split' ? 'unified' : 'split');
     }
@@ -288,7 +288,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     enabled: isOpen && canUseSplitView
   });
   
-  useKeyboardShortcut('s', () => {
+  useKeyboardShortcut('alt+f', () => {
     setSidebarCollapsed(prev => !prev);
   }, {
     contexts: ['diffViewer'],
@@ -1176,14 +1176,16 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
             </span>
             <span className="mx-2">·</span>
             <span className="inline-flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">S</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Alt</kbd>
+              <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">F</kbd>
               <span>Toggle sidebar</span>
             </span>
             {canUseSplitView && (
               <>
                 <span className="mx-2">·</span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">V</kbd>
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">Alt</kbd>
+                  <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded">D</kbd>
                   <span>Toggle view</span>
                 </span>
               </>

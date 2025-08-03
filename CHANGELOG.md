@@ -26,6 +26,10 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Auto-downgrade from unavailable modes when terminal space is too small
   - Alt+D cycling skips unavailable modes based on current terminal height
 
+- **Diff Viewer Keyboard Shortcuts**
+  - Changed sidebar toggle from S to Alt+F for consistency
+  - Changed split/unified view toggle from V to Alt+D to match split view conventions
+
 ### Fixed
 - **Terminal Tab Closing**
   - Fixed tab close button not working due to incorrect reference to task.terminals
