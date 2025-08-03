@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { GitService, executeGitCommand } from '../services/git.service.js';
+import { GitService, executeGitCommand } from '../services/git-compat.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 

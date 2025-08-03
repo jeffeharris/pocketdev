@@ -18,6 +18,7 @@
  */
 
 import { AIStateTracker } from './ai-state-tracker.js';
+import { AI_EVENTS } from './services/events.js';
 
 export class AISessionMonitor {
   constructor(sessionManager, wsServer, notificationService, models, eventEmitterService = null) {
@@ -545,11 +546,11 @@ export class AISessionMonitor {
     
     // Emit AI state changed event
     if (this.eventEmitterService) {
-      this.eventEmitterService.emitAIStateChanged(taskId, {
+      this.eventEmitterService.emit(AI_EVENTS.STATE_CHANGED, { taskId, sessionState: {
         status: aggregateState,
         lastStateChange: new Date().toISOString(),
         sessionStates: sessionStates // Include individual session states
-      });
+      }});
     }
     
     console.log(`AI state update: session ${sessionId} -> ${status.currentState}, task ${taskId} aggregate -> ${aggregateState}`);
