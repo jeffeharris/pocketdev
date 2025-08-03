@@ -133,7 +133,8 @@ export function SplitViewContainer({
     onToggle: () => void,
     onSelect: (terminalId: string) => void,
     position: 'primary' | 'secondary' | 'tertiary' | 'quaternary',
-    excludeIds: string[] = []
+    excludeIds: string[] = [],
+    customPositioning?: string
   ) => {
     // Calculate available terminals for selection (not already assigned to other positions)
     const availableTerminals = terminals.filter(t => 
@@ -158,7 +159,7 @@ export function SplitViewContainer({
     };
 
     return (
-      <div className="absolute top-2 left-2 z-50 dropdown-container">
+      <div className={customPositioning || "absolute top-2 left-2 z-50 dropdown-container"}>
         <button
           onClick={onToggle}
           className="flex items-center gap-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-sm text-gray-300 hover:text-white"
@@ -207,7 +208,7 @@ export function SplitViewContainer({
           {/* Terminal selection dropdowns */}
           <div>
             {/* Primary (top-left) dropdown - always show */}
-            <div className="absolute top-0 left-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
+            <div className="absolute top-2 left-2 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 primaryTerminal,
                 showPrimaryDropdown,
@@ -229,12 +230,13 @@ export function SplitViewContainer({
                 },
                 'primary',
                 // Exclude other assigned terminals
-                [secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
+                [secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[],
+                "relative z-50 dropdown-container"
               )}
             </div>
 
-            {/* Secondary (top-right) dropdown - always show */}
-            <div className="absolute top-0 right-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
+            {/* Secondary (top-right) dropdown - positioned in upper left of its panel */}
+            <div className="absolute top-2 left-[51%] pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 secondaryTerminal,
                 showSecondaryDropdown,
@@ -256,18 +258,13 @@ export function SplitViewContainer({
                 },
                 'secondary',
                 // Exclude other assigned terminals
-                [primaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
+                [primaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[],
+                "relative z-50 dropdown-container"
               )}
             </div>
-            {/* Control buttons always visible in top-right */}
-            {controlButtons && (
-              <div className="absolute top-2 right-2 pointer-events-auto">
-                {controlButtons}
-              </div>
-            )}
 
-            {/* Tertiary (bottom-left) dropdown - always show */}
-            <div className="absolute bottom-0 left-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
+            {/* Tertiary (bottom-left) dropdown - positioned in upper left of its panel */}
+            <div className="absolute top-[51%] left-2 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 tertiaryTerminal,
                 showTertiaryDropdown,
@@ -289,12 +286,13 @@ export function SplitViewContainer({
                 },
                 'tertiary',
                 // Exclude other assigned terminals
-                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
+                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[],
+                "relative z-50 dropdown-container"
               )}
             </div>
 
-            {/* Quaternary (bottom-right) dropdown - always show */}
-            <div className="absolute bottom-0 right-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
+            {/* Quaternary (bottom-right) dropdown - positioned in upper left of its panel */}
+            <div className="absolute top-[51%] left-[51%] pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 quaternaryTerminal,
                 showQuaternaryDropdown,
@@ -316,9 +314,17 @@ export function SplitViewContainer({
                 },
                 'quaternary',
                 // Exclude other assigned terminals
-                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId].filter(Boolean) as string[]
+                [primaryTerminal?.dbSessionId, secondaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId].filter(Boolean) as string[],
+                "relative z-50 dropdown-container"
               )}
             </div>
+            
+            {/* Control buttons always visible in top-right */}
+            {controlButtons && (
+              <div className="absolute top-2 right-2 pointer-events-auto">
+                {controlButtons}
+              </div>
+            )}
           </div>
 
           {/* Grid dividers */}

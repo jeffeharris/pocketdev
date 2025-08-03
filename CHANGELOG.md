@@ -4,6 +4,9 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Fixed
+- Fixed quad view terminal selection dropdowns positioning - all dropdowns now appear in the upper left corner of their respective panels for consistency
+
 ## [2.0.0] - 2025-08-03
 
 ### 🎉 Major Architectural Transformation
