@@ -5,7 +5,7 @@ import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
 import { SessionLauncher, type SessionOptions } from './SessionLauncher';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
@@ -41,6 +41,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     isVisible = true,
     isFullscreen = false
   } = props;
+  const terminalService = useService('terminal');
   const [isResetting, setIsResetting] = useState(false);
   const [activeTabId, setActiveTabId] = useState(() => {
     // Check if there's a focus request first
@@ -338,7 +339,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const aiAgent = options?.aiAgent || 'claude';
       const tabName = options?.tabName || getNextAvailableTabName(terminals);
       
-      const newSession = await api.createTerminalSession(task.id, {
+      const newSession = await terminalService.createTerminalSession(task.id, {
         tabName,
         aiAgent,
         copyHistoryFrom: activeTerminal?.sessionId || null
@@ -375,7 +376,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           
           // Small delay then send claude command
           setTimeout(async () => {
-            await api.executeCommand(newSession.shelltenderSessionId, 'claude');
+            await terminalService.executeCommand(newSession.shelltenderSessionId, 'claude');
           }, 500);
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
@@ -429,7 +430,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               
               // Execute commands in sequence
               for (const command of commands) {
-                await api.executeCommand(newSession.shelltenderSessionId, command);
+                await terminalService.executeCommand(newSession.shelltenderSessionId, command);
                 // Minimal delay between commands
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
@@ -499,7 +500,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       updateTerminal(task.id, terminal.dbSessionId, { tabName: newName });
       
       // Update via API
-      await api.updateTerminalTab(dbSessionId, {
+      await terminalService.updateTerminalTab(dbSessionId, {
         tabName: newName
       });
       
@@ -524,7 +525,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     try {
       // Update each tab's order in the backend
       const updatePromises = reorderedTabs.map(tab => 
-        api.updateTerminalTab(tab.dbSessionId, {
+        terminalService.updateTerminalTab(tab.dbSessionId, {
           tabOrder: tab.tabOrder
         })
       );
@@ -629,8 +630,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       }
       
       // Delete the terminal session
-      console.log('[performTabClose] Calling api.deleteTerminalSession');
-      await api.deleteTerminalSession(dbSessionId);
+      console.log('[performTabClose] Calling terminalService.deleteTerminalSession');
+      await terminalService.deleteTerminalSession(dbSessionId);
       
       // Clear confirm close state if it exists
       setConfirmClose(null);

@@ -88,11 +88,16 @@ export class TerminalService extends BaseService implements ITerminalService {
   }
 
   async deleteTerminalSession(sessionId: string): Promise<void> {
+    console.log('[TerminalService] deleteTerminalSession called with:', sessionId);
+    
     // Normalize the session ID for API calls
     const sessionInfo = sessionAdapter.findSessionByAnyId(sessionId);
     if (!sessionInfo) {
+      console.log('[TerminalService] Session not found in adapter:', sessionId);
       throw new Error(`Session not found: ${sessionId}`);
     }
+    
+    console.log('[TerminalService] Found session info:', sessionInfo);
     
     if (this.isMockEnabled) {
       this.handleMockDeletion(sessionInfo.dbSessionId);
@@ -101,9 +106,11 @@ export class TerminalService extends BaseService implements ITerminalService {
     }
     
     // Use the database session ID for the API call
+    console.log('[TerminalService] Calling DELETE API for:', sessionInfo.dbSessionId);
     await this.delete<void>(`/terminals/${sessionInfo.dbSessionId}`);
     
-    // Remove from adapter
+    // Remove from adapter - but this might be premature if the backend fails
+    console.log('[TerminalService] Removing from adapter');
     sessionAdapter.removeSession(sessionInfo.id);
   }
 

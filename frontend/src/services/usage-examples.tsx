@@ -72,7 +72,7 @@ export function TerminalExample({ taskId }: { taskId: string }) {
     async function loadSessions() {
       try {
         // Get sessions from API
-        const terminalSessions = await terminalService.getSessions(taskId);
+        const terminalSessions = await terminalService.getTerminalSessions(taskId);
         
         // Register with session adapter and get normalized IDs
         const normalizedIds = sessionAdapter.registerSessions(terminalSessions);
@@ -94,7 +94,7 @@ export function TerminalExample({ taskId }: { taskId: string }) {
 
   const handleCreateSession = async () => {
     try {
-      const newSession = await terminalService.createSession(taskId, {
+      const newSession = await terminalService.createTerminalSession(taskId, {
         tabName: 'New Tab',
         aiAgent: 'claude'
       });

@@ -8,7 +8,7 @@ import { DiffViewerModal } from '../diff/DiffViewerModal';
 import { CommitModal } from '../git/CommitModal';
 import { ImageUpload } from '../common/ImageUpload';
 import { useImageUpload } from '../../hooks/useImageUpload';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 
 interface SidebarProps {
   projectId: string;
@@ -31,6 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTaskUpdate,
   baseBranch
 }) => {
+  const taskService = useService('task');
+  const gitService = useService('git');
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
   const [showDiffModal, setShowDiffModal] = useState(false);
@@ -91,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const loadCommitHistory = async () => {
     try {
-      const history = await api.getCommitHistory(projectId, currentTask.id);
+      const history = await taskService.getCommitHistory(projectId, currentTask.id);
 
       // Find the last merge commit
       const lastMergeIndex = history.findIndex((commit: any) => commit.isMerge);
@@ -121,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
     
     try {
-      const result = await api.updateBranch(projectId, currentTask.id);
+      const result = await taskService.updateBranch(projectId, currentTask.id);
       if (!result.success) {
         alert(`Update failed: ${result.error || 'Unknown error'}`);
       }
@@ -136,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
     
     try {
-      const result = await api.gitOperation(projectId, currentTask.id, 'pr', {
+      const result = await gitService.performOperation(projectId, currentTask.id, 'pr', {
         message: `${currentTask.name} - ${currentTask.description}`
       });
       if (result.success) {
@@ -161,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
-      const result = await api.gitOperation(projectId, currentTask.id, 'push');
+      const result = await gitService.performOperation(projectId, currentTask.id, 'push');
       
       if (!result.success) {
         alert(`Failed to push: ${result.error || 'Unknown error'}`);
@@ -200,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
-      const result = await api.mergeToBase(projectId, currentTask.id);
+      const result = await taskService.mergeToBase(projectId, currentTask.id);
       
       if (result.success) {
         alert('Branch merged successfully!');
@@ -209,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // Manually refresh the task status after a short delay if WebSocket doesn't update
         setTimeout(async () => {
           try {
-            const updatedTask = await api.getTask(projectId, currentTask.id);
+            const updatedTask = await taskService.getTask(projectId, currentTask.id);
             if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
               onTaskUpdate(currentTask.id, updatedTask);
             }
@@ -236,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     setIsProcessing(true);
     try {
-      const result = await api.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
+      const result = await taskService.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
       if (result) {
         // Update the task in the parent component
         if (onTaskUpdate) {
@@ -285,7 +287,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowTaskActions(false);
                       if (confirm(`Are you sure you want to archive "${currentTask.name}"?`)) {
                         try {
-                          await api.archiveTask(projectId, currentTask.id);
+                          await taskService.archiveTask(projectId, currentTask.id);
                           if (onTaskUpdate) {
                             onTaskUpdate(currentTask.id, { taskState: TaskState.Archived });
                           }
@@ -305,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowTaskActions(false);
                       if (confirm('Are you sure you want to reset all uncommitted changes? This cannot be undone.')) {
                         try {
-                          await api.gitOperation(projectId, currentTask.id, 'reset-uncommitted');
+                          await gitService.performOperation(projectId, currentTask.id, 'reset-uncommitted');
                           // Git status will update via WebSocket
                         } catch (error: any) {
                           alert(`Failed to reset changes: ${error.message}`);
@@ -489,7 +491,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setIsProcessing(true);
                       try {
                         // First, get the actual conflict data
-                        const conflictData = await api.getTaskDiff(projectId, currentTask.id, 'base');
+                        const conflictData = await gitService.getTaskDiff(projectId, currentTask.id, { compareWith: 'base' });
                         
                         // Store in sessionStorage for the prototype page to access
                         sessionStorage.setItem('mergeConflictData', JSON.stringify({
@@ -878,7 +880,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (confirm(`Are you sure you want to reset to "${commit.message}"? This will remove all commits after this point.`)) {
                     setIsProcessing(true);
                     try {
-                      await api.gitOperation(projectId, currentTask.id, 'reset-to-commit', {
+                      await gitService.performOperation(projectId, currentTask.id, 'reset-to-commit', {
                         args: selectedCommit
                       });
                       setShowResetModal(false);

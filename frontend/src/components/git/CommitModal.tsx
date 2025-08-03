@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, GitBranch, AlertCircle } from 'lucide-react';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
 
 interface CommitModalProps {
@@ -22,6 +22,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
   stagedCount,
   onSuccess
 }) => {
+  const gitService = useService('git');
   const [message, setMessage] = useState('');
   const [isCommitting, setIsCommitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export const CommitModal: React.FC<CommitModalProps> = ({
     setError(null);
 
     try {
-      const result = await api.stageAndCommit(projectId, taskId, message);
+      const result = await gitService.stageAndCommit(projectId, taskId, message);
       
       if (result.success) {
         onClose();

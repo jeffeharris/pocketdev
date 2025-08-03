@@ -7,7 +7,7 @@ import { LensSlider } from '../common/LensSlider';
 import { CreateTaskModal } from './CreateTaskModal';
 import type { Task, CreateTaskDTO } from '../../types/task';
 import type { Project } from '../../types/project';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { useWebSocketContext } from '../../contexts/WebSocketContext';
 import { useTerminalStore } from '../../stores/terminalStore';
 
@@ -18,6 +18,8 @@ interface TaskWorkspaceProps {
 
 export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId }) => {
   const navigate = useNavigate();
+  const projectService = useService('project');
+  const taskService = useService('task');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [fullscreenMode, setFullscreenMode] = useState(false);
   const [validationMode, setValidationMode] = useState(false);
@@ -48,8 +50,8 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       try {
         setLoading(true);
         const [projectData, tasksData] = await Promise.all([
-          api.getProject(projectId),
-          api.getTasks(projectId)
+          projectService.getProject(projectId),
+          taskService.getTasks(projectId)
         ]);
         setProject(projectData);
         setTasks(tasksData);
@@ -111,7 +113,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     // Load detailed task data to get terminals
     const loadTaskDetails = async () => {
       try {
-        const taskDetails = await api.getTask(projectId, taskId);
+        const taskDetails = await taskService.getTask(projectId, taskId);
         // Update the task in our state with the detailed version that includes terminals
         setTasks(prevTasks => 
           prevTasks.map(task => 
@@ -209,7 +211,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
 
   const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
     try {
-      const newTask = await api.createTask(projectId, {
+      const newTask = await taskService.createTask(projectId, {
         ...taskData,
         projectId
       });
@@ -341,7 +343,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                     ...task,
                     onReload: () => {
                       // Reload task details to get updated terminals
-                      api.getTask(projectId, task.id).then(taskDetails => {
+                      taskService.getTask(projectId, task.id).then(taskDetails => {
                         setTasks(prevTasks => 
                           prevTasks.map(t => 
                             t.id === task.id ? { ...t, terminals: taskDetails.terminals } : t

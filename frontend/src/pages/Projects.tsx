@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GitBranch, Plus, Activity, Settings } from 'lucide-react';
 import type { Project } from '../types/project';
-import { api } from '../services/api';
+import { useService } from '../services';
 import { CreateProjectModal } from '../components/project/CreateProjectModal';
 import { SettingsModal } from '../components/settings/SettingsModal';
 
 export const Projects: React.FC = () => {
+  const projectService = useService('project');
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export const Projects: React.FC = () => {
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const data = await api.getProjects();
+      const data = await projectService.getProjects();
       setProjects(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects');

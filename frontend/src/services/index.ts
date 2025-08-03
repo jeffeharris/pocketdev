@@ -72,8 +72,7 @@ export { UploadService } from './upload.service';
 export { ContainerService } from './container.service';
 export { PullRequestService } from './pull-request.service';
 
-// Legacy API for migration (will be removed)
-export { api } from './api';
+// Legacy API removed - components now use services directly
 
 /**
  * Re-export the service type for convenience

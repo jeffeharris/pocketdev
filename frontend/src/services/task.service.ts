@@ -18,6 +18,7 @@ import type {
   GitOperationResult 
 } from './interfaces/task.service.interface';
 import type { Task, CreateTaskDTO, TaskState } from '../types/task';
+import { sessionAdapter } from './session-adapter';
 
 export class TaskService extends BaseService implements ITaskService {
   private mockTasks: Task[] = [
@@ -367,6 +368,14 @@ export class TaskService extends BaseService implements ITaskService {
     
     const r = response as Record<string, unknown>;
     
+    // Process and register terminals
+    const terminals = Array.isArray(r.terminals) ? r.terminals : [];
+    
+    // Register each terminal with the session adapter
+    terminals.forEach((terminal: any) => {
+      sessionAdapter.registerSession(terminal);
+    });
+    
     return {
       id: String(r.id || ''),
       name: String(r.name || 'Untitled Task'),
@@ -388,7 +397,7 @@ export class TaskService extends BaseService implements ITaskService {
       is_archived: r.is_archived,
       merged_at: r.merged_at,
       has_uncommitted_changes: r.has_uncommitted_changes,
-      terminals: Array.isArray(r.terminals) ? r.terminals : []
+      terminals: terminals
     } as Task;
   }
 

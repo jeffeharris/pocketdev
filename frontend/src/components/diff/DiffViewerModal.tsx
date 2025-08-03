@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, FileText, GitBranch, Columns2, FileCode, ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { DiffEditor } from '@monaco-editor/react';
 import { ThreeStateToggle, type ToggleOption } from './ThreeStateToggle';
 import { StatusIcon } from './StatusIcon';
 import { SearchInput, HighlightedPath } from './SearchInput';
 import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
+
+// Known issue: When closing the modal, you may see an error in the console:
+// "TextModel got disposed before DiffEditorWidget model got reset"
+// This is a known issue with monaco-editor (microsoft/monaco-editor#4779)
+// It doesn't affect functionality and can be safely ignored.
 
 interface DiffFile {
   path: string;
@@ -55,6 +60,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   branch,
   baseBranch = 'main'
 }) => {
+  const gitService = useService('git');
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<DiffFile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -479,8 +485,8 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     
     try {
       const result = action === 'unstage'
-        ? await api.unstageFile(projectId, taskId, filePath)
-        : await api.stageFile(projectId, taskId, filePath);
+        ? await gitService.performOperation(projectId, taskId, 'unstage', { files: filePath })
+        : await gitService.performOperation(projectId, taskId, 'add', { files: filePath });
         
       if (result.success) {
         // Success - reload for consistency
@@ -516,7 +522,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     
     try {
       // Always fetch all changes
-      const response = await api.getAllChanges(projectId, taskId);
+      const response = await gitService.getAllChanges(projectId, taskId);
       const files: DiffFile[] = response.files || [];
       
       // Cache the full response
@@ -583,7 +589,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
     }
     
     try {
-      const response = await api.getFileDiff(projectId, taskId, filePath, compareWith);
+      const response = await gitService.getFileDiff(projectId, taskId, filePath, { compareWith });
       
       // Cache the diff
       fileDiffCache.current[cacheKey] = response.diff;

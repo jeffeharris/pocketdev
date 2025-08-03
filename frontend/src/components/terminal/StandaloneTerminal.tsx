@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { TerminalPanel } from './TerminalPanel';
 import type { Task } from '../../types/task';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { useTerminalStore } from '../../stores/terminalStore';
 
 export function StandaloneTerminal() {
   const { projectId, taskId } = useParams<{ projectId: string; taskId: string }>();
+  const taskService = useService('task');
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +21,7 @@ export function StandaloneTerminal() {
 
     const loadTask = async () => {
       try {
-        const taskData = await api.getTask(projectId, taskId);
+        const taskData = await taskService.getTask(projectId, taskId);
         setTask(taskData);
         
         // Initialize terminal store with task terminals
@@ -43,7 +44,7 @@ export function StandaloneTerminal() {
     if (!projectId || !taskId) return;
     
     try {
-      const taskData = await api.getTask(projectId, taskId);
+      const taskData = await taskService.getTask(projectId, taskId);
       setTask(taskData);
       
       if (taskData.terminals) {

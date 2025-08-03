@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { api } from '../services/api';
+import { useService } from '../services';
 
 interface ImageData {
   filename: string;
@@ -10,6 +10,7 @@ interface ImageData {
 }
 
 export function useImageUpload(projectId: string, taskId: string) {
+  const uploadService = useService('upload');
   const [images, setImages] = useState<ImageData[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -20,8 +21,8 @@ export function useImageUpload(projectId: string, taskId: string) {
     
     setIsLoadingImages(true);
     try {
-      const response = await api.getTaskImages(projectId, taskId);
-      setImages(response.images || []);
+      const images = await uploadService.getTaskImages(projectId, taskId);
+      setImages(images || []);
     } catch (error) {
       console.error('Failed to load images:', error);
       setImages([]);
@@ -40,12 +41,12 @@ export function useImageUpload(projectId: string, taskId: string) {
     
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('file', file);
       
       // TODO: Add progress tracking if needed
       setUploadProgress(50);
       
-      const response = await api.uploadTaskImage(projectId, taskId, formData);
+      const response = await uploadService.uploadTaskImage(projectId, taskId, formData);
       
       setUploadProgress(100);
       
@@ -76,7 +77,7 @@ export function useImageUpload(projectId: string, taskId: string) {
     if (!projectId || !taskId) return;
     
     try {
-      await api.deleteTaskImage(projectId, taskId, filename);
+      await uploadService.deleteTaskImage(projectId, taskId, filename);
       setImages(prev => prev.filter(img => img.filename !== filename));
     } catch (error) {
       console.error('Failed to delete image:', error);
