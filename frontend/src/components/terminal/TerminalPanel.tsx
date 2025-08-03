@@ -9,6 +9,7 @@ import { api } from '../../services/api';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
+import { EmptyTerminalPanel } from './EmptyTerminalPanel';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
 import { useShortcutContext } from '../../hooks/keyboard';
@@ -184,16 +185,36 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
+    console.log('[TerminalPanel useEffect@186] Running tab validation effect:', {
+      taskId: task.id,
+      terminalsLength: terminals.length,
+      activeTabId,
+      terminals: terminals.map(t => ({ dbSessionId: t.dbSessionId, tabName: t.tabName }))
+    });
+    
     if (terminals.length > 0) {
       const savedId = localStorage.getItem(`activeTab-${task.id}`);
+      const currentTab = terminals.find(t => t.dbSessionId === activeTabId);
       const validTab = terminals.find(t => t.dbSessionId === savedId);
       
-      if (!validTab && terminals[0]) {
+      console.log('[TerminalPanel useEffect@186] Tab state:', {
+        savedId,
+        currentTab: currentTab?.dbSessionId,
+        validTab: validTab?.dbSessionId,
+        willUpdate: (!currentTab && !validTab && terminals[0]) || (!currentTab && validTab)
+      });
+      
+      // Only update if we don't have a current valid tab
+      if (!currentTab && !validTab && terminals[0]) {
+        console.log('[TerminalPanel useEffect@186] Setting activeTabId to first terminal:', terminals[0].dbSessionId);
         setActiveTabId(terminals[0].dbSessionId);
         // Don't set focus here - let the initial terminals effect handle it
+      } else if (!currentTab && validTab) {
+        console.log('[TerminalPanel useEffect@186] Setting activeTabId to saved tab:', validTab.dbSessionId);
+        setActiveTabId(validTab.dbSessionId);
       }
     }
-  }, [task.id, terminals]);
+  }, [task.id, terminals.length]); // Use terminals.length instead of terminals to avoid re-runs on terminal updates
 
   // Check for focus tab request
   useEffect(() => {
@@ -360,7 +381,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
         }
       }, 500); // Quick delay to ensure terminal connection is established
-      } else {
+      } else if (aiAgent !== 'none') {
         // Advanced launch with options
         
         // Mark as launching if we have a prompt or need to change directory
@@ -443,7 +464,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       claude: 'claude',
       aider: 'aider',
       codex: 'codex',
-      gemini: 'gemini'
+      gemini: 'gemini',
+      none: ''  // No command for plain terminal
     };
     return commands[agent] || 'claude';
   };
@@ -575,25 +597,39 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   };
   
   const performTabClose = async (dbSessionId: string) => {
+    console.log('[performTabClose] Starting close for:', dbSessionId, {
+      currentTerminals: terminals.map(t => ({ id: t.dbSessionId, name: t.tabName })),
+      activeTabId,
+      isClosingActiveTab: dbSessionId === activeTabId
+    });
+    
     try {
       // Find the terminal being closed
       const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
-      if (!terminalToClose) return;
+      if (!terminalToClose) {
+        console.log('[performTabClose] Terminal not found, aborting');
+        return;
+      }
       
-      // Store next tab id if we need to switch
-      let nextTabId: string | null = null;
-      
-      // If closing the active tab, determine which tab to switch to
+      // If closing the active tab, switch to another tab first
       if (dbSessionId === activeTabId) {
         const remainingTabs = terminals.filter(t => t.dbSessionId !== dbSessionId);
+        console.log('[performTabClose] Closing active tab, remaining tabs:', remainingTabs.length);
+        
         if (remainingTabs.length > 0) {
-          // Find the next tab
+          // Find the next tab and switch to it BEFORE deleting
           const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          nextTabId = nextTab.dbSessionId;
+          console.log('[performTabClose] Switching to next tab:', nextTab.dbSessionId);
+          setActiveTabId(nextTab.dbSessionId);
+          localStorage.setItem(`activeTab-${task.id}`, nextTab.dbSessionId);
+          setActiveTerminal(task.id, nextTab.dbSessionId);
+        } else {
+          console.log('[performTabClose] No remaining tabs after close');
         }
       }
       
       // Delete the terminal session
+      console.log('[performTabClose] Calling api.deleteTerminalSession');
       await api.deleteTerminalSession(dbSessionId);
       
       // Clear confirm close state if it exists
@@ -602,20 +638,24 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Reload task to get updated terminals list
       if (task.onReload) {
         await task.onReload();
-        
-        // After reload completes, trigger tab selection if needed
-        // Use a small timeout to ensure React has processed the state update
-        if (nextTabId) {
-          setTimeout(() => {
-            // The handleTabSelect will verify the tab exists
-            handleTabSelect(nextTabId);
-          }, 50);
-        }
       }
       
       // Skip the success notification to avoid terminal re-render issues
       // The tab closing is already visually apparent to the user
-    } catch (error) {
+    } catch (error: any) {
+      // Check if this is a "Session not found" error - this can happen when closing multiple
+      // tabs quickly due to race conditions with WebSocket events
+      if (error.message && error.message.includes('Session not found')) {
+        console.log('[performTabClose] Session already deleted (race condition), ignoring error');
+        // Clear confirm close state
+        setConfirmClose(null);
+        // Still reload to ensure UI is in sync
+        if (task.onReload) {
+          await task.onReload();
+        }
+        return;
+      }
+      
       console.error('[TerminalPanel] Failed to close tab:', error);
       showNotification('error', 'Failed to close tab');
       // Clear confirm close state on error too
@@ -997,7 +1037,13 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       {/* Terminal Content - All terminals rendered persistently */}
       <div ref={terminalContainerRef} className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
         {/* Render all terminals with CSS-based visibility */}
-        <div className={`terminals-container mode-${layout.mode} ${layout.mode === 'split' ? `orientation-${layout.orientation}` : ''}`}>
+        <div 
+          className={`terminals-container mode-${layout.mode} ${layout.mode === 'split' ? `orientation-${layout.orientation}` : ''}`}
+          style={{
+            '--split-ratio': `${layout.splitRatio * 100}%`,
+            '--split-ratio-fr': `${layout.splitRatio}fr`,
+            '--split-complement-fr': `${1 - layout.splitRatio}fr`
+          } as React.CSSProperties}>
           {terminals.map(terminal => {
             const isVisibleTerminal = shouldShowTerminal(terminal, layout, activeTabId);
             const terminalClassName = getTerminalClassName(terminal, layout);
@@ -1032,6 +1078,138 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               </div>
             );
           })}
+          
+          {/* Render empty panels for missing terminals in split/quad modes */}
+          {layout.mode === 'split' && terminals.length < 2 && (
+            <>
+              {terminals.length === 0 && (
+                <div className="terminal-wrapper terminal-primary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+              {terminals.length <= 1 && (
+                <div className="terminal-wrapper terminal-secondary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* Render empty panels for quad mode */}
+          {layout.mode === 'split-4' && terminals.length < 4 && (
+            <>
+              {terminals.length === 0 && (
+                <div className="terminal-wrapper terminal-primary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+              {terminals.length <= 1 && (
+                <div className="terminal-wrapper terminal-secondary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+              {terminals.length <= 2 && (
+                <div className="terminal-wrapper terminal-tertiary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+              {terminals.length <= 3 && (
+                <div className="terminal-wrapper terminal-quaternary">
+                  <EmptyTerminalPanel 
+                    onCreateTerminal={(type) => {
+                      switch (type) {
+                        case 'claude':
+                          handleTabAdd({ aiAgent: 'claude' });
+                          break;
+                        case 'bash':
+                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+                          break;
+                        case 'advanced':
+                          setShowSessionLauncher(true);
+                          break;
+                      }
+                    }}
+                    layout={layout}
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
         
         {/* Overlay split view controls when in split/quad modes */}

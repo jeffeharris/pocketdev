@@ -71,11 +71,11 @@ export function SplitViewContainer({
   // The dropdowns allow reordering by swapping terminals in the array
 
   const handleSwapPanes = useCallback(() => {
-    swapPanes(taskId);
-  }, [taskId, swapPanes]);
+    swapPanes();
+  }, [swapPanes]);
 
   const handleDoubleClick = useCallback(() => {
-    setSplitRatio(50);
+    setSplitRatio(0.5);
     saveLayout();
   }, [setSplitRatio]);
 
@@ -98,15 +98,15 @@ export function SplitViewContainer({
         const rect = container.getBoundingClientRect();
         const isHorizontal = layout.orientation === 'horizontal';
         
-        let percentage: number;
+        let ratio: number;
         if (isHorizontal) {
-          percentage = ((e.clientY - rect.top) / rect.height) * 100;
+          ratio = (e.clientY - rect.top) / rect.height;
         } else {
-          percentage = ((e.clientX - rect.left) / rect.width) * 100;
+          ratio = (e.clientX - rect.left) / rect.width;
         }
         
-        percentage = Math.max(20, Math.min(80, percentage));
-        setSplitRatio(percentage);
+        ratio = Math.max(0.2, Math.min(0.8, ratio));
+        setSplitRatio(ratio);
       });
     };
 
@@ -126,7 +126,7 @@ export function SplitViewContainer({
     document.addEventListener('mouseup', handleMouseUp);
   }, [isDragging, layout.orientation, setSplitRatio, setResizing]);
 
-  // Helper to render terminal dropdown
+  // Helper to render terminal dropdown or creation panel
   const renderTerminalDropdown = (
     terminal: TerminalSession | undefined,
     showDropdown: boolean,
@@ -135,6 +135,15 @@ export function SplitViewContainer({
     position: 'primary' | 'secondary' | 'tertiary' | 'quaternary',
     excludeIds: string[] = []
   ) => {
+    // Calculate available terminals for selection (not already assigned to other positions)
+    const availableTerminals = terminals.filter(t => 
+      t.dbSessionId === terminal?.dbSessionId || !excludeIds.includes(t.dbSessionId)
+    );
+    
+    // If no terminal is assigned, don't show dropdown
+    if (!terminal) {
+      return null;
+    }
     const getStateColor = (state?: string) => {
       switch (state) {
         case 'waiting':
@@ -152,7 +161,7 @@ export function SplitViewContainer({
       <div className="absolute top-2 left-2 z-50 dropdown-container">
         <button
           onClick={onToggle}
-          className="flex items-center gap-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-sm text-gray-300 hover:text-white transition-colors"
+          className="flex items-center gap-2 px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded text-sm text-gray-300 hover:text-white"
         >
           <div className={`w-2 h-2 rounded-full ${getStateColor(terminal?.aiState)}`} />
           <span className="max-w-[150px] truncate">
@@ -163,17 +172,14 @@ export function SplitViewContainer({
         
         {showDropdown && (
           <div className="absolute top-full left-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded shadow-lg overflow-hidden">
-            {terminals.filter(t => 
-              // Always show the currently selected terminal, or terminals not assigned elsewhere
-              t.dbSessionId === terminal?.dbSessionId || !excludeIds.includes(t.dbSessionId)
-            ).map(t => (
+            {availableTerminals.map(t => (
               <button
                 key={t.dbSessionId}
                 onClick={() => {
                   onSelect(t.dbSessionId);
                   onToggle();
                 }}
-                className={`w-full text-left px-3 py-2 hover:bg-gray-700 transition-colors flex items-center gap-2 ${
+                className={`w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 ${
                   t.dbSessionId === terminal?.dbSessionId ? 'bg-gray-700' : ''
                 }`}
               >
@@ -199,9 +205,9 @@ export function SplitViewContainer({
       {layout.mode === 'split-4' && (
         <>
           {/* Terminal selection dropdowns */}
-          <div className="pointer-events-auto">
-            {/* Primary (top-left) dropdown */}
-            <div className="absolute top-0 left-0 w-1/2 h-1/2">
+          <div>
+            {/* Primary (top-left) dropdown - always show */}
+            <div className="absolute top-0 left-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 primaryTerminal,
                 showPrimaryDropdown,
@@ -227,8 +233,8 @@ export function SplitViewContainer({
               )}
             </div>
 
-            {/* Secondary (top-right) dropdown with control buttons */}
-            <div className="absolute top-0 right-0 w-1/2 h-1/2">
+            {/* Secondary (top-right) dropdown - always show */}
+            <div className="absolute top-0 right-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 secondaryTerminal,
                 showSecondaryDropdown,
@@ -252,15 +258,16 @@ export function SplitViewContainer({
                 // Exclude other assigned terminals
                 [primaryTerminal?.dbSessionId, tertiaryTerminal?.dbSessionId, quaternaryTerminal?.dbSessionId].filter(Boolean) as string[]
               )}
-              {controlButtons && (
-                <div className="absolute top-2 right-2">
-                  {controlButtons}
-                </div>
-              )}
             </div>
+            {/* Control buttons always visible in top-right */}
+            {controlButtons && (
+              <div className="absolute top-2 right-2 pointer-events-auto">
+                {controlButtons}
+              </div>
+            )}
 
-            {/* Tertiary (bottom-left) dropdown */}
-            <div className="absolute bottom-0 left-0 w-1/2 h-1/2">
+            {/* Tertiary (bottom-left) dropdown - always show */}
+            <div className="absolute bottom-0 left-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 tertiaryTerminal,
                 showTertiaryDropdown,
@@ -286,8 +293,8 @@ export function SplitViewContainer({
               )}
             </div>
 
-            {/* Quaternary (bottom-right) dropdown */}
-            <div className="absolute bottom-0 right-0 w-1/2 h-1/2">
+            {/* Quaternary (bottom-right) dropdown - always show */}
+            <div className="absolute bottom-0 right-0 pointer-events-auto" style={{ width: 'auto', height: 'auto' }}>
               {renderTerminalDropdown(
                 quaternaryTerminal,
                 showQuaternaryDropdown,
@@ -315,9 +322,9 @@ export function SplitViewContainer({
           </div>
 
           {/* Grid dividers */}
-          <div className="pointer-events-auto">
-            <div className="absolute top-0 left-1/2 w-px h-full bg-gray-700 -translate-x-1/2" />
-            <div className="absolute left-0 top-1/2 w-full h-px bg-gray-700 -translate-y-1/2" />
+          <div className="pointer-events-none">
+            <div className="absolute top-0 left-1/2 w-px h-full bg-gray-700 -translate-x-1/2 pointer-events-none" />
+            <div className="absolute left-0 top-1/2 w-full h-px bg-gray-700 -translate-y-1/2 pointer-events-none" />
           </div>
         </>
       )}
@@ -326,9 +333,9 @@ export function SplitViewContainer({
       {layout.mode === 'split' && (
         <>
           {/* Terminal selection dropdowns - positioned to match grid layout */}
-          <div className="pointer-events-auto">
-            {/* Primary pane dropdown (top-left of first terminal) */}
-            <div className="absolute top-2 left-2">
+          <div>
+            {/* Primary pane dropdown - always show */}
+            <div className="absolute top-2 left-2 pointer-events-auto">
               {renderTerminalDropdown(
                 primaryTerminal,
                 showPrimaryDropdown,
@@ -354,8 +361,8 @@ export function SplitViewContainer({
               )}
             </div>
             
-            {/* Secondary pane dropdown (top-left of second terminal) */}
-            <div className={`absolute ${
+            {/* Secondary pane dropdown - always show */}
+            <div className={`absolute pointer-events-auto ${
               layout.orientation === 'vertical' 
                 ? 'top-2 left-1/2 pl-2' 
                 : 'top-1/2 left-2 pt-2'
@@ -387,7 +394,7 @@ export function SplitViewContainer({
             
             {/* Control buttons in top-right */}
             {controlButtons && (
-              <div className="absolute top-2 right-2">
+              <div className="absolute top-2 right-2 pointer-events-auto">
                 {controlButtons}
               </div>
             )}
@@ -396,15 +403,15 @@ export function SplitViewContainer({
           {/* Resizer */}
           <div
             ref={resizerRef}
-            className={`absolute bg-gray-700 hover:bg-blue-500 transition-colors cursor-${layout.orientation === 'vertical' ? 'col' : 'row'}-resize pointer-events-auto group`}
+            className={`absolute bg-gray-700 hover:bg-blue-500 cursor-${layout.orientation === 'vertical' ? 'col' : 'row'}-resize pointer-events-auto group`}
             style={layout.orientation === 'vertical' ? {
-              left: `${layout.splitRatio}%`,
+              left: `${layout.splitRatio * 100}%`,
               top: 0,
               bottom: 0,
               width: '1px',
               transform: 'translateX(-50%)',
             } : {
-              top: `${layout.splitRatio}%`,
+              top: `${layout.splitRatio * 100}%`,
               left: 0,
               right: 0,
               height: '1px',
@@ -423,7 +430,7 @@ export function SplitViewContainer({
                 layout.orientation === 'vertical' 
                   ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2' 
                   : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
-              } opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 hover:bg-blue-600 text-white p-1 rounded`}
+              } opacity-0 group-hover:opacity-100 bg-blue-500 hover:bg-blue-600 text-white p-1 rounded`}
               title="Swap panes"
             >
               <ArrowLeftRight className="w-3 h-3" />

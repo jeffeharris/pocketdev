@@ -35,12 +35,12 @@
 }
 
 .terminals-container.mode-split.orientation-vertical {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: var(--split-ratio, 50%) calc(100% - var(--split-ratio, 50%));
   grid-template-areas: "primary secondary";
 }
 
 .terminals-container.mode-split.orientation-horizontal {
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: var(--split-ratio-fr, 1fr) var(--split-complement-fr, 1fr);
   grid-template-areas: 
     "primary"
     "secondary";

@@ -31,6 +31,12 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
   - Changed split/unified view toggle from V to Alt+D to match split view conventions
 
 ### Fixed
+- **Horizontal Split View Animation**
+  - Fixed divider starting at bottom and animating up when switching to horizontal split
+  - Changed from percentage-based to fr units for grid-template-rows to avoid browser layout timing issues
+  - Horizontal split now appears instantly at correct position, matching vertical split behavior
+  - Maintains smooth resize dragging and double-click reset to 50/50 functionality
+
 - **Terminal Tab Closing**
   - Fixed tab close button not working due to incorrect reference to task.terminals
   - Changed to use terminals from zustand store instead of non-existent task prop
