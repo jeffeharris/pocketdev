@@ -18,7 +18,6 @@ import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { SessionCleanupService } from './services/session-cleanup.service.js';
-import { initializeWebSocketEvents } from './services/websocket-events.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
 import { ServiceRegistry, serviceMiddleware } from './services/index.js';
@@ -26,6 +25,14 @@ import { GitStatusService } from './services/git-status.service.js';
 import GitOperationService from './services/git-operation.service.js';
 import { TaskService } from './services/task.service.js';
 import { ProjectService } from './services/project.service.js';
+import { TerminalService } from './services/terminal.service.js';
+import { PullRequestService } from './services/pull-request.service.js';
+import { getEventEmitterService } from './services/event-emitter.service.js';
+import { WebSocketService } from './services/websocket.service.js';
+import { SettingsService } from './services/settings.service.js';
+import { ContainerService } from './services/container.service.js';
+import { UploadService } from './services/upload.service.js';
+import { MonitoringService } from './services/monitoring.service.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -139,11 +146,23 @@ async function initializeDatabase() {
   // Initialize Service Registry
   const serviceRegistry = new ServiceRegistry();
   
-  // Register services
+  // Initialize EventEmitter service (singleton)
+  const eventEmitterService = getEventEmitterService();
+  
+  // Register EventEmitter service first (other services depend on it)
+  serviceRegistry.registerInstance('EventEmitterService', eventEmitterService);
+  
+  // Register services with EventEmitter dependency
   serviceRegistry.register('GitStatusService', GitStatusService, ['models', 'githubTokenService']);
-  serviceRegistry.register('GitOperationService', GitOperationService, ['models', 'githubTokenService']);
-  serviceRegistry.register('TaskService', TaskService, ['models', 'githubTokenService']);
+  serviceRegistry.register('GitOperationService', GitOperationService, ['models', 'githubTokenService', 'EventEmitterService']);
+  serviceRegistry.register('TaskService', TaskService, ['models', 'githubTokenService', 'EventEmitterService']);
   serviceRegistry.register('ProjectService', ProjectService, ['models', 'githubTokenService']);
+  serviceRegistry.register('TerminalService', TerminalService, ['models', 'EventEmitterService']);
+  serviceRegistry.register('PullRequestService', PullRequestService, ['models', 'githubTokenService', 'EventEmitterService']);
+  serviceRegistry.register('SettingsService', SettingsService, ['models', 'EventEmitterService']);
+  serviceRegistry.register('ContainerService', ContainerService, ['models', 'EventEmitterService']);
+  serviceRegistry.register('UploadService', UploadService, ['models', 'EventEmitterService']);
+  serviceRegistry.register('MonitoringService', MonitoringService, ['models', 'EventEmitterService']);
   
   // Set app.locals reference for transitional dependencies
   serviceRegistry.setAppLocals(app.locals);
@@ -158,6 +177,9 @@ async function initializeDatabase() {
   const sessionCleanupService = new SessionCleanupService(db, models);
   app.locals.sessionCleanupService = sessionCleanupService;
   sessionCleanupService.start();
+  
+  // Return eventEmitterService for use in the main server setup
+  return eventEmitterService;
 }
 
 // Load settings
@@ -233,7 +255,7 @@ function handleWebSocketMessage(ws, data) {
 }
 
 // Initialize WebSocket and monitoring
-async function initializeMonitoring(server, wsEventService, models) {
+async function initializeMonitoring(server, models, eventEmitterService) {
   try {
     console.log('Initializing AI monitoring...');
     
@@ -256,7 +278,7 @@ async function initializeMonitoring(server, wsEventService, models) {
     notificationService = new NotificationService(wsClient);
     
     // Create AI monitor with the session monitor as sessionManager
-    aiMonitor = new AISessionMonitor(sessionMonitor, wsClient, notificationService, wsEventService, models);
+    aiMonitor = new AISessionMonitor(sessionMonitor, wsClient, notificationService, models, eventEmitterService);
     
     // Register AI patterns
     aiMonitor.registerPatterns(wsClient);
@@ -300,10 +322,14 @@ async function initializeMonitoring(server, wsEventService, models) {
     app.locals.wsClient = wsClient;
     app.locals.wsAdapter = sessionMonitor;
     
+    // Set monitoring dependencies on MonitoringService
+    const monitoringService = app.locals.serviceRegistry.get('MonitoringService');
+    monitoringService.setMonitoringDependencies(aiMonitor, notificationService);
+    
     console.log('AI monitoring initialized successfully');
     
     // Initialize git status monitoring
-    const gitStatusMonitor = initializeGitStatusMonitor(models, wsEventService, app.locals.githubTokenService);
+    const gitStatusMonitor = initializeGitStatusMonitor(models, eventEmitterService, app.locals.githubTokenService);
     app.locals.gitStatusMonitor = gitStatusMonitor;
     console.log('Git status monitoring initialized');
   } catch (error) {
@@ -316,7 +342,7 @@ async function initializeMonitoring(server, wsEventService, models) {
 async function start() {
   try {
     await ensureProjectsDir();
-    await initializeDatabase();
+    const eventEmitterService = await initializeDatabase();
     await loadSettings();
     
     // Add service middleware before routes
@@ -335,44 +361,15 @@ async function start() {
     // Create WebSocket server for app-level real-time updates
     const wss = new WebSocketServer({ server, path: '/ws' });
     
-    // Store WebSocket server in app locals for access by services
+    // Initialize new WebSocketService with event-based pattern
+    const webSocketService = new WebSocketService(wss, eventEmitterService);
+    
+    // Store WebSocket services in app locals (for transition period)
     app.locals.wss = wss;
-    
-    // Initialize WebSocket event service
-    const wsEventService = initializeWebSocketEvents(wss);
-    app.locals.wsEventService = wsEventService;
-    
-    // Handle WebSocket connections
-    wss.on('connection', (ws, req) => {
-      console.log('New WebSocket client connected');
-      
-      // Store client metadata
-      ws.clientId = Math.random().toString(36).substr(2, 9);
-      ws.subscriptions = new Set();
-      
-      ws.on('message', (message) => {
-        try {
-          const data = JSON.parse(message);
-          handleWebSocketMessage(ws, data);
-        } catch (error) {
-          console.error('Invalid WebSocket message:', error);
-        }
-      });
-      
-      ws.on('close', () => {
-        console.log(`WebSocket client ${ws.clientId} disconnected`);
-      });
-      
-      ws.on('error', (error) => {
-        console.error(`WebSocket client ${ws.clientId} error:`, error);
-      });
-      
-      // Send initial connection success
-      ws.send(JSON.stringify({ type: 'connected', clientId: ws.clientId }));
-    });
+    app.locals.webSocketService = webSocketService;
     
     // Initialize monitoring with Shelltender v0.6.1 adapter
-    await initializeMonitoring(server, wsEventService, models);
+    await initializeMonitoring(server, models, eventEmitterService);
     
     // Start listening
     server.listen(config.port, () => {

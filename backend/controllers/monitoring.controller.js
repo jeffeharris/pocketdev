@@ -3,23 +3,7 @@
  */
 export async function getMonitoringStatus(req, res, next) {
   try {
-    const aiMonitor = req.app.locals.aiMonitor;
-    const notificationService = req.app.locals.notificationService;
-    
-    if (!aiMonitor) {
-      return res.json({
-        enabled: false,
-        message: 'AI monitoring not initialized (Shelltender may not be running)'
-      });
-    }
-    
-    const status = {
-      enabled: true,
-      sessionsMonitored: aiMonitor.getMonitoredSessions ? aiMonitor.getMonitoredSessions().size : 0,
-      recentPatterns: aiMonitor.recentPatterns ? aiMonitor.recentPatterns.size : 0,
-      notificationCount: notificationService && notificationService.notifications ? notificationService.notifications.length : 0
-    };
-    
+    const status = await req.services.MonitoringService.getSystemMonitoringStatus();
     res.json(status);
   } catch (error) {
     next(error);
@@ -31,22 +15,9 @@ export async function getMonitoringStatus(req, res, next) {
  */
 export async function getNotifications(req, res, next) {
   try {
-    const notificationService = req.app.locals.notificationService;
     const { limit = 50, offset = 0 } = req.query;
-    
-    if (!notificationService) {
-      return res.json({ 
-        notifications: [],
-        message: 'Notification service not available' 
-      });
-    }
-    
-    const notifications = notificationService.getNotifications(
-      parseInt(limit),
-      parseInt(offset)
-    );
-    
-    res.json({ notifications });
+    const result = await req.services.MonitoringService.getNotifications({ limit, offset });
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -58,33 +29,12 @@ export async function getNotifications(req, res, next) {
 export async function getSessionState(req, res, next) {
   try {
     const { sessionId } = req.params;
-    const aiMonitor = req.app.locals.aiMonitor;
-    
-    if (!aiMonitor) {
-      return res.status(503).json({ 
-        error: 'AI monitoring not available' 
-      });
-    }
-    
-    // Get state from AI monitor
-    const state = aiMonitor.getSessionState ? 
-      aiMonitor.getSessionState(sessionId) : 
-      'unknown';
-    
-    // Get recent patterns for this session
-    const patterns = aiMonitor.getSessionPatterns ?
-      aiMonitor.getSessionPatterns(sessionId) :
-      [];
-    
-    res.json({
-      sessionId,
-      state,
-      patterns,
-      lastUpdate: aiMonitor.getLastUpdate ? 
-        aiMonitor.getLastUpdate(sessionId) : 
-        null
-    });
+    const result = await req.services.MonitoringService.getSessionStateAndAnalytics(sessionId);
+    res.json(result);
   } catch (error) {
+    if (error.message === 'AI monitoring not available') {
+      return res.status(503).json({ error: error.message });
+    }
     next(error);
   }
 }
@@ -94,21 +44,12 @@ export async function getSessionState(req, res, next) {
  */
 export async function clearNotifications(req, res, next) {
   try {
-    const notificationService = req.app.locals.notificationService;
-    
-    if (!notificationService) {
-      return res.status(503).json({ 
-        error: 'Notification service not available' 
-      });
-    }
-    
-    notificationService.clearNotifications();
-    
-    res.json({ 
-      message: 'Notifications cleared',
-      count: 0 
-    });
+    const result = await req.services.MonitoringService.performAdminAction('clear-notifications');
+    res.json(result);
   } catch (error) {
+    if (error.message.includes('not available')) {
+      return res.status(503).json({ error: error.message });
+    }
     next(error);
   }
 }
@@ -119,22 +60,13 @@ export async function clearNotifications(req, res, next) {
 export async function getSessionAnalytics(req, res, next) {
   try {
     const { sessionId } = req.params;
-    const models = req.app.locals.models;
+    const result = await req.services.MonitoringService.getSessionStateAndAnalytics(sessionId);
     
-    // Get session from database
-    const session = await models.sessions.findById(sessionId);
-    
-    if (!session) {
+    if (!result.analytics || !result.analytics.session) {
       return res.status(404).json({ error: 'Session not found' });
     }
     
-    // Get analytics
-    const analytics = await models.sessions.getAnalytics(sessionId);
-    
-    res.json({
-      session,
-      analytics
-    });
+    res.json(result.analytics);
   } catch (error) {
     next(error);
   }
@@ -146,11 +78,8 @@ export async function getSessionAnalytics(req, res, next) {
 export async function getTaskSessions(req, res, next) {
   try {
     const { taskId } = req.params;
-    const models = req.app.locals.models;
-    
-    const sessions = await models.sessions.findByTaskId(taskId);
-    
-    res.json({ sessions });
+    const result = await req.services.MonitoringService.performAdminAction('get-task-sessions', { taskId });
+    res.json(result);
   } catch (error) {
     next(error);
   }
