@@ -4,11 +4,12 @@ import type { GitStatus, ChangedFile, PullRequest } from '../types/git';
 import type { DeploymentResult } from '../types/container';
 import type { Project } from '../types/project';
 import type { Settings, UpdateSettingsDTO, GithubTestResult } from '../api/settings';
-import type { AllChangesResponse, FileCategory, DiffViewerResponse, FileDiffResponse } from '../types/diff';
-import { FileChangeType as FileChangeTypeValues } from '../types/diff';
-import { mockTasks, mockProjects, mockGitStatus, mockChangedFiles } from './mockData';
+import type { AllChangesResponse, DiffViewerResponse, FileDiffResponse } from '../types/diff';
+import { mockTasks, mockProjects } from './mockData';
 import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
+import { GitService } from './git.service';
+import { TerminalService } from './terminal.service';
 
 const API_BASE = '/api';
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -20,6 +21,16 @@ const settingsService = new SettingsService({
 });
 
 const uploadService = new UploadService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const gitService = new GitService({ 
+  baseUrl: API_BASE, 
+  mockEnabled: USE_MOCKS 
+});
+
+const terminalService = new TerminalService({ 
   baseUrl: API_BASE, 
   mockEnabled: USE_MOCKS 
 });
@@ -423,125 +434,40 @@ class ApiService {
 
   // Git endpoints
   async getGitStatus(projectId: string, taskId: string): Promise<GitStatus> {
-    if (USE_MOCKS) return mockGitStatus;
-    return this.fetch<GitStatus>(`/projects/${projectId}/tasks/${taskId}/git/status`);
+    // Delegated to GitService
+    return gitService.getGitStatus(projectId, taskId);
   }
 
   async getChangedFiles(projectId: string, taskId: string): Promise<ChangedFile[]> {
-    if (USE_MOCKS) return mockChangedFiles;
-    return this.fetch<ChangedFile[]>(`/projects/${projectId}/tasks/${taskId}/files/changed`);
+    // Delegated to GitService - use getAllChanges and extract files
+    const allChanges = await gitService.getAllChanges(projectId, taskId);
+    // Map DiffFile format to ChangedFile format
+    return allChanges.files.map(file => ({
+      name: file.path,
+      additions: file.additions,
+      deletions: file.deletions,
+      type: file.type
+    }));
   }
 
   async getAllChanges(projectId: string, taskId: string): Promise<AllChangesResponse> {
-    if (USE_MOCKS) {
-      return {
-        files: [],
-        summary: {
-          staged: 0,
-          unstaged: 0,
-          untracked: 0,
-          committed: 0,
-          total: 0,
-          unpushedCommits: 0
-        },
-        unpushedCommits: []
-      };
-    }
-    
-    const response = await this.fetch<any>(`/projects/${projectId}/tasks/${taskId}/git/all-changes`);
-    
-    // Map backend response to our typed format
-    return {
-      files: response.files.map((file: any) => ({
-        path: file.path,
-        type: file.type,
-        additions: file.additions,
-        deletions: file.deletions,
-        status: file.status,
-        category: file.category,
-        staged: file.staged,
-        unstaged: file.unstaged,
-        untracked: file.untracked,
-        committed: file.committed
-      })),
-      summary: response.summary,
-      unpushedCommits: response.unpushedCommits || []
-    };
+    // Delegated to GitService
+    return gitService.getAllChanges(projectId, taskId);
   }
 
   async getTaskDiff(projectId: string, taskId: string, compareWith: 'working' | 'base' = 'working'): Promise<DiffViewerResponse> {
-    if (USE_MOCKS) {
-      // Return mock diff data for testing
-      return {
-        files: [{
-          path: 'src/components/Button.tsx',
-          type: FileChangeTypeValues.Modified,
-          additions: 10,
-          deletions: 2,
-          diff: `diff --git a/src/components/Button.tsx b/src/components/Button.tsx
-index abc123..def456 100644
---- a/src/components/Button.tsx
-+++ b/src/components/Button.tsx
-@@ -1,5 +1,10 @@
--export const Button = ({ children }) => {
-+interface ButtonProps {
-+  children: React.ReactNode;
-+  onClick: () => void;
-+}
-+
-+export const Button: React.FC<ButtonProps> = ({ children, onClick }) => {
-   return (
--    <button>{children}</button>
-+    <button onClick={onClick}>{children}</button>
-   );
- };`
-        }],
-        compareWith,
-        hasWorkingChanges: true
-      };
-    }
-    
-    const response = await this.fetch<any>(
-      `/projects/${projectId}/tasks/${taskId}/git/diff${compareWith === 'base' ? '?compareWith=base' : ''}`
-    );
-    
-    // Map backend response to our typed format
-    return {
-      files: response.files.map((file: any) => ({
-        path: file.path,
-        type: file.type,
-        additions: file.additions,
-        deletions: file.deletions,
-        diff: file.diff
-      })),
-      compareWith: response.compareWith,
-      hasWorkingChanges: response.hasWorkingChanges
-    };
+    // Delegated to GitService
+    return gitService.getTaskDiff(projectId, taskId, { compareWith });
   }
 
   async getFileDiff(projectId: string, taskId: string, filePath: string, compareWith: 'working' | 'base' | 'all' = 'working'): Promise<FileDiffResponse> {
-    if (USE_MOCKS) {
-      return {
-        path: filePath,
-        diff: `diff --git a/${filePath} b/${filePath}
-index abc123..def456 100644
---- a/${filePath}
-+++ b/${filePath}
-@@ -1,5 +1,10 @@
--mock line removed
-+mock line added`,
-        hasDiff: true
-      };
-    }
-    // Encode the file path to handle special characters and slashes
-    const encodedPath = encodeURIComponent(filePath);
-    const queryParams = compareWith !== 'working' ? `?compareWith=${compareWith}` : '';
-    return this.fetch<FileDiffResponse>(
-      `/projects/${projectId}/tasks/${taskId}/git/diff/${encodedPath}${queryParams}`
-    );
+    // Delegated to GitService
+    return gitService.getFileDiff(projectId, taskId, filePath, { compareWith });
   }
 
   async checkConflicts(taskId: string): Promise<boolean> {
+    // Delegated to GitService - Note: This method needs to be added to GitService
+    // For now, using direct fetch until GitService is enhanced
     if (USE_MOCKS) return Math.random() > 0.7; // 30% chance of conflicts
     const result = await this.fetch<{ hasConflicts: boolean }>(`/tasks/${taskId}/git/check-conflicts`);
     return result.hasConflicts;
@@ -595,42 +521,27 @@ index abc123..def456 100644
     files?: string | string[];
     args?: string;
   }): Promise<{ success: boolean; output: string; error?: string }> {
-    if (USE_MOCKS) {
-      return { success: true, output: `Mock ${operation} successful` };
-    }
-    
-    const url = `/projects/${projectId}/tasks/${taskId}/git`;
-    const body = JSON.stringify({ operation, ...options });
-    
-    return this.fetch<{ success: boolean; output: string; error?: string }>(
-      url,
-      {
-        method: 'POST',
-        body: body,
-      }
-    );
+    // Delegated to GitService
+    return gitService.performOperation(projectId, taskId, operation, options);
   }
 
   async stageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
-    return this.gitOperation(projectId, taskId, 'add', { files: filePath });
+    // Delegated to GitService
+    return gitService.performOperation(projectId, taskId, 'add', { files: filePath });
   }
 
   async unstageFile(projectId: string, taskId: string, filePath: string): Promise<{ success: boolean; output: string; error?: string }> {
-    return this.gitOperation(projectId, taskId, 'unstage', { files: filePath });
+    // Delegated to GitService
+    return gitService.performOperation(projectId, taskId, 'unstage', { files: filePath });
   }
 
   async stageAndCommit(projectId: string, taskId: string, message: string, files?: string | string[]): Promise<{ success: boolean; output: string; error?: string }> {
-    // First stage files
-    const addResult = await this.gitOperation(projectId, taskId, 'add', { files: files || '.' });
-    if (!addResult.success) {
-      return addResult;
-    }
-    
-    // Then commit
-    return this.gitOperation(projectId, taskId, 'commit', { message });
+    // Delegated to GitService
+    return gitService.stageAndCommit(projectId, taskId, message, { files });
   }
 
   async updateBranch(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
+    // Delegated to GitService - Note: This uses a different endpoint, keeping direct implementation for now
     if (USE_MOCKS) {
       return { success: true, output: 'Mock update successful' };
     }
@@ -643,6 +554,7 @@ index abc123..def456 100644
   }
 
   async mergeToBase(projectId: string, taskId: string): Promise<{ success: boolean; output: string; error?: string }> {
+    // Delegated to GitService - Note: This uses a different endpoint, keeping direct implementation for now
     if (USE_MOCKS) {
       return { success: true, output: 'Mock merge successful' };
     }
@@ -669,9 +581,8 @@ index abc123..def456 100644
 
   // Terminal endpoint
   async openTerminal(taskId: string): Promise<{ url: string }> {
-    return this.fetch<{ url: string }>(`/tasks/${taskId}/terminal`, {
-      method: 'POST',
-    });
+    // Delegated to TerminalService
+    return terminalService.openTerminal(taskId);
   }
 
   // Settings endpoints
@@ -720,18 +631,8 @@ index abc123..def456 100644
 
   // Terminal session endpoints
   async getTerminalSessions(taskId: string): Promise<any[]> {
-    if (USE_MOCKS) {
-      return [{
-        id: `task-${taskId}-1`,
-        dbSessionId: 'mock123',
-        tabName: 'Main',
-        tabOrder: 0,
-        aiState: 'idle',
-        aiAgent: 'claude'
-      }];
-    }
-    const response = await this.fetch<any>(`/tasks/${taskId}`);
-    return response.terminals || [];
+    // Delegated to TerminalService
+    return terminalService.getTerminalSessions(taskId);
   }
 
   async createTerminalSession(taskId: string, options: {
@@ -741,64 +642,26 @@ index abc123..def456 100644
     initialPrompt?: string;
     copyHistoryFrom?: string | null;
   }): Promise<any> {
-    if (USE_MOCKS) {
-      const dbSessionId = Math.random().toString(36).substr(2, 8);
-      const sessionId = `task-${taskId}-${dbSessionId}`;
-      return {
-        sessionId: sessionId,
-        dbSessionId: dbSessionId,
-        shelltenderSessionId: sessionId,
-        tabName: options.tabName || 'New Tab',
-        tabOrder: 1,
-        aiAgent: options.aiAgent || 'claude',
-        isReconnected: false,
-        createdAt: new Date().toISOString(),
-        cols: 80,
-        rows: 24,
-        wsUrl: 'ws://localhost:8080/ws'
-      };
-    }
-    return this.fetch<any>(`/tasks/${taskId}/terminals`, {
-      method: 'POST',
-      body: JSON.stringify(options)
-    });
+    // Delegated to TerminalService
+    return terminalService.createTerminalSession(taskId, options);
   }
 
   async updateTerminalTab(sessionId: string, updates: {
     tabName?: string;
     tabOrder?: number;
   }): Promise<any> {
-    if (USE_MOCKS) {
-      return { ...updates, id: sessionId };
-    }
-    return this.fetch<any>(`/terminals/${sessionId}/tab`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates)
-    });
+    // Delegated to TerminalService
+    return terminalService.updateTerminalTab(sessionId, updates);
   }
 
   async deleteTerminalSession(sessionId: string): Promise<void> {
-    if (USE_MOCKS) return;
-    await this.fetch<void>(`/terminals/${sessionId}`, {
-      method: 'DELETE'
-    });
+    // Delegated to TerminalService
+    return terminalService.deleteTerminalSession(sessionId);
   }
 
   async executeCommand(sessionId: string, command: string): Promise<void> {
-    if (USE_MOCKS) {
-      return;
-    }
-    
-    try {
-      const response = await this.fetch<void>(`/sessions/${sessionId}/execute`, {
-        method: 'POST',
-        body: JSON.stringify({ command })
-      });
-      return response;
-    } catch (error) {
-      console.error('[API] executeCommand failed:', error);
-      throw error;
-    }
+    // Delegated to TerminalService
+    return terminalService.executeCommand(sessionId, command);
   }
 }
 

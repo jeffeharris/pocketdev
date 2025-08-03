@@ -13,6 +13,8 @@ import { BaseService } from './base.service';
 import { SessionAdapter, sessionAdapter } from './session-adapter';
 import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
+import { GitService } from './git.service';
+import { TerminalService } from './terminal.service';
 
 // Service registry types
 export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload';
@@ -26,8 +28,8 @@ export interface ServiceRegistry {
   // Core services (to be implemented)
   project: any; // Will be ProjectService
   task: any;    // Will be TaskService
-  git: any;     // Will be GitService
-  terminal: any; // Will be TerminalService
+  git: GitService;        // Phase 2 implemented
+  terminal: TerminalService; // Phase 2 implemented
   settings: SettingsService; // Phase 1 implemented
   upload: UploadService;   // Phase 1 implemented
   
@@ -119,10 +121,10 @@ export function ServiceProvider({ children, config = {} }: ServiceProviderProps)
           // These will be replaced with actual service implementations
           project: createPlaceholderService('project', serviceConfig),
           task: createPlaceholderService('task', serviceConfig),
-          git: createPlaceholderService('git', serviceConfig),
-          terminal: createPlaceholderService('terminal', serviceConfig),
           
-          // Phase 1 services - actual implementations
+          // Phase 1 & 2 services - actual implementations
+          git: new GitService(serviceConfig),
+          terminal: new TerminalService(serviceConfig),
           settings: new SettingsService(serviceConfig),
           upload: new UploadService(serviceConfig),
           
