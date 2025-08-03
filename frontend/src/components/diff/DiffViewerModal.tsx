@@ -168,37 +168,39 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   useEffect(() => {
     if (isOpen && taskId) {
       loadDiffData();
-    } else if (!isOpen) {
-      // Clear data when modal closes
-      setFiles([]);
-      setSelectedFile(null);
-      setOriginalCode('');
-      setModifiedCode('');
-      setError(null);
-      // Reset comparison mode to working
-      setCompareWith('working');
-      // Reset search state
-      setSearchTerm('');
-      setShowSearch(false);
-      hasManuallyToggledSearch.current = false;
-      // Clear pending operations
-      setPendingOperations(new Set());
-      // Clear toast
-      setToast(null);
-      // Clear caches when modal closes
-      diffCache.current = {};
-      fileDiffCache.current = {};
     }
-    
-    // Cleanup function to prevent Monaco disposal errors
-    return () => {
-      if (!isOpen) {
-        setOriginalCode('');
-        setModifiedCode('');
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskId]);
+
+  // Clear data when modal closes - separate effect to avoid Monaco disposal issues
+  useEffect(() => {
+    if (!isOpen) {
+      // Use a small delay to let Monaco clean up first
+      const timeoutId = setTimeout(() => {
+        // Clear data when modal closes
+        setFiles([]);
+        setSelectedFile(null);
+        setOriginalCode('');
+        setModifiedCode('');
+        setError(null);
+        // Reset comparison mode to working
+        setCompareWith('working');
+        // Reset search state
+        setSearchTerm('');
+        setShowSearch(false);
+        hasManuallyToggledSearch.current = false;
+        // Clear pending operations
+        setPendingOperations(new Set());
+        // Clear toast
+        setToast(null);
+        // Clear caches when modal closes
+        diffCache.current = {};
+        fileDiffCache.current = {};
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isOpen]);
 
   // Re-apply filters when compareWith changes
   useEffect(() => {
@@ -1121,9 +1123,9 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
                       <div className="text-gray-500">Loading...</div>
                     </div>
                   )}
-                  {!loading && originalCode !== undefined && modifiedCode !== undefined && !selectedFile.loading && (
+                  {!loading && originalCode !== undefined && modifiedCode !== undefined && !selectedFile.loading && isOpen && (
                     <DiffEditor
-                      key={`${selectedFile.path}-${viewMode}`}
+                      key={`${selectedFile.path}-${viewMode}-${isOpen}`}
                       height="100%"
                       language={getLanguageFromPath(selectedFile.path)}
                       original={originalCode}
