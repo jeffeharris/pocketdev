@@ -14,10 +14,11 @@ export const QuickAccessPanel: React.FC<QuickAccessPanelProps> = ({ isOpen, onCl
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { getActiveShortcuts } = useKeyboard();
   
-  // Get active shortcuts
+  // Get active shortcuts - recalculate when panel is open to avoid circular deps
   const activeShortcuts = useMemo(() => {
+    if (!isOpen) return [];
     return getActiveShortcuts().filter(shortcut => !shortcut.hidden);
-  }, [getActiveShortcuts]);
+  }, [isOpen, getActiveShortcuts]);
   
   // Filter shortcuts based on search term
   const filteredShortcuts = useMemo(() => {

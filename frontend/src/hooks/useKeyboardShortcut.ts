@@ -45,6 +45,13 @@ export function useKeyboardShortcut(
   
   // Use ref to avoid recreating the shortcut on every render
   const shortcutIdRef = useRef<string>();
+  // Use ref for handler to avoid re-registering on every render
+  const handlerRef = useRef(handler);
+  
+  // Update handler ref when it changes
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
   
   // Context priorities to match the pushContext priorities
   const contextPriorityMap: Record<string, number> = {
@@ -66,7 +73,7 @@ export function useKeyboardShortcut(
     const shortcut: KeyboardShortcut = {
       id,
       key,
-      handler,
+      handler: (event: KeyboardEvent) => handlerRef.current(event),
       description: options.description || `Dynamic shortcut: ${key}`,
       category: options.category || 'navigation',
       contexts: (options.contexts || ['global']).map(name => ({
@@ -86,7 +93,6 @@ export function useKeyboardShortcut(
     };
   }, [
     key,
-    handler,
     options.enabled,
     options.contexts?.join(','), // Re-register if contexts change
     options.description,

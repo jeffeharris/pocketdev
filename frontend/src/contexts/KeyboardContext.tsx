@@ -135,15 +135,18 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
     if (count <= 1) {
       // Last reference, remove context
       refs.delete(context);
-      setActiveContexts(prev => {
-        const next = new Set(prev);
-        next.delete(context);
-        return next;
-      });
-      setContextPriorities(prev => {
-        const next = new Map(prev);
-        next.delete(context);
-        return next;
+      // Use React's batching to prevent multiple state updates during unmount
+      React.startTransition(() => {
+        setActiveContexts(prev => {
+          const next = new Set(prev);
+          next.delete(context);
+          return next;
+        });
+        setContextPriorities(prev => {
+          const next = new Map(prev);
+          next.delete(context);
+          return next;
+        });
       });
     } else {
       // Decrement reference count
@@ -159,10 +162,13 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
 
   // Unregister a dynamic shortcut
   const unregisterShortcut = useCallback((id: string) => {
-    setDynamicShortcuts(prev => {
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
+    // Use React's batching to prevent multiple state updates during unmount
+    React.startTransition(() => {
+      setDynamicShortcuts(prev => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
     });
   }, []);
 
@@ -202,7 +208,44 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
       }
 
       const key = formatKeyCombo(event);
-      const activeShortcuts = getActiveShortcuts();
+      
+      // Inline the active shortcuts logic to avoid dependency issues
+      const allShortcuts = [...shortcuts.values(), ...dynamicShortcuts.values()];
+      
+      // Find the highest priority active context (30+ is modal priority)
+      let hasModalContext = false;
+      
+      for (const [context, priority] of contextPriorities) {
+        if (activeContexts.has(context) && priority >= 30) {
+          hasModalContext = true;
+          break;
+        }
+      }
+      
+      const activeShortcuts = allShortcuts.filter(shortcut => {
+        // Check if enabled
+        if (shortcut.enabled === false) return false;
+        
+        // Check if any context is active
+        return shortcut.contexts.some(ctx => {
+          // Check if context is active
+          if (!activeContexts.has(ctx.name)) return false;
+          
+          // If a modal is open (priority 30+), exclude non-global shortcuts from contexts with priority < 30
+          if (hasModalContext && ctx.name !== 'global') {
+            // Get the priority of this context
+            const ctxPriority = contextPriorities.get(ctx.name) || ctx.priority;
+            if (ctxPriority < 30) {
+              return false;
+            }
+          }
+          
+          // Check dynamic test if provided
+          if (ctx.test && !ctx.test()) return false;
+          
+          return true;
+        });
+      });
       
       // Find all matching shortcuts
       const matches = activeShortcuts
@@ -241,7 +284,7 @@ export function KeyboardProvider({ children }: KeyboardProviderProps) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [formatKeyCombo, getActiveShortcuts]);
+  }, [formatKeyCombo, shortcuts, dynamicShortcuts, activeContexts, contextPriorities]);
 
   const value: KeyboardContextValue = {
     registerShortcut,
