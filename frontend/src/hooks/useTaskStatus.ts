@@ -43,6 +43,7 @@ export function useTaskStatus(taskId: string | undefined) {
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
       case 'ai_state_update':
+        console.log('[useTaskStatus] Received AI state update:', message.data);
         // Update AI worker state - this comes from terminal pattern matching
         setTaskStatus(prev => ({
           ...prev!,
