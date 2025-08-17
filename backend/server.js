@@ -20,7 +20,6 @@ import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { getGitHubTokenService } from './services/github-token.service.js';
-import { ServiceRegistry, serviceMiddleware } from './services/index.js';
 import { GitStatusService } from './services/git-status.service.js';
 import GitOperationService from './services/git-operation.service.js';
 import { TaskService } from './services/task.service.js';
@@ -143,36 +142,32 @@ async function initializeDatabase() {
   const githubTokenService = getGitHubTokenService(db);
   app.locals.githubTokenService = githubTokenService;
   
-  // Initialize Service Registry
-  const serviceRegistry = new ServiceRegistry();
-  
   // Initialize EventEmitter service (singleton)
   const eventEmitterService = getEventEmitterService();
   
-  // Register EventEmitter service first (other services depend on it)
-  serviceRegistry.registerInstance('EventEmitterService', eventEmitterService);
+  // Initialize services directly
+  const services = {
+    // Core dependencies
+    models: models,
+    EventEmitterService: eventEmitterService,
+    GitHubTokenService: githubTokenService,
+    githubTokenService: githubTokenService, // Compatibility alias
+    
+    // Services
+    GitStatusService: new GitStatusService(models, githubTokenService),
+    GitOperationService: new GitOperationService(models, githubTokenService, eventEmitterService),
+    TaskService: new TaskService(models, githubTokenService, eventEmitterService),
+    ProjectService: new ProjectService(models, githubTokenService),
+    TerminalService: new TerminalService(models, eventEmitterService),
+    PullRequestService: new PullRequestService(models, githubTokenService, eventEmitterService),
+    SettingsService: new SettingsService(models, eventEmitterService),
+    ContainerService: new ContainerService(models, eventEmitterService),
+    UploadService: new UploadService(models, eventEmitterService),
+    MonitoringService: new MonitoringService(models, eventEmitterService)
+  };
   
-  // Register GitHubTokenService instance
-  serviceRegistry.registerInstance('GitHubTokenService', githubTokenService);
-  serviceRegistry.registerInstance('githubTokenService', githubTokenService); // Also register with lowercase for compatibility
-  
-  // Register services with EventEmitter dependency
-  serviceRegistry.register('GitStatusService', GitStatusService, ['models', 'githubTokenService']);
-  serviceRegistry.register('GitOperationService', GitOperationService, ['models', 'githubTokenService', 'EventEmitterService']);
-  serviceRegistry.register('TaskService', TaskService, ['models', 'githubTokenService', 'EventEmitterService']);
-  serviceRegistry.register('ProjectService', ProjectService, ['models', 'githubTokenService']);
-  serviceRegistry.register('TerminalService', TerminalService, ['models', 'EventEmitterService']);
-  serviceRegistry.register('PullRequestService', PullRequestService, ['models', 'githubTokenService', 'EventEmitterService']);
-  serviceRegistry.register('SettingsService', SettingsService, ['models', 'EventEmitterService']);
-  serviceRegistry.register('ContainerService', ContainerService, ['models', 'EventEmitterService']);
-  serviceRegistry.register('UploadService', UploadService, ['models', 'EventEmitterService']);
-  serviceRegistry.register('MonitoringService', MonitoringService, ['models', 'EventEmitterService']);
-  
-  // Set app.locals reference for transitional dependencies
-  serviceRegistry.setAppLocals(app.locals);
-  
-  // Store service registry in app.locals
-  app.locals.serviceRegistry = serviceRegistry;
+  // Store services in app.locals for backward compatibility
+  app.locals.services = services;
   
   // Run cleanup on startup
   await cleanupOrphanedWorktrees(models);
@@ -320,21 +315,28 @@ async function initializeMonitoring(server, models, eventEmitterService) {
       }
     });
     
-    // Store in app locals for API access
+    // Store in app locals for API access (being phased out)
     app.locals.aiMonitor = aiMonitor;
     app.locals.notificationService = notificationService;
     app.locals.wsClient = wsClient;
     app.locals.wsAdapter = sessionMonitor;
     
+    // Add monitoring services to services object
+    app.locals.services.aiMonitor = aiMonitor;
+    app.locals.services.wsAdapter = sessionMonitor;
+    app.locals.services.wsClient = wsClient;
+    app.locals.services.notificationService = notificationService;
+    
     // Set monitoring dependencies on MonitoringService
-    const monitoringService = app.locals.serviceRegistry.get('MonitoringService');
+    const monitoringService = app.locals.services.MonitoringService;
     monitoringService.setMonitoringDependencies(aiMonitor, notificationService);
     
     console.log('AI monitoring initialized successfully');
     
     // Initialize git status monitoring
-    const gitStatusMonitor = initializeGitStatusMonitor(models, eventEmitterService, app.locals.githubTokenService);
+    const gitStatusMonitor = initializeGitStatusMonitor(models, eventEmitterService, githubTokenService);
     app.locals.gitStatusMonitor = gitStatusMonitor;
+    app.locals.services.gitStatusMonitor = gitStatusMonitor;
     console.log('Git status monitoring initialized');
   } catch (error) {
     console.warn('Failed to initialize monitoring:', error.message);
@@ -350,7 +352,10 @@ async function start() {
     await loadSettings();
     
     // Add service middleware before routes
-    app.use(serviceMiddleware(app.locals.serviceRegistry));
+    app.use((req, res, next) => {
+      req.services = app.locals.services;
+      next();
+    });
     
     // Mount routes after models are initialized
     const routes = createRoutes(app);

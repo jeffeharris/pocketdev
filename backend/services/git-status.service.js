@@ -1,4 +1,4 @@
-import { GitService } from './git-compat.js';
+import { GitService } from './git-core.service.js';
 
 /**
  * GitStatusService - Handles all git status operations
@@ -72,6 +72,10 @@ export class GitStatusService {
       staged: detailedStatus.staged,
       unstaged: detailedStatus.unstaged,
       untracked: detailedStatus.untracked,
+      files: detailedStatus.files || [],
+      stagedFiles: detailedStatus.files?.filter(f => f.staged) || [],
+      unstagedFiles: detailedStatus.files?.filter(f => f.unstaged) || [],
+      untrackedFiles: detailedStatus.files?.filter(f => f.untracked) || [],
       hasRemoteTracking,
       rawStatus: statusResult.output
     };

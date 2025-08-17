@@ -345,6 +345,13 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         copyHistoryFrom: activeTerminal?.sessionId || null
       });
       
+      console.log('[TerminalPanel handleTabAdd] New session created:', {
+        sessionId: newSession.sessionId,
+        dbSessionId: newSession.dbSessionId,
+        shelltenderSessionId: newSession.shelltenderSessionId,
+        fullObject: newSession
+      });
+      
       const newTerminal: TerminalSession = {
         sessionId: newSession.sessionId,
         dbSessionId: newSession.dbSessionId,
@@ -376,7 +383,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           
           // Small delay then send claude command
           setTimeout(async () => {
-            await terminalService.executeCommand(newSession.shelltenderSessionId, 'claude');
+            console.log('[TerminalPanel] About to execute claude with sessionId:', newSession.sessionId);
+            await terminalService.executeCommand(newSession.sessionId, 'claude');
           }, 500);
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);

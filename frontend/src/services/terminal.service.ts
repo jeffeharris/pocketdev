@@ -59,8 +59,22 @@ export class TerminalService extends BaseService implements ITerminalService {
     
     const result = await this.post<CreateTerminalResult>(`/tasks/${taskId}/terminals`, options);
     
+    console.log('[TerminalService createTerminalSession] Backend response:', result);
+    
+    // Ensure the response has all required fields for the adapter
+    // The backend returns 'sessionId' but TerminalSession expects different fields
+    const terminalSession: TerminalSession = {
+      sessionId: result.sessionId,
+      dbSessionId: result.dbSessionId,
+      shelltenderSessionId: result.shelltenderSessionId || result.sessionId, // Fallback to sessionId if shelltenderSessionId is missing
+      tabName: result.tabName,
+      tabOrder: result.tabOrder,
+      aiState: result.aiState || 'not-started',
+      aiAgent: result.aiAgent
+    };
+    
     // Register the new session with the adapter
-    sessionAdapter.registerSession(result);
+    sessionAdapter.registerSession(terminalSession);
     
     return result;
   }
@@ -115,8 +129,12 @@ export class TerminalService extends BaseService implements ITerminalService {
   }
 
   async executeCommand(sessionId: string, command: string): Promise<void> {
+    console.log('[TerminalService executeCommand] Called with sessionId:', sessionId);
+    
     // Normalize the session ID for API calls
     const sessionInfo = sessionAdapter.findSessionByAnyId(sessionId);
+    console.log('[TerminalService executeCommand] Found session info:', sessionInfo);
+    
     if (!sessionInfo) {
       throw new Error(`Session not found: ${sessionId}`);
     }
@@ -128,7 +146,10 @@ export class TerminalService extends BaseService implements ITerminalService {
     }
     
     // Use the Shelltender session ID for command execution
-    await this.post<void>(`/sessions/${sessionInfo.shelltenderSessionId}/execute`, { command });
+    // If shelltenderSessionId is undefined, fall back to legacySessionId (which is the composite session ID)
+    const sessionIdToUse = sessionInfo.shelltenderSessionId || sessionInfo.legacySessionId;
+    console.log('[TerminalService executeCommand] Using sessionId:', sessionIdToUse);
+    await this.post<void>(`/sessions/${sessionIdToUse}/execute`, { command });
   }
 
   async openTerminal(taskId: string): Promise<{ url: string }> {

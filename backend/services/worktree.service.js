@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { executeGitCommand, configureGitCredentials } from './git-compat.js';
+import { executeGitCommand, configureGitCredentials } from './git-core.service.js';
 
 const execAsync = promisify(exec);
 

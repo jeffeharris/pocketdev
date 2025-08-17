@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
+import { GitService } from './git-core.service.js';
 
 /**
  * TaskService - Handles all task-related business operations

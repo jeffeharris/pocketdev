@@ -53,6 +53,13 @@ export class SessionAdapter {
       aiState: terminalSession.aiState
     };
 
+    console.log('[SessionAdapter registerSession] Registering session:', {
+      normalizedId,
+      dbSessionId: terminalSession.dbSessionId,
+      shelltenderSessionId: terminalSession.shelltenderSessionId,
+      sessionId: terminalSession.sessionId
+    });
+
     this.sessionMap.set(normalizedId, sessionInfo);
     return normalizedId;
   }

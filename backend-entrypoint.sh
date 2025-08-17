@@ -1,15 +1,12 @@
 #!/bin/sh
-# Backend entrypoint script - handles permissions dynamically
+# Backend entrypoint script
 
-# If running as root, fix permissions
-if [ "$(id -u)" = "0" ]; then
-    echo "Running as root, fixing permissions..."
-    # Ensure directories exist
-    mkdir -p /projects /app/data
-    # Fix ownership to match mounted volumes
-    chown -R $(stat -c "%u:%g" /projects) /projects 2>/dev/null || true
-    chown -R $(stat -c "%u:%g" /app/data) /app/data 2>/dev/null || true
-fi
+# Configure git to trust project directories (needed for git operations as pocketdev user)
+git config --global --add safe.directory '*'
+
+# Set umask to make new files/dirs group-writable (775 for dirs, 664 for files)
+# This helps with permission issues when multiple containers access the same volumes
+umask 002
 
 # Execute the main command
 exec "$@"

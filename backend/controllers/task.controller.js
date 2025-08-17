@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { WorktreeService } from '../services/worktree.service.js';
 import { SPLIT_EVENTS, TASK_EVENTS } from '../services/events.js';
-import { GitService } from '../services/git-compat.js';
+import { GitService } from '../services/git-core.service.js';
 import { GitStatusService } from '../services/git-status.service.js';
 
 /**
@@ -22,8 +22,8 @@ export class TaskController {
    * Trigger git status update after operations that change git state
    */
   async triggerStatusUpdate(taskId, req) {
-    if (req.app.locals.gitStatusMonitor) {
-      req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+    if (req.services.gitStatusMonitor) {
+      req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
         console.error(`Failed to update git status for task ${taskId}:`, err)
       );
     }
@@ -41,8 +41,8 @@ export class TaskController {
     }
     
     try {
-      // Get TaskService from service registry
-      const taskService = req.services.get('TaskService');
+      // Get TaskService from services
+      const taskService = req.services.TaskService;
       
       // Create task using service
       const result = await taskService.createTask(
@@ -56,8 +56,8 @@ export class TaskController {
       );
       
       // Connect session monitor to the new task
-      const sessionMonitor = req.app.locals.wsAdapter;
-      const aiMonitor = req.app.locals.aiMonitor;
+      const sessionMonitor = req.services.wsAdapter;
+      const aiMonitor = req.services.aiMonitor;
       if (sessionMonitor && aiMonitor && result.session?.sessionId) {
         try {
           console.log('Connecting monitor to new task session:', result.session.sessionId);
@@ -107,7 +107,7 @@ export class TaskController {
    */
   async listTasks(req, res) {
     const { projectId } = req.params;
-    const aiMonitor = req.app.locals.aiMonitor;
+    const aiMonitor = req.services.aiMonitor;
     
     try {
       const tasks = await this.models.tasks.findByProjectId(projectId);
@@ -117,7 +117,7 @@ export class TaskController {
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
       // Create GitStatusService
-      const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+      const githubTokenService = req.services.GitHubTokenService;
       const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
       // Enrich tasks with git status and session state
@@ -210,7 +210,7 @@ export class TaskController {
         const project = await this.models.projects.findById(task.project_id);
         if (project) {
           const baseBranch = `origin/${project.base_branch || 'main'}`;
-          const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+          const githubTokenService = req.services.GitHubTokenService;
           const gitStatusService = new GitStatusService(this.models, githubTokenService);
           gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
         }
@@ -263,7 +263,7 @@ export class TaskController {
       
       // Create GitService for basic operations
       const gitService = new GitService(req.githubToken);
-      const githubTokenService = req.services?.get('GitHubTokenService') || req.app.locals.githubTokenService;
+      const githubTokenService = req.services.GitHubTokenService;
       const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
       if (fsSync.existsSync(task.worktree_path)) {
@@ -290,10 +290,10 @@ export class TaskController {
       }
       
       // Get terminal states using TerminalService
-      const terminalService = req.services.get('TerminalService');
+      const terminalService = req.services.TerminalService;
       const terminalsWithStatus = await terminalService.getTaskSessions(taskId, {
-        aiMonitor: req.app.locals.aiMonitor,
-        wsAdapter: req.app.locals.wsAdapter
+        aiMonitor: req.services.aiMonitor,
+        wsAdapter: req.services.wsAdapter
       });
       
       res.json({
@@ -322,8 +322,8 @@ export class TaskController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Get TaskService from service registry
-      const taskService = req.services.get('TaskService');
+      // Get TaskService from services
+      const taskService = req.services.TaskService;
       
       // Build update object with only provided fields
       const updates = {};
@@ -438,8 +438,8 @@ export class TaskController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Get TaskService from service registry
-      const taskService = req.services.get('TaskService');
+      // Get TaskService from services
+      const taskService = req.services.TaskService;
       
       // Check deletion safety using service
       const safetyCheck = await taskService.checkTaskDeletionSafety(taskId, req.githubToken);
@@ -464,8 +464,8 @@ export class TaskController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Get TaskService from service registry
-      const taskService = req.services.get('TaskService');
+      // Get TaskService from services
+      const taskService = req.services.TaskService;
       
       // Delete task using service
       const result = await taskService.deleteTask(taskId, {

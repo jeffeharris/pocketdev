@@ -38,7 +38,7 @@ services:
     depends_on:
       - shelltender
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # - /var/run/docker.sock:/var/run/docker.sock  # DinD feature - not active
       - ${POCKETDEV_HOME:-~/.pocketdev}/projects:/projects
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev

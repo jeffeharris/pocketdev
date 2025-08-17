@@ -43,13 +43,25 @@ pocketdev_smart_prompt() {
     if [ "$current_pwd" != "$LAST_PWD" ] || [ "$SHOW_CONTEXT_NEXT" -eq 1 ]; then
         # Show the context line with better formatting
         local git_info=$(pocketdev_git_branch)
+        local username=$(whoami)
+        
+        # Build the context line parts
+        local user_part="\033[32m@${username}\033[0m"
+        local git_part=""
+        local task_part=""
+        local path_part="\033[33m~$(pocketdev_relative_path)\033[0m"
+        
         if [ -n "$git_info" ]; then
-            # Format: ⎇ branch-name | task-name | ~/path
-            echo -e "\033[36m⎇ ${git_info}\033[0m \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
-        else
-            # No git repo: task-name | ~/path
-            echo -e "\033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+            git_part=" \033[90m|\033[0m \033[36m⎇ ${git_info}\033[0m"
         fi
+        
+        if [ -n "$TASK_NAME" ]; then
+            task_part=" \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m"
+        fi
+        
+        # Format: 👤 username | ⎇ branch | task-name | ~/path
+        echo -e "${user_part}${git_part}${task_part} \033[90m|\033[0m ${path_part}"
+        
         LAST_PWD="$current_pwd"
         SHOW_CONTEXT_NEXT=0
     fi
@@ -95,14 +107,8 @@ clear() {
 # Set PROMPT_COMMAND to run our function before each prompt
 PROMPT_COMMAND="pocketdev_smart_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 
-# Simple prompt - just username and $
-PS1='\[\033[32m\]\u\[\033[0m\]\$ '
-
-# Check if PS1_ENV was passed and use it
-# PS1 isn't inherited as a normal environment variable by bash
-if [ -n "$PS1_ENV" ]; then
-    export PS1="$PS1_ENV"
-fi
+# Simple prompt - just > 
+PS1='> '
 
 # If not running interactively, skip the rest
 case $- in
@@ -163,13 +169,24 @@ if [ -n "$TASK_ID" ]; then
     fi
     echo ""
     # Show initial location with better formatting
-    local git_info=$(pocketdev_git_branch)
+    git_info=$(pocketdev_git_branch)
+    username=$(whoami)
+    
+    # Build the context line parts
+    user_part="\033[32m@${username}\033[0m"
+    git_part=""
+    task_part=""
+    path_part="\033[33m~$(pocketdev_relative_path)\033[0m"
+    
     if [ -n "$git_info" ]; then
-        # Format: ⎇ branch-name | task-name | ~/path
-        echo -e "\033[36m⎇ $git_info\033[0m \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
-    else
-        # No git repo: task-name | ~/path
-        echo -e "\033[1;35m$TASK_NAME\033[0m \033[90m|\033[0m \033[33m~$(pocketdev_relative_path)\033[0m"
+        git_part=" \033[90m|\033[0m \033[36m⎇ ${git_info}\033[0m"
     fi
+    
+    if [ -n "$TASK_NAME" ]; then
+        task_part=" \033[90m|\033[0m \033[1;35m$TASK_NAME\033[0m"
+    fi
+    
+    # Format: 👤 username | ⎇ branch | task-name | ~/path
+    echo -e "${user_part}${git_part}${task_part} \033[90m|\033[0m ${path_part}"
     LAST_PWD=$(pwd)
 fi

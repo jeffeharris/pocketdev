@@ -17,7 +17,7 @@ export async function getAllSessions(req, res, next) {
  */
 export async function getAttentionSessions(req, res, next) {
   try {
-    const aiMonitor = req.app.locals.aiMonitor;
+    const aiMonitor = req.services.aiMonitor;
     
     if (!aiMonitor || !aiMonitor.getSessionsNeedingAttention) {
       return res.json({ sessions: [] });
@@ -35,7 +35,7 @@ export async function getAttentionSessions(req, res, next) {
  */
 export async function getAIStates(req, res, next) {
   try {
-    const aiMonitor = req.app.locals.aiMonitor;
+    const aiMonitor = req.services.aiMonitor;
     
     if (!aiMonitor || !aiMonitor.getAllSessionStatuses) {
       return res.json([]);
@@ -93,7 +93,7 @@ export async function createTerminalSession(req, res, next) {
     const { tabName, aiAgent, initialPrompt, workingDirectory, copyHistoryFrom } = req.body;
     
     // Verify task exists and belongs to project
-    const task = await req.app.locals.models.tasks.findById(taskId);
+    const task = await req.services.models.tasks.findById(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -102,16 +102,16 @@ export async function createTerminalSession(req, res, next) {
       return res.status(404).json({ error: 'Task not found in project' });
     }
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Create terminal session using service
     const sessionInfo = await terminalService.createSession(
       taskId,
       { tabName, aiAgent, initialPrompt, workingDirectory },
       {
-        wsAdapter: req.app.locals.wsAdapter,
-        aiMonitor: req.app.locals.aiMonitor
+        wsAdapter: req.services.wsAdapter,
+        aiMonitor: req.services.aiMonitor
       }
     );
     
@@ -136,14 +136,14 @@ export async function executeInSession(req, res, next) {
       return res.status(400).json({ error: 'Command is required' });
     }
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Execute command using service
     const result = await terminalService.executeCommand(
       sessionId,
       command,
-      req.app.locals.wsAdapter
+      req.services.wsAdapter
     );
     
     res.json(result);
@@ -159,13 +159,13 @@ export async function acknowledgeSession(req, res, next) {
   try {
     const { sessionId } = req.params;
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Acknowledge session using service
     const result = await terminalService.acknowledgeSession(
       sessionId,
-      req.app.locals.aiMonitor
+      req.services.aiMonitor
     );
     
     res.json(result);
@@ -189,14 +189,14 @@ export async function respondToPrompt(req, res, next) {
       return res.status(400).json({ error: 'Response is required' });
     }
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Execute the response as a command
     const result = await terminalService.executeCommand(
       sessionId,
       response,
-      req.app.locals.wsAdapter
+      req.services.wsAdapter
     );
     
     res.json(result);
@@ -233,8 +233,8 @@ export async function resetSession(req, res, next) {
   try {
     const { sessionId } = req.params;
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Reset session using service
     const result = await terminalService.resetSession(sessionId);
@@ -253,8 +253,8 @@ export async function updateTerminalTab(req, res, next) {
     const { sessionId } = req.params;
     const { tabName, tabOrder } = req.body;
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Update tab using service
     const updatedSession = await terminalService.updateSessionTab(sessionId, {
@@ -279,8 +279,8 @@ export async function deleteTerminalSession(req, res, next) {
     const { sessionId } = req.params;
     console.log('[TerminalController] DELETE /terminals/:sessionId called with:', sessionId);
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Delete session using service
     const result = await terminalService.deleteSession(sessionId);
@@ -301,8 +301,8 @@ export async function deleteTerminalSession(req, res, next) {
  */
 export async function getAIAgents(req, res, next) {
   try {
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Get available agents using service
     const agents = terminalService.getAvailableAgents();
@@ -321,8 +321,8 @@ export async function getAgentLaunchCommandHandler(req, res, next) {
     const { agentId } = req.params;
     const { prompt } = req.body;
     
-    // Get TerminalService from service registry
-    const terminalService = req.services.get('TerminalService');
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
     // Get agent launch command using service
     const result = terminalService.getAgentLaunchCommand(agentId, prompt);

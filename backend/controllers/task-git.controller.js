@@ -20,8 +20,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Use GitStatusService from service registry
-      const gitStatusService = req.services.get('GitStatusService');
+      // Use GitStatusService from services
+      const gitStatusService = req.services.GitStatusService;
       const gitStatus = await gitStatusService.getTaskGitStatus(taskId, req.githubToken);
       
       res.json(gitStatus);
@@ -44,8 +44,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Use GitStatusService from service registry
-      const gitStatusService = req.services.get('GitStatusService');
+      // Use GitStatusService from services
+      const gitStatusService = req.services.GitStatusService;
       const changedFiles = await gitStatusService.getTaskChangedFiles(taskId, req.githubToken, compareWith);
       
       res.json(changedFiles);
@@ -67,8 +67,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Use GitStatusService from service registry
-      const gitStatusService = req.services.get('GitStatusService');
+      // Use GitStatusService from services
+      const gitStatusService = req.services.GitStatusService;
       const response = await gitStatusService.getTaskAllChanges(taskId, req.githubToken);
       
       res.json(response);
@@ -91,8 +91,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // Use GitOperationService from service registry
-      const gitOperationService = req.services.get('GitOperationService');
+      // Use GitOperationService from services
+      const gitOperationService = req.services.GitOperationService;
       const diffResult = await gitOperationService.getTaskDiff(taskId, compareWith, req.githubToken);
       
       res.json(diffResult);
@@ -116,8 +116,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // Use GitOperationService from service registry
-      const gitOperationService = req.services.get('GitOperationService');
+      // Use GitOperationService from services
+      const gitOperationService = req.services.GitOperationService;
       const diffResult = await gitOperationService.getFileDiff(taskId, file, compareWith, req.githubToken);
       
       res.json(diffResult);
@@ -139,8 +139,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // Use GitOperationService from service registry
-      const gitOperationService = req.services.get('GitOperationService');
+      // Use GitOperationService from services
+      const gitOperationService = req.services.GitOperationService;
       const commits = await gitOperationService.getCommitHistory(taskId, req.githubToken);
       
       res.json(commits);
@@ -162,8 +162,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
 
-      // Use GitStatusService from service registry
-      const gitStatusService = req.services.get('GitStatusService');
+      // Use GitStatusService from services
+      const gitStatusService = req.services.GitStatusService;
       const conflictInfo = await gitStatusService.getTaskConflicts(taskId, req.githubToken);
       
       res.json(conflictInfo);
@@ -184,8 +184,8 @@ export class TaskGitController {
         return res.status(404).json({ error: 'Task not found' });
       }
       
-      // Use GitOperationService from service registry
-      const gitOperationService = req.services.get('GitOperationService');
+      // Use GitOperationService from services
+      const gitOperationService = req.services.GitOperationService;
       
       const options = {
         message,

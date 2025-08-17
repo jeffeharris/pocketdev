@@ -1,5 +1,5 @@
 import { GIT_EVENTS } from './events.js';
-import { GitService } from './git-compat.js';
+import { GitService } from './git-core.service.js';
 
 /**
  * GitOperationService - Handles all git operations (commands, diffs, commits)

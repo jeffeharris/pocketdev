@@ -187,14 +187,28 @@ Through this service extraction, we resolved 8 major bugs:
 
 ## Next Steps
 
+### Completed (2025-08-17)
+1. ✅ **Removed ServiceRegistry** - 193 lines of unnecessary abstraction eliminated
+   - Direct service instantiation in controllers
+   - Simple services object in server.js
+   - All APIs still functioning
+
+2. ✅ **Renamed git-compat.js to git-core.service.js**
+   - Acknowledged it's the actual implementation (619 lines of git functionality)
+   - Updated 10 imports across codebase
+   - Removed misleading "temporary" and "compatibility" comments
+
+### In Progress
+1. Remove app.locals dependencies (16 remaining)
+
 ### Immediate Priorities
 1. Fix BUG-003 (Terminal sessions not loading)
 2. Extract TerminalPanel into deep modules
 3. Add comprehensive service tests
 
 ### Future Improvements
-1. Remove legacy api.ts class entirely
-2. Migrate components to use services directly
+1. ~~Remove legacy api.ts class entirely~~ ✅ Already removed
+2. ~~Migrate components to use services directly~~ ✅ Already done
 3. Add service metrics and monitoring
 4. Implement caching layer
 
@@ -204,6 +218,8 @@ Through this service extraction, we resolved 8 major bugs:
 2. **Deep Modules Scale**: Simple interfaces make complex systems manageable
 3. **Events > Direct Calls**: Decoupling via events improves flexibility
 4. **Mock First**: Built-in mocks accelerate development
+5. **Avoid Over-Abstraction**: ServiceRegistry added 193 lines for what direct imports handle in 10 lines
+6. **Temporary Code Becomes Permanent**: Migration scaffolding should be removed immediately, not left "for compatibility"
 
 ## Success Metrics
 

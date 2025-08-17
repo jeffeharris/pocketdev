@@ -558,7 +558,6 @@ export class TerminalService {
           DB_SESSION_ID: dbSession.id,
           WORKTREE_PATH: task.worktree_path,
           TERM: 'xterm-256color',
-          PS1_ENV: `\\033[32m\\u\\033[0m\\$ `,
           TASK_NAME: task.name,
           HISTFILE: path.join(task.worktree_path, '.pocketdev_task_history'),
           HISTSIZE: '10000',

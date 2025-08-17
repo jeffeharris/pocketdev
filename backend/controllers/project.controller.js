@@ -1,7 +1,8 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import config from '../config/index.js';
-import * as gitService from '../services/git-compat.js';
+import * as gitService from '../services/git-core.service.js';
+import { ProjectService } from '../services/project.service.js';
 
 // GitHub token is now injected by middleware as req.githubToken
 
@@ -10,7 +11,7 @@ import * as gitService from '../services/git-compat.js';
  */
 export async function listProjects(req, res, next) {
   try {
-    const models = req.app.locals.models;
+    const models = req.services.models;
     const projects = await models.projects.findAll();
     res.json(projects);
   } catch (error) {
@@ -24,7 +25,11 @@ export async function listProjects(req, res, next) {
 export async function createProject(req, res, next) {
   try {
     const { repoUrl, branch = 'main', projectName } = req.body;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     if (!repoUrl) {
       return res.status(400).json({ error: 'Repository URL is required' });
@@ -47,7 +52,7 @@ export async function createProject(req, res, next) {
 export async function getProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -66,7 +71,7 @@ export async function getProject(req, res, next) {
 export async function updateProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -91,7 +96,11 @@ export async function deleteProject(req, res, next) {
   try {
     const { projectId } = req.params;
     const { force } = req.body; // Allow force deletion via request body
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const result = await projectService.deleteProject(projectId, { force });
     
@@ -108,7 +117,7 @@ export async function createBranch(req, res, next) {
   try {
     const { projectId } = req.params;
     const { branchName, fromBranch = 'main' } = req.body;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     if (!branchName) {
       return res.status(400).json({ error: 'Branch name is required' });
@@ -147,7 +156,7 @@ export async function createBranch(req, res, next) {
 export async function listBranches(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -194,7 +203,7 @@ export async function listBranches(req, res, next) {
 export async function syncProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -235,15 +244,31 @@ export async function syncProject(req, res, next) {
 export async function fetchProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Get git config from settings
+    const gitUserName = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    const gitConfig = {
+      name: gitUserName?.value || 'PocketDev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
+    };
+    
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
     
     // Fetch with git
     const result = await gitService.executeGitCommand(
@@ -282,7 +307,7 @@ export async function fetchProject(req, res, next) {
 export async function getBaseBranchStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -329,17 +354,32 @@ export async function getBaseBranchStatus(req, res, next) {
 export async function pullBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
+    
     
     const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Get git config from settings
+    const gitUserName = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
     
+    const gitUserEmail = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    const gitConfig = {
+      name: gitUserName?.value || 'PocketDev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
+    };
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitService.executeGitCommand(
@@ -424,15 +464,31 @@ export async function pullBaseBranch(req, res, next) {
 export async function pushBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
     
+    // Get git config from settings
+    const gitUserName = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    const gitConfig = {
+      name: gitUserName?.value || 'PocketDev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
+    };
+    
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken);
+    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
     
     // Push base branch
     const result = await gitService.executeGitCommand(
@@ -466,7 +522,11 @@ export async function pushBaseBranch(req, res, next) {
 export async function getUpdateStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const result = await projectService.getProjectTasksUpdateStatus(projectId, req.githubToken);
     
@@ -482,7 +542,11 @@ export async function getUpdateStatus(req, res, next) {
 export async function getProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const planning = await projectService.getProjectPlanning(projectId, req.githubToken);
     
@@ -499,7 +563,11 @@ export async function updateProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
     const { content } = req.body;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const result = await projectService.updateProjectPlanning(projectId, content, req.githubToken);
     
@@ -515,7 +583,7 @@ export async function updateProjectPlanning(req, res, next) {
 export async function getProjectMinimal(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -542,7 +610,11 @@ export async function getProjectMinimal(req, res, next) {
 export async function getProjectDashboardCached(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const dashboard = await projectService.getProjectDashboard(
       projectId, 
@@ -562,7 +634,7 @@ export async function getProjectDashboardCached(req, res, next) {
 export async function refreshProjectStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const models = req.app.locals.models;
+    const models = req.services.models;
     
     const project = await models.projects.findById(projectId);
     if (!project) {
@@ -591,7 +663,11 @@ export async function refreshProjectStatus(req, res, next) {
 export async function getProjectDashboard(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = req.app.locals.serviceRegistry.get('ProjectService');
+    const projectService = new ProjectService(
+      req.services.models,
+      req.services.GitHubTokenService,
+      config.projectsDir
+    );
     
     const dashboard = await projectService.getProjectDashboard(
       projectId, 

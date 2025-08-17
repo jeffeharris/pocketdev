@@ -1,11 +1,9 @@
 /**
- * Git Compatibility Layer
+ * Git Core Service
  * 
- * Provides backward compatibility for services that still need GitService
- * functionality while the system transitions to the new architecture.
- * 
- * This is a temporary bridge - these functions should eventually be
- * moved to the appropriate new services.
+ * Provides core git functionality for all services that need to interact
+ * with git repositories. This is the central implementation of git operations
+ * used throughout the application.
  */
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -14,7 +12,7 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
- * Basic GitService-like class for compatibility
+ * GitService - Core git operations implementation
  */
 export class GitService {
   constructor(githubToken = null, gitConfig = null) {
@@ -30,7 +28,9 @@ export class GitService {
       const gitEnv = { ...process.env };
       
       if (this.githubToken) {
+        // Set both tokens for compatibility
         gitEnv.GITHUB_TOKEN = this.githubToken;
+        gitEnv.GH_TOKEN = this.githubToken;
       }
 
       const { stdout, stderr } = await execAsync(command, {
@@ -41,7 +41,7 @@ export class GitService {
 
       return {
         success: true,
-        output: stdout.trim(),
+        output: stdout.replace(/\s+$/, ''),  // Only trim trailing whitespace
         error: stderr.trim()
       };
     } catch (error) {
@@ -204,7 +204,7 @@ export class GitService {
       
       if (status === '??') {
         untracked++;
-        files.push({ path: filename, status: 'untracked', staged: false, unstaged: false, untracked: true });
+        files.push({ path: filename, status: '??', staged: false, unstaged: false, untracked: true });
       } else {
         if (indexStatus !== ' ' && indexStatus !== '?') {
           staged++;
@@ -264,6 +264,7 @@ export class GitService {
         const fileInfo = {
           path: file.path,
           type: file.untracked ? 'added' : 'modified',
+          status: file.status,  // Add the git status code for the icon
           additions: 0,
           deletions: 0,
           staged: file.staged,
@@ -322,6 +323,7 @@ export class GitService {
           files.set(path, {
             path,
             type: status === 'A' ? 'added' : status === 'D' ? 'deleted' : 'modified',
+            status: status,  // Add git status code for committed files
             additions: fileStats.additions,
             deletions: fileStats.deletions,
             diffType: 'committed'
@@ -378,6 +380,14 @@ export class GitService {
     };
     
     return { files, summary };
+  }
+
+  /**
+   * Configure git credentials for a repository
+   */
+  async configureCredentials(workingDirectory) {
+    // Use the existing configureGitCredentials function
+    return configureGitCredentials(workingDirectory, this.githubToken, this.gitConfig);
   }
 
   /**
@@ -474,6 +484,78 @@ export class GitService {
       };
     }
   }
+
+  /**
+   * Get diff content for a specific file
+   */
+  async getFileDiffContent(workingDirectory, filePath, compareTarget = 'working', fileInfo = null, getCompleteDiff = false) {
+    try {
+      let diffCommand;
+      
+      if (compareTarget === 'working') {
+        // For working tree comparisons
+        if (fileInfo) {
+          if (fileInfo.untracked) {
+            // For untracked files, show as new file
+            const content = await this.command(workingDirectory, `cat "${filePath}" 2>/dev/null || echo ""`);
+            if (content.output) {
+              const lines = content.output.split('\n');
+              const diffHeader = `diff --git a/${filePath} b/${filePath}
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/${filePath}`;
+              const diffContent = lines.map(line => `+${line}`).join('\n');
+              return `${diffHeader}\n@@ -0,0 +1,${lines.length} @@\n${diffContent}`;
+            }
+            return '';
+          } else if (fileInfo.staged && !fileInfo.unstaged) {
+            // Only staged changes
+            diffCommand = `git diff --cached -- "${filePath}"`;
+          } else if (!fileInfo.staged && fileInfo.unstaged) {
+            // Only unstaged changes
+            diffCommand = `git diff -- "${filePath}"`;
+          } else if (fileInfo.staged && fileInfo.unstaged) {
+            // Both staged and unstaged - show working tree diff
+            diffCommand = `git diff HEAD -- "${filePath}"`;
+          }
+        } else {
+          // Default to working tree diff
+          diffCommand = `git diff HEAD -- "${filePath}"`;
+        }
+      } else {
+        // Compare against a specific ref (base branch)
+        if (getCompleteDiff) {
+          // For 'all' mode - show complete diff from base to working tree
+          diffCommand = `git diff ${compareTarget}...HEAD -- "${filePath}"`;
+          
+          // Also check for uncommitted changes
+          const workingDiff = await this.command(workingDirectory, `git diff HEAD -- "${filePath}"`);
+          if (workingDiff.output.trim()) {
+            const baseDiff = await this.command(workingDirectory, diffCommand);
+            // Combine the diffs if both exist
+            if (baseDiff.output.trim()) {
+              return baseDiff.output + '\n' + workingDiff.output;
+            }
+            return workingDiff.output;
+          }
+        } else {
+          // Normal base comparison
+          diffCommand = `git diff ${compareTarget}...HEAD -- "${filePath}"`;
+        }
+      }
+      
+      if (!diffCommand) {
+        return '';
+      }
+      
+      const result = await this.command(workingDirectory, diffCommand);
+      return result.output || '';
+    } catch (error) {
+      console.error(`Error getting file diff for ${filePath}:`, error);
+      return '';
+    }
+  }
 }
 
 /**
@@ -487,16 +569,44 @@ export async function executeGitCommand(command, workingDirectory, githubToken =
 /**
  * Configure git credentials utility function
  */
-export async function configureGitCredentials(workingDirectory, githubToken) {
-  if (!githubToken) {
-    return { success: true };
-  }
-
+export async function configureGitCredentials(workingDirectory, githubToken, gitConfig = null) {
   const gitService = new GitService(githubToken);
+  
+  // Use provided git config or defaults
+  const config = gitConfig || { name: 'PocketDev User', email: 'user@pocketdev.local' };
+  
   const commands = [
-    'git config user.name "PocketDev AI"',
-    'git config user.email "ai@pocketdev.io"'
+    `git config user.name "${config.name}"`,
+    `git config user.email "${config.email}"`
   ];
+
+  // If we have a GitHub token, configure credential helper
+  if (githubToken) {
+    // Check if remote is GitHub
+    const remoteResult = await gitService.executeCommand('git remote get-url origin', workingDirectory);
+    if (remoteResult.success && remoteResult.output.includes('github.com')) {
+      // Extract the GitHub URL
+      const remoteUrl = remoteResult.output.trim();
+      
+      // Remove any existing authentication from the URL
+      let cleanUrl = remoteUrl;
+      const urlMatch = remoteUrl.match(/https:\/\/([^@]+@)?github\.com\/(.+)/);
+      if (urlMatch) {
+        cleanUrl = `https://github.com/${urlMatch[2]}`;
+      }
+      
+      // Create authenticated URL with the new token
+      const authenticatedUrl = cleanUrl.replace('https://github.com/', `https://x-access-token:${githubToken}@github.com/`);
+      
+      
+      // Update the remote URL directly
+      const setUrlResult = await gitService.executeCommand(`git remote set-url origin "${authenticatedUrl}"`, workingDirectory);
+      if (!setUrlResult.success) {
+        console.error('[configureGitCredentials] Failed to set remote URL:', setUrlResult.error);
+        return setUrlResult;
+      }
+    }
+  }
 
   for (const command of commands) {
     const result = await gitService.executeCommand(command, workingDirectory);

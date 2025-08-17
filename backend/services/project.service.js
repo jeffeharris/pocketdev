@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
-import { GitService } from './git-compat.js';
+import { GitService } from './git-core.service.js';
 
 /**
  * ProjectService - Handles all project-related business operations

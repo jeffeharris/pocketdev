@@ -27,8 +27,8 @@ export class TaskPullRequestController {
       const pullRequestService = req.services.PullRequestService;
       
       // Trigger git status update check after push
-      if (req.app.locals.gitStatusMonitor) {
-        req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+      if (req.services.gitStatusMonitor) {
+        req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
           console.error('Failed to update git status after push:', err)
         );
       }
@@ -63,8 +63,8 @@ export class TaskPullRequestController {
       const pullRequestService = req.services.PullRequestService;
       
       // Trigger git status update check after merge
-      if (req.app.locals.gitStatusMonitor) {
-        req.app.locals.gitStatusMonitor.checkTask(taskId).catch(err => 
+      if (req.services.gitStatusMonitor) {
+        req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
           console.error('Failed to update git status after merge:', err)
         );
       }

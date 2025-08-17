@@ -21,10 +21,11 @@ export async function updateSettings(req, res, next) {
     const settingsService = req.services.SettingsService;
     const result = await settingsService.updateSettings(req.body);
     
-    // Update GitHub instance for backward compatibility
+    // Update GitHub instance
     const github = await settingsService.createGitHubAPIInstance();
     if (github) {
-      req.app.locals.github = github;
+      req.app.locals.github = github;  // Keep for backward compatibility
+      req.services.github = github;      // New pattern
     }
     
     res.json(result);
