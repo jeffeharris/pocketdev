@@ -13,12 +13,27 @@ const execAsync = promisify(exec);
 
 /**
  * GitService - Core git operations implementation
+ * 
+ * Public API Methods:
+ * - command(dir, cmd) - Execute any git command
+ * - executeCommand(cmd, dir) - Alternative signature
+ * - getStatus(dir) - Get repository status
+ * - push(dir, branch, opts) - Push changes
+ * - commit(dir, message) - Commit staged changes
+ * - createPullRequest(dir, title, body, opts) - Create GitHub PR
+ * - configureCredentials(dir) - Setup git credentials
+ * 
+ * All other methods are considered internal implementation details.
  */
 export class GitService {
   constructor(githubToken = null, gitConfig = null) {
     this.githubToken = githubToken;
     this.gitConfig = gitConfig || { name: 'PocketDev AI', email: 'ai@pocketdev.io' };
   }
+
+  // ========================================
+  // PUBLIC API METHODS
+  // ========================================
 
   /**
    * Execute a git command in a specific directory
@@ -118,6 +133,25 @@ export class GitService {
   }
 
   /**
+   * Create a pull request using GitHub CLI
+   */
+  async createPullRequest(workingDirectory, title, body = '', options = {}) {
+    const { base = 'main', draft = false } = options;
+    
+    // Build the gh pr create command
+    let command = `gh pr create --title "${title}"`;
+    if (body) {
+      command += ` --body "${body}"`;
+    }
+    command += ` --base ${base}`;
+    if (draft) {
+      command += ' --draft';
+    }
+    
+    return this.executeCommand(command, workingDirectory);
+  }
+
+  /**
    * Pull changes from remote
    */
   async pull(workingDirectory, remote = 'origin', branch) {
@@ -181,6 +215,11 @@ export class GitService {
   async command(workingDirectory, command) {
     return this.executeCommand(command, workingDirectory);
   }
+
+  // ========================================
+  // INTERNAL METHODS (Complex Analysis)
+  // These are used by git-status.service.js
+  // ========================================
 
   /**
    * Get detailed git status including staged, unstaged, and untracked file counts
