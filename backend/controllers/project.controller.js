@@ -217,8 +217,7 @@ export async function syncProject(req, res, next) {
       return res.status(500).json({ error: `Failed to fetch: ${fetchResult.error}` });
     }
     
-    // Pull current branch
-    const repository = new GitRepository(req.githubToken);
+    // Pull current branch (reuse repository instance)
     const pullResult = await repository.pull(project.local_path);
     
     res.json({

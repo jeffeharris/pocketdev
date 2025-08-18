@@ -33,6 +33,7 @@ import { SettingsService } from './services/settings.service.js';
 import { ContainerService } from './services/container.service.js';
 import { UploadService } from './services/upload.service.js';
 import { MonitoringService } from './services/monitoring.service.js';
+import { MigrationService } from './services/migration.service.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -62,76 +63,15 @@ async function initializeDatabase() {
   models = new Models(db);
   console.log('Database initialized');
   
-  // Check if migration needs to run
-  try {
-    const needsMigration = await db.get(
-      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
-       WHERE name='merge_commit_sha'`
-    );
-    
-    if (needsMigration.count === 0) {
-      console.log('Running merge tracking migration...');
-      const migrationPath = path.join(path.dirname(config.dbPath), 'migrations/add_merge_tracking.sql');
-      const migration = await fs.readFile(migrationPath, 'utf8');
-      await db.exec(migration);
-      console.log('Migration completed');
-    }
-  } catch (error) {
-    console.error('Migration check failed:', error);
-  }
+  // Run pending migrations using MigrationService
+  const migrationService = new MigrationService(db, {
+    dbPath: config.dbPath,
+    migrationsDir: path.join(__dirname, 'db/migrations')
+  });
   
-  // Check if lifecycle migration needs to run
-  try {
-    const needsLifecycleMigration = await db.get(
-      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
-       WHERE name='task_chain_id'`
-    );
-    
-    if (needsLifecycleMigration.count === 0) {
-      console.log('Running task lifecycle migration...');
-      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/001_task_lifecycle.sql');
-      const migration = await fs.readFile(migrationPath, 'utf8');
-      await db.exec(migration);
-      console.log('Task lifecycle migration completed');
-    }
-  } catch (error) {
-    console.error('Lifecycle migration check failed:', error);
-  }
-  
-  // Check if multi-terminal sessions migration needs to run
-  try {
-    const needsMultiTerminalMigration = await db.get(
-      `SELECT COUNT(*) as count FROM pragma_table_info('terminal_sessions') 
-       WHERE name='tab_name'`
-    );
-    
-    if (needsMultiTerminalMigration.count === 0) {
-      console.log('Running multi-terminal sessions migration...');
-      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/003_multi_terminal_sessions.sql');
-      const migration = await fs.readFile(migrationPath, 'utf8');
-      await db.exec(migration);
-      console.log('Multi-terminal sessions migration completed');
-    }
-  } catch (error) {
-    console.error('Multi-terminal sessions migration check failed:', error);
-  }
-
-  // Check if split view layouts migration needs to run
-  try {
-    const needsSplitViewMigration = await db.get(
-      `SELECT COUNT(*) as count FROM pragma_table_info('tasks') 
-       WHERE name='split_layout'`
-    );
-    
-    if (needsSplitViewMigration.count === 0) {
-      console.log('Running split view layouts migration...');
-      const migrationPath = path.join(path.dirname(__filename), 'db/migrations/004_split_view_layouts.sql');
-      const migration = await fs.readFile(migrationPath, 'utf8');
-      await db.exec(migration);
-      console.log('Split view layouts migration completed');
-    }
-  } catch (error) {
-    console.error('Split view layouts migration check failed:', error);
+  const migrationResult = await migrationService.runPendingMigrations();
+  if (!migrationResult.success) {
+    console.error('Some migrations failed:', migrationResult.migrations.filter(m => m.status === 'failed'));
   }
   
   // Store models in app locals for access in routes
