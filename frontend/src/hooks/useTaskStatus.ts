@@ -63,7 +63,7 @@ export function useTaskStatus(taskId: string | undefined) {
         }));
         break;
         
-      case 'git_status_update':
+      case 'git-status-changed':
         setTaskStatus(prev => ({
           ...prev!,
           gitStatus: message.data.gitStatus
