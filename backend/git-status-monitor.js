@@ -6,6 +6,9 @@ import fsSync from 'fs';
 /**
  * GitStatusMonitor - Periodically checks git status for active tasks
  * and broadcasts updates via WebSocket
+ * 
+ * Now uses dependency injection - services should be passed in rather
+ * than created internally.
  */
 export class GitStatusMonitor {
   constructor(models, eventEmitterService, githubTokenService, checkInterval = 30000) { // Check every 30 seconds
@@ -16,6 +19,9 @@ export class GitStatusMonitor {
     this.isRunning = false;
     this.intervalId = null;
     this.lastStatus = new Map(); // Cache last status per task
+    
+    // Create services once on initialization
+    this.gitStatusService = new GitStatusService(models, githubTokenService);
   }
 
   start() {
@@ -77,15 +83,12 @@ export class GitStatusMonitor {
         return;
       }
       
-      // Get token
+      // Get token and create git service for this check
       const token = await this.githubTokenService.getToken();
-      
-      // Create service instances
       const gitService = new GitService(token);
-      const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
       
-      // Get comprehensive git status for the task
-      const status = await gitStatusService.getTaskGitStatus(task.id, gitService);
+      // Use the pre-created gitStatusService
+      const status = await this.gitStatusService.getTaskGitStatus(task.id, gitService);
       
       // Create status key for comparison (including staged/unstaged/untracked)
       const statusKey = `${status.ahead}-${status.behind}-${status.filesChanged}-${status.staged}-${status.unstaged}-${status.untracked}`;

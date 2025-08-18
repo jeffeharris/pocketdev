@@ -1,10 +1,23 @@
 /**
  * Git Core Service
  * 
- * Provides core git functionality for all services that need to interact
- * with git repositories. This is the central implementation of git operations
- * used throughout the application.
+ * This file now re-exports the simplified GitService that composes
+ * three deep modules: GitRepository, GitWorkingTree, and GitAnalyzer.
+ * 
+ * The old monolithic GitService implementation is preserved below for
+ * reference during migration, but should be removed once all consumers
+ * are updated.
  */
+
+// Export the new simplified service as the main GitService
+export { GitService } from './git-simple.service.js';
+
+// Also export the deep modules for services that need specific functionality
+export { GitRepository } from './git-repository.service.js';
+export { GitWorkingTree } from './git-workingtree.service.js';
+export { GitAnalyzer } from './git-analyzer.service.js';
+
+// Legacy imports for the old implementation below
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
@@ -12,7 +25,9 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
- * GitService - Core git operations implementation
+ * LEGACY GitService - TO BE REMOVED
+ * This is the old monolithic implementation preserved for reference.
+ * All new code should use the simplified GitService exported above.
  * 
  * Public API Methods:
  * - command(dir, cmd) - Execute any git command
@@ -24,7 +39,7 @@ const execAsync = promisify(exec);
  * 
  * All other methods are considered internal implementation details.
  */
-export class GitService {
+class LegacyGitService {
   constructor(githubToken = null, gitConfig = null) {
     this.githubToken = githubToken;
     this.gitConfig = gitConfig || { name: 'PocketDev AI', email: 'ai@pocketdev.io' };
