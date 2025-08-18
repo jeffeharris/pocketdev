@@ -4,8 +4,22 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: Complete refactoring of git services architecture
+  - Eliminated monolithic `GitService` (32+ methods) in favor of three focused modules:
+    - `GitRepository` (5 methods): clone, fetch, push, pull, getCurrentBranch
+    - `GitWorkingTree` (6 methods): stage, commit, reset, getStatus, checkout, merge
+    - `GitAnalyzer` (5 methods): getDiff, checkMergeConflicts, getUnpushedCommits, getCommitHistory, getFileChanges
+  - Removed all facades and compatibility layers - services now use modules directly
+  - Created `GitExecutor` base class to eliminate code duplication (internal only)
+  - Services no longer use dependency injection for git operations - they instantiate modules as needed
+  - Grade improved from C+ to A- in Ousterhout code review
+
 ### Fixed
 - Fixed quad view terminal selection dropdowns positioning - all dropdowns now appear in the upper left corner of their respective panels for consistency
+- Fixed critical bug in `GitAnalyzer` where `this._execute()` was called instead of `this.execute()`
+- Removed obsolete `git-services.middleware.js` that was creating non-existent GitService class
+- Fixed `GitStatusService` to use real module methods instead of non-existent phantom methods
 
 ## [2.0.0] - 2025-08-03
 

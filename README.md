@@ -85,7 +85,10 @@ backend/
 │   ├── upload.service.js        # File attachment handling (5 methods)
 │   ├── event-emitter.service.js # Central event hub for loose coupling
 │   ├── websocket.service.js     # Event-driven WebSocket broadcasting
-│   ├── git.service.js           # Low-level git operations (legacy)
+│   ├── git-repository.service.js # Repository operations (5 methods)
+│   ├── git-workingtree.service.js # Working tree operations (6 methods)
+│   ├── git-analyzer.service.js  # Git analysis operations (5 methods)
+│   ├── git-executor.js          # Internal base class for git modules
 │   ├── cleanup.service.js       # Orphaned resource cleanup
 │   ├── merge.service.js         # Merge/rebase operations
 │   └── worktree.service.js      # Git worktree management

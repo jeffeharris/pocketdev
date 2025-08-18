@@ -18,7 +18,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | **In QA** | 2025-08-03 |
 | BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087 | **High** | Complex god component | Open | 2025-08-16 |
 | BUG-010 | task.controller.js needs modularization | Technical Debt | 965 | **High** | 17 methods mixing concerns | **In QA** | 2025-08-03 |
-| BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **In QA** | 2025-08-03 |
+| BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **RESOLVED** | 2025-08-18 |
 | BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-22 |
 | BUG-017 | Consolidate Session Identity Abstraction | Technical Debt | N/A | **High** | Leaky abstraction in 21+ files | **In QA** | 2025-08-03 |
 | BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | Open | 2025-08-26 |
@@ -63,10 +63,16 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Extracted TaskService with 8 methods
    - Controller only handles HTTP concerns
 
-5. **BUG-007** (High): git.service.js modularization - **RESOLVED**
-   - Split into GitStatusService (4 methods) and GitOperationService (6 methods)
-   - Reduced from 32+ methods to 10 total across two services
-   - Deep module pattern achieved
+5. **BUG-007** (High): git.service.js modularization - **RESOLVED** (2025-08-18)
+   - Eliminated monolithic GitService (32+ methods) completely
+   - Split into three focused deep modules:
+     - GitRepository (5 methods): clone, fetch, push, pull, getCurrentBranch
+     - GitWorkingTree (6 methods): stage, commit, reset, getStatus, checkout, merge
+     - GitAnalyzer (5 methods): getDiff, checkMergeConflicts, getUnpushedCommits, getCommitHistory, getFileChanges
+   - Created GitExecutor base class for code reuse (internal only)
+   - Removed all facades and compatibility layers
+   - Services instantiate modules directly instead of dependency injection
+   - Grade improved from C+ to A- in Ousterhout code review
 
 6. **BUG-017** (High): Session Identity Abstraction - **RESOLVED**
    - Created TerminalService hiding ID complexity
