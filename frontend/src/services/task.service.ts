@@ -283,7 +283,8 @@ export class TaskService extends BaseService implements ITaskService {
       return;
     }
     
-    await this.post<void>(`/projects/${projectId}/tasks/${taskId}/archive`);
+    // Use the existing DELETE endpoint with softDelete=true to archive
+    await this.delete<void>(`/projects/${projectId}/tasks/${taskId}?softDelete=true`);
   }
 
   async getCommitHistory(projectId: string, taskId: string): Promise<CommitHistory[]> {

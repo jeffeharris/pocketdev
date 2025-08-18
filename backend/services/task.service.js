@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
-import { GitService } from './git-core.service.js';
+import { GitRepository, GitWorkingTree, GitAnalyzer, configureGitCredentials } from './git-core.service.js';
 import { GitStatusService } from './git-status.service.js';
 
 /**
@@ -33,7 +33,7 @@ export class TaskService {
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Created task with session info
    */
-  async createTask(projectId, taskData, gitService, options = {}) {
+  async createTask(projectId, taskData, githubToken, options = {}) {
     const { name, branch, useExistingBranch } = taskData;
     const { createSession = true, hostname } = options;
     
@@ -62,7 +62,7 @@ export class TaskService {
       );
       
       // Configure git credentials
-      await gitService.configureCredentials(worktreePath);
+      await configureGitCredentials(worktreePath, githubToken);
       
       // Create task in database
       const task = await this.models.tasks.create(project.id, {
@@ -214,7 +214,7 @@ export class TaskService {
    * @param {Object} gitService - GitService instance for git operations
    * @returns {Promise<Object>} Safety check results
    */
-  async checkTaskDeletionSafety(taskId, gitService) {
+  async checkTaskDeletionSafety(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -229,10 +229,12 @@ export class TaskService {
       };
     }
     
-    // gitService is now passed as parameter
+    // Create the modules we need
+    const workingTree = new GitWorkingTree(githubToken);
+    const analyzer = new GitAnalyzer(githubToken);
     
     // Check for uncommitted changes
-    const status = await gitService.getStatus(task.worktree_path);
+    const status = await workingTree.getStatus(task.worktree_path);
     const hasUncommittedChanges = status.output.trim().length > 0;
     
     // Check for unpushed commits
@@ -240,15 +242,15 @@ export class TaskService {
     let diffSummary = '';
     
     try {
-      const unpushed = await gitService.getUnpushedCommits(task.worktree_path, task.branch);
-      hasUnpushedCommits = unpushed.output.trim().length > 0;
+      const unpushed = await analyzer.getUnpushedCommits(task.worktree_path, task.branch);
+      hasUnpushedCommits = unpushed.count > 0;
     } catch (e) {
       hasUnpushedCommits = true; // Assume unsafe if can't check
     }
     
     // Get diff summary if changes exist
     if (hasUncommittedChanges) {
-      const diff = await gitService.getDiff(task.worktree_path, '--stat');
+      const diff = await analyzer.getDiff(task.worktree_path, { stat: true });
       diffSummary = diff.output;
     }
     
@@ -276,7 +278,7 @@ export class TaskService {
    * @param {Object} monitors - Monitor services for live state
    * @returns {Promise<Object>} Complete task state
    */
-  async getTaskState(taskId, gitService, monitors = {}) {
+  async getTaskState(taskId, githubToken, monitors = {}) {
     const task = await this.models.tasks.findByIdWithSessionState(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -289,7 +291,7 @@ export class TaskService {
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
       try {
         const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
-        gitStatus = await gitStatusService.getTaskGitStatus(taskId, gitService);
+        gitStatus = await gitStatusService.getTaskGitStatus(taskId, githubToken);
       } catch (error) {
         console.error(`Failed to get git status for task ${taskId}:`, error.message);
       }

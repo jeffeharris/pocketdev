@@ -12,14 +12,11 @@
  * - getFileChanges(workingDirectory) - Get detailed file change information
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { GitExecutor } from './git-executor.js';
 
-const execAsync = promisify(exec);
-
-export class GitAnalyzer {
+export class GitAnalyzer extends GitExecutor {
   constructor(githubToken = null) {
-    this.githubToken = githubToken;
+    super(githubToken);
   }
 
   /**
@@ -36,7 +33,7 @@ export class GitAnalyzer {
     if (stat) flags.push('--stat');
     if (nameOnly) flags.push('--name-only');
     
-    return this._execute(
+    return this.execute(
       `git diff ${flags.join(' ')} ${target}`.trim(),
       workingDirectory
     );
@@ -48,7 +45,7 @@ export class GitAnalyzer {
   async checkMergeConflicts(workingDirectory, targetBranch) {
     try {
       // Fast conflict check using git merge-tree
-      const result = await this._execute(
+      const result = await this.execute(
         `git merge-tree --write-tree --name-only HEAD ${targetBranch} 2>&1`,
         workingDirectory
       );
@@ -96,14 +93,14 @@ export class GitAnalyzer {
    */
   async getUnpushedCommits(workingDirectory, branch) {
     // Check if remote branch exists
-    const remoteCheck = await this._execute(
+    const remoteCheck = await this.execute(
       `git rev-parse --verify origin/${branch} 2>/dev/null`,
       workingDirectory
     );
     
     if (!remoteCheck.success) {
       // No remote branch, all commits are unpushed
-      const allCommits = await this._execute(
+      const allCommits = await this.execute(
         'git log --oneline',
         workingDirectory
       );
@@ -154,13 +151,13 @@ export class GitAnalyzer {
     const { compareTarget = 'HEAD' } = options;
     
     // Get file status
-    const statusResult = await this._execute(
+    const statusResult = await this.execute(
       'git status --porcelain --untracked-files=all',
       workingDirectory
     );
     
     // Get diff statistics
-    const diffStatResult = await this._execute(
+    const diffStatResult = await this.execute(
       `git diff --numstat ${compareTarget}`,
       workingDirectory
     );
@@ -191,36 +188,6 @@ export class GitAnalyzer {
   }
 
   // Private helper methods
-  _getEnv() {
-    const env = { ...process.env };
-    if (this.githubToken) {
-      env.GITHUB_TOKEN = this.githubToken;
-      env.GH_TOKEN = this.githubToken;
-    }
-    return env;
-  }
-
-  async _execute(command, workingDirectory) {
-    const env = this._getEnv();
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: workingDirectory,
-        env
-      });
-      return {
-        success: true,
-        output: stdout.trim(),
-        error: stderr.trim()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        output: '',
-        error: error.message
-      };
-    }
-  }
-
   _parseCommitLog(output) {
     if (!output.trim()) return { count: 0, commits: [] };
     

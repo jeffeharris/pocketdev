@@ -1,3 +1,6 @@
+import { GitRepository } from './git-repository.service.js';
+import { GitWorkingTree } from './git-workingtree.service.js';
+import { GitAnalyzer } from './git-analyzer.service.js';
 
 /**
  * GitStatusService - Handles all git status operations
@@ -19,7 +22,7 @@ export class GitStatusService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} Comprehensive git status information
    */
-  async getTaskGitStatus(taskId, gitService) {
+  async getTaskGitStatus(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -30,62 +33,67 @@ export class GitStatusService {
       throw new Error('Project not found');
     }
 
+    // Create the modules we need
+    const repository = new GitRepository(githubToken);
+    const workingTree = new GitWorkingTree(githubToken);
+    const analyzer = new GitAnalyzer(githubToken);
     
     // Debug logging for merged tasks with changes
     if (task.status === 'merged' || task.merged_at) {
       console.log(`[GitStatus] Checking merged task ${taskId} on branch ${task.branch}`);
-      const statusResult = await gitService.command(task.worktree_path, 'git status --porcelain');
+      const statusResult = await workingTree.getStatus(task.worktree_path);
       if (statusResult.output.trim()) {
         console.log(`[GitStatus] Merged task has changes:`, statusResult.output);
-        const branchResult = await gitService.command(task.worktree_path, 'git branch --show-current');
+        const branchResult = await repository.execute('git branch --show-current', task.worktree_path);
         console.log(`[GitStatus] Task worktree is on branch:`, branchResult.output.trim());
       }
     }
 
     // Get detailed git status
-    const statusResult = await gitService.getStatus(task.worktree_path);
+    const statusResult = await workingTree.getStatus(task.worktree_path);
     const cleanStatus = statusResult.output.trim().length === 0;
     
     // Check ahead/behind status
-    const aheadBehind = await this._getAheadBehindStatus(gitService, task, project);
+    const aheadBehind = await this._getAheadBehindStatus(repository, task, project);
     
-    // Count changed files
-    let filesChanged = 0;
-    if (!cleanStatus) {
-      filesChanged = statusResult.output.split('\n').filter(line => line.trim()).length;
-    }
-
-    // Get detailed status including staged/unstaged counts
-    const detailedStatus = await gitService.getDetailedStatus(task.worktree_path);
-
-    // Check if branch has remote tracking
-    const hasRemoteTracking = await this._checkRemoteTracking(gitService, task);
-
+    // Parse status to get file counts
+    const statusLines = statusResult.output.trim().split('\n').filter(line => line);
+    let staged = 0, unstaged = 0, untracked = 0;
+    
+    statusLines.forEach(line => {
+      if (!line.trim()) return;
+      const indexStatus = line[0];
+      const workingStatus = line[1];
+      
+      if (line.startsWith('??')) {
+        untracked++;
+      } else {
+        if (indexStatus !== ' ' && indexStatus !== '?') staged++;
+        if (workingStatus !== ' ' && workingStatus !== '?') unstaged++;
+      }
+    });
+    
     return {
       clean: cleanStatus,
       ahead: aheadBehind.ahead,
       behind: aheadBehind.behind,
-      filesChanged,
-      staged: detailedStatus.staged,
-      unstaged: detailedStatus.unstaged,
-      untracked: detailedStatus.untracked,
-      files: detailedStatus.files || [],
-      stagedFiles: detailedStatus.files?.filter(f => f.staged) || [],
-      unstagedFiles: detailedStatus.files?.filter(f => f.unstaged) || [],
-      untrackedFiles: detailedStatus.files?.filter(f => f.untracked) || [],
-      hasRemoteTracking,
+      hasRemoteTracking: aheadBehind.hasRemoteTracking,
+      staged,
+      unstaged,
+      untracked,
+      filesChanged: staged + unstaged + untracked,
       rawStatus: statusResult.output
     };
   }
 
   /**
-   * Get changed files with diff details for a task
+   * Get list of changed files for a task
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for git operations
-   * @param {string} compareWith - What to compare with ('working' or 'base')
-   * @returns {Promise<Array>} Array of changed files with details
+   * @param {string} compareTarget - Target to compare against ('working' or branch name)
+   * @returns {Promise<Array>} List of changed files with details
    */
-  async getTaskChangedFiles(taskId, gitService, compareWith = 'working') {
+  async getTaskChangedFiles(taskId, githubToken, compareTarget = 'working') {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -95,37 +103,22 @@ export class GitStatusService {
     if (!project) {
       throw new Error('Project not found');
     }
-
     
-    // Use comprehensive diff method to get proper line counts
-    const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
-    const diffResult = await gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
+    const analyzer = new GitAnalyzer(githubToken);
     
-    // Convert Map to array
-    const changedFiles = [];
-    for (const [path, fileInfo] of diffResult.files) {
-      changedFiles.push({
-        path: fileInfo.path,
-        type: fileInfo.type,
-        additions: fileInfo.additions,
-        deletions: fileInfo.deletions,
-        staged: fileInfo.staged || false,
-        unstaged: fileInfo.unstaged || false,
-        untracked: fileInfo.untracked || false,
-        committed: fileInfo.diffType === 'committed'
-      });
-    }
+    // Use the analyzer's getFileChanges method
+    const changes = await analyzer.getFileChanges(task.worktree_path, { compareTarget });
     
-    return changedFiles;
+    return changes.files || [];
   }
 
   /**
-   * Get all changes for a task including working tree and committed changes
+   * Get all changes for a task (files, commits, summary)
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for git operations
-   * @returns {Promise<Object>} All changes with categorized files and summary
+   * @returns {Promise<Object>} Comprehensive change information
    */
-  async getTaskAllChanges(taskId, gitService) {
+  async getTaskAllChanges(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -135,39 +128,22 @@ export class GitStatusService {
     if (!project) {
       throw new Error('Project not found');
     }
-
     
-    // Get all changes using the git service method
-    const allChanges = await gitService.getAllChanges(
-      task.worktree_path,
-      `origin/${project.base_branch}`
-    );
+    const analyzer = new GitAnalyzer(githubToken);
     
-    // Get unpushed commits info
-    const unpushedInfo = await gitService.getUnpushedCommitsInfo(
-      task.worktree_path,
-      task.branch
-    );
+    // Get file changes
+    const fileChanges = await analyzer.getFileChanges(task.worktree_path);
     
-    // Format response with categorized files
+    // Get unpushed commits
+    const unpushedCommits = await analyzer.getUnpushedCommits(task.worktree_path, task.branch);
+    
     return {
-      files: allChanges.files.map(file => ({
-        path: file.path,
-        type: file.type,
-        additions: file.additions,
-        deletions: file.deletions,
-        category: file.category,
-        status: file.status,
-        staged: file.staged || false,
-        unstaged: file.unstaged || false,
-        untracked: file.untracked || false,
-        committed: file.category === 'committed'
-      })),
+      files: fileChanges.files || [],
       summary: {
-        ...allChanges.summary,
-        unpushedCommits: unpushedInfo.count
+        ...fileChanges.summary,
+        unpushedCommits: unpushedCommits.count || 0
       },
-      unpushedCommits: unpushedInfo.commits
+      unpushedCommits: unpushedCommits.commits || []
     };
   }
 
@@ -177,64 +153,57 @@ export class GitStatusService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} Conflict information
    */
-  async getTaskConflicts(taskId, gitService) {
+  async getTaskConflicts(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
     }
-
+    
     const project = await this.models.projects.findById(task.project_id);
     if (!project) {
       throw new Error('Project not found');
     }
-
     
-    const conflicts = await gitService.checkMergeConflicts(
-      task.worktree_path, 
-      `origin/${project.base_branch}`
-    );
+    const analyzer = new GitAnalyzer(githubToken);
     
-    return {
-      hasConflicts: conflicts.hasConflicts,
-      conflicts: conflicts.conflicts || []
-    };
+    // Check for conflicts with base branch
+    const targetBranch = `origin/${project.base_branch || 'main'}`;
+    return await analyzer.checkMergeConflicts(task.worktree_path, targetBranch);
   }
-
+  
   // Private helper methods
-
-  /**
-   * Get ahead/behind status for a task
-   * @private
-   */
-  async _getAheadBehindStatus(gitService, task, project) {
-    let aheadBehind = { ahead: 0, behind: 0 };
+  async _getAheadBehindStatus(repository, task, project) {
+    const baseBranch = `origin/${project.base_branch || 'main'}`;
+    let ahead = 0, behind = 0, hasRemoteTracking = false;
+    
     try {
-      const aheadResult = await gitService.command(task.worktree_path, 
-        `git rev-list --count origin/${project.base_branch}..HEAD`);
-      const behindResult = await gitService.command(task.worktree_path,
-        `git rev-list --count HEAD..origin/${project.base_branch}`);
-      
-      aheadBehind.ahead = parseInt(aheadResult.output.trim()) || 0;
-      aheadBehind.behind = parseInt(behindResult.output.trim()) || 0;
-    } catch (error) {
-      console.warn('Could not get ahead/behind status:', error);
-    }
-    return aheadBehind;
-  }
-
-  /**
-   * Check if branch has remote tracking
-   * @private
-   */
-  async _checkRemoteTracking(gitService, task) {
-    try {
-      const remoteCheckResult = await gitService.command(
-        task.worktree_path,
-        `git rev-parse --verify origin/${task.branch} 2>/dev/null`
+      // Check if remote tracking branch exists
+      const aheadResult = await repository.execute(
+        `git rev-list --count ${baseBranch}..HEAD`,
+        task.worktree_path
       );
-      return remoteCheckResult.success;
+      const behindResult = await repository.execute(
+        `git rev-list --count HEAD..${baseBranch}`,
+        task.worktree_path
+      );
+      
+      if (aheadResult.success) {
+        ahead = parseInt(aheadResult.output.trim()) || 0;
+      }
+      if (behindResult.success) {
+        behind = parseInt(behindResult.output.trim()) || 0;
+      }
+      
+      // Check if remote tracking exists
+      const remoteCheckResult = await repository.execute(
+        `git rev-parse --verify origin/${task.branch} 2>/dev/null`,
+        task.worktree_path
+      );
+      hasRemoteTracking = remoteCheckResult.success;
     } catch (error) {
-      return false;
+      console.error('[GitStatus] Error checking ahead/behind:', error);
     }
+    
+    return { ahead, behind, hasRemoteTracking };
   }
 }

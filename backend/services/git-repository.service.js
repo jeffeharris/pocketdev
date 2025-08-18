@@ -12,38 +12,22 @@
  * - getCurrentBranch(workingDirectory) - Get current branch name
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { GitExecutor } from './git-executor.js';
 
-const execAsync = promisify(exec);
-
-export class GitRepository {
+export class GitRepository extends GitExecutor {
   constructor(githubToken = null) {
-    this.githubToken = githubToken;
+    super(githubToken);
   }
 
   /**
    * Clone a repository
    */
   async clone(url, destination) {
-    const env = this._getEnv();
-    try {
-      const { stdout, stderr } = await execAsync(
-        `git clone ${url} ${destination}`,
-        { env }
-      );
-      return {
-        success: true,
-        output: stdout.trim(),
-        error: stderr.trim()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        output: '',
-        error: error.message
-      };
-    }
+    // Clone doesn't have a working directory yet, so we execute in current dir
+    return this.execute(
+      `git clone ${url} ${destination}`,
+      process.cwd()
+    );
   }
 
   /**
@@ -55,7 +39,7 @@ export class GitRepository {
     if (all) flags.push('--all');
     if (prune) flags.push('--prune');
     
-    return this._execute(
+    return this.execute(
       `git fetch ${flags.join(' ')}`.trim(),
       workingDirectory
     );
@@ -70,7 +54,7 @@ export class GitRepository {
     if (setUpstream) flags.push('-u');
     if (force) flags.push('--force');
     
-    return this._execute(
+    return this.execute(
       `git push ${flags.join(' ')} origin ${branch}`.trim(),
       workingDirectory
     );
@@ -81,7 +65,7 @@ export class GitRepository {
    */
   async pull(workingDirectory, remote = 'origin', branch = null) {
     const branchArg = branch ? ` ${branch}` : '';
-    return this._execute(
+    return this.execute(
       `git pull ${remote}${branchArg}`,
       workingDirectory
     );
@@ -91,41 +75,10 @@ export class GitRepository {
    * Get current branch name
    */
   async getCurrentBranch(workingDirectory) {
-    const result = await this._execute(
+    const result = await this.execute(
       'git branch --show-current',
       workingDirectory
     );
     return result.success ? result.output : null;
-  }
-
-  // Private helper methods
-  _getEnv() {
-    const env = { ...process.env };
-    if (this.githubToken) {
-      env.GITHUB_TOKEN = this.githubToken;
-      env.GH_TOKEN = this.githubToken;
-    }
-    return env;
-  }
-
-  async _execute(command, workingDirectory) {
-    const env = this._getEnv();
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: workingDirectory,
-        env
-      });
-      return {
-        success: true,
-        output: stdout.trim(),
-        error: stderr.trim()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        output: '',
-        error: error.message
-      };
-    }
   }
 }

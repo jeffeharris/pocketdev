@@ -13,14 +13,11 @@
  * - merge(workingDirectory, branch) - Merge branches
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { GitExecutor } from './git-executor.js';
 
-const execAsync = promisify(exec);
-
-export class GitWorkingTree {
+export class GitWorkingTree extends GitExecutor {
   constructor(githubToken = null, gitConfig = null) {
-    this.githubToken = githubToken;
+    super(githubToken);
     this.gitConfig = gitConfig || { 
       name: 'PocketDev AI', 
       email: 'ai@pocketdev.io' 
@@ -32,7 +29,7 @@ export class GitWorkingTree {
    */
   async stage(workingDirectory, files = '.') {
     const filesArg = Array.isArray(files) ? files.join(' ') : files;
-    return this._execute(`git add ${filesArg}`, workingDirectory);
+    return this.execute(`git add ${filesArg}`, workingDirectory);
   }
 
   /**
@@ -41,7 +38,7 @@ export class GitWorkingTree {
   async commit(workingDirectory, message) {
     // Ensure git config is set before committing
     await this._ensureGitConfig(workingDirectory);
-    return this._execute(
+    return this.execute(
       `git commit -m "${message}"`,
       workingDirectory
     );
@@ -53,7 +50,7 @@ export class GitWorkingTree {
   async reset(workingDirectory, options = {}) {
     const { hard = false, commit = 'HEAD' } = options;
     const mode = hard ? '--hard' : '--mixed';
-    return this._execute(
+    return this.execute(
       `git reset ${mode} ${commit}`,
       workingDirectory
     );
@@ -63,7 +60,7 @@ export class GitWorkingTree {
    * Get working tree status
    */
   async getStatus(workingDirectory) {
-    return this._execute('git status --porcelain', workingDirectory);
+    return this.execute('git status --porcelain', workingDirectory);
   }
 
   /**
@@ -72,7 +69,7 @@ export class GitWorkingTree {
   async checkout(workingDirectory, branch, options = {}) {
     const { create = false } = options;
     const flags = create ? '-b' : '';
-    return this._execute(
+    return this.execute(
       `git checkout ${flags} ${branch}`.trim(),
       workingDirectory
     );
@@ -83,7 +80,7 @@ export class GitWorkingTree {
    */
   async merge(workingDirectory, branch, message = '') {
     const msgFlag = message ? `-m "${message}"` : '';
-    return this._execute(
+    return this.execute(
       `git merge ${branch} ${msgFlag}`.trim(),
       workingDirectory
     );
@@ -92,57 +89,27 @@ export class GitWorkingTree {
   // Private helper methods
   async _ensureGitConfig(workingDirectory) {
     // Check if git config is already set
-    const nameResult = await this._execute(
+    const nameResult = await this.execute(
       'git config user.name',
       workingDirectory
     );
-    const emailResult = await this._execute(
+    const emailResult = await this.execute(
       'git config user.email',
       workingDirectory
     );
     
     // Set config if not already set
     if (!nameResult.output.trim() && this.gitConfig.name) {
-      await this._execute(
+      await this.execute(
         `git config user.name "${this.gitConfig.name}"`,
         workingDirectory
       );
     }
     if (!emailResult.output.trim() && this.gitConfig.email) {
-      await this._execute(
+      await this.execute(
         `git config user.email "${this.gitConfig.email}"`,
         workingDirectory
       );
-    }
-  }
-
-  _getEnv() {
-    const env = { ...process.env };
-    if (this.githubToken) {
-      env.GITHUB_TOKEN = this.githubToken;
-      env.GH_TOKEN = this.githubToken;
-    }
-    return env;
-  }
-
-  async _execute(command, workingDirectory) {
-    const env = this._getEnv();
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        cwd: workingDirectory,
-        env
-      });
-      return {
-        success: true,
-        output: stdout.trim(),
-        error: stderr.trim()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        output: '',
-        error: error.message
-      };
     }
   }
 }
