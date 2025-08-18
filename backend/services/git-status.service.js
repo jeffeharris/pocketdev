@@ -38,16 +38,6 @@ export class GitStatusService {
     const workingTree = new GitWorkingTree(githubToken);
     const analyzer = new GitAnalyzer(githubToken);
     
-    // Debug logging for merged tasks with changes
-    if (task.status === 'merged' || task.merged_at) {
-      console.log(`[GitStatus] Checking merged task ${taskId} on branch ${task.branch}`);
-      const statusResult = await workingTree.getStatus(task.worktree_path);
-      if (statusResult.output.trim()) {
-        console.log(`[GitStatus] Merged task has changes:`, statusResult.output);
-        const branchResult = await repository.execute('git branch --show-current', task.worktree_path);
-        console.log(`[GitStatus] Task worktree is on branch:`, branchResult.output.trim());
-      }
-    }
 
     // Get detailed git status
     const statusResult = await workingTree.getStatus(task.worktree_path);
@@ -201,7 +191,7 @@ export class GitStatusService {
       );
       hasRemoteTracking = remoteCheckResult.success;
     } catch (error) {
-      console.error('[GitStatus] Error checking ahead/behind:', error);
+      // Silently handle errors - likely no remote tracking branch
     }
     
     return { ahead, behind, hasRemoteTracking };

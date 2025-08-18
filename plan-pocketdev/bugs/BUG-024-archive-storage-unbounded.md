@@ -1,4 +1,4 @@
-# BUG-023: Archive Storage Grows Unbounded
+# BUG-024: Archive Storage Grows Unbounded
 
 ## Problem
 The task archive system stores complete project worktrees indefinitely with no automatic cleanup, leading to unbounded storage growth.

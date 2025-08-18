@@ -20,6 +20,7 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 - Fixed critical bug in `GitAnalyzer` where `this._execute()` was called instead of `this.execute()`
 - Removed obsolete `git-services.middleware.js` that was creating non-existent GitService class
 - Fixed `GitStatusService` to use real module methods instead of non-existent phantom methods
+- Fixed archive task 404 error - frontend now uses existing DELETE endpoint with `softDelete=true` instead of non-existent `/archive` endpoint
 
 ## [2.0.0] - 2025-08-03
 
