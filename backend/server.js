@@ -178,8 +178,8 @@ async function initializeDatabase() {
   app.locals.sessionCleanupService = sessionCleanupService;
   sessionCleanupService.start();
   
-  // Return eventEmitterService for use in the main server setup
-  return eventEmitterService;
+  // Return services for use in the main server setup
+  return { eventEmitterService, githubTokenService };
 }
 
 // Load settings
@@ -255,7 +255,7 @@ function handleWebSocketMessage(ws, data) {
 }
 
 // Initialize WebSocket and monitoring
-async function initializeMonitoring(server, models, eventEmitterService) {
+async function initializeMonitoring(server, models, eventEmitterService, githubTokenService) {
   try {
     console.log('Initializing AI monitoring...');
     
@@ -349,7 +349,7 @@ async function initializeMonitoring(server, models, eventEmitterService) {
 async function start() {
   try {
     await ensureProjectsDir();
-    const eventEmitterService = await initializeDatabase();
+    const { eventEmitterService, githubTokenService } = await initializeDatabase();
     await loadSettings();
     
     // Add service middleware before routes
@@ -379,7 +379,7 @@ async function start() {
     app.locals.webSocketService = webSocketService;
     
     // Initialize monitoring with Shelltender v0.6.1 adapter
-    await initializeMonitoring(server, models, eventEmitterService);
+    await initializeMonitoring(server, models, eventEmitterService, githubTokenService);
     
     // Start listening
     server.listen(config.port, () => {

@@ -1,5 +1,6 @@
 import { GIT_EVENTS } from './services/events.js';
 import { GitStatusService } from './services/git-status.service.js';
+import { GitService } from './services/git-core.service.js';
 import fsSync from 'fs';
 
 /**
@@ -79,11 +80,12 @@ export class GitStatusMonitor {
       // Get token
       const token = await this.githubTokenService.getToken();
       
-      // Create GitStatusService instance
+      // Create service instances
+      const gitService = new GitService(token);
       const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
       
       // Get comprehensive git status for the task
-      const status = await gitStatusService.getTaskGitStatus(task.id, token);
+      const status = await gitStatusService.getTaskGitStatus(task.id, gitService);
       
       // Create status key for comparison (including staged/unstaged/untracked)
       const statusKey = `${status.ahead}-${status.behind}-${status.filesChanged}-${status.staged}-${status.unstaged}-${status.untracked}`;
