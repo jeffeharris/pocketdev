@@ -5,21 +5,25 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 ## [Unreleased]
 
 ### Changed
-- **BREAKING**: Complete refactoring of git services architecture
-  - Eliminated monolithic `GitService` (32+ methods) in favor of three focused modules:
-    - `GitRepository` (5 methods): clone, fetch, push, pull, getCurrentBranch
+- **BREAKING**: Complete refactoring of git services architecture (Grade: C+ → B+ → A-)
+  - Eliminated monolithic `GitService` (26+ methods) in favor of three focused deep modules:
+    - `GitRepository` (6 methods): clone, fetch, push, pull, merge, rebase
     - `GitWorkingTree` (6 methods): stage, commit, reset, getStatus, checkout, merge
     - `GitAnalyzer` (5 methods): getDiff, checkMergeConflicts, getUnpushedCommits, getCommitHistory, getFileChanges
-  - Removed all facades and compatibility layers - services now use modules directly
-  - Created `GitExecutor` base class to eliminate code duplication (internal only)
-  - Services no longer use dependency injection for git operations - they instantiate modules as needed
-  - Grade improved from C+ to A- in Ousterhout code review
+  - Removed all facades and compatibility layers (`git-core.service.js` deleted)
+  - Created `GitExecutor` base class for shared implementation (DRY principle, internal only)
+  - Controllers now pass `githubToken` instead of `gitService` parameter
+  - `configureCredentials` moved to `GitRepository` as static method
+  - All imports updated to use direct module imports
 
 ### Fixed
+- **Critical**: Fixed parameter order bug in `WorktreeService` - 11 calls had reversed parameters
 - Fixed quad view terminal selection dropdowns positioning - all dropdowns now appear in the upper left corner of their respective panels for consistency
 - Fixed critical bug in `GitAnalyzer` where `this._execute()` was called instead of `this.execute()`
 - Removed obsolete `git-services.middleware.js` that was creating non-existent GitService class
 - Fixed `GitStatusService` to use real module methods instead of non-existent phantom methods
+- Fixed `PullRequestService` to use git modules directly instead of expecting gitService
+- Fixed `TaskController` to instantiate git modules directly
 - Fixed archive task 404 error - frontend now uses existing DELETE endpoint with `softDelete=true` instead of non-existent `/archive` endpoint
 
 ### Documented

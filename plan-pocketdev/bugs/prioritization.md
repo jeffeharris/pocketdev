@@ -64,15 +64,17 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Controller only handles HTTP concerns
 
 5. **BUG-007** (High): git.service.js modularization - **RESOLVED** (2025-08-18)
-   - Eliminated monolithic GitService (32+ methods) completely
+   - Eliminated monolithic GitService (26+ methods) completely
    - Split into three focused deep modules:
-     - GitRepository (5 methods): clone, fetch, push, pull, getCurrentBranch
+     - GitRepository (6 methods): clone, fetch, push, pull, merge, rebase
      - GitWorkingTree (6 methods): stage, commit, reset, getStatus, checkout, merge
      - GitAnalyzer (5 methods): getDiff, checkMergeConflicts, getUnpushedCommits, getCommitHistory, getFileChanges
    - Created GitExecutor base class for code reuse (internal only)
-   - Removed all facades and compatibility layers
-   - Services instantiate modules directly instead of dependency injection
-   - Grade improved from C+ to A- in Ousterhout code review
+   - Removed all facades and compatibility layers (git-core.service.js deleted)
+   - Fixed critical parameter order bug in WorktreeService (11 reversed calls)
+   - Controllers pass githubToken instead of gitService parameter
+   - configureCredentials moved to GitRepository as static method
+   - Grade improved: C+ → B+ (after initial refactor) → A- (after bug fixes)
 
 6. **BUG-017** (High): Session Identity Abstraction - **RESOLVED**
    - Created TerminalService hiding ID complexity
