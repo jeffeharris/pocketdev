@@ -19,7 +19,7 @@ import createRoutes from './routes/index.js';
 import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
 import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
-import { gitServicesMiddleware } from './middleware/git-services.middleware.js';
+// Git services middleware removed - modules are instantiated directly by services
 import { getGitHubTokenService } from './services/github-token.service.js';
 import { GitStatusService } from './services/git-status.service.js';
 import GitOperationService from './services/git-operation.service.js';

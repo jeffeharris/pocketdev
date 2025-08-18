@@ -10,7 +10,7 @@ export { GitRepository } from './git-repository.service.js';
 export { GitWorkingTree } from './git-workingtree.service.js';
 export { GitAnalyzer } from './git-analyzer.service.js';
 
-// Import modules for utility functions
+// Import modules for utility functions (GitExecutor is internal only)
 import { GitRepository } from './git-repository.service.js';
 import { GitWorkingTree } from './git-workingtree.service.js';
 

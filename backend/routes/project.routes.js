@@ -2,14 +2,14 @@ import { Router } from 'express';
 import * as projectController from '../controllers/project.controller.js';
 import { TaskController } from '../controllers/task.controller.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
-import { gitServicesMiddleware } from '../middleware/git-services.middleware.js';
+// Git services middleware removed - modules instantiated directly
 
 const router = Router();
 
 // Apply GitHub token middleware to all routes
 // This injects req.githubToken for all project operations
 router.use(githubTokenMiddleware);
-router.use(gitServicesMiddleware);
+// Middleware removed - git modules instantiated as needed
 
 // Project CRUD operations
 router.get('/', projectController.listProjects);

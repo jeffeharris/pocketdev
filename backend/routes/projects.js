@@ -6,14 +6,14 @@ import fsSync from 'fs';
 import config from '../config/index.js';
 import { gitCommand, configureGitCredentials } from '../utils/git.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
-import { gitServicesMiddleware } from '../middleware/git-services.middleware.js';
+// Git services middleware removed - modules are instantiated directly
 
 const exec = promisify(execCallback);
 const router = Router();
 
 // Apply GitHub token middleware to all routes
 router.use(githubTokenMiddleware);
-router.use(gitServicesMiddleware);
+// Middleware removed - git modules instantiated as needed
 
 // Create new project from repo
 router.post('/', async (req, res) => {

@@ -108,7 +108,7 @@ export class GitAnalyzer extends GitExecutor {
     }
     
     // Get unpushed commits
-    const result = await this._execute(
+    const result = await this.execute(
       `git log origin/${branch}..HEAD --oneline`,
       workingDirectory
     );
@@ -133,7 +133,7 @@ export class GitAnalyzer extends GitExecutor {
     if (since) args.push(`--since="${since}"`);
     if (author) args.push(`--author="${author}"`);
     
-    const result = await this._execute(
+    const result = await this.execute(
       `git log ${args.join(' ')}`.trim(),
       workingDirectory
     );

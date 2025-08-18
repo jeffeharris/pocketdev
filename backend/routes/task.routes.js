@@ -4,7 +4,7 @@ import { TaskGitController } from '../controllers/task-git.controller.js';
 import { TaskPullRequestController } from '../controllers/task-pr.controller.js';
 import { TaskContainerController } from '../controllers/task-container.controller.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
-import { gitServicesMiddleware } from '../middleware/git-services.middleware.js';
+// Git services middleware removed - modules instantiated directly
 
 /**
  * Task routes
@@ -15,7 +15,7 @@ export default function createTaskRoutes(models, projectsDir) {
   
   // Apply GitHub token middleware to all task routes
   router.use(githubTokenMiddleware);
-  router.use(gitServicesMiddleware);
+// Middleware removed - git modules instantiated as needed
   
   // Initialize controllers
   const taskController = new TaskController(models, projectsDir);

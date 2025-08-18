@@ -14,6 +14,7 @@ This document tracks the prioritization and status of all filed UX issues in the
 | UX-007 | Merge Conflict Resolution Complexity | Merge UI | Git jargon, 4 views at once | **High** | Merge failures, user frustration | Open | 2025-08-14 |
 | UX-005 | Projects Page Scannability | Projects List | Confusing click targets | **Medium** | Inefficient navigation | Open | 2025-08-16 |
 | UX-002 | Managing Complexity - Task Workspace | Task Workspace | Feature-rich but overwhelming | **Medium** | Power vs. simplicity balance | Open | 2025-08-18 |
+| UX-008 | Archive System Transparency | Task Archive | Hidden data impact, session loss | **High** | Storage confusion, lost context | Open | 2025-08-20 |
 
 ## Priority Rationale
 
@@ -25,6 +26,7 @@ This document tracks the prioritization and status of all filed UX issues in the
 ### High (Fix Soon)
 - **UX-004**: Sidebar is used constantly - 900 lines trying to do everything creates constant friction
 - **UX-007**: Merge conflicts are high-stress moments - current UI adds to the stress instead of reducing it
+- **UX-008**: Archive system lacks transparency - users don't understand storage impact (full project copies) or that sessions are lost
 
 ### Medium (Plan to Fix)
 - **UX-005**: Projects page has issues but users don't spend much time there
