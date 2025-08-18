@@ -16,24 +16,10 @@ import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
 import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
-import { cleanupOrphanedWorktrees } from './services/cleanup.service.js';
-import { SessionCleanupService } from './services/session-cleanup.service.js';
 import { initializeGitStatusMonitor } from './git-status-monitor.js';
-// Git services middleware removed - modules are instantiated directly by services
-import { getGitHubTokenService } from './services/github-token.service.js';
-import { GitStatusService } from './services/git-status.service.js';
-import GitOperationService from './services/git-operation.service.js';
-import { TaskService } from './services/task.service.js';
-import { ProjectService } from './services/project.service.js';
-import { TerminalService } from './services/terminal.service.js';
-import { PullRequestService } from './services/pull-request.service.js';
-import { getEventEmitterService } from './services/event-emitter.service.js';
 import { WebSocketService } from './services/websocket.service.js';
-import { SettingsService } from './services/settings.service.js';
-import { ContainerService } from './services/container.service.js';
-import { UploadService } from './services/upload.service.js';
-import { MonitoringService } from './services/monitoring.service.js';
 import { MigrationService } from './services/migration.service.js';
+import { ServiceInitializer } from './services/service-initializer.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -79,44 +65,14 @@ async function initializeDatabase() {
   app.locals.db = db;
   app.locals.projectsDir = config.projectsDir;
   
-  // Initialize GitHub token service
-  const githubTokenService = getGitHubTokenService(db);
-  app.locals.githubTokenService = githubTokenService;
-  
-  // Initialize EventEmitter service (singleton)
-  const eventEmitterService = getEventEmitterService();
-  
-  // Initialize services directly
-  const services = {
-    // Core dependencies
-    models: models,
-    EventEmitterService: eventEmitterService,
-    GitHubTokenService: githubTokenService,
-    githubTokenService: githubTokenService, // Compatibility alias
-    
-    // Services
-    GitStatusService: new GitStatusService(models, githubTokenService),
-    GitOperationService: new GitOperationService(models, githubTokenService, eventEmitterService),
-    TaskService: new TaskService(models, githubTokenService, eventEmitterService),
-    ProjectService: new ProjectService(models, githubTokenService),
-    TerminalService: new TerminalService(models, eventEmitterService),
-    PullRequestService: new PullRequestService(models, githubTokenService, eventEmitterService),
-    SettingsService: new SettingsService(models, eventEmitterService),
-    ContainerService: new ContainerService(models, eventEmitterService),
-    UploadService: new UploadService(models, eventEmitterService),
-    MonitoringService: new MonitoringService(models, eventEmitterService)
-  };
+  // Initialize all services using ServiceInitializer
+  const serviceInitializer = new ServiceInitializer(models, db, config);
+  const { services, eventEmitterService, githubTokenService } = await serviceInitializer.initializeServices();
   
   // Store services in app.locals for backward compatibility
   app.locals.services = services;
-  
-  // Run cleanup on startup
-  await cleanupOrphanedWorktrees(models);
-  
-  // Initialize session cleanup service
-  const sessionCleanupService = new SessionCleanupService(db, models);
-  app.locals.sessionCleanupService = sessionCleanupService;
-  sessionCleanupService.start();
+  app.locals.githubTokenService = githubTokenService;
+  app.locals.sessionCleanupService = services.SessionCleanupService;
   
   // Return services for use in the main server setup
   return { eventEmitterService, githubTokenService };
