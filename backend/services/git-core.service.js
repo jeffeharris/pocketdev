@@ -20,7 +20,6 @@ const execAsync = promisify(exec);
  * - getStatus(dir) - Get repository status
  * - push(dir, branch, opts) - Push changes
  * - commit(dir, message) - Commit staged changes
- * - createPullRequest(dir, title, body, opts) - Create GitHub PR
  * - configureCredentials(dir) - Setup git credentials
  * 
  * All other methods are considered internal implementation details.
@@ -132,24 +131,6 @@ export class GitService {
     return this.executeCommand(`git push ${flags} origin ${branch}`, workingDirectory);
   }
 
-  /**
-   * Create a pull request using GitHub CLI
-   */
-  async createPullRequest(workingDirectory, title, body = '', options = {}) {
-    const { base = 'main', draft = false } = options;
-    
-    // Build the gh pr create command
-    let command = `gh pr create --title "${title}"`;
-    if (body) {
-      command += ` --body "${body}"`;
-    }
-    command += ` --base ${base}`;
-    if (draft) {
-      command += ' --draft';
-    }
-    
-    return this.executeCommand(command, workingDirectory);
-  }
 
   /**
    * Pull changes from remote

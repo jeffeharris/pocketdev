@@ -2,7 +2,6 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
-import { GitService } from './git-core.service.js';
 
 /**
  * ProjectService - Handles all project-related business operations
@@ -16,20 +15,20 @@ import { GitService } from './git-core.service.js';
  * and dashboard data aggregation.
  */
 export class ProjectService {
-  constructor(models, githubTokenService, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
+  constructor(models, gitServiceService, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
-    this.githubTokenService = githubTokenService;
+    this.gitServiceService = gitServiceService;
     this.projectsDir = projectsDir;
   }
 
   /**
    * Create a new project with git clone and setup
    * @param {Object} projectData - Project creation data
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {Object} gitService - GitService instance for git operations
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Created project with metadata
    */
-  async createProject(projectData, githubToken, options = {}) {
+  async createProject(projectData, gitService, options = {}) {
     const { repoUrl, branch = 'main', projectName } = projectData;
     
     if (!repoUrl) {
@@ -46,7 +45,6 @@ export class ProjectService {
     try {
       // Clone repository
       console.log(`Cloning ${repoUrl} to ${projectPath}...`);
-      const gitService = new GitService(githubToken);
       const cloneResult = await gitService.command(
         this.projectsDir,
         `git clone ${repoUrl} ${projectId}`
@@ -80,7 +78,7 @@ export class ProjectService {
       });
       
       // Create default planning document
-      await this._createDefaultPlanningDocument(project, repoUrl, branch, githubToken);
+      await this._createDefaultPlanningDocument(project, repoUrl, branch, gitService);
       
       // Get GitHub metadata if available
       const projectWithMetadata = await this._enrichWithGitHubMetadata(project, repoUrl);
@@ -194,16 +192,15 @@ export class ProjectService {
   /**
    * Get project branch information and management
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Branch information and operations
    */
-  async getProjectBranches(projectId, githubToken) {
+  async getProjectBranches(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Get all branches
     const branchResult = await gitService.command(
@@ -243,10 +240,10 @@ export class ProjectService {
    * Create a new branch in the project
    * @param {string} projectId - Project ID
    * @param {Object} branchData - Branch creation data
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Branch creation result
    */
-  async createProjectBranch(projectId, branchData, githubToken) {
+  async createProjectBranch(projectId, branchData, gitService) {
     const { branchName, fromBranch = 'main' } = branchData;
     
     if (!branchName) {
@@ -258,7 +255,6 @@ export class ProjectService {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Create branch
     const result = await gitService.command(
@@ -281,11 +277,11 @@ export class ProjectService {
   /**
    * Sync project with remote repository
    * @param {string} projectId - Project ID  
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @param {Object} options - Sync options
    * @returns {Promise<Object>} Sync result
    */
-  async syncProject(projectId, githubToken, options = {}) {
+  async syncProject(projectId, gitService, options = {}) {
     const { fetchOnly = false } = options;
     
     const project = await this.models.projects.findById(projectId);
@@ -293,7 +289,6 @@ export class ProjectService {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Fetch from remote
     const fetchResult = await gitService.command(
@@ -331,7 +326,7 @@ export class ProjectService {
    * Create default planning document for new project
    * @private
    */
-  async _createDefaultPlanningDocument(project, repoUrl, branch, githubToken) {
+  async _createDefaultPlanningDocument(project, repoUrl, branch, gitService) {
     const planningTemplate = `# Project Planning: ${project.name}
 
 ## 🎯 Project Overview
@@ -373,14 +368,13 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
           repoUrl, 
           branch, 
           planningTemplate, 
-          githubToken,
+          gitService,
           project
         );
         
         if (success) {
           // Pull the changes to sync local repository
-          const gitService = new GitService(githubToken);
-          await gitService.command(
+                await gitService.command(
             project.local_path,
             `git pull origin ${branch}`
           );
@@ -402,7 +396,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * Create planning document via GitHub API
    * @private
    */
-  async _createPlanningViaGitHubAPI(repoUrl, branch, content, githubToken, project) {
+  async _createPlanningViaGitHubAPI(repoUrl, branch, content, gitService, project) {
     try {
       const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
       
@@ -414,8 +408,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         -f content="${base64Content}" \
         -f branch="${branch}"`;
       
-      const gitService = new GitService(githubToken);
-      const createResult = await gitService.command(
+        const createResult = await gitService.command(
         project.local_path,
         createFileCommand
       );
@@ -436,10 +429,10 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Get base branch sync status for project
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Base branch status
    */
-  async getBaseBranchStatus(projectId, githubToken) {
+  async getBaseBranchStatus(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -454,8 +447,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     }
     
     try {
-      const gitService = new GitService(githubToken);
-      
+        
       // Fetch latest from remote to get accurate status
       await gitService.command(project.local_path, 'git fetch origin');
       
@@ -490,16 +482,15 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Pull base branch updates
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Pull result
    */
-  async pullBaseBranch(projectId, githubToken) {
+  async pullBaseBranch(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitService.getStatus(project.local_path);
@@ -530,16 +521,15 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Push base branch changes
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Push result
    */
-  async pushBaseBranch(projectId, githubToken) {
+  async pushBaseBranch(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Push base branch
     const result = await gitService.command(
@@ -563,11 +553,11 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Get comprehensive dashboard data for project
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @param {Object} options - Dashboard options
    * @returns {Promise<Object>} Complete dashboard data
    */
-  async getProjectDashboard(projectId, githubToken, options = {}) {
+  async getProjectDashboard(projectId, gitService, options = {}) {
     const { cached = false } = options;
     
     const project = await this.models.projects.findById(projectId);
@@ -582,7 +572,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     // 1. Check base branch sync status
     if (!cached) {
       try {
-        const branchStatus = await this.getBaseBranchStatus(projectId, githubToken);
+        const branchStatus = await this.getBaseBranchStatus(projectId, gitService);
         
         if (branchStatus.behind > 0) {
           needsAttention.push({
@@ -627,8 +617,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       // 3. Check for merge conflicts (if not cached)
       if (!cached && task.status === 'active' && task.worktree_path) {
         try {
-          const gitService = new GitService(githubToken);
-          const mergeResult = await gitService.command(
+                const mergeResult = await gitService.command(
             task.worktree_path,
             `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`
           );
@@ -649,10 +638,9 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     }
     
     // 4. Check for open PRs (if not cached and GitHub token available)
-    if (!cached && githubToken) {
+    if (!cached && gitService) {
       try {
-        const gitService = new GitService(githubToken);
-        const prResult = await gitService.command(
+            const prResult = await gitService.command(
           project.local_path,
           `gh pr list --state open --json number,title,url,author,createdAt`
         );
@@ -693,10 +681,10 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Get project planning document content
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Planning document content
    */
-  async getProjectPlanning(projectId, githubToken) {
+  async getProjectPlanning(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -716,8 +704,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     // Try to read from git
     try {
-      const gitService = new GitService(githubToken);
-      const result = await gitService.command(
+        const result = await gitService.command(
         project.local_path,
         `git show ${project.base_branch}:.pocketdev/PLANNING.md`
       );
@@ -742,16 +729,15 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * Update project planning document
    * @param {string} projectId - Project ID
    * @param {string} content - New planning content
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Update result
    */
-  async updateProjectPlanning(projectId, content, githubToken) {
+  async updateProjectPlanning(projectId, content, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
     
-    const gitService = new GitService(githubToken);
     
     // Ensure we're on the base branch
     await gitService.command(
@@ -788,10 +774,10 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
   /**
    * Get update status for all tasks in project
    * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Update status for all tasks
    */
-  async getProjectTasksUpdateStatus(projectId, githubToken) {
+  async getProjectTasksUpdateStatus(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -799,7 +785,6 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     const tasks = await this.models.tasks.findByProjectId(project.id);
     const updateStatus = [];
-    const gitService = new GitService(githubToken);
     
     for (const task of tasks) {
       if (!fsSync.existsSync(task.worktree_path)) continue;
@@ -882,7 +867,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * Create default planning document for new project
    * @private
    */
-  async _createDefaultPlanningDocument(project, repoUrl, branch, githubToken) {
+  async _createDefaultPlanningDocument(project, repoUrl, branch, gitService) {
     const planningTemplate = `# Project Planning: ${project.name}
 
 ## 🎯 Project Overview
@@ -924,14 +909,13 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
           repoUrl, 
           branch, 
           planningTemplate, 
-          githubToken,
+          gitService,
           project
         );
         
         if (success) {
           // Pull the changes to sync local repository
-          const gitService = new GitService(githubToken);
-          await gitService.command(
+                await gitService.command(
             project.local_path,
             `git pull origin ${branch}`
           );
@@ -953,7 +937,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * Create planning document via GitHub API
    * @private
    */
-  async _createPlanningViaGitHubAPI(repoUrl, branch, content, githubToken, project) {
+  async _createPlanningViaGitHubAPI(repoUrl, branch, content, gitService, project) {
     try {
       const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
       
@@ -965,8 +949,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         -f content="${base64Content}" \
         -f branch="${branch}"`;
       
-      const gitService = new GitService(githubToken);
-      const createResult = await gitService.command(
+        const createResult = await gitService.command(
         project.local_path,
         createFileCommand
       );

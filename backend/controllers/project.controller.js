@@ -4,7 +4,7 @@ import config from '../config/index.js';
 import * as gitService from '../services/git-core.service.js';
 import { ProjectService } from '../services/project.service.js';
 
-// GitHub token is now injected by middleware as req.githubToken
+// GitHub token is now injected by middleware as req.services.git
 
 /**
  * List all projects
@@ -37,7 +37,7 @@ export async function createProject(req, res, next) {
     
     const result = await projectService.createProject(
       { repoUrl, branch, projectName },
-      req.githubToken
+      req.services.git
     );
     
     res.status(201).json(result);
@@ -133,7 +133,7 @@ export async function createBranch(req, res, next) {
     const result = await gitService.executeGitCommand(
       `git checkout -b ${branchName} ${fromBranch}`,
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (!result.success) {
@@ -167,7 +167,7 @@ export async function listBranches(req, res, next) {
     const result = await gitService.executeGitCommand(
       'git branch -a',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (!result.success) {
@@ -214,7 +214,7 @@ export async function syncProject(req, res, next) {
     const fetchResult = await gitService.executeGitCommand(
       'git fetch --all --prune',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (!fetchResult.success) {
@@ -225,7 +225,7 @@ export async function syncProject(req, res, next) {
     const pullResult = await gitService.executeGitCommand(
       'git pull',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     res.json({
@@ -268,20 +268,20 @@ export async function fetchProject(req, res, next) {
     };
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
+    await gitService.configureGitCredentials(project.local_path, req.services.git, gitConfig);
     
     // Fetch with git
     const result = await gitService.executeGitCommand(
       'git fetch --all --prune --tags',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     // Get updated branch info
     const branchResult = await gitService.executeGitCommand(
       'git branch -r',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     const branches = branchResult.output
@@ -320,13 +320,13 @@ export async function getBaseBranchStatus(req, res, next) {
     
     try {
       // Fetch latest from remote to get accurate status
-      await gitService.executeGitCommand('git fetch origin', project.local_path, req.githubToken);
+      await gitService.executeGitCommand('git fetch origin', project.local_path, req.services.git);
       
       // Check if base branch is behind its remote
       const behindResult = await gitService.executeGitCommand(
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`,
         project.local_path,
-        req.githubToken
+        req.services.git
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
@@ -334,7 +334,7 @@ export async function getBaseBranchStatus(req, res, next) {
       const aheadResult = await gitService.executeGitCommand(
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`,
         project.local_path,
-        req.githubToken
+        req.services.git
       );
       const ahead = parseInt(aheadResult.output.trim()) || 0;
       
@@ -379,13 +379,13 @@ export async function pullBaseBranch(req, res, next) {
     };
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
+    await gitService.configureGitCredentials(project.local_path, req.services.git, gitConfig);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitService.executeGitCommand(
       'git status --porcelain',
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (statusResult.output && statusResult.output.trim()) {
@@ -399,20 +399,20 @@ export async function pullBaseBranch(req, res, next) {
     const result = await gitService.executeGitCommand(
       `git pull origin ${project.base_branch}`,
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (!result.success) {
       // Check if it's an authentication error
       if (result.error && (result.error.includes('could not read Password') || result.error.includes('Authentication failed'))) {
         // Check if we have a token configured
-        const hasToken = !!req.githubToken;
+        const hasToken = !!req.services.git;
         
         return res.status(401).json({ 
           error: 'GitHub authentication failed',
           details: result.error,
           hasToken,
-          tokenLength: req.githubToken ? req.githubToken.length : 0,
+          tokenLength: req.services.git ? req.services.git.length : 0,
           settingsUrl: '/settings',
           helpText: hasToken 
             ? 'Your GitHub token appears to be invalid or expired. Please update it in the settings.'
@@ -488,13 +488,13 @@ export async function pushBaseBranch(req, res, next) {
     };
     
     // Ensure git credentials are configured
-    await gitService.configureGitCredentials(project.local_path, req.githubToken, gitConfig);
+    await gitService.configureGitCredentials(project.local_path, req.services.git, gitConfig);
     
     // Push base branch
     const result = await gitService.executeGitCommand(
       `git push origin ${project.base_branch}`,
       project.local_path,
-      req.githubToken
+      req.services.git
     );
     
     if (!result.success) {
@@ -528,7 +528,7 @@ export async function getUpdateStatus(req, res, next) {
       config.projectsDir
     );
     
-    const result = await projectService.getProjectTasksUpdateStatus(projectId, req.githubToken);
+    const result = await projectService.getProjectTasksUpdateStatus(projectId, req.services.git);
     
     res.json(result);
   } catch (error) {
@@ -548,7 +548,7 @@ export async function getProjectPlanning(req, res, next) {
       config.projectsDir
     );
     
-    const planning = await projectService.getProjectPlanning(projectId, req.githubToken);
+    const planning = await projectService.getProjectPlanning(projectId, req.services.git);
     
     res.json(planning);
   } catch (error) {
@@ -569,7 +569,7 @@ export async function updateProjectPlanning(req, res, next) {
       config.projectsDir
     );
     
-    const result = await projectService.updateProjectPlanning(projectId, content, req.githubToken);
+    const result = await projectService.updateProjectPlanning(projectId, content, req.services.git);
     
     res.json(result);
   } catch (error) {
@@ -618,7 +618,7 @@ export async function getProjectDashboardCached(req, res, next) {
     
     const dashboard = await projectService.getProjectDashboard(
       projectId, 
-      req.githubToken, 
+      req.services.git, 
       { cached: true }
     );
     
@@ -642,7 +642,7 @@ export async function refreshProjectStatus(req, res, next) {
     }
     
     // Trigger git fetch in background (non-blocking)
-    gitService.executeGitCommand('git fetch origin', project.local_path, req.githubToken)
+    gitService.executeGitCommand('git fetch origin', project.local_path, req.services.git)
       .then(() => console.log(`Background fetch completed for project ${projectId}`))
       .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
     
@@ -671,7 +671,7 @@ export async function getProjectDashboard(req, res, next) {
     
     const dashboard = await projectService.getProjectDashboard(
       projectId, 
-      req.githubToken, 
+      req.services.git, 
       { cached: false }
     );
     

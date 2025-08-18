@@ -36,7 +36,8 @@ export class TaskPullRequestController {
       // Create PR using service
       const prResult = await pullRequestService.createPullRequest(
         taskId,
-        req.githubToken,
+        req.services.git,
+        req.services.github,
         { description }
       );
       
@@ -72,7 +73,8 @@ export class TaskPullRequestController {
       // Merge PR using service
       const mergeResult = await pullRequestService.mergePullRequest(
         taskId,
-        req.githubToken
+        req.services.git,
+        req.services.github
       );
       
       res.json(mergeResult);
@@ -100,7 +102,8 @@ export class TaskPullRequestController {
       // Get PR status using service
       const prStatus = await pullRequestService.getPullRequestStatus(
         taskId,
-        req.githubToken
+        req.services.git,
+        req.services.github
       );
       
       res.json(prStatus);

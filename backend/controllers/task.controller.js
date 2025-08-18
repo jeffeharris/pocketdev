@@ -48,7 +48,7 @@ export class TaskController {
       const result = await taskService.createTask(
         projectId,
         { name, branch, useExistingBranch },
-        req.githubToken,
+        req.services.git,
         { 
           createSession: true, 
           hostname: req.hostname 
@@ -126,7 +126,7 @@ export class TaskController {
         
         if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
           try {
-            gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
+            gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.services.git);
           } catch (error) {
             console.error(`Failed to get git status for task ${task.id}:`, error.message);
           }
@@ -212,7 +212,7 @@ export class TaskController {
           const baseBranch = `origin/${project.base_branch || 'main'}`;
           const githubTokenService = req.services.GitHubTokenService;
           const gitStatusService = new GitStatusService(this.models, githubTokenService);
-          gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
+          gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.services.git);
         }
       }
       
@@ -262,7 +262,7 @@ export class TaskController {
       let mergeInfo = null;
       
       // Create GitService for basic operations
-      const gitService = new GitService(req.githubToken);
+      const gitService = new GitService(req.services.git);
       const githubTokenService = req.services.GitHubTokenService;
       const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
@@ -442,7 +442,7 @@ export class TaskController {
       const taskService = req.services.TaskService;
       
       // Check deletion safety using service
-      const safetyCheck = await taskService.checkTaskDeletionSafety(taskId, req.githubToken);
+      const safetyCheck = await taskService.checkTaskDeletionSafety(taskId, req.services.git);
       
       res.json(safetyCheck);
     } catch (error) {
@@ -498,7 +498,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for uncommitted changes
-      const gitService = new GitService(req.githubToken);
+      const gitService = new GitService(req.services.git);
       const statusResult = await gitService.getStatus(task.worktree_path);
       if (statusResult.output.trim()) {
         return res.status(400).json({ 
@@ -603,7 +603,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for conflicts using git service
-      const gitService = new GitService(req.githubToken);
+      const gitService = new GitService(req.services.git);
       const conflicts = await gitService.checkMergeConflicts(
         task.worktree_path, 
         `origin/${project.base_branch}`

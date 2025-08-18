@@ -1,5 +1,4 @@
 import { GIT_EVENTS } from './events.js';
-import { GitService } from './git-core.service.js';
 
 /**
  * GitOperationService - Handles all git operations (commands, diffs, commits)
@@ -25,7 +24,7 @@ export class GitOperationService {
    * @param {Object} appLocals - Express app.locals for status updates (transitional)
    * @returns {Promise<Object>} Operation result
    */
-  async executeOperation(taskId, operation, options = {}, githubToken, appLocals = null) {
+  async executeOperation(taskId, operation, options = {}, gitService, githubService, appLocals = null) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -33,9 +32,6 @@ export class GitOperationService {
     
     await this.models.projects.updateLastAccessed(task.project_id);
     
-    // Get git config for this operation
-    const gitConfig = await this._getGitConfig();
-    const gitService = new GitService(githubToken, gitConfig);
     
     let result;
     
@@ -110,11 +106,11 @@ export class GitOperationService {
       case 'pr':
         const prTitle = options.message || `Updates from task: ${task.name}`;
         const project = await this.models.projects.findById(task.project_id);
-        result = await gitService.createPullRequest(
+        result = await githubService.createPullRequest(
           task.worktree_path,
           prTitle,
           `Created by Claude Code - Task: ${task.name}`,
-          project.base_branch
+          { base: project.base_branch }
         );
         break;
         
@@ -164,7 +160,7 @@ export class GitOperationService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} Task diff information
    */
-  async getTaskDiff(taskId, compareWith = 'working', githubToken) {
+  async getTaskDiff(taskId, compareWith = 'working', gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -175,8 +171,6 @@ export class GitOperationService {
       throw new Error('Project not found');
     }
     
-    // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Use unified diff method
     const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
@@ -229,7 +223,7 @@ export class GitOperationService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} File diff information
    */
-  async getFileDiff(taskId, filePath, compareWith = 'working', githubToken) {
+  async getFileDiff(taskId, filePath, compareWith = 'working', gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -251,8 +245,6 @@ export class GitOperationService {
       compareTarget = 'working';
     }
     
-    // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Get file info first to know its state
     const diffResult = await gitService.getComprehensiveDiff(task.worktree_path, compareTarget);
@@ -280,14 +272,12 @@ export class GitOperationService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Array>} Array of commit objects
    */
-  async getCommitHistory(taskId, githubToken) {
+  async getCommitHistory(taskId, gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
     }
 
-    // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Get commit history
     const logResult = await gitService.log(

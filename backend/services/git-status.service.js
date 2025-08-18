@@ -1,4 +1,3 @@
-import { GitService } from './git-core.service.js';
 
 /**
  * GitStatusService - Handles all git status operations
@@ -20,7 +19,7 @@ export class GitStatusService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} Comprehensive git status information
    */
-  async getTaskGitStatus(taskId, githubToken) {
+  async getTaskGitStatus(taskId, gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -31,8 +30,6 @@ export class GitStatusService {
       throw new Error('Project not found');
     }
 
-    // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Debug logging for merged tasks with changes
     if (task.status === 'merged' || task.merged_at) {
@@ -88,7 +85,7 @@ export class GitStatusService {
    * @param {string} compareWith - What to compare with ('working' or 'base')
    * @returns {Promise<Array>} Array of changed files with details
    */
-  async getTaskChangedFiles(taskId, githubToken, compareWith = 'working') {
+  async getTaskChangedFiles(taskId, gitService, compareWith = 'working') {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -99,7 +96,6 @@ export class GitStatusService {
       throw new Error('Project not found');
     }
 
-    const gitService = new GitService(githubToken);
     
     // Use comprehensive diff method to get proper line counts
     const compareTarget = compareWith === 'base' ? `origin/${project.base_branch}` : 'working';
@@ -129,7 +125,7 @@ export class GitStatusService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} All changes with categorized files and summary
    */
-  async getTaskAllChanges(taskId, githubToken) {
+  async getTaskAllChanges(taskId, gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -140,7 +136,6 @@ export class GitStatusService {
       throw new Error('Project not found');
     }
 
-    const gitService = new GitService(githubToken);
     
     // Get all changes using the git service method
     const allChanges = await gitService.getAllChanges(
@@ -182,7 +177,7 @@ export class GitStatusService {
    * @param {string} githubToken - GitHub token for git operations
    * @returns {Promise<Object>} Conflict information
    */
-  async getTaskConflicts(taskId, githubToken) {
+  async getTaskConflicts(taskId, gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -193,7 +188,6 @@ export class GitStatusService {
       throw new Error('Project not found');
     }
 
-    const gitService = new GitService(githubToken);
     
     const conflicts = await gitService.checkMergeConflicts(
       task.worktree_path, 

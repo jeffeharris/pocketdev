@@ -1,4 +1,3 @@
-import { GitService } from './git-core.service.js';
 
 /**
  * PullRequestService - Handles all pull request operations
@@ -24,7 +23,7 @@ export class PullRequestService {
    * @param {Object} options - PR creation options
    * @returns {Promise<Object>} Created PR information
    */
-  async createPullRequest(taskId, githubToken, options = {}) {
+  async createPullRequest(taskId, gitService, githubService, options = {}) {
     const { description } = options;
     
     // Get task and validate
@@ -40,7 +39,6 @@ export class PullRequestService {
     }
 
     // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // First ensure the branch is pushed
     const pushResult = await gitService.push(task.worktree_path, task.branch, { setUpstream: true });
@@ -53,11 +51,11 @@ export class PullRequestService {
     const prBody = this._generatePRBody(task, description);
     
     // Create PR using GitHub CLI
-    const prResult = await gitService.createPullRequest(
+    const prResult = await githubService.createPullRequest(
       task.worktree_path,
       prTitle,
       prBody,
-      project.base_branch
+      { base: project.base_branch }
     );
     
     if (!prResult.success) {
@@ -101,7 +99,7 @@ export class PullRequestService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} PR status information
    */
-  async getPullRequestStatus(taskId, githubToken) {
+  async getPullRequestStatus(taskId, gitService, githubService) {
     // Get task and validate
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
@@ -113,7 +111,6 @@ export class PullRequestService {
     }
     
     // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Get PR status using GitHub CLI
     const prResult = await gitService.command(task.worktree_path,
@@ -148,7 +145,7 @@ export class PullRequestService {
    * @param {Object} options - Merge options
    * @returns {Promise<Object>} Merge result
    */
-  async mergePullRequest(taskId, githubToken, options = {}) {
+  async mergePullRequest(taskId, gitService, githubService, options = {}) {
     const { strategy = 'squash', deleteSourceBranch = true } = options;
     
     // Get task and validate
@@ -161,14 +158,15 @@ export class PullRequestService {
       throw new Error('No pull request found for this task');
     }
     
-    // Create GitService with token
-    const gitService = new GitService(githubToken);
-    
-    // Build merge command based on strategy
-    const mergeCommand = this._buildMergeCommand(task.pr_number, strategy, deleteSourceBranch);
-    
-    // Execute merge
-    const mergeResult = await gitService.command(task.worktree_path, mergeCommand);
+    // Use GitHubService to merge PR
+    const mergeResult = await githubService.mergePullRequest(
+      task.worktree_path,
+      task.pr_number,
+      { 
+        mergeMethod: strategy,
+        deleteBranch: deleteSourceBranch 
+      }
+    );
     
     if (!mergeResult.success) {
       throw new Error(`Failed to merge pull request: ${mergeResult.error}`);
@@ -202,7 +200,7 @@ export class PullRequestService {
    * @param {Object} updates - Updates to apply
    * @returns {Promise<Object>} Update result
    */
-  async updatePullRequest(taskId, githubToken, updates = {}) {
+  async updatePullRequest(taskId, gitService, githubService, updates = {}) {
     const { title, body } = updates;
     
     // Get task and validate
@@ -216,7 +214,6 @@ export class PullRequestService {
     }
     
     // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Build update command
     const updateParts = [];
@@ -256,7 +253,7 @@ export class PullRequestService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} Close result
    */
-  async closePullRequest(taskId, githubToken) {
+  async closePullRequest(taskId, gitService, githubService) {
     // Get task and validate
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
@@ -268,7 +265,6 @@ export class PullRequestService {
     }
     
     // Create GitService with token
-    const gitService = new GitService(githubToken);
     
     // Close PR
     const closeResult = await gitService.command(task.worktree_path,

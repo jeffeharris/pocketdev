@@ -61,7 +61,6 @@ export class TaskService {
       );
       
       // Configure git credentials
-      const gitService = new GitService(githubToken);
       await gitService.configureCredentials(worktreePath);
       
       // Create task in database
@@ -287,7 +286,6 @@ export class TaskService {
     // Get git status if worktree exists
     let gitStatus = null;
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-      const gitService = new GitService(githubToken);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       
       try {
