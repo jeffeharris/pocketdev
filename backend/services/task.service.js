@@ -4,6 +4,7 @@ import fsSync from 'fs';
 import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
 import { GitService } from './git-core.service.js';
+import { GitStatusService } from './git-status.service.js';
 
 /**
  * TaskService - Handles all task-related business operations
@@ -28,11 +29,11 @@ export class TaskService {
    * Create a new task with worktree and optional terminal session
    * @param {string} projectId - Project ID
    * @param {Object} taskData - Task creation data
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {Object} gitService - GitService instance for git operations
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Created task with session info
    */
-  async createTask(projectId, taskData, githubToken, options = {}) {
+  async createTask(projectId, taskData, gitService, options = {}) {
     const { name, branch, useExistingBranch } = taskData;
     const { createSession = true, hostname } = options;
     
@@ -210,10 +211,10 @@ export class TaskService {
   /**
    * Check if a task can be safely deleted
    * @param {string} taskId - Task ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {Object} gitService - GitService instance for git operations
    * @returns {Promise<Object>} Safety check results
    */
-  async checkTaskDeletionSafety(taskId, githubToken) {
+  async checkTaskDeletionSafety(taskId, gitService) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -228,7 +229,7 @@ export class TaskService {
       };
     }
     
-    const gitService = new GitService(githubToken);
+    // gitService is now passed as parameter
     
     // Check for uncommitted changes
     const status = await gitService.getStatus(task.worktree_path);
@@ -271,11 +272,11 @@ export class TaskService {
   /**
    * Get comprehensive task state including git and session info
    * @param {string} taskId - Task ID
-   * @param {string} githubToken - GitHub token for git operations
+   * @param {Object} gitService - GitService instance for git operations
    * @param {Object} monitors - Monitor services for live state
    * @returns {Promise<Object>} Complete task state
    */
-  async getTaskState(taskId, githubToken, monitors = {}) {
+  async getTaskState(taskId, gitService, monitors = {}) {
     const task = await this.models.tasks.findByIdWithSessionState(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -286,14 +287,9 @@ export class TaskService {
     // Get git status if worktree exists
     let gitStatus = null;
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-      const baseBranch = `origin/${project.base_branch || 'main'}`;
-      
       try {
-        gitStatus = await gitService.getBranchStatus(
-          task.worktree_path,
-          task.branch,
-          baseBranch
-        );
+        const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
+        gitStatus = await gitStatusService.getTaskGitStatus(taskId, gitService);
       } catch (error) {
         console.error(`Failed to get git status for task ${taskId}:`, error.message);
       }

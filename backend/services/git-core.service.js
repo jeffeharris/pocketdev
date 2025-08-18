@@ -71,7 +71,7 @@ export class GitService {
    * Get repository status
    */
   async getStatus(workingDirectory) {
-    return this.executeCommand('git status --porcelain -b', workingDirectory);
+    return this.executeCommand('git status --porcelain', workingDirectory);
   }
 
   /**
@@ -181,6 +181,35 @@ export class GitService {
    */
   async log(workingDirectory, args = '--oneline -n 10') {
     return this.executeCommand(`git log ${args}`, workingDirectory);
+  }
+
+  /**
+   * Get HEAD commit SHA
+   */
+  async getHeadCommit(workingDirectory) {
+    return this.executeCommand('git rev-parse HEAD', workingDirectory);
+  }
+
+  /**
+   * Get unpushed commits
+   */
+  async getUnpushedCommits(workingDirectory, branch) {
+    // Check if remote branch exists
+    const remoteCheck = await this.executeCommand(
+      `git rev-parse --verify origin/${branch} 2>/dev/null`,
+      workingDirectory
+    );
+    
+    if (!remoteCheck.success) {
+      // No remote branch, all commits are unpushed
+      return this.executeCommand('git log --oneline', workingDirectory);
+    }
+    
+    // Get unpushed commits
+    return this.executeCommand(
+      `git log origin/${branch}..HEAD --oneline`,
+      workingDirectory
+    );
   }
 
   /**

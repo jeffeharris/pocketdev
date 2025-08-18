@@ -3,7 +3,6 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { WorktreeService } from '../services/worktree.service.js';
 import { SPLIT_EVENTS, TASK_EVENTS } from '../services/events.js';
-import { GitService } from '../services/git-core.service.js';
 import { GitStatusService } from '../services/git-status.service.js';
 
 /**
@@ -262,7 +261,7 @@ export class TaskController {
       let mergeInfo = null;
       
       // Create GitService for basic operations
-      const gitService = new GitService(req.services.git);
+      const gitService = req.services.git;
       const githubTokenService = req.services.GitHubTokenService;
       const gitStatusService = new GitStatusService(this.models, githubTokenService);
       
@@ -498,7 +497,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for uncommitted changes
-      const gitService = new GitService(req.services.git);
+      const gitService = req.services.git;
       const statusResult = await gitService.getStatus(task.worktree_path);
       if (statusResult.output.trim()) {
         return res.status(400).json({ 
@@ -551,7 +550,22 @@ export class TaskController {
           message: `Created merge task with Claude assistance`
         });
       } else {
-        // Perform update directly
+        // Check for conflicts before attempting merge
+        const conflicts = await gitService.checkMergeConflicts(
+          task.worktree_path, 
+          `origin/${project.base_branch}`
+        );
+        
+        if (conflicts.hasConflicts) {
+          return res.status(400).json({
+            error: 'Merge conflicts detected. Use "Update with Claude" to resolve conflicts.',
+            hasConflicts: true,
+            conflicts: conflicts.conflicts,
+            suggestion: 'Use the "Update with Claude" option to get help resolving conflicts'
+          });
+        }
+        
+        // Perform update directly since no conflicts detected
         let result;
         if (method === 'rebase') {
           result = await gitService.rebase(task.worktree_path, `origin/${project.base_branch}`);
@@ -603,7 +617,7 @@ export class TaskController {
       const project = await this.models.projects.findById(task.project_id);
       
       // Check for conflicts using git service
-      const gitService = new GitService(req.services.git);
+      const gitService = req.services.git;
       const conflicts = await gitService.checkMergeConflicts(
         task.worktree_path, 
         `origin/${project.base_branch}`
@@ -629,6 +643,7 @@ export class TaskController {
       }
       
       const project = await this.models.projects.findById(task.project_id);
+      const gitService = req.services.git;
       
       if (withClaude) {
         // Create a merge task for Claude assistance
@@ -640,14 +655,14 @@ export class TaskController {
         const mergeWorktreePath = path.join(this.projectsDir, `${project.id}-merge-${mergeTaskId}`);
         
         // Pull latest base branch changes
-        await this.gitService.checkout(project.local_path, project.base_branch);
-        await this.gitService.pull(project.local_path, 'origin', project.base_branch);
+        await gitService.checkout(project.local_path, project.base_branch);
+        await gitService.pull(project.local_path, 'origin', project.base_branch);
         
         // Create worktree from base branch
         await this.worktreeService.create(project.local_path, mergeBranch, mergeWorktreePath, project.base_branch);
         
         // Attempt merge in the new worktree
-        const mergeResult = await this.gitService.merge(mergeWorktreePath, `origin/${task.branch}`);
+        const mergeResult = await gitService.merge(mergeWorktreePath, `origin/${task.branch}`);
         
         // Create merge task in database
         const mergeTask = await this.models.tasks.create(project.id, {
@@ -699,7 +714,7 @@ Original task: ${task.name}`;
       } else {
         // Direct merge without Claude
         // First ensure the task branch is pushed to origin
-        const pushResult = await this.gitService.push(task.worktree_path, task.branch, { setUpstream: true });
+        const pushResult = await gitService.push(task.worktree_path, task.branch, { setUpstream: true });
         if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
           return res.status(500).json({ 
             error: 'Failed to push branch', 
@@ -708,8 +723,23 @@ Original task: ${task.name}`;
         }
         
         // Now ensure we're on the base branch and up to date
-        await this.gitService.checkout(project.local_path, project.base_branch);
+        await gitService.checkout(project.local_path, project.base_branch);
         await gitService.pull(project.local_path, 'origin', project.base_branch);
+        
+        // Check for conflicts before attempting merge
+        const conflicts = await gitService.checkMergeConflicts(
+          project.local_path,
+          `origin/${task.branch}`
+        );
+        
+        if (conflicts.hasConflicts) {
+          return res.status(400).json({
+            error: 'Cannot merge: conflicts detected',
+            hasConflicts: true,
+            conflicts: conflicts.conflicts,
+            suggestion: 'Resolve conflicts locally or use "Merge with Claude" option'
+          });
+        }
         
         // Merge the task branch
         const mergeResult = await gitService.merge(
