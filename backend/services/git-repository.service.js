@@ -2,14 +2,15 @@
  * GitRepository Service - Deep Module
  * 
  * Handles core repository operations with a simple interface.
- * Only 5 public methods that hide all git complexity.
+ * Only 6 public methods that hide all git complexity.
  * 
  * Public API:
  * - clone(url, destination) - Clone a repository
  * - fetch(workingDirectory) - Fetch updates from remote
  * - push(workingDirectory, branch) - Push changes to remote
  * - pull(workingDirectory, branch) - Pull changes from remote
- * - getCurrentBranch(workingDirectory) - Get current branch name
+ * - merge(workingDirectory, branch) - Merge a branch
+ * - rebase(workingDirectory, branch) - Rebase onto a branch
  */
 
 import { GitExecutor } from './git-executor.js';
@@ -72,13 +73,23 @@ export class GitRepository extends GitExecutor {
   }
 
   /**
-   * Get current branch name
+   * Merge a branch into current branch
    */
-  async getCurrentBranch(workingDirectory) {
-    const result = await this.execute(
-      'git branch --show-current',
+  async merge(workingDirectory, branch, message = null) {
+    const messageArg = message ? ` -m "${message}"` : '';
+    return this.execute(
+      `git merge ${branch}${messageArg}`,
       workingDirectory
     );
-    return result.success ? result.output : null;
+  }
+
+  /**
+   * Rebase current branch onto another branch
+   */
+  async rebase(workingDirectory, branch) {
+    return this.execute(
+      `git rebase ${branch}`,
+      workingDirectory
+    );
   }
 }

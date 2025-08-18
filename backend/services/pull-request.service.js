@@ -9,6 +9,9 @@
  * Following deep module principles: simple interface (6 methods), 
  * complex GitHub API interactions hidden inside.
  */
+import { GitRepository } from './git-repository.service.js';
+import { GitWorkingTree } from './git-workingtree.service.js';
+import { GitAnalyzer } from './git-analyzer.service.js';
 export class PullRequestService {
   constructor(models, githubTokenService, eventEmitterService = null) {
     this.models = models;
@@ -20,10 +23,11 @@ export class PullRequestService {
    * Create a pull request for a task
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} githubService - GitHub service for PR operations
    * @param {Object} options - PR creation options
    * @returns {Promise<Object>} Created PR information
    */
-  async createPullRequest(taskId, gitService, githubService, options = {}) {
+  async createPullRequest(taskId, githubToken, githubService, options = {}) {
     const { description } = options;
     
     // Get task and validate
@@ -38,10 +42,11 @@ export class PullRequestService {
       throw new Error('Project not found');
     }
 
-    // Create GitService with token
+    // Create repository module for git operations
+    const repository = new GitRepository(githubToken);
     
     // First ensure the branch is pushed
-    const pushResult = await gitService.push(task.worktree_path, task.branch, { setUpstream: true });
+    const pushResult = await repository.push(task.worktree_path, task.branch, { setUpstream: true });
     if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
       throw new Error(`Failed to push branch: ${pushResult.error}`);
     }
@@ -97,9 +102,10 @@ export class PullRequestService {
    * Get pull request status for a task
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} githubService - GitHub service for PR operations
    * @returns {Promise<Object>} PR status information
    */
-  async getPullRequestStatus(taskId, gitService, githubService) {
+  async getPullRequestStatus(taskId, githubToken, githubService) {
     // Get task and validate
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
@@ -110,11 +116,14 @@ export class PullRequestService {
       throw new Error('No pull request found for this task');
     }
     
-    // Create GitService with token
+    // Create repository module for git operations
+    const repository = new GitRepository(githubToken);
     
     // Get PR status using GitHub CLI
-    const prResult = await gitService.command(task.worktree_path,
-      `gh pr view ${task.pr_number} --json state,mergeable,title,url`);
+    const prResult = await repository.execute(
+      `gh pr view ${task.pr_number} --json state,mergeable,title,url`,
+      task.worktree_path
+    );
     
     if (!prResult.success) {
       throw new Error(`Failed to get PR status: ${prResult.error}`);
@@ -142,10 +151,11 @@ export class PullRequestService {
    * Merge a pull request for a task
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} githubService - GitHub service for PR operations
    * @param {Object} options - Merge options
    * @returns {Promise<Object>} Merge result
    */
-  async mergePullRequest(taskId, gitService, githubService, options = {}) {
+  async mergePullRequest(taskId, githubToken, githubService, options = {}) {
     const { strategy = 'squash', deleteSourceBranch = true } = options;
     
     // Get task and validate
@@ -197,10 +207,11 @@ export class PullRequestService {
    * Update pull request title and/or body
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} githubService - GitHub service for PR operations
    * @param {Object} updates - Updates to apply
    * @returns {Promise<Object>} Update result
    */
-  async updatePullRequest(taskId, gitService, githubService, updates = {}) {
+  async updatePullRequest(taskId, githubToken, githubService, updates = {}) {
     const { title, body } = updates;
     
     // Get task and validate
@@ -213,7 +224,8 @@ export class PullRequestService {
       throw new Error('No pull request found for this task');
     }
     
-    // Create GitService with token
+    // Create repository module for git operations
+    const repository = new GitRepository(githubToken);
     
     // Build update command
     const updateParts = [];
@@ -227,7 +239,7 @@ export class PullRequestService {
     const updateCommand = `gh pr edit ${task.pr_number} ${updateParts.join(' ')}`;
     
     // Execute update
-    const updateResult = await gitService.command(task.worktree_path, updateCommand);
+    const updateResult = await repository.execute(updateCommand, task.worktree_path);
     
     if (!updateResult.success) {
       throw new Error(`Failed to update pull request: ${updateResult.error}`);
@@ -251,9 +263,10 @@ export class PullRequestService {
    * Close pull request without merging
    * @param {string} taskId - Task ID
    * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} githubService - GitHub service for PR operations
    * @returns {Promise<Object>} Close result
    */
-  async closePullRequest(taskId, gitService, githubService) {
+  async closePullRequest(taskId, githubToken, githubService) {
     // Get task and validate
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
@@ -264,11 +277,14 @@ export class PullRequestService {
       throw new Error('No pull request found for this task');
     }
     
-    // Create GitService with token
+    // Create repository module for git operations
+    const repository = new GitRepository(githubToken);
     
     // Close PR
-    const closeResult = await gitService.command(task.worktree_path,
-      `gh pr close ${task.pr_number}`);
+    const closeResult = await repository.execute(
+      `gh pr close ${task.pr_number}`,
+      task.worktree_path
+    );
     
     if (!closeResult.success) {
       throw new Error(`Failed to close pull request: ${closeResult.error}`);

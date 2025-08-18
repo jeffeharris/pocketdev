@@ -132,7 +132,7 @@ The task archive system provides a way to soft-delete tasks while preserving the
 - User confusion about archive behavior eliminated
 
 ## Related Issues
-- BUG-023: Archive Storage Grows Unbounded
+- BUG-025: Archive Storage Grows Unbounded
 - UX-008: Archive System Transparency
 - BUG-017: Session ID Management (affects session preservation)
 

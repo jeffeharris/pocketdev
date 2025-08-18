@@ -22,6 +22,11 @@ All notable changes to the PocketDev Simple Server will be documented in this fi
 - Fixed `GitStatusService` to use real module methods instead of non-existent phantom methods
 - Fixed archive task 404 error - frontend now uses existing DELETE endpoint with `softDelete=true` instead of non-existent `/archive` endpoint
 
+### Documented
+- Added BUG-024 documenting unbounded archive storage growth issue
+- Added UX-008 to prioritization for archive system transparency
+- Created comprehensive spec for task archive system improvements in `/plan-pocketdev/specs/task-archive-system/`
+
 ## [2.0.0] - 2025-08-03
 
 ### 🎉 Major Architectural Transformation

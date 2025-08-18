@@ -22,7 +22,7 @@ export class TaskGitController {
       
       // Use GitStatusService from services
       const gitStatusService = req.services.GitStatusService;
-      const gitStatus = await gitStatusService.getTaskGitStatus(taskId, req.services.git);
+      const gitStatus = await gitStatusService.getTaskGitStatus(taskId, req.githubToken);
       
       res.json(gitStatus);
     } catch (error) {
@@ -46,7 +46,7 @@ export class TaskGitController {
       
       // Use GitStatusService from services
       const gitStatusService = req.services.GitStatusService;
-      const changedFiles = await gitStatusService.getTaskChangedFiles(taskId, req.services.git, compareWith);
+      const changedFiles = await gitStatusService.getTaskChangedFiles(taskId, req.githubToken, compareWith);
       
       res.json(changedFiles);
     } catch (error) {
@@ -69,7 +69,7 @@ export class TaskGitController {
       
       // Use GitStatusService from services
       const gitStatusService = req.services.GitStatusService;
-      const response = await gitStatusService.getTaskAllChanges(taskId, req.services.git);
+      const response = await gitStatusService.getTaskAllChanges(taskId, req.githubToken);
       
       res.json(response);
     } catch (error) {
@@ -93,7 +93,7 @@ export class TaskGitController {
 
       // Use GitOperationService from services
       const gitOperationService = req.services.GitOperationService;
-      const diffResult = await gitOperationService.getTaskDiff(taskId, compareWith, req.services.git);
+      const diffResult = await gitOperationService.getTaskDiff(taskId, compareWith, req.githubToken);
       
       res.json(diffResult);
     } catch (error) {
@@ -118,7 +118,7 @@ export class TaskGitController {
 
       // Use GitOperationService from services
       const gitOperationService = req.services.GitOperationService;
-      const diffResult = await gitOperationService.getFileDiff(taskId, file, compareWith, req.services.git);
+      const diffResult = await gitOperationService.getFileDiff(taskId, file, compareWith, req.githubToken);
       
       res.json(diffResult);
     } catch (error) {
@@ -141,7 +141,7 @@ export class TaskGitController {
 
       // Use GitOperationService from services
       const gitOperationService = req.services.GitOperationService;
-      const commits = await gitOperationService.getCommitHistory(taskId, req.services.git);
+      const commits = await gitOperationService.getCommitHistory(taskId, req.githubToken);
       
       res.json(commits);
     } catch (error) {
@@ -164,7 +164,7 @@ export class TaskGitController {
 
       // Use GitStatusService from services
       const gitStatusService = req.services.GitStatusService;
-      const conflictInfo = await gitStatusService.getTaskConflicts(taskId, req.services.git);
+      const conflictInfo = await gitStatusService.getTaskConflicts(taskId, req.githubToken);
       
       res.json(conflictInfo);
     } catch (error) {
@@ -198,7 +198,7 @@ export class TaskGitController {
         taskId, 
         operation, 
         options, 
-        req.services.git,
+        req.githubToken,
         req.services.github,
         req.app.locals
       );
