@@ -3,7 +3,9 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
-import { GitRepository, GitWorkingTree, GitAnalyzer, configureGitCredentials } from './git-core.service.js';
+import { GitRepository } from './git-repository.service.js';
+import { GitWorkingTree } from './git-workingtree.service.js';
+import { GitAnalyzer } from './git-analyzer.service.js';
 import { GitStatusService } from './git-status.service.js';
 
 /**
@@ -62,7 +64,7 @@ export class TaskService {
       );
       
       // Configure git credentials
-      await configureGitCredentials(worktreePath, githubToken);
+      await GitRepository.configureCredentials(worktreePath, githubToken);
       
       // Create task in database
       const task = await this.models.tasks.create(project.id, {

@@ -3,9 +3,12 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { executeGitCommand, configureGitCredentials } from './git-core.service.js';
+import { GitRepository } from './git-repository.service.js';
+import { GitWorkingTree } from './git-workingtree.service.js';
+import { GitAnalyzer } from './git-analyzer.service.js';
 
 const execAsync = promisify(exec);
+
 
 /**
  * Initialize a new worktree for a task
@@ -50,7 +53,7 @@ export async function initializeWorktree(options) {
     
     // Configure git credentials if token provided
     if (githubToken) {
-      await configureGitCredentials(worktreePath, githubToken);
+      await GitRepository.configureCredentials(worktreePath, githubToken);
     }
     
     return { success: true };
@@ -68,14 +71,14 @@ export async function initializeWorktree(options) {
 export async function resetWorktree(worktreePath, branch) {
   try {
     // Clean up any uncommitted changes
-    await executeGitCommand(worktreePath, 'git reset --hard');
-    await executeGitCommand(worktreePath, 'git clean -fd');
+    await executeGitCommand('git reset --hard', worktreePath);
+    await executeGitCommand('git clean -fd', worktreePath);
     
     // Checkout the branch
-    await executeGitCommand(worktreePath, `git checkout ${branch}`);
+    await executeGitCommand(`git checkout ${branch}`, worktreePath);
     
     // Pull latest changes
-    await executeGitCommand(worktreePath, `git pull origin ${branch}`);
+    await executeGitCommand(`git pull origin ${branch}`, worktreePath);
     
     return { success: true };
   } catch (error) {
@@ -86,20 +89,25 @@ export async function resetWorktree(worktreePath, branch) {
 /**
  * Check worktree status
  * @param {string} worktreePath - Path to the worktree
+ * @param {string} githubToken - GitHub token (optional)
  * @returns {Promise<Object>} Worktree status information
  */
-export async function getWorktreeStatus(worktreePath) {
+export async function getWorktreeStatus(worktreePath, githubToken = null) {
   try {
+    const workingTree = new GitWorkingTree(githubToken);
+    const analyzer = new GitAnalyzer(githubToken);
+    const repository = new GitRepository(githubToken);
+    
     // Get git status
-    const statusResult = await executeGitCommand(worktreePath, 'git status --porcelain');
+    const statusResult = await workingTree.getStatus(worktreePath);
     const hasChanges = statusResult.output.trim().length > 0;
     
     // Get current branch
-    const branchResult = await executeGitCommand(worktreePath, 'git branch --show-current');
+    const branchResult = await repository.execute('git branch --show-current', worktreePath);
     const currentBranch = branchResult.output.trim();
     
     // Get diff summary
-    const diffResult = await executeGitCommand(worktreePath, 'git diff --stat');
+    const diffResult = await analyzer.getDiff(worktreePath, '--stat');
     
     return {
       exists: true,
@@ -123,7 +131,7 @@ export async function getWorktreeStatus(worktreePath) {
  */
 export async function listWorktrees(mainRepoPath) {
   try {
-    const result = await executeGitCommand(mainRepoPath, 'git worktree list --porcelain');
+    const result = await executeGitCommand('git worktree list --porcelain', mainRepoPath);
     const worktrees = [];
     let currentWorktree = {};
     
@@ -160,7 +168,7 @@ export async function listWorktrees(mainRepoPath) {
  */
 export async function pruneWorktrees(mainRepoPath) {
   try {
-    const result = await executeGitCommand(mainRepoPath, 'git worktree prune -v');
+    const result = await executeGitCommand('git worktree prune -v', mainRepoPath);
     
     // Count pruned worktrees from output
     const prunedCount = (result.output.match(/Pruning/g) || []).length;
@@ -168,6 +176,22 @@ export async function pruneWorktrees(mainRepoPath) {
     return { success: true, pruned: prunedCount };
   } catch (error) {
     return { success: false, pruned: 0, error: error.message };
+  }
+}
+
+/**
+ * Remove a worktree
+ * @param {string} mainRepoPath - Path to the main repository
+ * @param {string} worktreePath - Path to the worktree to remove
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function removeWorktree(mainRepoPath, worktreePath) {
+  try {
+    // Remove the worktree
+    await executeGitCommand(`git worktree remove ${worktreePath} --force`, mainRepoPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 }
 
@@ -181,7 +205,7 @@ export async function pruneWorktrees(mainRepoPath) {
 export async function moveWorktree(mainRepoPath, oldPath, newPath) {
   try {
     // Git 2.17+ supports git worktree move
-    await executeGitCommand(mainRepoPath, `git worktree move ${oldPath} ${newPath}`);
+    await executeGitCommand(`git worktree move ${oldPath} ${newPath}`, mainRepoPath);
     return { success: true };
   } catch (error) {
     // Fallback for older git versions
@@ -190,8 +214,8 @@ export async function moveWorktree(mainRepoPath, oldPath, newPath) {
       await execAsync(`mv "${oldPath}" "${newPath}"`);
       
       // Update git worktree
-      await executeGitCommand(mainRepoPath, 'git worktree prune');
-      await executeGitCommand(mainRepoPath, `git worktree add ${newPath}`);
+      await executeGitCommand('git worktree prune', mainRepoPath);
+      await executeGitCommand(`git worktree add ${newPath}`, mainRepoPath);
       
       return { success: true };
     } catch (fallbackError) {

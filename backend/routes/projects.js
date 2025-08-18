@@ -4,7 +4,8 @@ import { promisify } from 'util';
 import path from 'path';
 import fsSync from 'fs';
 import config from '../config/index.js';
-import { gitCommand, configureGitCredentials } from '../utils/git.js';
+import { gitCommand } from '../utils/git.js';
+import { GitRepository } from '../services/git-repository.service.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
 // Git services middleware removed - modules are instantiated directly
 
@@ -52,7 +53,7 @@ router.post('/', async (req, res) => {
     }
     
     await exec(`git checkout ${branch}`, { cwd: projectPath });
-    await configureGitCredentials(projectPath, req.githubToken);
+    await GitRepository.configureCredentials(projectPath, req.githubToken);
     
     // Create project in database
     const project = await models.projects.create({

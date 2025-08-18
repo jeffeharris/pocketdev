@@ -21,6 +21,61 @@ export class GitRepository extends GitExecutor {
   }
 
   /**
+   * Configure git credentials for a repository
+   * @static
+   * @param {string} workingDirectory - Directory to configure
+   * @param {string} githubToken - GitHub token
+   * @param {Object} gitConfig - Git configuration (name, email)
+   */
+  static async configureCredentials(workingDirectory, githubToken, gitConfig = null) {
+    const repository = new GitRepository(githubToken);
+    
+    // Use provided git config or defaults
+    const config = gitConfig || { name: 'PocketDev User', email: 'user@pocketdev.local' };
+    
+    const commands = [
+      `git config user.name "${config.name}"`,
+      `git config user.email "${config.email}"`
+    ];
+
+    // If we have a GitHub token, configure credential helper
+    if (githubToken) {
+      // Check if remote is GitHub
+      const remoteResult = await repository.execute('git remote get-url origin', workingDirectory);
+      if (remoteResult.success && remoteResult.output.includes('github.com')) {
+        // Extract the GitHub URL
+        const remoteUrl = remoteResult.output.trim();
+        
+        // Remove any existing authentication from the URL
+        let cleanUrl = remoteUrl;
+        const urlMatch = remoteUrl.match(/https:\/\/([^@]+@)?github\.com\/(.+)/);
+        if (urlMatch) {
+          cleanUrl = `https://github.com/${urlMatch[2]}`;
+        }
+        
+        // Create authenticated URL with the new token
+        const authenticatedUrl = cleanUrl.replace('https://github.com/', `https://x-access-token:${githubToken}@github.com/`);
+        
+        // Update the remote URL directly
+        const setUrlResult = await repository.execute(`git remote set-url origin "${authenticatedUrl}"`, workingDirectory);
+        if (!setUrlResult.success) {
+          console.error('[configureCredentials] Failed to set remote URL:', setUrlResult.error);
+          return setUrlResult;
+        }
+      }
+    }
+
+    for (const command of commands) {
+      const result = await repository.execute(command, workingDirectory);
+      if (!result.success) {
+        return result;
+      }
+    }
+
+    return { success: true };
+  }
+
+  /**
    * Clone a repository
    */
   async clone(url, destination) {
