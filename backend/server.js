@@ -10,7 +10,6 @@ import config from './config/index.js';
 import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
-import GitHubAPI from './github.js';
 // Shelltender v0.5.0 - WebSocket client functionality is now provided by the service
 import { AISessionMonitor } from './ai-session-monitor.js';
 import { NotificationService } from './notification-service.js';
@@ -20,6 +19,7 @@ import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { WebSocketService } from './services/websocket.service.js';
 import { MigrationService } from './services/migration.service.js';
 import { ServiceInitializer } from './services/service-initializer.js';
+import { SettingsLoader } from './services/settings-loader.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -80,44 +80,20 @@ async function initializeDatabase() {
 
 // Load settings
 async function loadSettings() {
-  try {
-    // First check database for GitHub token
-    const githubTokenSetting = await app.locals.models.db.get(
-      'SELECT value FROM settings WHERE key = ?',
-      ['github_token']
-    );
-    
-    if (githubTokenSetting?.value) {
-      // Import decrypt function
-      const { decrypt } = await import('./utils/crypto.js');
-      const decryptedToken = decrypt(githubTokenSetting.value);
-      const token = decryptedToken || githubTokenSetting.value; // Fallback to raw value if decryption fails
-      
-      github = new GitHubAPI(token);
-      app.locals.github = github;
-      console.log('GitHub integration enabled from database');
-      return;
-    }
-    
-    // Then check settings file
-    const settingsData = await fs.readFile(config.settingsPath, 'utf8');
-    const settings = JSON.parse(settingsData);
-    
-    if (settings.githubToken) {
-      github = new GitHubAPI(settings.githubToken);
-      app.locals.github = github;
-      console.log('GitHub integration enabled from settings file');
-    }
-  } catch (error) {
-    console.log('No settings found or error loading:', error.message);
-    
-    // Fall back to environment variable
-    if (config.githubToken) {
-      github = new GitHubAPI(config.githubToken);
-      app.locals.github = github;
-      console.log('GitHub integration enabled from environment');
-    }
+  const settingsLoader = new SettingsLoader(app.locals.db, config);
+  const allSettings = await settingsLoader.loadAllSettings();
+  
+  // Get GitHub instance if configured
+  const { github: githubInstance } = settingsLoader.getSettings();
+  if (githubInstance) {
+    github = githubInstance;
+    app.locals.github = github;
   }
+  
+  // Store settings in app locals for backward compatibility
+  app.locals.settings = allSettings;
+  
+  return settingsLoader;
 }
 
 // Handle WebSocket messages from clients
@@ -246,7 +222,7 @@ async function start() {
   try {
     await ensureProjectsDir();
     const { eventEmitterService, githubTokenService } = await initializeDatabase();
-    await loadSettings();
+    const settingsLoader = await loadSettings();
     
     // Add service middleware before routes
     app.use((req, res, next) => {
