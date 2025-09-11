@@ -58,6 +58,12 @@ export class MigrationService {
         checkTable: 'tasks',
         checkColumn: 'split_layout',
         description: 'Add split view layout support'
+      },
+      {
+        name: 'fix_tasks_primary_key',
+        file: '005_fix_tasks_primary_key.sql',
+        checkSql: "SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks' AND sql NOT LIKE '%PRIMARY KEY%'",
+        description: 'Fix missing PRIMARY KEY on tasks table'
       }
     ];
 
@@ -141,6 +147,14 @@ export class MigrationService {
   
   async _isMigrationNeeded(migration) {
     try {
+      // If migration has a custom check SQL, use that
+      if (migration.checkSql) {
+        const result = await this.db.get(migration.checkSql);
+        // If the query returns a row, migration is needed
+        return result !== undefined;
+      }
+      
+      // Otherwise use the standard column check
       const result = await this.db.get(
         `SELECT COUNT(*) as count FROM pragma_table_info('${migration.checkTable}') 
          WHERE name='${migration.checkColumn}'`

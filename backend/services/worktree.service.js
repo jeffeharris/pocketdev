@@ -9,6 +9,21 @@ import { GitAnalyzer } from './git-analyzer.service.js';
 
 const execAsync = promisify(exec);
 
+/**
+ * Execute git command helper function
+ */
+async function executeGitCommand(command, workingDirectory) {
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: workingDirectory,
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+    });
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(`Git command failed: ${error.message}`);
+  }
+}
+
 
 /**
  * Initialize a new worktree for a task

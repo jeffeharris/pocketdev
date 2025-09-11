@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { WebSocketProvider } from './contexts/WebSocketContext';
-import { ToastProvider, WebSocketProvider as ShelltenderWSProvider } from '@shelltender/client';
+import { ToastProvider, WebSocketProvider as ShelltenderWSProvider, MobileProvider } from '@shelltender/client';
 import { KeyboardProvider } from './contexts/KeyboardContext';
 import { ServiceProvider } from './services/service-provider';
 import { Projects } from './pages/Projects';
@@ -38,11 +38,12 @@ function App() {
   return (
     <ServiceProvider>
       <ToastProvider>
-        <ShelltenderWSProvider config={shelltenderConfig}>
-          <WebSocketProvider>
-            <KeyboardProvider>
-              <Router>
-                <Routes>
+        <MobileProvider>
+          <ShelltenderWSProvider config={shelltenderConfig}>
+            <WebSocketProvider>
+              <KeyboardProvider>
+                <Router>
+                  <Routes>
                   <Route path="/" element={<Navigate to="/projects" replace />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/:projectId" element={<ProjectDashboard />} />
@@ -61,6 +62,7 @@ function App() {
             </KeyboardProvider>
           </WebSocketProvider>
         </ShelltenderWSProvider>
+        </MobileProvider>
       </ToastProvider>
     </ServiceProvider>
   );

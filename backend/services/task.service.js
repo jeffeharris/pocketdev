@@ -355,15 +355,32 @@ export class TaskService {
    */
   async _createTaskSession(taskId, worktreePath) {
     try {
-      const { createTaskSession } = await import('../../shared/shelltender-client.js');
-      await createTaskSession(taskId, worktreePath);
+      // Get TerminalService to create a proper terminal session
+      const terminalService = await this._getTerminalService();
+      
+      // Create the first terminal session with default settings
+      const sessionInfo = await terminalService.createSession(
+        taskId,
+        {
+          tabName: 'Tab 1',
+          aiAgent: 'claude',
+          workingDirectory: null // Use task's worktree root
+        },
+        {} // No monitors needed here, they'll connect later
+      );
+      
+      console.log(`Created initial terminal session for task ${taskId}:`, sessionInfo);
       
       return {
-        sessionId: `task-${taskId}`,
-        created: true
+        sessionId: sessionInfo.sessionId,
+        dbSessionId: sessionInfo.dbSessionId,
+        shelltenderSessionId: sessionInfo.shelltenderSessionId,
+        created: true,
+        tabName: sessionInfo.tabName,
+        aiAgent: sessionInfo.aiAgent
       };
     } catch (error) {
-      console.warn('Failed to create shelltender session:', error.message);
+      console.warn('Failed to create initial terminal session:', error.message);
       return {
         sessionId: `task-${taskId}`,
         created: false,
@@ -390,7 +407,7 @@ export class TaskService {
     if (!this._terminalService) {
       // Import TerminalService only when needed
       const { TerminalService } = await import('./terminal.service.js');
-      this._terminalService = new TerminalService(this.models);
+      this._terminalService = new TerminalService(this.models, this.eventEmitterService);
     }
     return this._terminalService;
   }

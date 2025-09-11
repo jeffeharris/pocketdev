@@ -94,6 +94,30 @@ export class TerminalService {
     // Connect monitors
     await this._connectMonitors(shelltenderSessionId, monitors);
     
+    // Auto-activate AI agent if specified (using shared config)
+    if (dbSession.ai_agent && dbSession.ai_agent !== 'none') {
+      const agentConfig = getAgentConfig(dbSession.ai_agent);
+      if (agentConfig) {
+        try {
+          // Use the agent's configured launch delay
+          const launchDelay = agentConfig.launchDelay || 500;
+          await new Promise(resolve => setTimeout(resolve, launchDelay));
+          
+          console.log(`[TerminalService] Auto-activating ${dbSession.ai_agent} for session ${shelltenderSessionId}`);
+          
+          // Get the launch command (without prompt for auto-activation)
+          const launchCommand = getAgentLaunchCommand(dbSession.ai_agent);
+          if (launchCommand) {
+            await this.executeCommand(shelltenderSessionId, launchCommand, monitors.wsAdapter);
+            console.log(`[TerminalService] Successfully activated ${dbSession.ai_agent}`);
+          }
+        } catch (error) {
+          console.error(`[TerminalService] Failed to auto-activate ${dbSession.ai_agent}:`, error.message);
+          // Don't fail the whole session creation if AI activation fails
+        }
+      }
+    }
+    
     const result = {
       ...sessionInfo,
       isReconnected: false
