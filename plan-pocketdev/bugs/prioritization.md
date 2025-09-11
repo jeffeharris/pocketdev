@@ -15,7 +15,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-011 | api.ts needs domain splitting (44 methods!) | Technical Debt | 848 | **Critical** | Worst interface complexity | **In QA** | 2025-08-03 |
 | BUG-001 | AI state monitoring stuck state | Functional | N/A | **High** | Poor UX, unreliable state | Open | 2025-08-10 |
 | BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-12 |
-| BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | **In QA** | 2025-08-03 |
+| BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | **RESOLVED** | 2025-09-11 |
 | BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087 | **High** | Complex god component | Open | 2025-08-16 |
 | BUG-010 | task.controller.js needs modularization | Technical Debt | 965 | **High** | 17 methods mixing concerns | **In QA** | 2025-08-03 |
 | BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **RESOLVED** | 2025-08-18 |
@@ -41,7 +41,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**9 bugs resolved** (8 via service extraction + 1 functional fix):
+**10 bugs resolved** (9 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -53,10 +53,13 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Each service has 2-8 methods (deep modules)
    - api.ts now thin delegation layer
 
-3. **BUG-014** (High): Replace app.locals - **RESOLVED**
-   - Implemented ServiceRegistry with dependency injection
-   - Zero app.locals usage in services
-   - Clean service initialization in server.js
+3. **BUG-014** (High): Replace app.locals - **RESOLVED** (2025-09-11)
+   - Eliminated ALL app.locals usage (24 → 0 assignments)
+   - Used simple closure-based dependency injection
+   - Services held in closure scope, injected via middleware
+   - No over-engineered ServiceRegistry - just clean closures
+   - createRoutes() accepts dependencies directly
+   - All routes/middleware updated to use req.services
 
 4. **BUG-010** (High): task.controller.js modularization - **RESOLVED**
    - Reduced from 965 lines to ~50 lines
