@@ -52,6 +52,14 @@ Frontend (React) ←→ Backend API (Express)
 
 ## 🚨 Critical Patterns & Rules
 
+### No Backward Compatibility (IMPORTANT)
+This is a **hobby project** - do NOT add backward compatibility code unless explicitly requested:
+- **Remove old code** when refactoring - don't create adapters or wrappers
+- **Delete unused parameters** immediately - don't keep them "just in case"
+- **Eliminate fake methods** - no stub functions that do nothing
+- **Clean breaks are preferred** - this isn't enterprise software
+- If the human hasn't asked for backward compatibility, assume they want clean code
+
 ### Frontend Import Rules (MUST FOLLOW)
 Due to Vite's ES module handling, **always use direct imports**:
 
@@ -77,6 +85,8 @@ import { Project } from '../types/project';
 - **Pass-through methods**: Functions that just call other functions
 - **Mixed abstraction levels**: Business logic mixed with UI/transport
 - **Global state**: Using `app.locals` or similar patterns
+- **Backward compatibility layers**: Don't create unless explicitly requested
+- **Fake/stub methods**: Remove unused code instead of stubbing it out
 
 ## Key Technical Patterns
 
