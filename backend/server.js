@@ -90,35 +90,6 @@ async function loadSettings() {
   return settingsLoader;
 }
 
-// Handle WebSocket messages from clients
-function handleWebSocketMessage(ws, data) {
-  switch (data.type) {
-    case 'subscribe':
-      // Subscribe to updates for a specific project or task
-      if (data.projectId) {
-        ws.subscriptions.add(`project:${data.projectId}`);
-        console.log(`Client ${ws.clientId} subscribed to project ${data.projectId}`);
-      }
-      if (data.taskId) {
-        ws.subscriptions.add(`task:${data.taskId}`);
-        console.log(`Client ${ws.clientId} subscribed to task ${data.taskId}`);
-      }
-      break;
-      
-    case 'unsubscribe':
-      // Unsubscribe from updates
-      if (data.projectId) {
-        ws.subscriptions.delete(`project:${data.projectId}`);
-      }
-      if (data.taskId) {
-        ws.subscriptions.delete(`task:${data.taskId}`);
-      }
-      break;
-      
-    default:
-      console.log(`Unknown message type: ${data.type}`);
-  }
-}
 
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server, models, eventEmitterService, githubTokenService) {
