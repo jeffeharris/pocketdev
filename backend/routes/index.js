@@ -11,14 +11,10 @@ import githubRoutes from './github.routes.js';
 import { TaskController } from '../controllers/task.controller.js';
 
 /**
- * Create all routes with access to app instance
+ * Create all routes with models and config
  */
-export default function createRoutes(app) {
+export default function createRoutes(models, projectsDir) {
   const router = Router();
-  
-  // Get models and config from app
-  const models = app.locals.models;
-  const projectsDir = app.locals.projectsDir || process.env.PROJECTS_DIR || '/projects';
   
   // Mount simple route modules
   router.use('/projects', projectRoutes);

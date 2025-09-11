@@ -11,7 +11,7 @@ export async function githubTokenMiddleware(req, res, next) {
     }
 
     // Get token from service
-    const githubTokenService = req.app.locals.githubTokenService;
+    const githubTokenService = req.services.githubTokenService;
     const token = await githubTokenService.getToken();
     
     // Inject into request object

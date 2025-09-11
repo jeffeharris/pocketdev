@@ -12,7 +12,7 @@ const router = Router();
  */
 router.get('/status', async (req, res) => {
   try {
-    const github = req.app.locals.github;
+    const github = req.services.github;
     
     if (!github) {
       return res.json({
@@ -52,7 +52,7 @@ router.get('/status', async (req, res) => {
  */
 router.get('/repos', async (req, res) => {
   try {
-    const github = req.app.locals.github;
+    const github = req.services.github;
     
     if (!github) {
       return res.status(503).json({ 
@@ -93,7 +93,7 @@ router.get('/repos', async (req, res) => {
  */
 router.get('/repos/:owner/:repo/branches', async (req, res) => {
   try {
-    const github = req.app.locals.github;
+    const github = req.services.github;
     const { owner, repo } = req.params;
     
     if (!github) {

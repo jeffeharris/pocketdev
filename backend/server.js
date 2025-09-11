@@ -21,10 +21,9 @@ import { MonitoringInitializer } from './services/monitoring-initializer.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Global instances
+// Global instances (only for shutdown)
 let db = null;
-let models = null;
-let github = null;
+let sessionCleanupService = null;
 
 // Ensure projects directory exists
 async function ensureProjectsDir() {
@@ -40,7 +39,7 @@ async function ensureProjectsDir() {
 // Initialize database
 async function initializeDatabase() {
   db = await getDatabase();
-  models = new Models(db);
+  const models = new Models(db);
   console.log('Database initialized');
   
   // Run pending migrations using MigrationService
@@ -54,45 +53,40 @@ async function initializeDatabase() {
     console.error('Some migrations failed:', migrationResult.migrations.filter(m => m.status === 'failed'));
   }
   
-  // Store models in app locals for access in routes
-  app.locals.models = models;
-  app.locals.db = db;
-  app.locals.projectsDir = config.projectsDir;
-  
   // Initialize all services using ServiceInitializer
   const serviceInitializer = new ServiceInitializer(models, db, config);
   const { services, eventEmitterService, githubTokenService } = await serviceInitializer.initializeServices();
   
-  // Store services in app.locals for backward compatibility
-  app.locals.services = services;
-  app.locals.githubTokenService = githubTokenService;
-  app.locals.sessionCleanupService = services.SessionCleanupService;
+  // Store cleanup service for shutdown
+  sessionCleanupService = services.SessionCleanupService;
   
-  // Return services for use in the main server setup
-  return { eventEmitterService, githubTokenService };
+  // Return everything needed by the app
+  return { 
+    models, 
+    services, 
+    eventEmitterService, 
+    githubTokenService 
+  };
 }
 
 // Load settings
-async function loadSettings() {
-  const settingsLoader = new SettingsLoader(app.locals.db, config);
+async function loadSettings(database) {
+  const settingsLoader = new SettingsLoader(database, config);
   const allSettings = await settingsLoader.loadAllSettings();
   
   // Get GitHub instance if configured
   const { github: githubInstance } = settingsLoader.getSettings();
-  if (githubInstance) {
-    github = githubInstance;
-    app.locals.github = github;
-  }
   
-  // Store settings in app locals for backward compatibility
-  app.locals.settings = allSettings;
-  
-  return settingsLoader;
+  return { 
+    settingsLoader, 
+    allSettings, 
+    github: githubInstance 
+  };
 }
 
 
 // Initialize WebSocket and monitoring
-async function initializeMonitoring(server, models, eventEmitterService, githubTokenService) {
+async function initializeMonitoring(models, eventEmitterService, githubTokenService, services) {
   // Create monitoring initializer
   const monitoringInitializer = new MonitoringInitializer(
     config,
@@ -105,20 +99,15 @@ async function initializeMonitoring(server, models, eventEmitterService, githubT
   const { success, monitors } = await monitoringInitializer.initialize();
   
   if (success) {
-    // Store monitors in app locals for backward compatibility (being phased out)
-    app.locals.aiMonitor = monitors.aiMonitor;
-    app.locals.notificationService = monitors.notificationService;
-    app.locals.wsAdapter = monitors.sessionMonitor;
-    app.locals.gitStatusMonitor = monitors.gitStatusMonitor;
-    
     // Add monitoring services to services object
-    app.locals.services.aiMonitor = monitors.aiMonitor;
-    app.locals.services.wsAdapter = monitors.sessionMonitor;
-    app.locals.services.notificationService = monitors.notificationService;
-    app.locals.services.gitStatusMonitor = monitors.gitStatusMonitor;
+    services.aiMonitor = monitors.aiMonitor;
+    services.wsAdapter = monitors.sessionMonitor;
+    services.notificationService = monitors.notificationService;
+    services.gitStatusMonitor = monitors.gitStatusMonitor;
+    services.models = models; // Add models to services for controller access
     
     // Set monitoring dependencies on MonitoringService
-    const monitoringService = app.locals.services.MonitoringService;
+    const monitoringService = services.MonitoringService;
     monitoringService.setMonitoringDependencies(monitors.aiMonitor, monitors.notificationService);
   }
   
@@ -129,17 +118,28 @@ async function initializeMonitoring(server, models, eventEmitterService, githubT
 async function start() {
   try {
     await ensureProjectsDir();
-    const { eventEmitterService, githubTokenService } = await initializeDatabase();
-    const settingsLoader = await loadSettings();
     
-    // Add service middleware before routes
+    // Initialize database and services
+    const { models, services, eventEmitterService, githubTokenService } = await initializeDatabase();
+    
+    // Load settings
+    const { allSettings, github } = await loadSettings(db);
+    
+    // Add GitHub to services if configured
+    if (github) {
+      services.github = github;
+    }
+    services.githubTokenService = githubTokenService;
+    services.settings = allSettings;
+    
+    // Add service middleware before routes using closure
     app.use((req, res, next) => {
-      req.services = app.locals.services;
+      req.services = services;
       next();
     });
     
     // Mount routes after models are initialized
-    const routes = createRoutes(app);
+    const routes = createRoutes(models, config.projectsDir);
     app.use('/api', routes);
     
     // Add error handlers after routes
@@ -153,13 +153,11 @@ async function start() {
     
     // Initialize new WebSocketService with event-based pattern
     const webSocketService = new WebSocketService(wss, eventEmitterService);
-    
-    // Store WebSocket services in app locals (for transition period)
-    app.locals.wss = wss;
-    app.locals.webSocketService = webSocketService;
+    services.wss = wss;
+    services.webSocketService = webSocketService;
     
     // Initialize monitoring with Shelltender v0.6.1 adapter
-    await initializeMonitoring(server, models, eventEmitterService, githubTokenService);
+    await initializeMonitoring(models, eventEmitterService, githubTokenService, services);
     
     // Start listening
     server.listen(config.port, () => {
@@ -180,8 +178,8 @@ process.on('SIGINT', async () => {
   console.log('\nShutting down...');
   
   // Stop session cleanup service
-  if (app.locals.sessionCleanupService) {
-    app.locals.sessionCleanupService.stop();
+  if (sessionCleanupService) {
+    sessionCleanupService.stop();
     console.log('Session cleanup service stopped');
   }
   
