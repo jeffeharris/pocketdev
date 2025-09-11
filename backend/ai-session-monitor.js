@@ -21,9 +21,8 @@ import { AIStateTracker } from './ai-state-tracker.js';
 import { AI_EVENTS } from './services/events.js';
 
 export class AISessionMonitor {
-  constructor(sessionManager, wsServer, notificationService, models, eventEmitterService = null) {
+  constructor(sessionManager, notificationService, models, eventEmitterService = null) {
     this.sessionManager = sessionManager;
-    this.wsServer = wsServer;
     this.notificationService = notificationService;
     this.eventEmitterService = eventEmitterService;
     this.models = models;
@@ -32,12 +31,9 @@ export class AISessionMonitor {
   }
 
   /**
-   * Register AI-specific patterns with EventManager
-   * Uses Shelltender v0.2.6's AgenticCodingPatterns
+   * Register AI-specific patterns
    */
-  registerPatterns(eventManager) {
-    this.eventManager = eventManager;
-    
+  registerPatterns() {
     // Set up global session monitoring using sessionManager.onData
     this.setupGlobalMonitoring();
     

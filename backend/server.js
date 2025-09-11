@@ -10,16 +10,12 @@ import config from './config/index.js';
 import app, { addErrorHandlers } from './app.js';
 import { getDatabase } from './db/index.js';
 import Models from './db/models/index.js';
-// Shelltender v0.5.0 - WebSocket client functionality is now provided by the service
-import { AISessionMonitor } from './ai-session-monitor.js';
-import { NotificationService } from './notification-service.js';
-import { createSessionMonitor } from './shelltender-session-monitor.js';
 import createRoutes from './routes/index.js';
-import { initializeGitStatusMonitor } from './git-status-monitor.js';
 import { WebSocketService } from './services/websocket.service.js';
 import { MigrationService } from './services/migration.service.js';
 import { ServiceInitializer } from './services/service-initializer.js';
 import { SettingsLoader } from './services/settings-loader.js';
+import { MonitoringInitializer } from './services/monitoring-initializer.js';
 
 // ES Module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -29,8 +25,6 @@ const __dirname = dirname(__filename);
 let db = null;
 let models = null;
 let github = null;
-let aiMonitor = null;
-let notificationService = null;
 
 // Ensure projects directory exists
 async function ensureProjectsDir() {
@@ -128,93 +122,36 @@ function handleWebSocketMessage(ws, data) {
 
 // Initialize WebSocket and monitoring
 async function initializeMonitoring(server, models, eventEmitterService, githubTokenService) {
-  try {
-    console.log('Initializing AI monitoring...');
-    
-    // Create Shelltender session monitor for v0.6.1
-    const sessionMonitor = await createSessionMonitor({
-      wsUrl: config.shelltenderWsUrl,
-      apiUrl: config.shelltenderApiUrl
-    });
-    
-    console.log('Shelltender session monitor initialized');
-    
-    // For backward compatibility, create a wsClient that wraps the monitor
-    const wsClient = { 
-      send: () => {}, 
-      on: (event, handler) => sessionMonitor.on(event, handler),
-      connect: () => Promise.resolve()
-    };
-    
-    // Initialize notification service
-    notificationService = new NotificationService(wsClient);
-    
-    // Create AI monitor with the session monitor as sessionManager
-    aiMonitor = new AISessionMonitor(sessionMonitor, wsClient, notificationService, models, eventEmitterService);
-    
-    // Register AI patterns
-    aiMonitor.registerPatterns(wsClient);
-    
-    // Register existing sessions for pattern tracking (monitor mode receives all automatically)
-    try {
-      const response = await fetch(`${config.shelltenderApiUrl}/api/sessions`);
-      if (response.ok) {
-        const existingSessions = await response.json();
-        console.log(`Found ${existingSessions.length} existing sessions`);
-        
-        // In monitor mode, we just need to set up pattern tracking
-        // The monitor adapter automatically receives data from ALL sessions
-        for (const session of existingSessions) {
-          if (session.id && session.id.startsWith('task-')) {
-            console.log('Setting up pattern tracking for session:', session.id);
-            await aiMonitor.registerSessionPatterns(session.id);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to register existing sessions:', error);
-    }
-    
-    // Listen for new task sessions to monitor
-    // Note: We'll rely on the task creation endpoint to notify us
-    // since Shelltender v0.6.1 doesn't have a global session event system
-    
-    // Listen for session closure
-    wsClient.on('session-closed', (sessionId) => {
-      if (sessionId && sessionId.startsWith('task-')) {
-        console.log('Session closed, removing pattern tracking:', sessionId);
-        aiMonitor.removeSession(sessionId);
-        // Monitor mode continues to work for remaining sessions
-      }
-    });
-    
-    // Store in app locals for API access (being phased out)
-    app.locals.aiMonitor = aiMonitor;
-    app.locals.notificationService = notificationService;
-    app.locals.wsClient = wsClient;
-    app.locals.wsAdapter = sessionMonitor;
+  // Create monitoring initializer
+  const monitoringInitializer = new MonitoringInitializer(
+    config,
+    models,
+    eventEmitterService,
+    githubTokenService
+  );
+  
+  // Initialize all monitoring systems
+  const { success, monitors } = await monitoringInitializer.initialize();
+  
+  if (success) {
+    // Store monitors in app locals for backward compatibility (being phased out)
+    app.locals.aiMonitor = monitors.aiMonitor;
+    app.locals.notificationService = monitors.notificationService;
+    app.locals.wsAdapter = monitors.sessionMonitor;
+    app.locals.gitStatusMonitor = monitors.gitStatusMonitor;
     
     // Add monitoring services to services object
-    app.locals.services.aiMonitor = aiMonitor;
-    app.locals.services.wsAdapter = sessionMonitor;
-    app.locals.services.wsClient = wsClient;
-    app.locals.services.notificationService = notificationService;
+    app.locals.services.aiMonitor = monitors.aiMonitor;
+    app.locals.services.wsAdapter = monitors.sessionMonitor;
+    app.locals.services.notificationService = monitors.notificationService;
+    app.locals.services.gitStatusMonitor = monitors.gitStatusMonitor;
     
     // Set monitoring dependencies on MonitoringService
     const monitoringService = app.locals.services.MonitoringService;
-    monitoringService.setMonitoringDependencies(aiMonitor, notificationService);
-    
-    console.log('AI monitoring initialized successfully');
-    
-    // Initialize git status monitoring
-    const gitStatusMonitor = initializeGitStatusMonitor(models, eventEmitterService, githubTokenService);
-    app.locals.gitStatusMonitor = gitStatusMonitor;
-    app.locals.services.gitStatusMonitor = gitStatusMonitor;
-    console.log('Git status monitoring initialized');
-  } catch (error) {
-    console.warn('Failed to initialize monitoring:', error.message);
-    console.warn('Server will continue without AI monitoring features');
+    monitoringService.setMonitoringDependencies(monitors.aiMonitor, monitors.notificationService);
   }
+  
+  return success;
 }
 
 // Start server

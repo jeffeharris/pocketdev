@@ -1,11 +1,10 @@
 /**
  * Notification Service
- * Manages notifications for AI sessions and broadcasts to connected clients
+ * Manages notifications for AI sessions
  */
 
 export class NotificationService {
-  constructor(wsServer) {
-    this.wsServer = wsServer;
+  constructor() {
     this.notificationQueue = [];
     this.notificationHandlers = new Map(); // type -> handler function
   }
@@ -30,9 +29,6 @@ export class NotificationService {
       this.notificationQueue.shift();
     }
 
-    // Broadcast to all connected clients via WebSocket
-    // Note: Shelltender WebSocket server doesn't have a broadcast method
-    // We'll need to handle notifications differently
     console.log('Notification queued:', enrichedNotification.type, 'for session:', sessionId);
 
     // Execute any registered handlers
@@ -77,8 +73,6 @@ export class NotificationService {
     if (notification) {
       notification.read = true;
       
-      // Broadcast update
-      // Note: Shelltender WebSocket server doesn't have a broadcast method
       console.log('Notification marked as read:', notificationId);
       
       return true;
