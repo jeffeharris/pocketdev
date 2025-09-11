@@ -219,7 +219,7 @@ Through this service extraction, we resolved 8 major bugs:
 3. **Events > Direct Calls**: Decoupling via events improves flexibility
 4. **Mock First**: Built-in mocks accelerate development
 5. **Avoid Over-Abstraction**: ServiceRegistry added 193 lines for what direct imports handle in 10 lines
-6. **Temporary Code Becomes Permanent**: Migration scaffolding should be removed immediately, not left "for compatibility"
+6. **No Backward Compatibility**: This is a hobby project - remove old code immediately, don't create adapters or wrappers
 
 ## Success Metrics
 

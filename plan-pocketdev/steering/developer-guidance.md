@@ -63,7 +63,15 @@ class ProjectController {
 
 ## 🚫 Anti-Patterns to Avoid
 
-### 1. Shallow Modules
+### 1. Backward Compatibility Layers
+**This is a hobby project** - clean breaks are preferred:
+- ❌ Creating adapters or wrappers for old code
+- ❌ Keeping unused parameters "just in case"
+- ❌ Stub methods that do nothing
+- ✅ Delete old code immediately when refactoring
+- ✅ Remove unused functionality completely
+
+### 2. Shallow Modules
 **Examples Fixed in v2.0.0**:
 - `api.ts`: Was 44 methods → Now 8 service delegations ✅
 - `websocket-events.js`: Was 10 methods → Now EventEmitter pattern ✅
@@ -71,7 +79,7 @@ class ProjectController {
 
 **Fix Applied**: Combined related operations into higher-level abstractions.
 
-### 2. Pass-Through Methods
+### 3. Pass-Through Methods
 ```javascript
 // ❌ BAD
 class TaskController {
@@ -92,7 +100,7 @@ class TaskController {
 }
 ```
 
-### 3. Leaky Abstractions
+### 4. Leaky Abstractions
 Don't expose implementation details:
 - ❌ Exposing Map/Set data structures
 - ❌ Requiring users to understand internal state
