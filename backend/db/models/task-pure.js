@@ -44,10 +44,21 @@ class TaskModel extends BaseModel {
   /**
    * Find all tasks for a project
    * @param {string} projectId
+   * @param {Object|boolean} options - Options object or includeArchived boolean for backward compatibility
    * @returns {Promise<Array>}
    */
-  async findByProjectId(projectId) {
-    return this.findAll({ project_id: projectId, is_archived: 0 });
+  async findByProjectId(projectId, options = {}) {
+    // Handle legacy boolean parameter
+    if (typeof options === 'boolean') {
+      options = { includeArchived: options };
+    }
+    
+    const conditions = { project_id: projectId };
+    if (!options.includeArchived) {
+      conditions.is_archived = 0;
+    }
+    
+    return this.findAll(conditions);
   }
 
   /**
