@@ -289,8 +289,14 @@ describe('Task Split Layout API', () => {
     });
 
     it('should not broadcast WebSocket event if wsEventService is not available', async () => {
-      // Remove wsEventService
-      app.locals.wsEventService = null;
+      // Remove wsEventService from services by replacing the middleware
+      app._router.stack = app._router.stack.filter(layer => 
+        !layer.handle || layer.handle.name !== 'serviceMiddleware'
+      );
+      app.use((req, res, next) => {
+        req.services = { models, db }; // No wsEventService
+        next();
+      });
 
       const newLayout = { mode: 'split' };
 

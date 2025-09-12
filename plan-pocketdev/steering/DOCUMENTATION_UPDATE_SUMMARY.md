@@ -66,7 +66,7 @@ This document summarizes the documentation updates made to reflect the v2.0.0 se
 
 ### Architectural Patterns
 - Service Layer: Complete separation of business logic
-- Dependency Injection: ServiceRegistry replaces app.locals
+- Dependency Injection: Closure-based DI replaces app.locals
 - Event-Driven: EventEmitter for state propagation
 - Deep Modules: Simple interfaces hiding complexity
 

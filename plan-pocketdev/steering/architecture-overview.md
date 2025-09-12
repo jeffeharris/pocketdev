@@ -40,7 +40,7 @@ This document provides a comprehensive view of PocketDev's architecture after th
 ├─────────────────────┼─────────────────────┼────────────────────┤
 │ • GitStatusService  │ • EventEmitter      │ • MonitoringService │
 │ • GitOperationSvc   │ • WebSocketService  │ • SettingsService   │
-│ • TaskService       │ • ServiceRegistry   │ • UploadService     │
+│ • TaskService       │ • Closure-based DI  │ • UploadService     │
 │ • ProjectService    │                     │ • ContainerService  │
 │ • TerminalService   │                     │                     │
 │ • PullRequestSvc    │                     │                     │
@@ -137,10 +137,15 @@ class TaskController {
 app.locals.models = models;
 app.locals.db = db;
 
-// After: Clean dependency injection
-const serviceRegistry = new ServiceRegistry();
-serviceRegistry.register('TaskService', new TaskService(models, eventEmitter));
-req.services = serviceRegistry;
+// After: Clean closure-based dependency injection
+const services = { 
+  TaskService: new TaskService(models, eventEmitter),
+  // ... other services
+};
+app.use((req, res, next) => {
+  req.services = services;
+  next();
+});
 ```
 
 ### 5. Session Identity Unified ✅

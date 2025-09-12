@@ -77,10 +77,18 @@ export async function createTestApp() {
   // Create mock WebSocket service
   const wsEventService = createMockWsEventService();
   
-  // Set up locals
-  app.locals.db = db;
-  app.locals.models = models;
-  app.locals.wsEventService = wsEventService;
+  // Set up services using closure-based DI (matching production)
+  const services = {
+    db,
+    models,
+    wsEventService
+  };
+  
+  // Service middleware using closure
+  app.use((req, res, next) => {
+    req.services = services;
+    next();
+  });
   
   // Mock GitHub auth middleware - skip authentication in tests
   app.use((req, res, next) => {
@@ -98,7 +106,7 @@ export async function createTestApp() {
     res.status(err.status || 500).json({ error: err.message });
   });
   
-  return { app, db, models, wsEventService };
+  return { app, db, models, wsEventService, services };
 }
 
 /**

@@ -200,7 +200,7 @@ export class TaskGitController {
         options, 
         req.githubToken,
         req.services.github,
-        req.app.locals
+        req.services
       );
       
       res.json(result);

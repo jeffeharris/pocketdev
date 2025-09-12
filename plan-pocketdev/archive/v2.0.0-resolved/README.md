@@ -13,7 +13,7 @@ The following bugs were resolved through the comprehensive service layer extract
 - **BUG-010**: task.controller.js needs modularization - RESOLVED via TaskService
 - **BUG-011**: api.ts needs domain splitting - RESOLVED via 8 frontend services
 - **BUG-013**: Implement Service Layer Architecture - RESOLVED (10 backend + 8 frontend services)
-- **BUG-014**: Replace app.locals with Dependency Injection - RESOLVED via ServiceRegistry
+- **BUG-014**: Replace app.locals with Dependency Injection - RESOLVED via closure-based DI
 - **BUG-017**: Consolidate Session Identity Abstraction - RESOLVED via TerminalService + SessionAdapter
 - **BUG-019**: WebSocket Event System Needs Deep Module - RESOLVED via EventEmitter + WebSocketService
 

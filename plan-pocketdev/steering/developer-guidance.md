@@ -243,7 +243,7 @@ See `/plan-pocketdev/bugs/prioritization.md` for details. Completed:
 1. **Service Layer** (BUG-013): ✅ Created 10 backend + 8 frontend services
 2. **API Simplification** (BUG-011): ✅ 44 methods → 8 service delegations
 3. **Deep Modules** (Multiple bugs): ✅ All services have <10 public methods
-4. **Dependency Injection** (BUG-014): ✅ ServiceRegistry replaces app.locals
+4. **Dependency Injection** (BUG-014): ✅ Closure-based DI replaces app.locals
 
 ### Remaining Priorities
 

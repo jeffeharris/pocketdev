@@ -48,33 +48,26 @@ export class ServerOrchestrator {
     try {
       console.log('Starting server initialization...');
       
-      // Phase 1: Environment setup
       await this._ensureProjectsDir();
       
-      // Phase 2: Database and core services
       const { models, services, eventEmitterService, githubTokenService } = 
         await this._initializeDatabase();
       
-      // Phase 3: Settings and configuration
       const { allSettings, github } = await this._loadSettings();
       
-      // Phase 4: Consolidate services
       this._consolidateServices(services, {
         github,
         githubTokenService,
         settings: allSettings
       });
       
-      // Phase 5: Configure Express app
       this._configureExpressApp(services, models);
       
-      // Phase 6: Create servers
       this.server = this._createHttpServer();
       const { wss, webSocketService } = this._createWebSocketServer(eventEmitterService);
       services.wss = wss;
       services.webSocketService = webSocketService;
       
-      // Phase 7: Initialize monitoring
       await this._initializeMonitoring(models, eventEmitterService, githubTokenService, services);
       
       this.services = services;

@@ -19,7 +19,7 @@ router.use(githubTokenMiddleware);
 // Create new project from repo
 router.post('/', async (req, res) => {
   const { repoUrl, branch = 'main', projectName } = req.body;
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     // Check if project already exists
@@ -78,7 +78,7 @@ router.post('/', async (req, res) => {
 
 // List all projects
 router.get('/', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const projects = await models.projects.findAll();
@@ -90,7 +90,7 @@ router.get('/', async (req, res) => {
 
 // Get project details
 router.get('/:id', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -119,7 +119,7 @@ router.get('/:id', async (req, res) => {
 
 // Get base branch sync status
 router.get('/:id/base-branch-status', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -157,7 +157,7 @@ router.get('/:id/base-branch-status', async (req, res) => {
 
 // Pull base branch updates
 router.post('/:id/pull-base-branch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -166,7 +166,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitRepository.configureCredentials(project.local_path, req.githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitCommand(project.local_path, 'git status --porcelain');
@@ -203,7 +203,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
 
 // Push base branch changes
 router.post('/:id/push-base-branch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -212,7 +212,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitRepository.configureCredentials(project.local_path, req.githubToken);
     
     // Push base branch
     const result = await gitCommand(project.local_path, 
@@ -240,7 +240,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
 
 // Fetch remote updates for project
 router.post('/:id/fetch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -249,7 +249,7 @@ router.post('/:id/fetch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitRepository.configureCredentials(project.local_path, req.githubToken);
     
     // Fetch with git (will use gh credential helper if configured)
     const result = await gitCommand(project.local_path, 'git fetch --all --prune --tags');
@@ -276,7 +276,7 @@ router.post('/:id/fetch', async (req, res) => {
 
 // Check update status for all tasks
 router.get('/:id/update-status', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -357,7 +357,7 @@ router.get('/:id/update-status', async (req, res) => {
 
 // Delete project
 router.delete('/:id', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);

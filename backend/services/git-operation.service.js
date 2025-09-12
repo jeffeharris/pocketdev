@@ -21,10 +21,10 @@ export class GitOperationService {
    * @param {string} operation - Git operation to perform
    * @param {Object} options - Operation options (message, files, etc.)
    * @param {string} githubToken - GitHub token for git operations
-   * @param {Object} appLocals - Express app.locals for status updates (transitional)
+   * @param {Object} services - Services object containing gitStatusMonitor
    * @returns {Promise<Object>} Operation result
    */
-  async executeOperation(taskId, operation, options = {}, gitService, githubService, appLocals = null) {
+  async executeOperation(taskId, operation, options = {}, gitService, githubService, services = null) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -138,7 +138,7 @@ export class GitOperationService {
     
     // Trigger status update for operations that change git state
     if (result.success && statusUpdateOperations.includes(operation)) {
-      await this._triggerStatusUpdate(taskId, appLocals);
+      await this._triggerStatusUpdate(taskId, services);
       
       // Emit git operation completed event
       if (this.eventEmitterService) {
@@ -354,11 +354,9 @@ export class GitOperationService {
    * Trigger git status update after operations that change git state
    * @private
    */
-  async _triggerStatusUpdate(taskId, appLocals) {
-    // For now, we'll still use the app.locals pattern for git status monitor
-    // This will be refactored when we extract the GitStatusMonitor service
-    if (appLocals && appLocals.gitStatusMonitor) {
-      appLocals.gitStatusMonitor.checkTask(taskId).catch(err => 
+  async _triggerStatusUpdate(taskId, services) {
+    if (services && services.gitStatusMonitor) {
+      services.gitStatusMonitor.checkTask(taskId).catch(err => 
         console.error(`Failed to update git status for task ${taskId}:`, err)
       );
     }

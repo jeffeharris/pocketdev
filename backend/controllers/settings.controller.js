@@ -24,8 +24,7 @@ export async function updateSettings(req, res, next) {
     // Update GitHub instance
     const github = await settingsService.createGitHubAPIInstance();
     if (github) {
-      req.app.locals.github = github;  // Keep for backward compatibility
-      req.services.github = github;      // New pattern
+      req.services.github = github;
     }
     
     res.json(result);

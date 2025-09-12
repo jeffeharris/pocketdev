@@ -10,8 +10,8 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | Bug ID | Title | Type | Lines | Priority | Impact | Status | Target Date |
 |--------|-------|------|-------|----------|---------|---------|-------------|
 | BUG-003 | Terminal sessions not loading on task open | Functional | N/A | **Critical** | Blocks core functionality | **Complete** | 2025-08-03 |
-| BUG-012 | Extract Migration System from server.js | Architecture | 400 | **Critical** | Blocks proper initialization | Open | 2025-08-06 |
-| BUG-013 | Implement Service Layer Architecture | Architecture | N/A | **Critical** | Missing architectural layer | **In QA** | 2025-08-03 |
+| BUG-012 | Extract Migration System from server.js | Architecture | 400 | **Critical** | Blocks proper initialization | **RESOLVED** | 2025-09-12 |
+| BUG-013 | Implement Service Layer Architecture | Architecture | N/A | **Critical** | Missing architectural layer | **RESOLVED** | 2025-08-03 |
 | BUG-011 | api.ts needs domain splitting (44 methods!) | Technical Debt | 848 | **Critical** | Worst interface complexity | **In QA** | 2025-08-03 |
 | BUG-001 | AI state monitoring stuck state | Functional | N/A | **High** | Poor UX, unreliable state | Open | 2025-08-10 |
 | BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-12 |

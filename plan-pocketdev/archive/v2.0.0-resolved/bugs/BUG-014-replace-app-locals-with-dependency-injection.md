@@ -72,13 +72,14 @@ class TaskController {
 }
 ```
 
-## Implementation Steps
-1. Create `ServiceContainer` class
-2. Register all services with proper lifecycle
-3. Create controller factories that inject dependencies
-4. Update route definitions to use controller instances
-5. Remove all `app.locals` usage
-6. Add TypeScript interfaces for better type safety
+## Implementation (RESOLVED)
+Used closure-based dependency injection instead of ServiceContainer:
+1. Initialized all services in `start()` function scope
+2. Created middleware that captures services via closure
+3. Injected services into `req.services`
+4. Updated all controllers to use `req.services` instead of `req.app.locals`
+5. Removed all 24 `app.locals` assignments
+6. Passed dependencies explicitly to route creators
 
 ## Benefits
 - **Explicit dependencies**: Clear what each component needs
@@ -92,3 +93,4 @@ While not blocking features, this significantly impacts code quality and testabi
 ## Estimated Effort: 2-3 days
 
 ## Filed: 2025-08-01
+## Resolved: 2025-09-12

@@ -37,31 +37,26 @@ module.exports = GitStatusService;
 - Easy to test
 - Easy to modify
 
-### Change 2: Create a Service Registry
+### Change 2: Use Closure-Based Dependency Injection
 **Current State**: Everything uses `app.locals` (global state)
-**Target State**: Services injected where needed
+**Target State**: Services injected via closure-based middleware
 
 ```javascript
-// backend/services/index.js
-class ServiceRegistry {
-  constructor() {
-    this.services = {};
-  }
+// backend/server.js
+async function start() {
+  // Services in closure scope
+  const services = await initializeServices();
   
-  register(name, service) {
-    this.services[name] = service;
-  }
+  // Middleware captures services via closure
+  app.use((req, res, next) => {
+    req.services = services;
+    next();
+  });
   
-  get(name) {
-    return this.services[name];
-  }
+  // Pass dependencies explicitly
+  const routes = createRoutes(models, config);
+  app.use('/api', routes);
 }
-
-// In app.js
-const registry = new ServiceRegistry();
-registry.register('gitStatus', new GitStatusService());
-registry.register('taskNumber', new TaskNumberService());
-req.services = registry; // Add to request
 ```
 
 ### Change 3: Start Moving Logic from Controllers
@@ -214,7 +209,7 @@ Level 3: Simplifies interfaces (labels on boxes)
 
 ### After Level 1 ✅ COMPLETE
 - Controllers under 50 lines each ✓ (Achieved: 10-50 lines average)
-- No `app.locals` usage ✓ (Replaced with ServiceRegistry)
+- No `app.locals` usage ✓ (Replaced with closure-based DI)
 - Services testable in isolation ✓ (All services use dependency injection)
 
 ### After Level 2 ✅ COMPLETE
@@ -273,7 +268,7 @@ If you're making it more complex, stop and think. There's usually a simpler way.
 We successfully implemented all three levels of the practical incremental changes plan:
 
 #### ✅ Level 1: Foundation - COMPLETE
-- Created ServiceRegistry replacing app.locals
+- Created closure-based DI replacing app.locals
 - Extracted 10 backend services + EventEmitter + WebSocketService
 - Controllers reduced from 1000+ lines to <50 lines each
 - 100% dependency injection
