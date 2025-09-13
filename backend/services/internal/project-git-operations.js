@@ -46,47 +46,43 @@ export class ProjectGitOperations {
   }
 
   async getProjectStatus(projectPath) {
-    return await this.gitService.info(projectPath, 'status');
+    return await this.gitService.getStatus(projectPath);
   }
 
   async getProjectBranches(projectPath, options = {}) {
-    return await this.gitService.info(projectPath, 'branches', options);
+    return await this.gitService.listBranches(projectPath, options);
   }
 
   async createBranch(projectPath, branchName, fromBranch = null) {
     if (fromBranch) {
-      await this.gitService.branch(projectPath, 'checkout', fromBranch);
+      await this.gitService.checkoutBranch(projectPath, fromBranch);
     }
-    return await this.gitService.branch(projectPath, 'create', branchName, { checkout: true });
+    return await this.gitService.createBranch(projectPath, branchName, { checkout: true });
   }
 
   async checkoutBranch(projectPath, branch) {
-    return await this.gitService.branch(projectPath, 'checkout', branch);
+    return await this.gitService.checkoutBranch(projectPath, branch);
   }
 
   async getCommitHistory(projectPath, limit = 50) {
-    return await this.gitService.info(projectPath, 'log', { limit, oneline: true });
+    const commits = await this.gitService.getCommits(projectPath, { limit, oneline: true });
+    return { success: true, commits };
   }
 
   async getBaseBranchStatus(projectPath, baseBranch) {
     // Get current branch info
-    const currentInfo = await this.gitService.info(projectPath, 'current');
+    const currentBranch = await this.gitService.getCurrentBranch(projectPath);
     
     // Check if we're behind base branch
-    if (currentInfo.branch !== baseBranch) {
+    if (currentBranch !== baseBranch) {
       await this.checkoutBranch(projectPath, baseBranch);
-      const status = await this.gitService.info(projectPath, 'current');
-      return {
-        behind: status.behind || 0,
-        ahead: status.ahead || 0,
-        branch: baseBranch
-      };
     }
     
+    const status = await this.gitService.getStatus(projectPath);
     return {
-      behind: currentInfo.behind || 0,
-      ahead: currentInfo.ahead || 0,
-      branch: currentInfo.branch
+      behind: status.behind || 0,
+      ahead: status.ahead || 0,
+      branch: baseBranch
     };
   }
 

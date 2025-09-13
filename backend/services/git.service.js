@@ -20,17 +20,8 @@ export class GitService {
     this.githubToken = githubToken;
   }
 
-  // ========== 10 PUBLIC METHODS ==========
-  // 1. clone - Clone a repository
-  // 2. sync - Fetch and pull updates (combines fetch + pull)
-  // 3. push - Push changes to remote
-  // 4. commit - Stage and commit changes
-  // 5. merge - Merge branches (with conflict checking)
-  // 6. branch - Manage branches (checkout, create, delete, list)
-  // 7. info - Get repository information (status, branches, log, current)
-  // 8. getDiff - Get differences between refs
-  // 9. checkConflicts - Check for merge conflicts
-  // 10. execute - Execute arbitrary git command (escape hatch)
+  // ========== CORE GIT OPERATIONS ==========
+  // Simple verb-based API with clear single purposes
 
   /**
    * Clone a repository
@@ -153,83 +144,130 @@ export class GitService {
   }
 
   /**
-   * Manage branches (checkout, create, delete)
-   * @param {string} repoPath - Repository path
-   * @param {string} operation - Operation: 'checkout', 'create', 'delete', 'list'
-   * @param {string} branch - Branch name (for checkout/create/delete)
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Result
+   * Create a new branch
    */
-  async branch(repoPath, operation, branch = null, options = {}) {
-    switch (operation) {
-      case 'checkout':
-        return await this._execute(`git checkout ${branch}`, repoPath);
-      
-      case 'create':
-        const createCmd = options.checkout 
-          ? `git checkout -b ${branch}`
-          : `git branch ${branch}`;
-        return await this._execute(createCmd, repoPath);
-      
-      case 'delete':
-        const deleteCmd = options.force 
-          ? `git branch -D ${branch}`
-          : `git branch -d ${branch}`;
-        return await this._execute(deleteCmd, repoPath);
-      
-      case 'list':
-        return await this.getBranches(repoPath, options);
-      
-      case 'current':
-        return await this.getCurrentBranch(repoPath);
-      
-      default:
-        return { success: false, error: `Unknown branch operation: ${operation}` };
+  async createBranch(repoPath, branchName, options = {}) {
+    const { checkout = false, fromBranch = null } = options;
+    
+    if (fromBranch) {
+      const checkoutResult = await this.checkoutBranch(repoPath, fromBranch);
+      if (!checkoutResult.success) return checkoutResult;
     }
+    
+    const command = checkout 
+      ? `git checkout -b ${branchName}`
+      : `git branch ${branchName}`;
+    
+    return await this._execute(command, repoPath);
   }
 
   /**
-   * Get repository info (status, branches, commits)
-   * @param {string} repoPath - Repository path
-   * @param {string} infoType - Type of info: 'status', 'branches', 'log', 'current'
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Repository information
+   * Checkout an existing branch
    */
-  async info(repoPath, infoType = 'status', options = {}) {
-    switch (infoType) {
-      case 'status':
-        return await this._getStatus(repoPath);
-      
-      case 'branches':
-        return await this._getBranches(repoPath, options);
-      
-      case 'log':
-        const { limit = 10, oneline = true } = options;
-        const logCmd = oneline 
-          ? `git log --oneline -n ${limit}`
-          : `git log -n ${limit}`;
-        const logResult = await this._execute(logCmd, repoPath);
-        return logResult.success 
-          ? { success: true, commits: logResult.output.split('\n').filter(l => l) }
-          : logResult;
-      
-      case 'current':
-        const branch = await this._getCurrentBranch(repoPath);
-        const commit = await this._getCurrentCommit(repoPath);
-        const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
-        return {
-          success: true,
-          branch,
-          commit,
-          ...aheadBehind
-        };
-      
-      default:
-        return { success: false, error: `Unknown info type: ${infoType}` };
-    }
+  async checkoutBranch(repoPath, branchName) {
+    return await this._execute(`git checkout ${branchName}`, repoPath);
   }
 
-  // Keep as internal helper for other methods
+  /**
+   * Delete a branch
+   */
+  async deleteBranch(repoPath, branchName, options = {}) {
+    const { force = false } = options;
+    const command = force 
+      ? `git branch -D ${branchName}`
+      : `git branch -d ${branchName}`;
+    
+    return await this._execute(command, repoPath);
+  }
+
+  /**
+   * List all branches
+   */
+  async listBranches(repoPath, options = {}) {
+    const { remote = false, all = false } = options;
+    
+    let command = 'git branch';
+    if (all) command += ' -a';
+    else if (remote) command += ' -r';
+    
+    const result = await this._execute(command, repoPath);
+    
+    if (!result.success) {
+      return [];
+    }
+    
+    return result.output
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        return line.trim()
+          .replace(/^\* /, '')
+          .replace(/^remotes\/origin\//, '')
+          .replace(/^origin\//, '');
+      })
+      .filter(branch => branch && !branch.includes('HEAD'));
+  }
+
+  /**
+   * Get repository status
+   */
+  async getStatus(repoPath) {
+    const result = await this._execute('git status --porcelain', repoPath);
+    
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    
+    const files = result.output
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const status = line.substring(0, 2);
+        const file = line.substring(3);
+        return { status, file };
+      });
+    
+    const branch = await this.getCurrentBranch(repoPath);
+    const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
+    
+    return {
+      success: true,
+      branch,
+      files,
+      hasChanges: files.length > 0,
+      ...aheadBehind
+    };
+  }
+
+  /**
+   * Get current branch name
+   */
+  async getCurrentBranch(repoPath) {
+    const result = await this._execute('git branch --show-current', repoPath);
+    return result.success ? result.output.trim() : null;
+  }
+
+  /**
+   * Get commit history
+   */
+  async getCommits(repoPath, options = {}) {
+    const { limit = 10, oneline = true } = options;
+    
+    const command = oneline 
+      ? `git log --oneline -n ${limit}`
+      : `git log -n ${limit}`;
+    
+    const result = await this._execute(command, repoPath);
+    
+    if (!result.success) {
+      return [];
+    }
+    
+    return result.output.split('\n').filter(l => l.trim());
+  }
+
+  // ========== PRIVATE HELPER METHODS ==========
+  
   async _getBranches(repoPath, options = {}) {
     const { remote = false, all = false } = options;
     
@@ -291,6 +329,16 @@ export class GitService {
   }
 
   /**
+   * Execute arbitrary git command (escape hatch for advanced operations)
+   * @param {string} command - Git command to execute
+   * @param {string} repoPath - Repository path
+   * @returns {Promise<Object>} Result with success, output, error
+   */
+  async execute(command, repoPath) {
+    return await this._execute(command, repoPath);
+  }
+
+  /**
    * Check for merge conflicts without actually merging
    * @param {string} repoPath - Repository path
    * @param {string} targetBranch - Branch to check conflicts against
@@ -301,15 +349,6 @@ export class GitService {
   }
 
 
-  /**
-   * Execute arbitrary git command (for advanced operations)
-   * @param {string} command - Git command to execute
-   * @param {string} repoPath - Repository path
-   * @returns {Promise<Object>} Result with success, output, error
-   */
-  async execute(command, repoPath) {
-    return await this._execute(command, repoPath);
-  }
 
   /**
    * Configure git credentials
@@ -336,42 +375,6 @@ export class GitService {
   // ========== HELPER METHODS (Internal Use) ==========
   
   // These were previously public but are now internal:
-  async _getStatus(repoPath) {
-    const result = await this._execute('git status --porcelain', repoPath);
-    
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-    
-    const files = result.output
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const status = line.substring(0, 2);
-        const file = line.substring(3);
-        return { status, file };
-      });
-    
-    // Get branch info
-    const branch = await this._getCurrentBranch(repoPath);
-    
-    // Get ahead/behind info
-    const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
-    
-    return {
-      success: true,
-      branch,
-      files,
-      hasChanges: files.length > 0,
-      ...aheadBehind
-    };
-  }
-
-  async _getCurrentBranch(repoPath) {
-    const result = await this._execute('git branch --show-current', repoPath);
-    return result.success ? result.output.trim() : null;
-  }
-
   async _getCurrentCommit(repoPath) {
     const result = await this._execute('git rev-parse HEAD', repoPath);
     return result.success ? result.output.trim() : null;
