@@ -543,98 +543,53 @@ export class TaskController {
         });
       }
       
-      if (withClaude) {
-        // Create a special merge task that uses the same worktree
-        const operation = method === 'rebase' ? 'rebase' : 'merge';
-        const mergeTaskName = `${operation} ${project.base_branch} into ${task.name}`;
-        const prompt = `Help me ${operation} the branch '${project.base_branch}' into this task branch '${task.branch}'. ` +
-          `IMPORTANT: If there are conflicts, show me each conflicted section using git diff before resolving. ` +
-          `For each conflict, explain what would be lost by choosing either version, then suggest a resolution. ` +
-          `Start by checking the current status and then perform the ${operation}.`;
-        
-        // Create a temporary merge task in the database
-        const mergeTaskId = this.generateTaskId();
-        const mergeTask = await this.models.tasks.create({
-          project_id: project.id,
-          id: mergeTaskId,
-          name: mergeTaskName,
-          branch: task.branch,
-          worktree_path: task.worktree_path
-        });
-        
-        // Update metadata to mark this as a merge task
-        await this.models.tasks.update(mergeTaskId, {
-          metadata: {
-            isMergeTask: true,
-            parentTaskId: task.id,
-            operation: operation
-          }
-        });
-        
-        // Write prompt to a file in the worktree
-        const promptFile = path.join(task.worktree_path, '.claude-prompt');
-        await fs.writeFile(promptFile, prompt);
-        
-        // Return the merge task info so UI can open it
-        res.json({ 
-          claudeAssisted: true,
-          mergeTask: {
-            id: mergeTask.id,
-            name: mergeTask.name,
-            claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`
-          },
-          message: `Created merge task with Claude assistance`
-        });
-      } else {
-        // Check for conflicts before attempting merge
-        const analyzer = new GitAnalyzer(req.githubToken);
-        const repository = new GitRepository(req.githubToken);
-        const conflicts = await analyzer.checkMergeConflicts(
-          task.worktree_path, 
-          `origin/${project.base_branch}`
-        );
-        
-        if (conflicts.hasConflicts) {
-          return res.status(400).json({
-            error: 'Merge conflicts detected. Use "Update with Claude" to resolve conflicts.',
-            hasConflicts: true,
-            conflicts: conflicts.conflicts,
-            suggestion: 'Use the "Update with Claude" option to get help resolving conflicts'
-          });
-        }
-        
-        // Perform update directly since no conflicts detected
-        let result;
-        if (method === 'rebase') {
-          result = await repository.rebase(task.worktree_path, `origin/${project.base_branch}`);
-        } else {
-          result = await repository.merge(task.worktree_path, `origin/${project.base_branch}`);
-        }
-        
-        await this.models.projects.updateLastAccessed(project.id);
-        
-        // After rebase, check if branches became identical
-        if (result.success && method === 'rebase' && task.status === 'merged') {
-          const diffResult = await analyzer.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
-          if (!diffResult.output.trim()) {
-            // Branches are now identical, clear the "needs re-merge" flag
-            await this.models.tasks.update(task.id, {
-              has_commits_since_merge: false
-            });
-          }
-        }
-        
-        // Trigger status update if successful
-        if (result.success) {
-          await this.triggerStatusUpdate(taskId, req);
-        }
-        
-        res.json({ 
-          success: result.success, 
-          output: result.output,
-          method
+      // Check for conflicts before attempting merge
+      const analyzer = new GitAnalyzer(req.githubToken);
+      const repository = new GitRepository(req.githubToken);
+      const conflicts = await analyzer.checkMergeConflicts(
+        task.worktree_path, 
+        `origin/${project.base_branch}`
+      );
+      
+      if (conflicts.hasConflicts) {
+        return res.status(400).json({
+          error: 'Merge conflicts detected',
+          hasConflicts: true,
+          conflicts: conflicts.conflicts
         });
       }
+      
+      // Perform update directly since no conflicts detected
+      let result;
+      if (method === 'rebase') {
+        result = await repository.rebase(task.worktree_path, `origin/${project.base_branch}`);
+      } else {
+        result = await repository.merge(task.worktree_path, `origin/${project.base_branch}`);
+      }
+      
+      await this.models.projects.updateLastAccessed(project.id);
+      
+      // After rebase, check if branches became identical
+      if (result.success && method === 'rebase' && task.status === 'merged') {
+        const diffResult = await analyzer.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
+        if (!diffResult.output.trim()) {
+          // Branches are now identical, clear the "needs re-merge" flag
+          await this.models.tasks.update(task.id, {
+            has_commits_since_merge: false
+          });
+        }
+      }
+      
+      // Trigger status update if successful
+      if (result.success) {
+        await this.triggerStatusUpdate(taskId, req);
+      }
+      
+      res.json({ 
+        success: result.success, 
+        output: result.output,
+        method
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -672,7 +627,6 @@ export class TaskController {
    */
   async mergeToBase(req, res) {
     const { projectId, taskId } = req.params;
-    const { withClaude = false } = req.body;
     
     try {
       const task = await this.models.tasks.findById(taskId);
@@ -685,104 +639,36 @@ export class TaskController {
       const workingTree = new GitWorkingTree(req.githubToken);
       const analyzer = new GitAnalyzer(req.githubToken);
       
-      if (withClaude) {
-        // Create a merge task for Claude assistance
-        const mergeTaskName = `merge ${task.branch} into ${project.base_branch}`;
-        const mergeTaskId = this.generateTaskId();
-        
-        // Create a new branch for the merge
-        const mergeBranch = `merge/${task.branch}-into-${project.base_branch}`.replace(/[^a-zA-Z0-9-]/g, '-');
-        const mergeWorktreePath = path.join(this.projectsDir, `${project.id}-merge-${mergeTaskId}`);
-        
-        // Pull latest base branch changes
-        await workingTree.checkout(project.local_path, project.base_branch);
-        await repository.pull(project.local_path, 'origin', project.base_branch);
-        
-        // Create worktree from base branch
-        await this.worktreeService.create(project.local_path, mergeBranch, mergeWorktreePath, project.base_branch);
-        
-        // Attempt merge in the new worktree
-        const mergeResult = await repository.merge(mergeWorktreePath, `origin/${task.branch}`);
-        
-        // Create merge task in database
-        const mergeTask = await this.models.tasks.create({
-          project_id: project.id,
-          id: mergeTaskId,
-          name: mergeTaskName,
-          branch: mergeBranch,
-          worktree_path: mergeWorktreePath
+      // Direct merge
+      // First ensure the task branch is pushed to origin
+      const pushResult = await repository.push(task.worktree_path, task.branch, { setUpstream: true });
+      if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
+        return res.status(500).json({ 
+          error: 'Failed to push branch', 
+          details: pushResult.error 
         });
-        
-        // Add metadata to indicate this is a merge task
-        await this.models.tasks.update(mergeTaskId, {
-          metadata: {
-            isMergeTask: true,
-            sourceBranch: task.branch,
-            targetBranch: project.base_branch,
-            originalTaskId: task.id
-          }
+      }
+      
+      // Now ensure we're on the base branch and up to date
+      await workingTree.checkout(project.local_path, project.base_branch);
+      await repository.pull(project.local_path, 'origin', project.base_branch);
+      
+      // Check for conflicts before attempting merge
+      const conflicts = await analyzer.checkMergeConflicts(
+        project.local_path,
+        `origin/${task.branch}`
+      );
+      
+      if (conflicts.hasConflicts) {
+        return res.status(400).json({
+          error: 'Cannot merge: conflicts detected',
+          hasConflicts: true,
+          conflicts: conflicts.conflicts
         });
-        
-        // Write instructions for Claude
-        const promptFile = path.join(mergeWorktreePath, '.claude-prompt');
-        const prompt = `Help me complete the merge of branch '${task.branch}' into '${project.base_branch}'.
-
-There are merge conflicts that need to be resolved. Please:
-1. Check the current git status to see conflicting files
-2. For EACH conflict, use 'git diff' to show me the conflicting sections
-3. Explain what each version contains and what would be lost by choosing either side
-4. Suggest how to resolve the conflict and wait for my approval
-5. Only after showing me all conflicts, proceed with resolution
-6. Make sure the code still works after merging
-7. Commit the merge with an appropriate message
-
-IMPORTANT: Never use 'git checkout --theirs' or '--ours' without first showing what would be removed.
-
-Original task: ${task.name}`;
-        
-        await fs.writeFile(promptFile, prompt);
-        
-        res.json({
-          mergeTask: {
-            id: mergeTask.id,
-            name: mergeTask.name,
-            branch: mergeTask.branch,
-            claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(mergeWorktreePath)}`
-          }
-        });
-        
-      } else {
-        // Direct merge without Claude
-        // First ensure the task branch is pushed to origin
-        const pushResult = await repository.push(task.worktree_path, task.branch, { setUpstream: true });
-        if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
-          return res.status(500).json({ 
-            error: 'Failed to push branch', 
-            details: pushResult.error 
-          });
-        }
-        
-        // Now ensure we're on the base branch and up to date
-        await workingTree.checkout(project.local_path, project.base_branch);
-        await repository.pull(project.local_path, 'origin', project.base_branch);
-        
-        // Check for conflicts before attempting merge
-        const conflicts = await analyzer.checkMergeConflicts(
-          project.local_path,
-          `origin/${task.branch}`
-        );
-        
-        if (conflicts.hasConflicts) {
-          return res.status(400).json({
-            error: 'Cannot merge: conflicts detected',
-            hasConflicts: true,
-            conflicts: conflicts.conflicts,
-            suggestion: 'Resolve conflicts locally or use "Merge with Claude" option'
-          });
-        }
-        
-        // Merge the task branch
-        const mergeResult = await repository.merge(
+      }
+      
+      // Merge the task branch
+      const mergeResult = await repository.merge(
           project.local_path, 
           `origin/${task.branch}`,
           `Merge branch '${task.branch}' into ${project.base_branch}`
