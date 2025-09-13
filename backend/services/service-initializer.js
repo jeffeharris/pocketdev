@@ -10,8 +10,7 @@
  */
 
 import { getGitHubTokenService } from './github-token.service.js';
-import { GitStatusService } from './git-status.service.js';
-import GitOperationService from './git-operation.service.js';
+import { GitService } from './git.service.js';
 import { TaskService } from './task.service.js';
 import { ProjectService } from './project.service.js';
 import { TerminalService } from './terminal.service.js';
@@ -43,6 +42,9 @@ export class ServiceInitializer {
     const githubTokenService = getGitHubTokenService(this.db);
     const eventEmitterService = getEventEmitterService();
     
+    // Get current GitHub token for GitService
+    const currentToken = await githubTokenService.getToken();
+    
     // Create service registry
     this.services = {
       // Core dependencies
@@ -51,9 +53,11 @@ export class ServiceInitializer {
       GitHubTokenService: githubTokenService,
       githubTokenService: githubTokenService, // Compatibility alias
       
+      // Git Services (consolidated)
+      GitService: new GitService(currentToken),
+      git: new GitService(currentToken), // Convenience alias
+      
       // Domain Services
-      GitStatusService: new GitStatusService(this.models, githubTokenService),
-      GitOperationService: new GitOperationService(this.models, githubTokenService, eventEmitterService),
       TaskService: new TaskService(this.models, githubTokenService, eventEmitterService),
       ProjectService: new ProjectService(this.models, githubTokenService),
       TerminalService: new TerminalService(this.models, eventEmitterService),
