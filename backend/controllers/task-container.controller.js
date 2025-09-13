@@ -187,7 +187,6 @@ export class TaskContainerController {
       // docker exec -it <containerId> /bin/bash
       
       res.json({
-        success: true,
         shellUrl: `http://localhost:7681/?container=${targetContainer.id.substring(0, 12)}`,
         containerId: targetContainer.id.substring(0, 12),
         service: targetContainer.service

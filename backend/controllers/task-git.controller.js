@@ -210,9 +210,9 @@ export class TaskGitController {
           error.message === 'Commit message required' || 
           error.message === 'Commit hash required for reset' ||
           error.message === 'Invalid operation') {
-        res.status(400).json({ success: false, error: error.message });
+        res.status(400).json({ error: error.message });
       } else {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ error: error.message });
       }
     }
   }

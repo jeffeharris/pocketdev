@@ -427,7 +427,6 @@ export async function pullBaseBranch(req, res, next) {
     await models.projects.updateLastAccessed(project.id);
     
     res.json({ 
-      success: true, 
       output: result.output,
       message: `Successfully pulled updates to ${project.base_branch}`
     });
@@ -482,7 +481,6 @@ export async function pushBaseBranch(req, res, next) {
     await models.projects.updateLastAccessed(project.id);
     
     res.json({ 
-      success: true, 
       output: result.output,
       message: `Successfully pushed ${project.base_branch} to origin`
     });
@@ -624,7 +622,6 @@ export async function refreshProjectStatus(req, res, next) {
     
     // Return immediately
     res.json({ 
-      success: true, 
       message: 'Refresh triggered',
       projectId 
     });

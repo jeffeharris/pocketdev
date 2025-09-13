@@ -103,7 +103,7 @@ export class TaskController {
       
       res.json(result.task);
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ error: error.message });
     }
   }
 
@@ -513,7 +513,7 @@ export class TaskController {
       
       res.json(result);
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ error: error.message });
     }
   }
 
@@ -577,7 +577,6 @@ export class TaskController {
         
         // Return the merge task info so UI can open it
         res.json({ 
-          success: true,
           claudeAssisted: true,
           mergeTask: {
             id: mergeTask.id,
@@ -744,7 +743,6 @@ Original task: ${task.name}`;
         await fs.writeFile(promptFile, prompt);
         
         res.json({
-          success: true,
           mergeTask: {
             id: mergeTask.id,
             name: mergeTask.name,
@@ -834,7 +832,6 @@ Original task: ${task.name}`;
         }
         
         res.json({
-          success: true,
           message: `Successfully merged ${task.branch} into ${project.base_branch}`,
           output: mergeResult.output,
           mergeCommit: mergeCommitSha
