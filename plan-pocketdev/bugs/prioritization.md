@@ -26,7 +26,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | Open | 2025-08-30 |
 | BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-09-01 |
 | BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
-| BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | Open | 2025-09-05 |
+| BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | **RESOLVED** | 2025-09-12 |
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
 | BUG-023 | API Response Format Inconsistency | API Design | N/A | **Medium** | Inconsistent response formats | Open | 2025-09-09 |
 | BUG-024 | Create Pull Request Fails on Unpushed Branches | Functional | N/A | **Medium** | Common workflow broken | Open | 2025-09-10 |
@@ -41,7 +41,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**10 bugs resolved** (9 via service extraction/refactoring + 1 functional fix):
+**11 bugs resolved** (10 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -97,6 +97,13 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 9. **BUG-003** (Critical): Terminal sessions not loading on task open - **RESOLVED**
    - Fixed as part of TerminalService improvements
    - Sessions now properly load when opening tasks
+
+10. **BUG-021** (Medium): Database Models Cross-Table Contamination - **RESOLVED** (2025-09-12)
+   - Refactored all models to follow single-table responsibility
+   - Created pure models that only query their own tables
+   - Moved all cross-table aggregation to service layer
+   - Eliminated JOINs from model layer completely
+   - Services now handle data aggregation properly
 
 ### Metrics Achieved
 - **Backend**: Controllers reduced by 90%+ in size
