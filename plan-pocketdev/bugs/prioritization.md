@@ -28,7 +28,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
 | BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | **RESOLVED** | 2025-09-12 |
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
-| BUG-023 | API Response Format Inconsistency | API Design | N/A | **Medium** | Inconsistent response formats | Open | 2025-09-09 |
+| BUG-023 | API Response Format Inconsistency | API Design | N/A | **Medium** | Inconsistent response formats | **RESOLVED** | 2025-09-12 |
 | BUG-024 | Create Pull Request Fails on Unpushed Branches | Functional | N/A | **Medium** | Common workflow broken | Open | 2025-09-10 |
 | BUG-025 | Terminal Store Shallow Module | Technical Debt | N/A | **High** | 34+ methods, leaky abstraction | Open | 2025-08-04 |
 | BUG-026 | Split View Store Shallow Module | Technical Debt | N/A | **High** | 17 methods, mixed concerns | Open | 2025-08-04 |
