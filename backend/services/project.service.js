@@ -2,1180 +2,273 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
+import { ProjectRepository } from './internal/project-repository.js';
+import { ProjectGitOperations } from './internal/project-git-operations.js';
+import { ProjectPlanningManager } from './internal/project-planning-manager.js';
 import { GitService } from './git.service.js';
-import { GitRepository } from './git-repository.service.js';
 
 /**
- * ProjectService - Handles all project-related business operations
- * 
- * This service provides a clean interface for project management operations,
- * hiding the complexity of git cloning, credential setup, branch management,
- * filesystem operations, and status aggregation.
- * 
- * Following deep module principles: simple interface (10-12 methods), 
- * complex implementation handling project lifecycle, git operations,
- * and dashboard data aggregation.
+ * ProjectService - Orchestrates project operations using internal services
+ * A proper "deep module" with 8 public methods hiding complex implementation
  */
 export class ProjectService {
-  constructor(models, githubTokenService, gitService = null, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
+  constructor(models, githubTokenService, githubService = null, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
+    // Internal services that handle specific aspects
+    this.repository = new ProjectRepository(models);
+    this.gitOps = new ProjectGitOperations(new GitService(), githubTokenService, projectsDir);
+    this.planningManager = new ProjectPlanningManager(githubService, projectsDir);
+    
+    // Core dependencies
     this.models = models;
     this.githubTokenService = githubTokenService;
-    this.gitService = gitService || new GitService();
+    this.githubService = githubService;
     this.projectsDir = projectsDir;
   }
 
   /**
-   * Create a new project (not branches)
-   * @param {Object} data - Project creation data (repoUrl, branch, projectName)
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Created project
+   * Create a new project
    */
-  async create(data, options = {}) {
-    const { githubToken } = options;
-    return this._createProject(data, this.gitService || new GitService(githubToken), options);
-  }
-  
-  /**
-   * Create a new branch in existing project
-   * @param {string} projectId - Project ID
-   * @param {string} branchName - New branch name
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Branch creation result
-   */
-  async createBranch(projectId, branchName, options = {}) {
-    const { githubToken } = options;
-    return this._createProjectBranch(projectId, { name: branchName }, this.gitService || new GitService(githubToken));
-  }
-
-  /**
-   * Internal create project implementation
-   * @private
-   */
-  async _createProject(projectData, gitService, options = {}) {
+  async create(projectData, options = {}) {
     const { repoUrl, branch = 'main', projectName } = projectData;
+    const { githubToken = null } = options;
     
     if (!repoUrl) {
       throw new Error('Repository URL is required');
     }
     
-    // Generate project ID and paths
-    const projectId = crypto.randomBytes(8).toString('hex');
-    const projectPath = path.join(this.projectsDir, projectId);
+    // Generate project ID
+    const projectId = crypto.randomBytes(4).toString('hex');
+    const name = projectName || repoUrl.split('/').pop().replace('.git', '');
     
-    // Extract project name from URL if not provided
-    const finalProjectName = projectName || repoUrl.split('/').pop().replace('.git', '');
+    // Clone the repository
+    const projectPath = await this.gitOps.cloneProject(repoUrl, projectId, branch, githubToken);
     
-    try {
-      // Clone repository
-      console.log(`Cloning ${repoUrl} to ${projectPath}...`);
-      const cloneResult = await gitService.clone(
-        repoUrl,
-        projectPath,
-        { branch: branch || 'main' }
-      );
-      
-      if (!cloneResult.success) {
-        throw new Error(`Failed to clone repository: ${cloneResult.error}`);
-      }
-      
-      // Configure git credentials
-      await GitService.configureCredentials(projectPath, githubToken);
-      
-      // Checkout branch if different from default
-      if (branch && branch !== 'main') {
-        const checkoutResult = await gitService.branch(projectPath, 'checkout', branch);
-        
-        if (!checkoutResult.success) {
-          // Clean up on failure
-          await fs.rm(projectPath, { recursive: true, force: true });
-          throw new Error(`Failed to checkout branch ${branch}: ${checkoutResult.error}`);
-        }
-      }
-      
-      // Save project to database
-      const project = await this.models.projects.create({
-        id: projectId,
-        name: finalProjectName,
-        repoUrl: repoUrl,
-        baseBranch: branch,
-        localPath: projectPath
-      });
-      
-      // Create default planning document
-      await this._createDefaultPlanningDocument(project, repoUrl, branch, gitService);
-      
-      // Get GitHub metadata if available
-      const projectWithMetadata = await this._enrichWithGitHubMetadata(project, repoUrl);
-      
-      return {
-        success: true,
-        project: projectWithMetadata
-      };
-    } catch (error) {
-      // Cleanup on failure
-      try {
-        if (fsSync.existsSync(projectPath)) {
-          await fs.rm(projectPath, { recursive: true, force: true });
-        }
-      } catch (cleanupError) {
-        console.error('Failed to cleanup after project creation failure:', cleanupError);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a project with complete cleanup
-   * @param {string} projectId - Project ID to delete
-   * @param {Object} options - Deletion options
-   * @returns {Promise<Object>} Deletion result
-   */
-  /**
-   * Delete a project
-   * @param {string} projectId - Project ID
-   * @param {Object} options - Deletion options
-   * @returns {Promise<Object>} Deletion result
-   */
-  async delete(projectId, options = {}) {
-    return this._deleteProject(projectId, options);
-  }
-
-  async _deleteProject(projectId, options = {}) {
-    const { force = false } = options;
+    // Create project in database
+    const project = await this.repository.create({
+      id: projectId,
+      name,
+      repo_url: repoUrl,
+      base_branch: branch,
+      local_path: projectPath,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
     
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
+    // Create default planning document
+    await this.planningManager.createDefaultPlanningDocument(project, repoUrl);
+    
+    // Store GitHub token if provided
+    if (githubToken) {
+      await this.githubTokenService.storeToken(projectId, githubToken);
     }
     
-    // Check for active tasks before deletion
-    const activeTasks = await this.models.tasks.findByProjectId(projectId, false);
-    if (activeTasks.length > 0 && !force) {
-      throw new Error(`Cannot delete project: ${activeTasks.length} active tasks exist. Use force option to override.`);
-    }
-    
-    // Clean up all tasks first
-    if (activeTasks.length > 0) {
-      for (const task of activeTasks) {
-        try {
-          // Clean up task worktrees and sessions
-          if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-            await fs.rm(task.worktree_path, { recursive: true, force: true });
-          }
-          
-          // Archive task in database
-          await this.models.tasks.archive(task.id);
-        } catch (error) {
-          console.error(`Failed to cleanup task ${task.id}:`, error);
-        }
-      }
-    }
-    
-    // Delete project directory
-    try {
-      if (project.local_path && fsSync.existsSync(project.local_path)) {
-        await fs.rm(project.local_path, { recursive: true, force: true });
-      }
-    } catch (error) {
-      console.error('Failed to delete project directory:', error);
-    }
-    
-    // Archive project in database
-    await this.models.projects.archive(projectId);
-    
-    return {
-      success: true,
-      message: 'Project deleted successfully',
-      cleanedTasks: activeTasks.length
-    };
+    return project;
   }
 
   /**
    * Get project by ID
-   * @param {string} projectId - Project ID
-   * @returns {Promise<Object>} Project details
    */
-  /**
-   * Get project details
-   * @param {string} projectId - Project ID
-   * @param {Array} includes - Optional data to include: ['branches', 'dashboard']
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Project with requested details
-   */
-  async get(projectId, includes = [], options = {}) {
-    const { githubToken } = options;
+  async get(projectId, includes = []) {
+    const project = await this.repository.findById(projectId);
     
-    // Always get base project data
-    const project = await this._getProject(projectId);
-    
-    // Add optional includes
-    if (includes.includes('dashboard')) {
-      const gitService = this.gitService || new GitService(githubToken);
-      const dashboard = await this._getProjectDashboard(projectId, gitService, options);
-      return { ...project, ...dashboard };
+    // Add included data
+    if (includes.includes('tasks')) {
+      project.tasks = await this.repository.getProjectTasks(projectId);
     }
     
     if (includes.includes('branches')) {
-      const gitService = this.gitService || new GitService(githubToken);
-      const branches = await this._getProjectBranches(projectId, gitService);
-      project.branches = branches;
+      project.branches = await this.gitOps.getProjectBranches(project.local_path);
+    }
+    
+    if (includes.includes('status')) {
+      project.git_status = await this.gitOps.getProjectStatus(project.local_path);
+    }
+    
+    if (includes.includes('planning')) {
+      const planning = await this.planningManager.getPlanningContent(project.local_path);
+      project.planning = planning.content;
+    }
+    
+    if (includes.includes('github')) {
+      const githubToken = await this.githubTokenService.getToken(projectId);
+      if (githubToken) {
+        project.metadata = await this.planningManager.enrichWithGitHubMetadata(
+          project,
+          project.repo_url,
+          githubToken
+        );
+      }
     }
     
     return project;
   }
 
-  async _getProject(projectId) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      const error = new Error('Project not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    return project;
-  }
-
   /**
-   * Get minimal project info for fast loading
-   * @param {string} projectId - Project ID
-   * @returns {Promise<Object>} Minimal project details
-   */
-  async _getProjectMinimal(projectId) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      const error = new Error('Project not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    
-    // Return just the project info - no git operations
-    return {
-      id: project.id,
-      name: project.name,
-      repository: project.repo_url,
-      baseBranch: project.base_branch,
-      created: project.created_at,
-      local_path: project.local_path
-    };
-  }
-
-  /**
-   * Trigger background refresh of git status
-   * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for authentication
-   * @returns {Promise<Object>} Refresh status
-   */
-  /**
-   * Get project status information
-   * @param {string} projectId - Project ID
-   * @param {string} type - Status type: 'refresh', 'baseBranch', 'tasks'
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Status information
-   */
-  async status(projectId, type = 'refresh', options = {}) {
-    const { githubToken } = options;
-    const gitService = this.gitService || new GitService(githubToken);
-    
-    switch (type) {
-      case 'refresh':
-        return this._refreshProjectStatus(projectId, githubToken);
-      case 'baseBranch':
-        return this._getBaseBranchStatus(projectId, gitService);
-      case 'tasks':
-        return this._getProjectTasksUpdateStatus(projectId, gitService);
-      default:
-        throw new Error(`Unknown status type: ${type}`);
-    }
-  }
-
-  async _refreshProjectStatus(projectId, githubToken) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      const error = new Error('Project not found');
-      error.statusCode = 404;
-      throw error;
-    }
-    
-    // Trigger git fetch in background (non-blocking)
-    const gitService = new GitService(githubToken);
-    gitService.sync(project.local_path, { fetchOnly: true })
-      .then(() => console.log(`Background fetch completed for project ${projectId}`))
-      .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
-    
-    // Return immediately
-    return { 
-      message: 'Refresh triggered',
-      projectId 
-    };
-  }
-
-  /**
-   * List all active projects
-   * @returns {Promise<Array>} List of active projects
-   */
-  /**
-   * List projects
-   * @param {Object} options - List options
-   * @returns {Promise<Array>} Array of projects
+   * List all projects
    */
   async list(options = {}) {
-    return this._listProjects();
-  }
-
-  async _listProjects() {
-    return await this.models.projects.findActive();
+    return await this.repository.list(options);
   }
 
   /**
    * Update project metadata
-   * @param {string} projectId - Project ID
-   * @param {Object} updates - Fields to update
-   * @returns {Promise<Object>} Updated project
    */
-  /**
-   * Update project metadata only
-   * @param {string} projectId - Project ID
-   * @param {Object} updates - Metadata updates (name, description, baseBranch)
-   * @returns {Promise<Object>} Updated project
-   */
-  async update(projectId, updates = {}) {
-    return this._updateProject(projectId, updates);
-  }
-  
-  /**
-   * Update project planning document
-   * @param {string} projectId - Project ID
-   * @param {string} content - Planning document content
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Update result
-   */
-  async updatePlanning(projectId, content, options = {}) {
-    const { githubToken } = options;
-    const gitService = this.gitService || new GitService(githubToken);
-    return this._updateProjectPlanning(projectId, content, gitService);
-  }
-
-  async _updateProject(projectId, updates) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    // Validate allowed updates
-    const allowedUpdates = ['name', 'description', 'baseBranch', 'metadata'];
+  async update(projectId, updates) {
+    // Only allow updating certain fields
+    const allowedFields = ['name', 'base_branch', 'description'];
     const filteredUpdates = {};
     
-    for (const [key, value] of Object.entries(updates)) {
-      if (allowedUpdates.includes(key)) {
-        filteredUpdates[key] = value;
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        filteredUpdates[field] = updates[field];
       }
     }
     
     if (Object.keys(filteredUpdates).length === 0) {
-      throw new Error('No valid updates provided');
+      return await this.repository.findById(projectId);
     }
     
-    // Update project in database
-    await this.models.projects.update(projectId, filteredUpdates);
+    filteredUpdates.updated_at = new Date().toISOString();
+    await this.repository.update(projectId, filteredUpdates);
     
-    // Return updated project
-    return await this.models.projects.findById(projectId);
+    return await this.repository.findById(projectId);
   }
 
   /**
-   * Get project branch information and management
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Branch information and operations
+   * Delete project
    */
-  async _getProjectBranches(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
+  async delete(projectId, options = {}) {
+    const { cleanupFiles = true } = options;
+    
+    const project = await this.repository.findById(projectId);
+    
+    // Delete from database (cascades to tasks)
+    await this.repository.delete(projectId);
+    
+    // Clean up files if requested
+    if (cleanupFiles && project.local_path) {
+      try {
+        await fs.rm(project.local_path, { recursive: true, force: true });
+      } catch (error) {
+        console.warn(`Failed to delete project files: ${error.message}`);
+      }
     }
     
+    // Remove stored credentials
+    await this.githubTokenService.removeToken(projectId);
     
-    // Get all branches
-    const branchResult = await gitService.execute(
-      project.local_path,
-      'git branch -a'
-    );
-    
-    if (!branchResult.success) {
-      throw new Error(`Failed to list branches: ${branchResult.error}`);
-    }
-    
-    // Parse branches
-    const branches = branchResult.output
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const branch = line.trim().replace('* ', '');
-        const isRemote = branch.startsWith('remotes/');
-        const isCurrent = line.startsWith('* ');
-        
-        return {
-          name: isRemote ? branch.replace('remotes/origin/', '') : branch,
-          isRemote,
-          isCurrent,
-          fullName: branch
-        };
-      });
-    
-    return {
-      branches,
-      currentBranch: branches.find(b => b.isCurrent)?.name,
-      baseBranch: project.base_branch
-    };
+    return { success: true, deleted: project };
   }
 
   /**
-   * Create a new branch in the project
-   * @param {string} projectId - Project ID
-   * @param {Object} branchData - Branch creation data
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Branch creation result
-   */
-  async _createProjectBranch(projectId, branchData, gitService) {
-    const { branchName, fromBranch = 'main' } = branchData;
-    
-    if (!branchName) {
-      throw new Error('Branch name is required');
-    }
-    
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    
-    // Create branch
-    const result = await gitService.execute(
-      project.local_path,
-      `git checkout -b ${branchName} ${fromBranch}`
-    );
-    
-    if (!result.success) {
-      throw new Error(`Failed to create branch: ${result.error}`);
-    }
-    
-    return {
-      success: true,
-      branch: branchName,
-      fromBranch,
-      output: result.output
-    };
-  }
-
-  /**
-   * Fetch updates from remote repository
-   * @param {string} projectId - Project ID
-   * @param {string} githubToken - GitHub token for authentication
-   * @returns {Promise<Object>} Fetch result with branches
-   */
-  /**
-   * Sync project with remote repository
-   * @param {string} projectId - Project ID
-   * @param {string} operation - Operation type: 'fetch', 'pull', 'push'
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Sync result
+   * Sync project with remote (fetch/pull)
    */
   async sync(projectId, operation = 'fetch', options = {}) {
-    const { githubToken } = options;
-    const gitService = this.gitService || new GitService(githubToken);
+    const { githubToken = null } = options;
     
+    const project = await this.repository.findById(projectId);
+    
+    // Get stored token if not provided
+    const token = githubToken || await this.githubTokenService.getToken(projectId);
+    
+    // Configure git with token if available
+    if (token) {
+      await GitService.configureCredentials(project.local_path, token);
+    }
+    
+    let result;
     switch (operation) {
       case 'fetch':
-        return this._fetchProject(projectId, githubToken);
+        result = await this.gitOps.fetchProject(project.local_path);
+        break;
+      
       case 'pull':
-        return this._pullBaseBranch(projectId, gitService);
+        result = await this.gitOps.pullProject(project.local_path, project.base_branch);
+        break;
+      
       case 'push':
-        return this._pushBaseBranch(projectId, gitService);
+        result = await this.gitOps.pushProject(project.local_path, project.base_branch);
+        break;
+      
       default:
         throw new Error(`Unknown sync operation: ${operation}`);
     }
-  }
-
-  async _fetchProject(projectId, githubToken) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      const error = new Error('Project not found');
-      error.statusCode = 404;
-      throw error;
-    }
     
-    // Get git config from settings
-    const gitUserName = await this.models.db.get(
-      'SELECT value FROM settings WHERE key = ?',
-      ['git_user_name']
-    );
+    // Update project timestamp
+    await this.repository.update(projectId, {
+      updated_at: new Date().toISOString()
+    });
     
-    const gitUserEmail = await this.models.db.get(
-      'SELECT value FROM settings WHERE key = ?',
-      ['git_user_email']
-    );
-    
-    const gitConfig = {
-      name: gitUserName?.value || 'PocketDev User',
-      email: gitUserEmail?.value || 'user@pocketdev.local'
-    };
-    
-    // Ensure git credentials are configured
-    await GitService.configureCredentials(project.local_path, githubToken, gitConfig);
-    
-    // Fetch with git
-    const gitService = new GitService(githubToken);
-    const result = await gitService.sync(project.local_path, { fetchOnly: true });
-    
-    // Get updated branch info
-    const branches = await gitService.info(project.local_path, 'branches', { remote: true });
-    
-    await this.models.projects.updateLastAccessed(project.id);
-    
-    return { 
-      success: result.success, 
-      output: result.output,
-      branches: branches
-    };
+    return result;
   }
 
   /**
-   * Sync project with remote repository
-   * @param {string} projectId - Project ID  
-   * @param {string} gitService - GitHub token for git operations
-   * @param {Object} options - Sync options
-   * @returns {Promise<Object>} Sync result
+   * Manage branches (create, checkout, list)
    */
-  async _syncProject(projectId, gitService, options = {}) {
-    const { fetchOnly = false } = options;
+  async branch(projectId, operation, branchName = null, options = {}) {
+    const project = await this.repository.findById(projectId);
     
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    
-    // Fetch from remote
-    const fetchResult = await gitService.execute(
-      project.local_path,
-      'git fetch --all --prune --tags'
-    );
-    
-    if (!fetchResult.success) {
-      throw new Error(`Failed to fetch: ${fetchResult.error}`);
-    }
-    
-    let pullResult = null;
-    if (!fetchOnly) {
-      // Pull current branch
-      pullResult = await gitService.execute(
-        project.local_path,
-        'git pull'
-      );
-    }
-    
-    // Update project last accessed
-    await this.models.projects.updateLastAccessed(projectId);
-    
-    return {
-      success: true,
-      fetch: fetchResult.output,
-      pull: pullResult?.output,
-      message: fetchOnly ? 'Project fetched successfully' : 'Project synced successfully'
-    };
-  }
-
-  // Private helper methods
-
-  /**
-   * Create default planning document for new project
-   * @private
-   */
-  async _createDefaultPlanningDocument(project, repoUrl, branch, gitService) {
-    const planningTemplate = `# Project Planning: ${project.name}
-
-## 🎯 Project Overview
-${project.name} - Created on ${new Date().toLocaleDateString()}
-
-## 🐛 Bugs & Issues
-<!-- Track bugs that need to be fixed -->
-- [ ] 
-
-## 💡 Feature Ideas
-<!-- New features and enhancements to implement -->
-- [ ] 
-
-## 🔧 Technical Debt
-<!-- Code improvements, refactoring needs, and optimization tasks -->
-- [ ] 
-
-## 📋 Current Sprint
-<!-- Tasks currently being worked on or planned for the current sprint -->
-- [ ] 
-
-## 🏗️ Architecture Decisions
-<!-- Important technical decisions and their rationale -->
-- 
-
-## 📝 Notes & Context
-<!-- Any additional context, links, or information relevant to the project -->
-- Repository: ${repoUrl}
-- Base Branch: ${branch}
-
----
-*This file is maintained by PocketDev to track project planning and context across all tasks.*
-`;
-
-    try {
-      // Try to create via GitHub API for GitHub repositories
-      if (repoUrl.includes('github.com')) {
-        const success = await this._createPlanningViaGitHubAPI(
-          repoUrl, 
-          branch, 
-          planningTemplate, 
-          gitService,
-          project
-        );
-        
-        if (success) {
-          // Pull the changes to sync local repository
-                await gitService.execute(
-            project.local_path,
-            `git pull origin ${branch}`
-          );
-          return;
-        }
-      }
-      
-      // Fallback to local file creation
-      const planningPath = path.join(project.local_path, '.pocketdev', 'PLANNING.md');
-      await fs.mkdir(path.dirname(planningPath), { recursive: true });
-      await fs.writeFile(planningPath, planningTemplate, 'utf8');
-    } catch (error) {
-      console.error('Failed to create default PLANNING.md:', error);
-      // Don't fail project creation if planning file creation fails
-    }
-  }
-
-  /**
-   * Create planning document via GitHub API
-   * @private
-   */
-  async _createPlanningViaGitHubAPI(repoUrl, branch, content, gitService, project) {
-    try {
-      const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
-      
-      // Create the file using GitHub API via gh CLI
-      const base64Content = Buffer.from(content).toString('base64');
-      const createFileCommand = `gh api repos/${owner}/${repo}/contents/.pocketdev/PLANNING.md \
-        -X PUT \
-        -f message="Add PocketDev project planning file" \
-        -f content="${base64Content}" \
-        -f branch="${branch}"`;
-      
-        const createResult = await gitService.execute(
-        project.local_path,
-        createFileCommand
-      );
-      
-      if (createResult.success) {
-        console.log('Created default PLANNING.md on GitHub for project:', project.name);
-        return true;
-      } else {
-        console.error('Failed to create PLANNING.md via GitHub API:', createResult.error);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error creating planning file via GitHub API:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get base branch sync status for project
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Base branch status
-   */
-  async _getBaseBranchStatus(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    if (!fsSync.existsSync(project.local_path)) {
-      return { 
-        behind: 0, 
-        ahead: 0, 
-        error: 'Project directory not found' 
-      };
-    }
-    
-    try {
-        
-      // Fetch latest from remote to get accurate status
-      await gitService.execute(project.local_path, 'git fetch origin');
-      
-      // Check if base branch is behind its remote
-      const behindResult = await gitService.execute(
-        project.local_path,
-        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`
-      );
-      const behind = parseInt(behindResult.output.trim()) || 0;
-      
-      // Check if base branch has unpushed commits
-      const aheadResult = await gitService.execute(
-        project.local_path,
-        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`
-      );
-      const ahead = parseInt(aheadResult.output.trim()) || 0;
-      
-      return { 
-        behind, 
-        ahead, 
-        branch: project.base_branch 
-      };
-    } catch (error) {
-      return { 
-        behind: 0, 
-        ahead: 0, 
-        error: error.message 
-      };
-    }
-  }
-
-  /**
-   * Pull base branch updates
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Pull result
-   */
-  async _pullBaseBranch(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    
-    // Check for uncommitted changes in base branch
-    const statusResult = await gitService.info(project.local_path, 'status');
-    
-    if (statusResult.output && statusResult.output.trim()) {
-      throw new Error('Cannot pull: Base branch has uncommitted changes');
-    }
-    
-    // Pull updates for base branch
-    const result = await gitService.execute(
-      project.local_path,
-      `git pull origin ${project.base_branch}`
-    );
-    
-    if (!result.success) {
-      throw new Error(`Pull failed: ${result.error}`);
-    }
-    
-    await this.models.projects.updateLastAccessed(project.id);
-    
-    return {
-      success: true,
-      output: result.output,
-      message: `Successfully pulled updates to ${project.base_branch}`
-    };
-  }
-
-  /**
-   * Push base branch changes
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Push result
-   */
-  async _pushBaseBranch(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    
-    // Push base branch
-    const result = await gitService.execute(
-      project.local_path,
-      `git push origin ${project.base_branch}`
-    );
-    
-    if (!result.success) {
-      throw new Error(`Push failed: ${result.error}`);
-    }
-    
-    await this.models.projects.updateLastAccessed(project.id);
-    
-    return {
-      success: true,
-      output: result.output,
-      message: `Successfully pushed ${project.base_branch} to origin`
-    };
-  }
-
-  /**
-   * Get comprehensive dashboard data for project
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @param {Object} options - Dashboard options
-   * @returns {Promise<Object>} Complete dashboard data
-   */
-  async _getProjectDashboard(projectId, gitService, options = {}) {
-    const { cached = false } = options;
-    
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    // Get all active tasks for this project
-    const tasks = await this.models.tasks.findByProjectId(projectId, false);
-    const needsAttention = [];
-    
-    // 1. Check base branch sync status
-    if (!cached) {
-      try {
-        const branchStatus = await this.getBaseBranchStatus(projectId, gitService);
-        
-        if (branchStatus.behind > 0) {
-          needsAttention.push({
-            type: 'base-behind',
-            severity: 'warning',
-            message: `Base branch is ${branchStatus.behind} commits behind origin`,
-            details: { behind: branchStatus.behind, branch: project.base_branch },
-            actions: ['pull']
-          });
-        }
-        
-        if (branchStatus.ahead > 0) {
-          needsAttention.push({
-            type: 'base-ahead',
-            severity: 'info',
-            message: `Local base is ${branchStatus.ahead} commits ahead of origin`,
-            details: { ahead: branchStatus.ahead, branch: project.base_branch },
-            actions: ['push']
-          });
-        }
-      } catch (error) {
-        console.error('Git status check failed:', error);
-      }
-    }
-    
-    // 2. Check for stale tasks (no commits in 7+ days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    for (const task of tasks) {
-      if (task.status === 'active' && task.updated < sevenDaysAgo) {
-        const daysSinceUpdate = Math.floor((Date.now() - new Date(task.updated).getTime()) / (1000 * 60 * 60 * 24));
-        needsAttention.push({
-          type: 'stale-task',
-          severity: 'warning',
-          message: `Task "${task.name}" inactive for ${daysSinceUpdate} days`,
-          details: { taskId: task.id, taskName: task.name, daysSinceUpdate },
-          actions: ['open-task', 'archive']
-        });
-      }
-      
-      // 3. Check for merge conflicts (if not cached)
-      if (!cached && task.status === 'active' && task.worktree_path) {
-        try {
-                const mergeResult = await gitService.execute(
-            task.worktree_path,
-            `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`
-          );
-          
-          if (mergeResult.output && mergeResult.output.includes('<<<<<<< ')) {
-            needsAttention.push({
-              type: 'merge-conflict',
-              severity: 'error',
-              message: `Task "${task.name}" has merge conflicts with base branch`,
-              details: { taskId: task.id, taskName: task.name },
-              actions: ['open-task', 'resolve-conflicts']
-            });
-          }
-        } catch (error) {
-          // Skip conflict check for this task
-        }
-      }
-    }
-    
-    // 4. Check for open PRs (if not cached and GitHub token available)
-    if (!cached && gitService) {
-      try {
-            const prResult = await gitService.execute(
+    switch (operation) {
+      case 'create':
+        if (!branchName) throw new Error('Branch name required');
+        return await this.gitOps.createBranch(
           project.local_path,
-          `gh pr list --state open --json number,title,url,author,createdAt`
+          branchName,
+          options.fromBranch
         );
-        
-        if (prResult.success && prResult.output) {
-          const prs = JSON.parse(prResult.output);
-          for (const pr of prs) {
-            needsAttention.push({
-              type: 'open-pr',
-              severity: 'info',
-              message: `PR #${pr.number}: ${pr.title}`,
-              details: { 
-                prNumber: pr.number, 
-                prUrl: pr.url,
-                title: pr.title,
-                author: pr.author.login,
-                createdAt: pr.createdAt
-              },
-              actions: ['view-pr', 'merge-pr']
-            });
-          }
-        }
-      } catch (error) {
-        console.error('PR check failed:', error);
-      }
-    }
-    
-    return {
-      project,
-      needsAttention,
-      tasksCount: tasks.length,
-      activeTasks: tasks.filter(t => t.status === 'active').length,
-      cached,
-      lastUpdated: new Date().toISOString()
-    };
-  }
-
-  /**
-   * Get project planning document content
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Planning document content
-   */
-  /**
-   * Get project planning document
-   * @param {string} projectId - Project ID
-   * @param {Object} options - Options
-   * @returns {Promise<Object>} Planning document
-   */
-  async getPlanning(projectId, options = {}) {
-    const { githubToken } = options;
-    const gitService = this.gitService || new GitService(githubToken);
-    return this._getProjectPlanning(projectId, gitService);
-  }
-
-  async _getProjectPlanning(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    // First try to read from the filesystem directly
-    const planningPath = path.join(project.local_path, '.pocketdev', 'PLANNING.md');
-    try {
-      const fileContent = await fs.readFile(planningPath, 'utf8');
-      return { 
-        exists: true, 
-        content: fileContent 
-      };
-    } catch (fsError) {
-      // File doesn't exist on filesystem, try git
-    }
-    
-    // Try to read from git
-    try {
-        const result = await gitService.execute(
-        project.local_path,
-        `git show ${project.base_branch}:.pocketdev/PLANNING.md`
-      );
       
-      if (result.success) {
-        return { 
-          exists: true, 
-          content: result.output 
-        };
-      } else {
-        return { 
-          exists: false, 
-          content: null 
-        };
-      }
-    } catch (error) {
-      throw new Error(`Failed to read PLANNING.md: ${error.message}`);
-    }
-  }
-
-  /**
-   * Update project planning document
-   * @param {string} projectId - Project ID
-   * @param {string} content - New planning content
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Update result
-   */
-  async _updateProjectPlanning(projectId, content, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    
-    // Ensure we're on the base branch
-    await gitService.execute(
-      project.local_path,
-      `git checkout ${project.base_branch}`
-    );
-    
-    // Create .pocketdev directory if it doesn't exist
-    const pocketdevDir = path.join(project.local_path, '.pocketdev');
-    await fs.mkdir(pocketdevDir, { recursive: true });
-    
-    // Write the PLANNING.md file
-    const planningPath = path.join(pocketdevDir, 'PLANNING.md');
-    await fs.writeFile(planningPath, content, 'utf8');
-    
-    // Add and commit the file
-    await gitService.execute(
-      project.local_path,
-      'git add .pocketdev/PLANNING.md'
-    );
-    
-    const commitResult = await gitService.execute(
-      project.local_path,
-      `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`
-    );
-    
-    return {
-      success: true,
-      message: 'PLANNING.md updated successfully',
-      needsPush: commitResult.output.includes('file changed')
-    };
-  }
-
-  /**
-   * Get update status for all tasks in project
-   * @param {string} projectId - Project ID
-   * @param {string} gitService - GitHub token for git operations
-   * @returns {Promise<Object>} Update status for all tasks
-   */
-  async _getProjectTasksUpdateStatus(projectId, gitService) {
-    const project = await this.models.projects.findById(projectId);
-    if (!project) {
-      throw new Error('Project not found');
-    }
-    
-    const tasks = await this.models.tasks.findByProjectId(project.id);
-    const updateStatus = [];
-    
-    for (const task of tasks) {
-      if (!fsSync.existsSync(task.worktree_path)) continue;
+      case 'checkout':
+        if (!branchName) throw new Error('Branch name required');
+        return await this.gitOps.checkoutBranch(project.local_path, branchName);
       
-      try {
-        // Check if branch is behind origin/base_branch
-        const behindResult = await gitService.execute(
-          task.worktree_path,
-          `git rev-list --count HEAD..origin/${project.base_branch}`
-        );
-        const behind = parseInt(behindResult.output.trim()) || 0;
+      case 'list':
+        return await this.gitOps.getProjectBranches(project.local_path, options);
+      
+      default:
+        throw new Error(`Unknown branch operation: ${operation}`);
+    }
+  }
+
+  /**
+   * Manage planning documents
+   */
+  async planning(projectId, operation, content = null, options = {}) {
+    const project = await this.repository.findById(projectId);
+    
+    switch (operation) {
+      case 'get':
+        return await this.planningManager.getPlanningContent(project.local_path);
+      
+      case 'update':
+        if (!content) throw new Error('Content required for update');
         
-        // Check if branch has unpushed commits
-        let ahead = 0;
-        try {
-          // First check if remote tracking branch exists
-          const remoteCheckResult = await gitService.execute(
-            task.worktree_path,
-            `git rev-parse --verify origin/${task.branch} 2>/dev/null`
+        // Update locally
+        await this.planningManager.updatePlanningContent(project.local_path, content);
+        
+        // Commit and push if requested
+        if (options.commit) {
+          const gitService = new GitService(options.githubToken);
+          await gitService.commit(
+            project.local_path,
+            options.commitMessage || 'Update planning document',
+            ['.pocketdev/PLANNING.md']
           );
           
-          if (remoteCheckResult.success) {
-            // Remote branch exists, count unpushed commits
-            const aheadResult = await gitService.execute(
-              task.worktree_path,
-              `git rev-list --count origin/${task.branch}..HEAD`
-            );
-            ahead = parseInt(aheadResult.output.trim()) || 0;
-          } else {
-            // No remote branch, count all commits ahead of base branch
-            const aheadResult = await gitService.execute(
-              task.worktree_path,
-              `git rev-list --count origin/${project.base_branch}..HEAD`
-            );
-            ahead = parseInt(aheadResult.output.trim()) || 0;
+          if (options.push) {
+            await gitService.push(project.local_path, project.base_branch);
           }
-        } catch (e) {
-          // Fallback to comparing with base branch
-          const aheadResult = await gitService.execute(
-            task.worktree_path,
-            `git rev-list --count origin/${project.base_branch}..HEAD`
-          );
-          ahead = parseInt(aheadResult.output.trim()) || 0;
         }
         
-        // Check for uncommitted changes
-        const statusResult = await gitService.info(task.worktree_path);
-        const hasUncommitted = statusResult.output.trim().length > 0;
-        
-        updateStatus.push({
-          taskId: task.id,
-          taskName: task.name,
-          branch: task.branch,
-          behind,
-          ahead,
-          hasUncommitted,
-          needsUpdate: behind > 0
-        });
-      } catch (error) {
-        // Task might not have tracking set up
-        updateStatus.push({
-          taskId: task.id,
-          taskName: task.name,
-          branch: task.branch,
-          behind: 0,
-          ahead: 0,
-          hasUncommitted: false,
-          needsUpdate: false,
-          error: error.message
-        });
-      }
-    }
-    
-    return { updateStatus };
-  }
-
-  // Private helper methods
-
-  /**
-   * Create default planning document for new project
-   * @private
-   */
-
-  /**
-   * Enrich project with GitHub metadata
-   * @private
-   */
-  async _enrichWithGitHubMetadata(project, repoUrl) {
-    try {
-      // This would typically use a GitHub API service
-      // For now, we'll extract basic info from the URL
-      if (repoUrl.includes('github.com')) {
-        const [owner, repo] = repoUrl.split('github.com/')[1].replace('.git', '').split('/');
-        
-        const enrichedProject = {
-          ...project,
-          github_owner: owner,
-          github_repo: repo
-        };
-        
-        // Update project with metadata
-        await this.models.projects.update(project.id, {
-          metadata: {
-            github_owner: owner,
-            github_repo: repo
-          }
-        });
-        
-        return enrichedProject;
-      }
+        return { success: true };
       
-      return project;
-    } catch (error) {
-      console.error('Failed to enrich with GitHub metadata:', error);
-      return project;
+      case 'create':
+        return await this.planningManager.createDefaultPlanningDocument(project, project.repo_url);
+      
+      default:
+        throw new Error(`Unknown planning operation: ${operation}`);
     }
   }
 }
+
+// Re-export internal services for testing
+export { ProjectRepository, ProjectGitOperations, ProjectPlanningManager };
