@@ -71,7 +71,7 @@ export class TaskService {
       );
       
       // Configure git credentials
-      await GitRepository.configureCredentials(worktreePath, githubToken);
+      await GitService.configureCredentials(worktreePath, githubToken);
       
       // Create task in database
       const task = await this.models.tasks.create({
@@ -193,30 +193,44 @@ export class TaskService {
    * @returns {Promise<Object>} Updated task
    */
   /**
-   * Update task - metadata, git operations, or split layout
+   * Update task metadata only
    * @param {string} taskId - Task ID
-   * @param {Object} updates - Updates to apply
-   * @returns {Promise<Object>} Update result
+   * @param {Object} updates - Metadata updates (name, description)
+   * @returns {Promise<Object>} Updated task
    */
   async update(taskId, updates = {}) {
-    const { metadata, gitOperation, splitLayout, projectId, githubToken } = updates;
+    // Only handle metadata updates
+    return this._updateTaskMetadata(taskId, updates);
+  }
+  
+  /**
+   * Sync task with remote repository
+   * @param {string} taskId - Task ID
+   * @param {string} operation - Operation type: 'pull' or 'push'
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Sync result
+   */
+  async sync(taskId, operation = 'pull', options = {}) {
+    const { githubToken } = options;
     
-    // Update metadata if provided
-    if (metadata) {
-      return this._updateTaskMetadata(taskId, metadata);
+    if (operation === 'pull') {
+      return this._updateTask(taskId, githubToken, { method: 'merge' });
+    } else if (operation === 'push') {
+      return this._updateTask(taskId, githubToken, { method: 'push' });
     }
     
-    // Update split layout if provided
-    if (splitLayout && projectId) {
-      return this._updateSplitLayout(taskId, projectId, splitLayout);
-    }
-    
-    // Perform git operation if specified
-    if (gitOperation) {
-      return this._updateTask(taskId, githubToken, gitOperation);
-    }
-    
-    throw new Error('No valid update operation specified');
+    throw new Error(`Unknown sync operation: ${operation}`);
+  }
+  
+  /**
+   * Set task split layout configuration
+   * @param {string} taskId - Task ID
+   * @param {string} projectId - Project ID for validation
+   * @param {Object} layout - Layout configuration
+   * @returns {Promise<Object>} Updated layout
+   */
+  async setLayout(taskId, projectId, layout) {
+    return this._updateSplitLayout(taskId, projectId, layout);
   }
 
   async _updateTaskMetadata(taskId, updates) {
@@ -412,9 +426,10 @@ export class TaskService {
       
       // Check if task can be merged
       if (project && task.status !== 'merged') {
-        const conflicts = await analyzer.checkMergeConflicts(
+        const gitService = this.gitService || new GitService(githubToken);
+        const conflicts = await gitService.checkConflicts(
           task.worktree_path,
-          `origin/${project.base_branch}`
+          project.base_branch
         );
         
         mergeInfo = {
@@ -496,16 +511,13 @@ export class TaskService {
     
     const baseBranch = `origin/${project.base_branch || 'main'}`;
     
-    // Create GitStatusService
-    const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
-    
     // Enrich tasks with git status and session state
     const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
       let gitStatus = null;
       
       if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
         try {
-          gitStatus = await gitStatusService.getTaskGitStatus(task.id, githubToken);
+          gitStatus = await this._getTaskGitStatus(task.id, githubToken);
         } catch (error) {
           console.error(`Failed to get git status for task ${task.id}:`, error.message);
         }
@@ -584,8 +596,7 @@ export class TaskService {
     let gitStatus = null;
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
       try {
-        const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
-        gitStatus = await gitStatusService.getTaskGitStatus(taskId, githubToken);
+        gitStatus = await this._getTaskGitStatus(taskId, githubToken);
       } catch (error) {
         console.error(`Failed to get git status for task ${taskId}:`, error.message);
       }
@@ -710,24 +721,25 @@ export class TaskService {
    * @returns {Promise<Object>} Merge result
    */
   /**
-   * Merge operations - check conflicts, merge to base, check status
+   * Merge task to base branch
    * @param {string} taskId - Task ID
-   * @param {Object} options - Merge options
+   * @param {string} operation - 'toBase', 'checkConflicts', or 'status'
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Merge result
    */
-  async merge(taskId, options = {}) {
-    const { checkConflicts = false, checkStatus = false, githubToken } = options;
+  async merge(taskId, operation = 'toBase', options = {}) {
+    const { githubToken } = options;
     
-    if (checkConflicts) {
-      return this._checkMergeConflicts(taskId, githubToken);
+    switch (operation) {
+      case 'toBase':
+        return this._mergeToBase(taskId, githubToken);
+      case 'checkConflicts':
+        return this._checkMergeConflicts(taskId, githubToken);
+      case 'status':
+        return this._checkMergeStatus(taskId, githubToken);
+      default:
+        throw new Error(`Unknown merge operation: ${operation}`);
     }
-    
-    if (checkStatus) {
-      return this._checkMergeStatus(taskId, githubToken);
-    }
-    
-    // Default to merging to base
-    return this._mergeToBase(taskId, githubToken);
   }
 
   async _mergeToBase(taskId, githubToken) {
@@ -831,23 +843,35 @@ export class TaskService {
   /**
    * Manage terminal sessions
    * @param {string} taskId - Task ID
-   * @param {Object} options - Management options
+   * @param {string} action - Action to perform: 'start', 'stop', 'cleanup'
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Action result
    */
-  async manageTerminal(taskId, options = {}) {
-    const { sessionData = {}, monitors = {}, cleanup = false } = options;
+  async terminal(taskId, action = 'start', options = {}) {
+    const { sessionData = {}, monitors = {} } = options;
     
-    if (cleanup) {
-      return this._cleanupTaskSessions(taskId);
+    switch (action) {
+      case 'start':
+        return this._manageTaskTerminalSession(taskId, sessionData, monitors);
+      case 'stop':
+        // Stop specific session if ID provided
+        return this._stopTaskSession(taskId, options.sessionId);
+      case 'cleanup':
+        return this._cleanupTaskSessions(taskId);
+      default:
+        throw new Error(`Unknown terminal action: ${action}`);
     }
-    
-    return this._manageTaskTerminalSession(taskId, sessionData, monitors);
   }
 
   async _manageTaskTerminalSession(taskId, sessionData = {}, monitors = {}) {
     // Delegate to TerminalService which handles session complexity
     const terminalService = await this._getTerminalService();
     return await terminalService.createSession(taskId, sessionData, monitors);
+  }
+  
+  async _stopTaskSession(taskId, sessionId) {
+    const terminalService = await this._getTerminalService();
+    return await terminalService.stopSession(sessionId || `task-${taskId}`);
   }
 
   // Private helper methods
@@ -978,9 +1002,8 @@ export class TaskService {
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
       const project = await this.models.projects.findById(task.project_id);
       if (project) {
-        const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
         try {
-          gitStatus = await gitStatusService.getTaskGitStatus(taskId, githubToken);
+          gitStatus = await this._getTaskGitStatus(taskId, githubToken);
         } catch (error) {
           console.error(`Error fetching git status for task ${taskId}:`, error);
         }
@@ -1156,6 +1179,31 @@ export class TaskService {
     // Delegate to TerminalService which handles session complexity
     const terminalService = await this._getTerminalService();
     return await terminalService.cleanupTaskSessions(taskId);
+  }
+
+  /**
+   * Get task git status
+   * @private
+   */
+  async _getTaskGitStatus(taskId, githubToken) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task || !task.worktree_path || !fsSync.existsSync(task.worktree_path)) {
+      return null;
+    }
+    
+    const gitService = this.gitService || new GitService(githubToken);
+    const status = await gitService.getStatus(task.worktree_path);
+    
+    // Get branch info
+    const currentBranch = await gitService.getCurrentBranch(task.worktree_path);
+    const aheadBehind = await gitService.getAheadBehind(task.worktree_path, task.branch);
+    
+    return {
+      branch: currentBranch,
+      ...status,
+      ahead: aheadBehind.ahead,
+      behind: aheadBehind.behind
+    };
   }
 
   /**
