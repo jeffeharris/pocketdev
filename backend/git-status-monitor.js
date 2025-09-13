@@ -1,5 +1,5 @@
 import { GIT_EVENTS } from './services/events.js';
-import { GitStatusService } from './services/git-status.service.js';
+import { GitService } from './services/git.service.js';
 import fsSync from 'fs';
 
 /**
@@ -19,8 +19,8 @@ export class GitStatusMonitor {
     this.intervalId = null;
     this.lastStatus = new Map(); // Cache last status per task
     
-    // Create services once on initialization
-    this.gitStatusService = new GitStatusService(models, githubTokenService);
+    // Create git service once on initialization
+    this.gitService = null; // Will be initialized with token when needed
   }
 
   start() {
@@ -85,8 +85,13 @@ export class GitStatusMonitor {
       // Get token for this check
       const token = await this.githubTokenService.getToken();
       
-      // Use the pre-created gitStatusService with token directly
-      const status = await this.gitStatusService.getTaskGitStatus(task.id, token);
+      // Create GitService with current token if needed
+      if (!this.gitService) {
+        this.gitService = new GitService(token);
+      }
+      
+      // Get git status directly from worktree
+      const status = await this.gitService.getStatus(task.worktree_path);
       
       // Create status key for comparison (including staged/unstaged/untracked)
       const statusKey = `${status.ahead}-${status.behind}-${status.filesChanged}-${status.staged}-${status.unstaged}-${status.untracked}`;

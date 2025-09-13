@@ -5,7 +5,7 @@ import path from 'path';
 import fsSync from 'fs';
 import config from '../config/index.js';
 import { gitCommand } from '../utils/git.js';
-import { GitRepository } from '../services/git-repository.service.js';
+import { GitService } from '../services/git.service.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
 // Git services middleware removed - modules are instantiated directly
 
@@ -53,7 +53,7 @@ router.post('/', async (req, res) => {
     }
     
     await exec(`git checkout ${branch}`, { cwd: projectPath });
-    await GitRepository.configureCredentials(projectPath, req.githubToken);
+    await GitService.configureCredentials(projectPath, req.githubToken);
     
     // Create project in database
     const project = await models.projects.create({
@@ -166,7 +166,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await GitRepository.configureCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
     // Check for uncommitted changes in base branch
     const statusResult = await gitCommand(project.local_path, 'git status --porcelain');
@@ -212,7 +212,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await GitRepository.configureCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
     // Push base branch
     const result = await gitCommand(project.local_path, 
@@ -249,7 +249,7 @@ router.post('/:id/fetch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await GitRepository.configureCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
     // Fetch with git (will use gh credential helper if configured)
     const result = await gitCommand(project.local_path, 'git fetch --all --prune --tags');
