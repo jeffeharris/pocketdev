@@ -98,9 +98,11 @@ export async function createBranch(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.create(req.body, {
-      createBranch: true,
-      projectId,
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Branch name is required' });
+    }
+    const result = await projectService.createBranch(projectId, name, {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -122,10 +124,10 @@ export async function listBranches(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const branches = await projectService.get(projectId, {
-      includeBranches: true,
+    const result = await projectService.get(projectId, ['branches'], {
       githubToken: req.githubToken
     });
+    const branches = result.branches || [];
     res.json(branches);
   } catch (error) {
     if (error.message === 'Project not found') {
@@ -142,8 +144,8 @@ export async function syncProject(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, {
-      operation: 'sync',
+    // Sync is basically a fetch followed by update status
+    const result = await projectService.sync(projectId, 'fetch', {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -165,8 +167,7 @@ export async function fetchProject(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, {
-      operation: 'fetch',
+    const result = await projectService.sync(projectId, 'fetch', {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -185,8 +186,7 @@ export async function getBaseBranchStatus(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const status = await projectService.getStatus(projectId, {
-      type: 'baseBranch',
+    const status = await projectService.status(projectId, 'baseBranch', {
       githubToken: req.githubToken
     });
     res.json(status);
@@ -209,8 +209,7 @@ export async function pullBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, {
-      operation: 'pull',
+    const result = await projectService.sync(projectId, 'pull', {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -233,8 +232,7 @@ export async function pushBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, {
-      operation: 'push',
+    const result = await projectService.sync(projectId, 'push', {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -257,8 +255,7 @@ export async function getUpdateStatus(req, res, next) {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
     
-    const result = await projectService.getStatus(projectId, {
-      type: 'tasksUpdate',
+    const result = await projectService.status(projectId, 'tasks', {
       githubToken: req.githubToken
     });
     
@@ -295,8 +292,7 @@ export async function updateProjectPlanning(req, res, next) {
     const { content } = req.body;
     const projectService = req.services.ProjectService;
     
-    const result = await projectService.update(projectId, {
-      planning: content,
+    const result = await projectService.updatePlanning(projectId, content, {
       githubToken: req.githubToken
     });
     
@@ -313,9 +309,8 @@ export async function getProjectMinimal(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const project = await projectService.get(projectId, {
-      minimal: true
-    });
+    // For minimal, just get basic project data
+    const project = await projectService.get(projectId);
     res.json(project);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -333,8 +328,7 @@ export async function getProjectDashboardCached(req, res, next) {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
     
-    const dashboard = await projectService.get(projectId, {
-      includeDashboard: true,
+    const dashboard = await projectService.get(projectId, ['dashboard'], {
       githubToken: req.githubToken,
       cached: true
     });
@@ -352,8 +346,7 @@ export async function refreshProjectStatus(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const result = await projectService.getStatus(projectId, {
-      type: 'refresh',
+    const result = await projectService.status(projectId, 'refresh', {
       githubToken: req.githubToken
     });
     res.json(result);
@@ -373,8 +366,7 @@ export async function getProjectDashboard(req, res, next) {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
     
-    const dashboard = await projectService.get(projectId, {
-      includeDashboard: true,
+    const dashboard = await projectService.get(projectId, ['dashboard'], {
       githubToken: req.githubToken,
       cached: false
     });

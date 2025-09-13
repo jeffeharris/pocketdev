@@ -183,9 +183,7 @@ export class TaskController {
       if (description !== undefined) updates.description = description;
       
       // Update task using service
-      const updatedTask = await taskService.update(taskId, {
-        metadata: updates
-      });
+      const updatedTask = await taskService.update(taskId, updates);
       
       res.json(updatedTask);
     } catch (error) {
@@ -201,11 +199,19 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const layout = await taskService.get(taskId, {
-        projectId,
-        includeSplitLayout: true
-      });
-      res.json(layout);
+      // Get task to retrieve its split layout
+      const task = await taskService.get(taskId);
+      if (!task || task.project_id !== projectId) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      const defaultLayout = {
+        mode: 'tab',
+        orientation: 'horizontal',
+        primaryTerminalId: null,
+        secondaryTerminalId: null,
+        splitRatio: 0.5
+      };
+      res.json(task.split_layout || defaultLayout);
     } catch (error) {
       const statusCode = error.statusCode || 500;
       res.status(statusCode).json({ error: error.message });
@@ -221,10 +227,7 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const layout = await taskService.update(taskId, {
-        projectId,
-        splitLayout
-      });
+      const layout = await taskService.setLayout(taskId, projectId, splitLayout);
       res.json(layout);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -249,7 +252,10 @@ export class TaskController {
       const taskService = req.services.TaskService;
       
       // Check deletion safety using service
-      const safetyCheck = await taskService.checkTaskDeletionSafety(taskId, req.githubToken);
+      const safetyCheck = await taskService.delete(taskId, {
+        checkSafety: true,
+        githubToken: req.githubToken
+      });
       
       res.json(safetyCheck);
     } catch (error) {
@@ -298,8 +304,8 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const result = await taskService.update(taskId, {
-        gitOperation: { method },
+      // Pull updates from remote
+      const result = await taskService.sync(taskId, 'pull', {
         githubToken: req.githubToken
       });
       
@@ -329,8 +335,7 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const conflicts = await taskService.merge(taskId, {
-        checkConflicts: true,
+      const conflicts = await taskService.merge(taskId, 'checkConflicts', {
         githubToken: req.githubToken
       });
       res.json(conflicts);
@@ -348,7 +353,7 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const result = await taskService.merge(taskId, {
+      const result = await taskService.merge(taskId, 'toBase', {
         githubToken: req.githubToken
       });
       
