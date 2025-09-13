@@ -3,9 +3,7 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import { TASK_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
-import { GitRepository } from './git-repository.service.js';
-import { GitWorkingTree } from './git-workingtree.service.js';
-import { GitAnalyzer } from './git-analyzer.service.js';
+import { GitService } from './git.service.js';
 import { GitStatusService } from './git-status.service.js';
 import { getSessionInfo } from '../../shared/shelltender-client.js';
 
@@ -20,10 +18,11 @@ import { getSessionInfo } from '../../shared/shelltender-client.js';
  * complex implementation handling multiple concerns.
  */
 export class TaskService {
-  constructor(models, githubTokenService, eventEmitterService = null, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
+  constructor(models, githubTokenService, eventEmitterService = null, gitService = null, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
     this.githubTokenService = githubTokenService;
     this.eventEmitterService = eventEmitterService;
+    this.gitService = gitService || new GitService();
     this.projectsDir = projectsDir;
     this.worktreeService = new WorktreeService();
   }
@@ -235,28 +234,28 @@ export class TaskService {
     }
     
     // Create the modules we need
-    const workingTree = new GitWorkingTree(githubToken);
-    const analyzer = new GitAnalyzer(githubToken);
+    // Create GitService with current token
+    const gitService = new GitService(githubToken);
     
     // Check for uncommitted changes
-    const status = await workingTree.getStatus(task.worktree_path);
-    const hasUncommittedChanges = status.output.trim().length > 0;
+    const status = await gitService.getStatus(task.worktree_path);
+    const hasUncommittedChanges = status.hasChanges;
     
     // Check for unpushed commits
     let hasUnpushedCommits = false;
     let diffSummary = '';
     
     try {
-      const unpushed = await analyzer.getUnpushedCommits(task.worktree_path, task.branch);
-      hasUnpushedCommits = unpushed.count > 0;
+      // Check if branch is ahead of origin
+      hasUnpushedCommits = status.ahead > 0;
     } catch (e) {
       hasUnpushedCommits = true; // Assume unsafe if can't check
     }
     
     // Get diff summary if changes exist
     if (hasUncommittedChanges) {
-      const diff = await analyzer.getDiff(task.worktree_path, { stat: true });
-      diffSummary = diff.output;
+      const diff = await gitService.getDiff(task.worktree_path, 'HEAD', 'HEAD', { stat: true });
+      diffSummary = diff.diff || '';
     }
     
     const warnings = [];
@@ -324,14 +323,13 @@ export class TaskService {
     let mergeInfo = null;
     
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-      const workingTree = new GitWorkingTree(githubToken);
-      const analyzer = new GitAnalyzer(githubToken);
+      const gitService = new GitService(githubToken);
       
-      const status = await workingTree.getStatus(task.worktree_path);
-      const diff = await analyzer.getDiff(task.worktree_path, '--stat');
+      const status = await gitService.getStatus(task.worktree_path);
+      const diff = await gitService.getDiff(task.worktree_path, 'HEAD', 'HEAD', { stat: true });
       
       gitInfo = {
-        status: status.output,
+        status: status.files ? status.files.map(f => `${f.status} ${f.file}`).join('\n') : '',
         diff: diff.output,
         hasChanges: status.output.trim().length > 0
       };
@@ -558,47 +556,43 @@ export class TaskService {
     }
     
     // Check for uncommitted changes
-    const workingTree = new GitWorkingTree(githubToken);
-    const statusResult = await workingTree.getStatus(task.worktree_path);
+    const gitService = new GitService(githubToken);
+    const statusResult = await gitService.getStatus(task.worktree_path);
     
-    if (statusResult.output.trim()) {
+    if (statusResult.hasChanges) {
       const error = new Error('Cannot update: You have uncommitted changes');
       error.statusCode = 400;
       error.hasUncommitted = true;
-      error.changes = statusResult.output;
+      error.changes = statusResult.files ? statusResult.files.map(f => `${f.status} ${f.file}`).join('\n') : '';
       throw error;
     }
     
-    // Check for conflicts before attempting merge
-    const analyzer = new GitAnalyzer(githubToken);
-    const repository = new GitRepository(githubToken);
-    const conflicts = await analyzer.checkMergeConflicts(
-      task.worktree_path, 
-      `origin/${project.base_branch}`
-    );
+    // Perform update (merge will check for conflicts internally)
+    const baseBranch = `origin/${project.base_branch}`;
     
-    if (conflicts.hasConflicts) {
+    let result;
+    if (method === 'rebase') {
+      result = await gitService.rebase(task.worktree_path, baseBranch);
+    } else {
+      // Merge with conflict checking enabled
+      result = await gitService.merge(task.worktree_path, baseBranch, { checkConflicts: true });
+    }
+    
+    // Handle merge conflicts
+    if (!result.success && result.hasConflicts) {
       const error = new Error('Merge conflicts detected');
       error.statusCode = 400;
       error.hasConflicts = true;
-      error.conflicts = conflicts.conflicts;
+      error.conflicts = result.conflicts;
       throw error;
-    }
-    
-    // Perform update
-    let result;
-    if (method === 'rebase') {
-      result = await repository.rebase(task.worktree_path, `origin/${project.base_branch}`);
-    } else {
-      result = await repository.merge(task.worktree_path, `origin/${project.base_branch}`);
     }
     
     await this.models.projects.updateLastAccessed(project.id);
     
     // After rebase, check if branches became identical
     if (result.success && method === 'rebase' && task.status === 'merged') {
-      const diffResult = await analyzer.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
-      if (!diffResult.output.trim()) {
+      const diffResult = await gitService.getDiff(task.worktree_path, project.base_branch, 'HEAD', { nameOnly: true });
+      if (!diffResult.files || diffResult.files.length === 0) {
         // Branches are now identical, clear the "needs re-merge" flag
         await this.models.tasks.update(task.id, {
           has_commits_since_merge: false
@@ -635,12 +629,10 @@ export class TaskService {
       throw new Error('Project not found');
     }
     
-    const repository = new GitRepository(githubToken);
-    const workingTree = new GitWorkingTree(githubToken);
-    const analyzer = new GitAnalyzer(githubToken);
+    const gitService = new GitService(githubToken);
     
     // First ensure the task branch is pushed to origin
-    const pushResult = await repository.push(task.worktree_path, task.branch, { setUpstream: true });
+    const pushResult = await gitService.push(task.worktree_path, task.branch, { setUpstream: true });
     if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
       const error = new Error('Failed to push branch');
       error.statusCode = 500;
@@ -649,31 +641,24 @@ export class TaskService {
     }
     
     // Now ensure we're on the base branch and up to date
-    await workingTree.checkout(project.local_path, project.base_branch);
-    await repository.pull(project.local_path, 'origin', project.base_branch);
+    await gitService.checkout(project.local_path, project.base_branch);
+    await gitService.pull(project.local_path, 'origin', project.base_branch);
     
-    // Check for conflicts before attempting merge
-    const conflicts = await analyzer.checkMergeConflicts(
-      project.local_path,
-      `origin/${task.branch}`
-    );
-    
-    if (conflicts.hasConflicts) {
-      const error = new Error('Cannot merge: conflicts detected');
-      error.statusCode = 400;
-      error.hasConflicts = true;
-      error.conflicts = conflicts.conflicts;
-      throw error;
-    }
-    
-    // Merge the task branch
-    const mergeResult = await repository.merge(
+    // Merge the task branch (will check for conflicts internally)
+    const mergeResult = await gitService.merge(
       project.local_path, 
       `origin/${task.branch}`,
-      `Merge branch '${task.branch}' into ${project.base_branch}`
+      { checkConflicts: true }
     );
     
     if (!mergeResult.success) {
+      if (mergeResult.hasConflicts) {
+        const error = new Error('Cannot merge: conflicts detected');
+        error.statusCode = 400;
+        error.hasConflicts = true;
+        error.conflicts = mergeResult.conflicts;
+        throw error;
+      }
       const error = new Error('Merge failed');
       error.statusCode = 500;
       error.details = mergeResult.error;
@@ -681,14 +666,13 @@ export class TaskService {
     }
     
     // Get the merge commit SHA
-    const mergeCommitResult = await repository.execute('git rev-parse HEAD', project.local_path);
-    const mergeCommitSha = mergeCommitResult.output.trim();
+    const mergeCommitSha = await gitService.getCurrentCommit(project.local_path);
     
     // Push the merged changes to origin
-    const pushBaseResult = await repository.push(project.local_path, project.base_branch);
+    const pushBaseResult = await gitService.push(project.local_path, project.base_branch);
     if (!pushBaseResult.success) {
       // If push fails, we need to reset the merge
-      await repository.execute('git reset --hard HEAD~1', project.local_path);
+      await gitService.reset(project.local_path, 'HEAD~1', 'hard');
       const error = new Error('Failed to push merged changes to origin');
       error.statusCode = 500;
       error.details = pushBaseResult.error;
@@ -811,14 +795,20 @@ export class TaskService {
       throw error;
     }
     
-    // Check for conflicts using git analyzer
-    const analyzer = new GitAnalyzer(githubToken);
-    const conflicts = await analyzer.checkMergeConflicts(
-      task.worktree_path, 
-      `origin/${project.base_branch}`
+    // Check for conflicts using git service
+    const gitService = new GitService(githubToken);
+    
+    // Use merge with checkConflicts to detect conflicts without actually merging
+    const mergeResult = await gitService.merge(
+      task.worktree_path,
+      `origin/${project.base_branch}`,
+      { checkConflicts: true, noCommit: true }
     );
     
-    return conflicts;
+    return {
+      hasConflicts: !mergeResult.success && mergeResult.hasConflicts,
+      conflicts: mergeResult.conflicts || []
+    };
   }
 
   /**

@@ -191,6 +191,37 @@ export class GitService {
   }
 
   /**
+   * Checkout a branch
+   * @param {string} repoPath - Repository path
+   * @param {string} branch - Branch to checkout
+   * @returns {Promise<Object>} Result with success, output, error
+   */
+  async checkout(repoPath, branch) {
+    return await this._execute(`git checkout ${branch}`, repoPath);
+  }
+
+  /**
+   * Get current commit SHA
+   * @param {string} repoPath - Repository path
+   * @returns {Promise<string>} Current commit SHA
+   */
+  async getCurrentCommit(repoPath) {
+    const result = await this._execute('git rev-parse HEAD', repoPath);
+    return result.success ? result.output.trim() : null;
+  }
+
+  /**
+   * Reset to a specific commit
+   * @param {string} repoPath - Repository path
+   * @param {string} target - Target commit or reference (e.g., 'HEAD~1')
+   * @param {string} mode - Reset mode (hard, soft, mixed)
+   * @returns {Promise<Object>} Result with success, output, error
+   */
+  async reset(repoPath, target = 'HEAD', mode = 'hard') {
+    return await this._execute(`git reset --${mode} ${target}`, repoPath);
+  }
+
+  /**
    * Get diff between branches or commits
    * @param {string} repoPath - Repository path
    * @param {string} from - From ref (branch/commit)
