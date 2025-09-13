@@ -222,6 +222,38 @@ export class GitService {
   }
 
   /**
+   * Get list of branches
+   * @param {string} repoPath - Repository path
+   * @param {Object} options - Options for branch listing
+   * @returns {Promise<Array>} List of branch names
+   */
+  async getBranches(repoPath, options = {}) {
+    const { remote = false, all = false } = options;
+    
+    let command = 'git branch';
+    if (all) command += ' -a';
+    else if (remote) command += ' -r';
+    
+    const result = await this._execute(command, repoPath);
+    
+    if (!result.success) {
+      return [];
+    }
+    
+    return result.output
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        // Remove leading * for current branch and remote prefix
+        return line.trim()
+          .replace(/^\* /, '')
+          .replace(/^remotes\/origin\//, '')
+          .replace(/^origin\//, '');
+      })
+      .filter(branch => branch && !branch.includes('HEAD'));
+  }
+
+  /**
    * Get diff between branches or commits
    * @param {string} repoPath - Repository path
    * @param {string} from - From ref (branch/commit)

@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
+import { GitService } from './git.service.js';
+import { GitRepository } from './git-repository.service.js';
 
 /**
  * ProjectService - Handles all project-related business operations
@@ -15,9 +17,10 @@ import crypto from 'crypto';
  * and dashboard data aggregation.
  */
 export class ProjectService {
-  constructor(models, gitServiceService, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
+  constructor(models, githubTokenService, gitService = null, projectsDir = process.env.PROJECTS_DIR || path.join(process.cwd(), '../projects')) {
     this.models = models;
-    this.gitServiceService = gitServiceService;
+    this.githubTokenService = githubTokenService;
+    this.gitService = gitService || new GitService();
     this.projectsDir = projectsDir;
   }
 
@@ -210,8 +213,8 @@ export class ProjectService {
     }
     
     // Trigger git fetch in background (non-blocking)
-    const repository = new GitRepository(githubToken);
-    repository.fetch(project.local_path)
+    const gitService = new GitService(githubToken);
+    gitService.fetch(project.local_path, { all: true })
       .then(() => console.log(`Background fetch completed for project ${projectId}`))
       .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
     
@@ -379,19 +382,14 @@ export class ProjectService {
     };
     
     // Ensure git credentials are configured
-    await GitRepository.configureCredentials(project.local_path, githubToken, gitConfig);
+    await GitService.configureCredentials(project.local_path, githubToken, gitConfig);
     
     // Fetch with git
-    const repository = new GitRepository(githubToken);
-    const result = await repository.fetch(project.local_path, { all: true, prune: true });
+    const gitService = new GitService(githubToken);
+    const result = await gitService.fetch(project.local_path, { all: true, prune: true });
     
     // Get updated branch info
-    const branchResult = await repository.execute('git branch -r', project.local_path);
-    
-    const branches = branchResult.output
-      .split('\n')
-      .filter(b => b.trim())
-      .map(b => b.trim().replace('origin/', ''));
+    const branches = await gitService.getBranches(project.local_path, { remote: true });
     
     await this.models.projects.updateLastAccessed(project.id);
     

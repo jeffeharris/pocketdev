@@ -59,7 +59,7 @@ export class ServiceInitializer {
       
       // Domain Services (with GitService dependency)
       TaskService: new TaskService(this.models, githubTokenService, eventEmitterService, new GitService(currentToken)),
-      ProjectService: new ProjectService(this.models, githubTokenService),
+      ProjectService: new ProjectService(this.models, githubTokenService, new GitService(currentToken)),
       TerminalService: new TerminalService(this.models, eventEmitterService),
       PullRequestService: new PullRequestService(this.models, githubTokenService, eventEmitterService),
       
