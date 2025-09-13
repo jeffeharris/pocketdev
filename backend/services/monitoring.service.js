@@ -230,7 +230,7 @@ export class MonitoringService {
     // Check database connectivity
     let dbHealthy = true;
     try {
-      await this.models.projects.findAll({ limit: 1 });
+      await this.models.projects.findActive();
     } catch (error) {
       dbHealthy = false;
     }
@@ -292,8 +292,14 @@ export class MonitoringService {
         throw new Error('Session not found');
       }
       
-      // Get analytics
-      const analytics = await this.models.sessions.getAnalytics(sessionId);
+      // Compute basic analytics from session data
+      const analytics = {
+        message_count: session.message_count || 0,
+        token_usage: session.token_usage || {},
+        error_count: session.error_count || 0,
+        duration: session.created_at && session.last_activity ? 
+          new Date(session.last_activity) - new Date(session.created_at) : 0
+      };
       
       return {
         session,
