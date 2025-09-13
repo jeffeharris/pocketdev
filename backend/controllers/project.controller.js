@@ -1,10 +1,6 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import config from '../config/index.js';
-import { GitRepository } from '../services/git-repository.service.js';
-import { GitWorkingTree } from '../services/git-workingtree.service.js';
-import { GitAnalyzer } from '../services/git-analyzer.service.js';
-import { ProjectService } from '../services/project.service.js';
 
 // GitHub token is now injected by middleware as req.services.git
 
@@ -13,12 +9,8 @@ import { ProjectService } from '../services/project.service.js';
  */
 export async function listProjects(req, res, next) {
   try {
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const projects = await projectService.listProjects();
+    const projectService = req.services.ProjectService;
+    const projects = await projectService.list();
     res.json(projects);
   } catch (error) {
     next(error);
@@ -31,19 +23,15 @@ export async function listProjects(req, res, next) {
 export async function createProject(req, res, next) {
   try {
     const { repoUrl, branch = 'main', projectName } = req.body;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
     if (!repoUrl) {
       return res.status(400).json({ error: 'Repository URL is required' });
     }
     
-    const result = await projectService.createProject(
+    const result = await projectService.create(
       { repoUrl, branch, projectName },
-      req.services.git
+      { githubToken: req.githubToken }
     );
     
     res.status(201).json(result);
@@ -58,12 +46,8 @@ export async function createProject(req, res, next) {
 export async function getProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const project = await projectService.getProject(projectId);
+    const projectService = req.services.ProjectService;
+    const project = await projectService.get(projectId);
     res.json(project);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -79,12 +63,8 @@ export async function getProject(req, res, next) {
 export async function updateProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const updatedProject = await projectService.updateProject(projectId, req.body);
+    const projectService = req.services.ProjectService;
+    const updatedProject = await projectService.update(projectId, req.body);
     res.json(updatedProject);
   } catch (error) {
     if (error.message === 'Project not found') {
@@ -101,13 +81,9 @@ export async function deleteProject(req, res, next) {
   try {
     const { projectId } = req.params;
     const { force } = req.body; // Allow force deletion via request body
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const result = await projectService.deleteProject(projectId, { force });
+    const result = await projectService.delete(projectId, { force });
     
     res.json(result);
   } catch (error) {
@@ -121,12 +97,12 @@ export async function deleteProject(req, res, next) {
 export async function createBranch(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.createProjectBranch(projectId, req.body, req.services.git);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.create(req.body, {
+      createBranch: true,
+      projectId,
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.message === 'Branch name is required') {
@@ -145,12 +121,11 @@ export async function createBranch(req, res, next) {
 export async function listBranches(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const branches = await projectService.getProjectBranches(projectId, req.services.git);
+    const projectService = req.services.ProjectService;
+    const branches = await projectService.get(projectId, {
+      includeBranches: true,
+      githubToken: req.githubToken
+    });
     res.json(branches);
   } catch (error) {
     if (error.message === 'Project not found') {
@@ -166,12 +141,11 @@ export async function listBranches(req, res, next) {
 export async function syncProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.syncProject(projectId, req.services.git);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.sync(projectId, {
+      operation: 'sync',
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.message === 'Project not found') {
@@ -190,12 +164,11 @@ export async function syncProject(req, res, next) {
 export async function fetchProject(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.fetchProject(projectId, req.githubToken);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.sync(projectId, {
+      operation: 'fetch',
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -211,12 +184,11 @@ export async function fetchProject(req, res, next) {
 export async function getBaseBranchStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const status = await projectService.getBaseBranchStatus(projectId, req.services.git);
+    const projectService = req.services.ProjectService;
+    const status = await projectService.getStatus(projectId, {
+      type: 'baseBranch',
+      githubToken: req.githubToken
+    });
     res.json(status);
   } catch (error) {
     if (error.message === 'Project not found') {
@@ -236,12 +208,11 @@ export async function getBaseBranchStatus(req, res, next) {
 export async function pullBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.pullBaseBranch(projectId, req.services.git);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.sync(projectId, {
+      operation: 'pull',
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.statusCode) {
@@ -261,12 +232,11 @@ export async function pullBaseBranch(req, res, next) {
 export async function pushBaseBranch(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.pushBaseBranch(projectId, req.services.git);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.sync(projectId, {
+      operation: 'push',
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.statusCode) {
@@ -285,13 +255,12 @@ export async function pushBaseBranch(req, res, next) {
 export async function getUpdateStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const result = await projectService.getProjectTasksUpdateStatus(projectId, req.services.git);
+    const result = await projectService.getStatus(projectId, {
+      type: 'tasksUpdate',
+      githubToken: req.githubToken
+    });
     
     res.json(result);
   } catch (error) {
@@ -305,13 +274,11 @@ export async function getUpdateStatus(req, res, next) {
 export async function getProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const planning = await projectService.getProjectPlanning(projectId, req.services.git);
+    const planning = await projectService.getPlanning(projectId, {
+      githubToken: req.githubToken
+    });
     
     res.json(planning);
   } catch (error) {
@@ -326,13 +293,12 @@ export async function updateProjectPlanning(req, res, next) {
   try {
     const { projectId } = req.params;
     const { content } = req.body;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const result = await projectService.updateProjectPlanning(projectId, content, req.services.git);
+    const result = await projectService.update(projectId, {
+      planning: content,
+      githubToken: req.githubToken
+    });
     
     res.json(result);
   } catch (error) {
@@ -346,12 +312,10 @@ export async function updateProjectPlanning(req, res, next) {
 export async function getProjectMinimal(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const project = await projectService.getProjectMinimal(projectId);
+    const projectService = req.services.ProjectService;
+    const project = await projectService.get(projectId, {
+      minimal: true
+    });
     res.json(project);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -367,17 +331,13 @@ export async function getProjectMinimal(req, res, next) {
 export async function getProjectDashboardCached(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const dashboard = await projectService.getProjectDashboard(
-      projectId, 
-      req.services.git, 
-      { cached: true }
-    );
+    const dashboard = await projectService.get(projectId, {
+      includeDashboard: true,
+      githubToken: req.githubToken,
+      cached: true
+    });
     
     res.json(dashboard);
   } catch (error) {
@@ -391,12 +351,11 @@ export async function getProjectDashboardCached(req, res, next) {
 export async function refreshProjectStatus(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
-    const result = await projectService.refreshProjectStatus(projectId, req.githubToken);
+    const projectService = req.services.ProjectService;
+    const result = await projectService.getStatus(projectId, {
+      type: 'refresh',
+      githubToken: req.githubToken
+    });
     res.json(result);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -412,17 +371,13 @@ export async function refreshProjectStatus(req, res, next) {
 export async function getProjectDashboard(req, res, next) {
   try {
     const { projectId } = req.params;
-    const projectService = new ProjectService(
-      req.services.models,
-      req.services.GitHubTokenService,
-      config.projectsDir
-    );
+    const projectService = req.services.ProjectService;
     
-    const dashboard = await projectService.getProjectDashboard(
-      projectId, 
-      req.services.git, 
-      { cached: false }
-    );
+    const dashboard = await projectService.get(projectId, {
+      includeDashboard: true,
+      githubToken: req.githubToken,
+      cached: false
+    });
     
     res.json(dashboard);
   } catch (error) {
