@@ -18,10 +18,9 @@ export class TaskPullRequestController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get PullRequestService from service registry
       const pullRequestService = req.services.PullRequestService;
@@ -55,10 +54,9 @@ export class TaskPullRequestController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get PullRequestService from service registry
       const pullRequestService = req.services.PullRequestService;
@@ -91,10 +89,9 @@ export class TaskPullRequestController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get PullRequestService from service registry
       const pullRequestService = req.services.PullRequestService;

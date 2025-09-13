@@ -15,10 +15,9 @@ export class TaskContainerController {
     const { forceRecreate = false, environmentOverrides = {}, portBindings = {} } = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -44,10 +43,9 @@ export class TaskContainerController {
     const { removeVolumes = false, force = false } = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -71,10 +69,9 @@ export class TaskContainerController {
     const { projectId, taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -96,10 +93,9 @@ export class TaskContainerController {
     const { service } = req.query;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -121,10 +117,9 @@ export class TaskContainerController {
     const { tail, since, follow, service } = req.query;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -151,10 +146,9 @@ export class TaskContainerController {
     const { containerId, service } = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;
@@ -204,10 +198,9 @@ export class TaskContainerController {
     const { service, recreate = false } = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Get ContainerService from request services
       const containerService = req.services.ContainerService;

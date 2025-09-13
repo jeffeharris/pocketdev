@@ -15,10 +15,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
       
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -44,10 +43,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
       
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -56,7 +54,8 @@ export class TaskGitController {
       }
       
       // Get changed files using diff
-      const project = await this.models.projects.findById(task.project_id);
+      const projectService = req.services.ProjectService;
+      const project = await projectService.get(task.project_id);
       const baseBranch = `origin/${project.base_branch || 'main'}`;
       const changedFiles = await gitService.getDiff(task.worktree_path, baseBranch, 'HEAD', { nameOnly: true });
       
@@ -74,10 +73,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
       
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -87,7 +85,8 @@ export class TaskGitController {
       
       // Get all changes
       const status = await gitService.getStatus(task.worktree_path);
-      const project = await this.models.projects.findById(task.project_id);
+      const projectService = req.services.ProjectService;
+      const project = await projectService.get(task.project_id);
       const diff = await gitService.getDiff(task.worktree_path, `origin/${project.base_branch}`, 'HEAD', { stat: true });
       const response = { status, diff };
       
@@ -106,10 +105,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -118,7 +116,8 @@ export class TaskGitController {
       }
       
       // Get diff based on compareWith option
-      const project = await this.models.projects.findById(task.project_id);
+      const projectService = req.services.ProjectService;
+      const project = await projectService.get(task.project_id);
       const fromRef = compareWith === 'base' ? `origin/${project.base_branch}` : 'HEAD';
       const diffResult = await gitService.getDiff(task.worktree_path, fromRef, 'HEAD');
       
@@ -138,10 +137,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -149,7 +147,8 @@ export class TaskGitController {
         throw new Error('GitService not available');
       }
       // Get file diff
-      const project = await this.models.projects.findById(task.project_id);
+      const projectService = req.services.ProjectService;
+      const project = await projectService.get(task.project_id);
       const fromRef = compareWith === 'base' ? `origin/${project.base_branch}` : 'HEAD';
       const diffResult = await gitService.getDiff(task.worktree_path, fromRef, 'HEAD');
       
@@ -167,10 +166,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;
@@ -195,10 +193,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
 
       // Use GitStatusService from services
       const gitStatusService = req.services.GitStatusService;
@@ -217,10 +214,9 @@ export class TaskGitController {
     
     try {
       // Validate task belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Validation handled by service
       
       // Use GitService from services
       const gitService = req.services.git || req.services.GitService;

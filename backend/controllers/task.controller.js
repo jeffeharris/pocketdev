@@ -21,13 +21,7 @@ export class TaskController {
     const { projectId } = req.params;
     const { name, branch, useExistingBranch } = req.body;
     
-    if (!name || !branch) {
-      return res.status(400).json({ error: 'Task name and branch are required' });
-    }
-    
     try {
-      // Get TaskService from services
-      const taskService = req.services.TaskService;
       
       // Create task using service
       const result = await taskService.createTask(
@@ -66,7 +60,8 @@ export class TaskController {
     const { projectId } = req.params;
     
     try {
-      const tasks = await this.models.tasks.findByProjectId(projectId);
+      const taskService = req.services.TaskService;
+      const tasks = await taskService.list(projectId);
       
       // Return only essential fields for instant UI rendering
       const minimalTasks = tasks.map(task => ({
@@ -169,13 +164,10 @@ export class TaskController {
     
     try {
       // Verify task exists and belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Get TaskService from services
       const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Service will throw if task not found or doesn't belong to project
+      
       
       // Build update object with only provided fields
       const updates = {};
@@ -201,9 +193,7 @@ export class TaskController {
       const taskService = req.services.TaskService;
       // Get task to retrieve its split layout
       const task = await taskService.get(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      // Service will throw if task not found or doesn't belong to project
       const defaultLayout = {
         mode: 'tab',
         orientation: 'horizontal',
@@ -243,13 +233,10 @@ export class TaskController {
     
     try {
       // Verify task exists and belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Get TaskService from services
       const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Service will throw if task not found or doesn't belong to project
+      
       
       // Check deletion safety using service
       const safetyCheck = await taskService.delete(taskId, {
@@ -272,13 +259,10 @@ export class TaskController {
     
     try {
       // Verify task exists and belongs to project
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Get TaskService from services
       const taskService = req.services.TaskService;
+      const task = await taskService.get(taskId, [], { projectId });
+      // Service will throw if task not found or doesn't belong to project
+      
       
       // Delete task using service
       const result = await taskService.deleteTask(taskId, {
@@ -287,7 +271,11 @@ export class TaskController {
       });
       
       // Update project last accessed
-      await this.models.projects.updateLastAccessed(task.project_id);
+      // Update last accessed through ProjectService
+      const projectService = req.services.ProjectService;
+      await projectService.update(task.project_id, { 
+        last_accessed_at: new Date().toISOString() 
+      });
       
       res.json(result);
     } catch (error) {

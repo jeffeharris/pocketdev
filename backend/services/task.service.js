@@ -108,10 +108,17 @@ export class TaskService {
    * Get task details
    */
   async get(taskId, includes = [], options = {}) {
-    const { githubToken } = options;
+    const { githubToken, projectId } = options;
     
     // Get base task data
     const task = await this.repository.findById(taskId);
+    
+    // Validate project ownership if projectId provided
+    if (projectId && task.project_id !== projectId) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
     
     // Add optional includes
     if (includes.includes('sessions')) {
