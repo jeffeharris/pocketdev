@@ -522,76 +522,25 @@ export class TaskController {
    */
   async updateTask(req, res) {
     const { projectId, taskId } = req.params;
-    const { method = 'merge', withClaude = false } = req.body;
+    const { method = 'merge' } = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const result = await taskService.updateTask(taskId, req.githubToken, { method });
       
-      const project = await this.models.projects.findById(task.project_id);
-      
-      // Check for uncommitted changes
-      const workingTree = new GitWorkingTree(req.githubToken);
-      const statusResult = await workingTree.getStatus(task.worktree_path);
-      if (statusResult.output.trim()) {
-        return res.status(400).json({ 
-          error: 'Cannot update: You have uncommitted changes',
-          hasUncommitted: true,
-          changes: statusResult.output
-        });
-      }
-      
-      // Check for conflicts before attempting merge
-      const analyzer = new GitAnalyzer(req.githubToken);
-      const repository = new GitRepository(req.githubToken);
-      const conflicts = await analyzer.checkMergeConflicts(
-        task.worktree_path, 
-        `origin/${project.base_branch}`
-      );
-      
-      if (conflicts.hasConflicts) {
-        return res.status(400).json({
-          error: 'Merge conflicts detected',
-          hasConflicts: true,
-          conflicts: conflicts.conflicts
-        });
-      }
-      
-      // Perform update directly since no conflicts detected
-      let result;
-      if (method === 'rebase') {
-        result = await repository.rebase(task.worktree_path, `origin/${project.base_branch}`);
-      } else {
-        result = await repository.merge(task.worktree_path, `origin/${project.base_branch}`);
-      }
-      
-      await this.models.projects.updateLastAccessed(project.id);
-      
-      // After rebase, check if branches became identical
-      if (result.success && method === 'rebase' && task.status === 'merged') {
-        const diffResult = await analyzer.getDiff(task.worktree_path, `${project.base_branch}..HEAD --name-only`);
-        if (!diffResult.output.trim()) {
-          // Branches are now identical, clear the "needs re-merge" flag
-          await this.models.tasks.update(task.id, {
-            has_commits_since_merge: false
-          });
-        }
-      }
-      
-      // Trigger status update if successful
+      // Trigger status update after successful update
       if (result.success) {
         await this.triggerStatusUpdate(taskId, req);
       }
       
-      res.json({ 
-        success: result.success, 
-        output: result.output,
-        method
-      });
+      res.json(result);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ 
+        error: error.message,
+        ...(error.hasUncommitted && { hasUncommitted: true, changes: error.changes }),
+        ...(error.hasConflicts && { hasConflicts: true, conflicts: error.conflicts })
+      });
     }
   }
 
@@ -629,102 +578,20 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
+      const taskService = req.services.TaskService;
+      const result = await taskService.mergeToBase(taskId, req.githubToken);
       
-      const project = await this.models.projects.findById(task.project_id);
-      const repository = new GitRepository(req.githubToken);
-      const workingTree = new GitWorkingTree(req.githubToken);
-      const analyzer = new GitAnalyzer(req.githubToken);
+      // Trigger status update after successful merge
+      await this.triggerStatusUpdate(taskId, req);
       
-      // Direct merge
-      // First ensure the task branch is pushed to origin
-      const pushResult = await repository.push(task.worktree_path, task.branch, { setUpstream: true });
-      if (!pushResult.success && !pushResult.error?.includes('Everything up-to-date')) {
-        return res.status(500).json({ 
-          error: 'Failed to push branch', 
-          details: pushResult.error 
-        });
-      }
-      
-      // Now ensure we're on the base branch and up to date
-      await workingTree.checkout(project.local_path, project.base_branch);
-      await repository.pull(project.local_path, 'origin', project.base_branch);
-      
-      // Check for conflicts before attempting merge
-      const conflicts = await analyzer.checkMergeConflicts(
-        project.local_path,
-        `origin/${task.branch}`
-      );
-      
-      if (conflicts.hasConflicts) {
-        return res.status(400).json({
-          error: 'Cannot merge: conflicts detected',
-          hasConflicts: true,
-          conflicts: conflicts.conflicts
-        });
-      }
-      
-      // Merge the task branch
-      const mergeResult = await repository.merge(
-          project.local_path, 
-          `origin/${task.branch}`,
-          `Merge branch '${task.branch}' into ${project.base_branch}`
-        );
-        
-        if (!mergeResult.success) {
-          return res.status(500).json({ 
-            error: 'Merge failed', 
-            details: mergeResult.error 
-          });
-        }
-        
-        // Get the merge commit SHA using repository.execute
-        const mergeCommitResult = await repository.execute('git rev-parse HEAD', project.local_path);
-        const mergeCommitSha = mergeCommitResult.output.trim();
-        
-        // Push the merged changes to origin
-        console.log(`Pushing merged changes in ${project.base_branch} to origin...`);
-        const pushBaseResult = await repository.push(project.local_path, project.base_branch);
-        if (!pushBaseResult.success) {
-          // If push fails, we need to reset the merge
-          await repository.execute('git reset --hard HEAD~1', project.local_path);
-          return res.status(500).json({ 
-            error: 'Failed to push merged changes to origin', 
-            details: pushBaseResult.error 
-          });
-        }
-        
-        // Update task with merge information
-        await this.models.tasks.update(task.id, { 
-          status: 'merged',
-          completed_at: new Date().toISOString(),
-          merged_at: new Date().toISOString(),
-          merge_commit_sha: mergeCommitSha,
-          has_commits_since_merge: false
-        });
-        
-        // Update project last accessed
-        await this.models.projects.updateLastAccessed(project.id);
-        
-        // Trigger status update for the task
-        await this.triggerStatusUpdate(taskId, req);
-        
-        // Emit task state changed event
-        if (req.services?.EventEmitterService) {
-          req.services.EventEmitterService.emit(TASK_EVENTS.STATE_CHANGED, { taskId, newState: 'merged', oldState: 'active' });
-        }
-        
-        res.json({
-          message: `Successfully merged ${task.branch} into ${project.base_branch}`,
-          output: mergeResult.output,
-          mergeCommit: mergeCommitSha
-        });
-      }
+      res.json(result);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ 
+        error: error.message,
+        ...(error.details && { details: error.details }),
+        ...(error.hasConflicts && { hasConflicts: true, conflicts: error.conflicts })
+      });
     }
   }
 

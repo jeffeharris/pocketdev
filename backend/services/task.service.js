@@ -7,6 +7,7 @@ import { GitRepository } from './git-repository.service.js';
 import { GitWorkingTree } from './git-workingtree.service.js';
 import { GitAnalyzer } from './git-analyzer.service.js';
 import { GitStatusService } from './git-status.service.js';
+import { getSessionInfo } from '../../shared/shelltender-client.js';
 
 /**
  * TaskService - Handles all task-related business operations
@@ -272,6 +273,119 @@ export class TaskService {
       hasUnpushedCommits,
       diffSummary,
       warnings
+    };
+  }
+
+  /**
+   * Get complete task details including git status and terminals
+   * @param {string} taskId - Task ID  
+   * @param {string} projectId - Project ID for validation
+   * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Complete task details
+   */
+  async getTaskDetails(taskId, projectId, githubToken, options = {}) {
+    const { includeTerminals = true, terminalLimit = 6 } = options;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Verify task belongs to project
+    if (task.project_id !== projectId) {
+      const error = new Error('Task not found in this project');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Get project for base branch info
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      throw new Error('Project not found');
+    }
+    
+    // Get terminal sessions if requested
+    let terminals = [];
+    if (includeTerminals) {
+      const allTerminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+      terminals = allTerminals.slice(0, terminalLimit);
+      
+      // Log warning if too many terminals
+      if (allTerminals.length > terminalLimit) {
+        console.warn(`Task ${taskId} has ${allTerminals.length} terminals - showing only first ${terminalLimit}`);
+      }
+    }
+    
+    // Get git status for this task's worktree
+    let gitInfo = null;
+    let mergeInfo = null;
+    
+    if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+      const workingTree = new GitWorkingTree(githubToken);
+      const analyzer = new GitAnalyzer(githubToken);
+      
+      const status = await workingTree.getStatus(task.worktree_path);
+      const diff = await analyzer.getDiff(task.worktree_path, '--stat');
+      
+      gitInfo = {
+        status: status.output,
+        diff: diff.output,
+        hasChanges: status.output.trim().length > 0
+      };
+      
+      // Update task if uncommitted changes status changed
+      if (gitInfo.hasChanges !== task.has_uncommitted_changes) {
+        await this.models.tasks.update(task.id, {
+          has_uncommitted_changes: gitInfo.hasChanges
+        });
+      }
+      
+      // Check if task can be merged
+      if (project && task.status !== 'merged') {
+        const conflicts = await analyzer.checkMergeConflicts(
+          task.worktree_path,
+          `origin/${project.base_branch}`
+        );
+        
+        mergeInfo = {
+          hasConflicts: conflicts.hasConflicts,
+          conflicts: conflicts.conflicts || [],
+          canMerge: !conflicts.hasConflicts && gitInfo.hasChanges
+        };
+      }
+    }
+    
+    // Get enhanced terminals with status
+    const terminalsWithStatus = await Promise.all(
+      terminals.map(async (terminal) => {
+        let workerStatus = null;
+        try {
+          const sessionInfo = await getSessionInfo(terminal.shellhub_session_id);
+          if (sessionInfo && sessionInfo.worker) {
+            workerStatus = {
+              status: sessionInfo.worker.status || 'unknown',
+              lastActivity: sessionInfo.worker.lastActivity || null
+            };
+          }
+        } catch (error) {
+          console.error(`Failed to get session info for ${terminal.shellhub_session_id}:`, error.message);
+        }
+        
+        return {
+          ...terminal,
+          workerStatus
+        };
+      })
+    );
+    
+    return {
+      ...task,
+      git: gitInfo,
+      mergeInfo: mergeInfo,
+      terminals: terminalsWithStatus
     };
   }
 
