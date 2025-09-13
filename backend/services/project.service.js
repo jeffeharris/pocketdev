@@ -25,13 +25,26 @@ export class ProjectService {
   }
 
   /**
-   * Create a new project with git clone and setup
-   * @param {Object} projectData - Project creation data
-   * @param {Object} gitService - GitService instance for git operations
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Created project with metadata
+   * Create project or branch
+   * @param {Object} data - Creation data
+   * @param {Object} options - Creation options
+   * @returns {Promise<Object>} Created project or branch
    */
-  async createProject(projectData, gitService, options = {}) {
+  async create(data, options = {}) {
+    const { createBranch, projectId, branchName, githubToken } = options;
+    
+    if (createBranch && projectId) {
+      return this._createProjectBranch(projectId, branchName, githubToken);
+    }
+    
+    return this._createProject(data, this.gitService || new GitService(githubToken), options);
+  }
+
+  /**
+   * Internal create project implementation
+   * @private
+   */
+  async _createProject(projectData, gitService, options = {}) {
     const { repoUrl, branch = 'main', projectName } = projectData;
     
     if (!repoUrl) {
@@ -109,7 +122,17 @@ export class ProjectService {
    * @param {Object} options - Deletion options
    * @returns {Promise<Object>} Deletion result
    */
-  async deleteProject(projectId, options = {}) {
+  /**
+   * Delete a project
+   * @param {string} projectId - Project ID
+   * @param {Object} options - Deletion options
+   * @returns {Promise<Object>} Deletion result
+   */
+  async delete(projectId, options = {}) {
+    return this._deleteProject(projectId, options);
+  }
+
+  async _deleteProject(projectId, options = {}) {
     const { force = false } = options;
     
     const project = await this.models.projects.findById(projectId);
@@ -164,7 +187,36 @@ export class ProjectService {
    * @param {string} projectId - Project ID
    * @returns {Promise<Object>} Project details
    */
-  async getProject(projectId) {
+  /**
+   * Get project with various levels of detail
+   * @param {string} projectId - Project ID
+   * @param {Object} options - Options for what to include
+   * @returns {Promise<Object>} Project with requested details
+   */
+  async get(projectId, options = {}) {
+    const {
+      minimal = false,
+      includeDashboard = false,
+      includeBranches = false,
+      githubToken = null
+    } = options;
+    
+    if (minimal) {
+      return this._getProjectMinimal(projectId);
+    }
+    
+    if (includeDashboard) {
+      return this._getProjectDashboard(projectId, this.gitService || new GitService(githubToken), options);
+    }
+    
+    if (includeBranches) {
+      return this._getProjectBranches(projectId, this.gitService || new GitService(githubToken));
+    }
+    
+    return this._getProject(projectId);
+  }
+
+  async _getProject(projectId) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       const error = new Error('Project not found');
@@ -179,7 +231,7 @@ export class ProjectService {
    * @param {string} projectId - Project ID
    * @returns {Promise<Object>} Minimal project details
    */
-  async getProjectMinimal(projectId) {
+  async _getProjectMinimal(projectId) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       const error = new Error('Project not found');
@@ -204,7 +256,29 @@ export class ProjectService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} Refresh status
    */
-  async refreshProjectStatus(projectId, githubToken) {
+  /**
+   * Get various status information
+   * @param {string} projectId - Project ID
+   * @param {Object} options - Status options
+   * @returns {Promise<Object>} Status information
+   */
+  async getStatus(projectId, options = {}) {
+    const { type = 'refresh', githubToken } = options;
+    const gitService = this.gitService || new GitService(githubToken);
+    
+    switch (type) {
+      case 'refresh':
+        return this._refreshProjectStatus(projectId, githubToken);
+      case 'baseBranch':
+        return this._getBaseBranchStatus(projectId, gitService);
+      case 'tasksUpdate':
+        return this._getProjectTasksUpdateStatus(projectId, gitService);
+      default:
+        throw new Error(`Unknown status type: ${type}`);
+    }
+  }
+
+  async _refreshProjectStatus(projectId, githubToken) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       const error = new Error('Project not found');
@@ -229,7 +303,16 @@ export class ProjectService {
    * List all active projects
    * @returns {Promise<Array>} List of active projects
    */
-  async listProjects() {
+  /**
+   * List projects
+   * @param {Object} options - List options
+   * @returns {Promise<Array>} Array of projects
+   */
+  async list(options = {}) {
+    return this._listProjects();
+  }
+
+  async _listProjects() {
     return await this.models.projects.findActive();
   }
 
@@ -239,7 +322,24 @@ export class ProjectService {
    * @param {Object} updates - Fields to update
    * @returns {Promise<Object>} Updated project
    */
-  async updateProject(projectId, updates) {
+  /**
+   * Update project - metadata or planning
+   * @param {string} projectId - Project ID
+   * @param {Object} updates - Updates to apply
+   * @returns {Promise<Object>} Update result
+   */
+  async update(projectId, updates = {}) {
+    const { planning, metadata, githubToken } = updates;
+    
+    if (planning) {
+      return this._updateProjectPlanning(projectId, planning, this.gitService || new GitService(githubToken));
+    }
+    
+    // Default to metadata update
+    return this._updateProject(projectId, metadata || updates);
+  }
+
+  async _updateProject(projectId, updates) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -272,7 +372,7 @@ export class ProjectService {
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Branch information and operations
    */
-  async getProjectBranches(projectId, gitService) {
+  async _getProjectBranches(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -320,7 +420,7 @@ export class ProjectService {
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Branch creation result
    */
-  async createProjectBranch(projectId, branchData, gitService) {
+  async _createProjectBranch(projectId, branchData, gitService) {
     const { branchName, fromBranch = 'main' } = branchData;
     
     if (!branchName) {
@@ -357,7 +457,31 @@ export class ProjectService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} Fetch result with branches
    */
-  async fetchProject(projectId, githubToken) {
+  /**
+   * Sync operations - fetch, pull, push
+   * @param {string} projectId - Project ID
+   * @param {Object} options - Sync options
+   * @returns {Promise<Object>} Sync result
+   */
+  async sync(projectId, options = {}) {
+    const { operation = 'fetch', githubToken } = options;
+    const gitService = this.gitService || new GitService(githubToken);
+    
+    switch (operation) {
+      case 'fetch':
+        return this._fetchProject(projectId, githubToken);
+      case 'sync':
+        return this._syncProject(projectId, gitService, options);
+      case 'pull':
+        return this._pullBaseBranch(projectId, gitService);
+      case 'push':
+        return this._pushBaseBranch(projectId, gitService);
+      default:
+        throw new Error(`Unknown sync operation: ${operation}`);
+    }
+  }
+
+  async _fetchProject(projectId, githubToken) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       const error = new Error('Project not found');
@@ -407,7 +531,7 @@ export class ProjectService {
    * @param {Object} options - Sync options
    * @returns {Promise<Object>} Sync result
    */
-  async syncProject(projectId, gitService, options = {}) {
+  async _syncProject(projectId, gitService, options = {}) {
     const { fetchOnly = false } = options;
     
     const project = await this.models.projects.findById(projectId);
@@ -558,7 +682,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Base branch status
    */
-  async getBaseBranchStatus(projectId, gitService) {
+  async _getBaseBranchStatus(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -611,7 +735,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Pull result
    */
-  async pullBaseBranch(projectId, gitService) {
+  async _pullBaseBranch(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -650,7 +774,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Push result
    */
-  async pushBaseBranch(projectId, gitService) {
+  async _pushBaseBranch(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -683,7 +807,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {Object} options - Dashboard options
    * @returns {Promise<Object>} Complete dashboard data
    */
-  async getProjectDashboard(projectId, gitService, options = {}) {
+  async _getProjectDashboard(projectId, gitService, options = {}) {
     const { cached = false } = options;
     
     const project = await this.models.projects.findById(projectId);
@@ -810,7 +934,19 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Planning document content
    */
-  async getProjectPlanning(projectId, gitService) {
+  /**
+   * Get project planning document
+   * @param {string} projectId - Project ID
+   * @param {Object} options - Options
+   * @returns {Promise<Object>} Planning document
+   */
+  async getPlanning(projectId, options = {}) {
+    const { githubToken } = options;
+    const gitService = this.gitService || new GitService(githubToken);
+    return this._getProjectPlanning(projectId, gitService);
+  }
+
+  async _getProjectPlanning(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -858,7 +994,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Update result
    */
-  async updateProjectPlanning(projectId, content, gitService) {
+  async _updateProjectPlanning(projectId, content, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -903,7 +1039,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
    * @param {string} gitService - GitHub token for git operations
    * @returns {Promise<Object>} Update status for all tasks
    */
-  async getProjectTasksUpdateStatus(projectId, gitService) {
+  async _getProjectTasksUpdateStatus(projectId, gitService) {
     const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
