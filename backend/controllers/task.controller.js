@@ -138,84 +138,19 @@ export class TaskController {
   /**
    * List all tasks for a project (with full git status)
    */
+  /**
+   * List all tasks for a project
+   */
   async listTasks(req, res) {
     const { projectId } = req.params;
-    const aiMonitor = req.services.aiMonitor;
     
     try {
-      const tasks = await this.models.tasks.findByProjectId(projectId);
-      
-      // Get the project to know the base branch
-      const project = await this.models.projects.findById(projectId);
-      const baseBranch = `origin/${project.base_branch || 'main'}`;
-      
-      // Create GitStatusService
-      const githubTokenService = req.services.GitHubTokenService;
-      const gitStatusService = new GitStatusService(this.models, githubTokenService);
-      
-      // Enrich tasks with git status and session state
-      const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
-        let gitStatus = null;
-        
-        if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-          try {
-            gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.githubToken);
-          } catch (error) {
-            console.error(`Failed to get git status for task ${task.id}:`, error.message);
-          }
-        }
-        
-        // Get session state from AI monitor (live) or database (persisted)
-        // This two-tier approach ensures we always show the most current state:
-        // 1. Live state from AI monitor (if terminal session is active)
-        // 2. Persisted state from database (if no active session)
-        let sessionState = { status: 'not-started', lastStateChange: null };
-        
-        // First try to get live state from AI monitor
-        let liveStatus = null;
-        if (aiMonitor && aiMonitor.getSessionStatus) {
-          const sessionId = `task-${task.id}`;
-          liveStatus = aiMonitor.getSessionStatus(sessionId);
-          
-          if (liveStatus) {
-            // Use live state from AI monitor - this is the most accurate
-            sessionState = {
-              status: liveStatus.currentState,
-              lastStateChange: new Date().toISOString()
-            };
-          }
-        }
-        
-        // If no live state from AI monitor, get from database
-        // This happens when:
-        // - No terminal session exists for this task
-        // - Backend just restarted and hasn't received terminal data yet
-        if (!liveStatus) {
-          const taskWithSession = await this.getTaskWithSessionState(task.id);
-          if (taskWithSession && taskWithSession.sessionState) {
-            sessionState = taskWithSession.sessionState;
-          }
-        }
-        
-        // Calculate task state
-        let taskState = 'active';
-        if (task.status === 'merged' || task.merged_at) {
-          taskState = 'merged';
-        } else if (task.is_archived) {
-          taskState = 'archived';
-        }
-        
-        return {
-          ...task,
-          gitStatus,
-          taskState,
-          sessionState
-        };
-      }));
-      
-      res.json(tasksWithFullStatus);
+      const taskService = req.services.TaskService;
+      const tasks = await taskService.listProjectTasks(projectId, req.githubToken);
+      res.json(tasks);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
 
@@ -226,41 +161,20 @@ export class TaskController {
     const { taskId } = req.params;
     
     try {
-      const task = await this.getTaskWithSessionState(taskId);
-      if (!task) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Get git status
-      let gitStatus = {
-        ahead: 0,
-        behind: 0,
-        hasConflicts: false
-      };
-      
-      if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
-        // Get the project to know the base branch
-        const project = await this.models.projects.findById(task.project_id);
-        if (project) {
-          const baseBranch = `origin/${project.base_branch || 'main'}`;
-          const githubTokenService = req.services.GitHubTokenService;
-          const gitStatusService = new GitStatusService(this.models, githubTokenService);
-          gitStatus = await gitStatusService.getTaskGitStatus(task.id, req.services.git);
-        }
-      }
-      
-      // Return just the status information
-      res.json({
-        id: task.id,
-        taskState: task.taskState,
-        sessionState: task.sessionState,
-        gitStatus
+      const taskService = req.services.TaskService;
+      const status = await taskService.getTaskStatus(taskId, req.githubToken, {
+        aiMonitor: req.services.aiMonitor
       });
+      res.json(status);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
 
+  /**
+   * Get task details with git status
+   */
   /**
    * Get task details with git status
    */
@@ -268,81 +182,14 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Verify task belongs to project
-      if (task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found in this project' });
-      }
-      
-      // Get project for base branch info
-      const project = await this.models.projects.findById(projectId);
-      
-      // Get terminal sessions for this task (limit to 6 most recent)
-      const allTerminals = await this.models.sessions.findAllActiveByTaskId(taskId);
-      const terminals = allTerminals.slice(0, 6);
-      
-      // Log warning if too many terminals
-      if (allTerminals.length > 6) {
-        console.warn(`Task ${taskId} has ${allTerminals.length} terminals - showing only first 6`);
-      }
-      
-      // Get git status for this task's worktree
-      let gitInfo = null;
-      let mergeInfo = null;
-      
-      // Create git modules for operations
-      const workingTree = new GitWorkingTree(req.githubToken);
-      const analyzer = new GitAnalyzer(req.githubToken);
-      const repository = new GitRepository(req.githubToken);
-      const githubTokenService = req.services.GitHubTokenService;
-      const gitStatusService = new GitStatusService(this.models, githubTokenService);
-      
-      if (fsSync.existsSync(task.worktree_path)) {
-        const status = await workingTree.getStatus(task.worktree_path);
-        const diff = await analyzer.getDiff(task.worktree_path, '--stat');
-        
-        gitInfo = {
-          status: status.output,
-          diff: diff.output,
-          hasChanges: status.output.trim().length > 0
-        };
-        
-        // Update task if uncommitted changes status changed
-        if (gitInfo.hasChanges !== task.has_uncommitted_changes) {
-          await this.models.tasks.update(task.id, {
-            has_uncommitted_changes: gitInfo.hasChanges
-          });
-        }
-        
-        // Check for commits since merge if task was merged
-        if (task.merge_commit_sha) {
-          mergeInfo = await this._checkMergeStatus(task, project, repository);
-        }
-      }
-      
-      // Get terminal states using TerminalService
-      const terminalService = req.services.TerminalService;
-      const terminalsWithStatus = await terminalService.getTaskSessions(taskId, {
-        aiMonitor: req.services.aiMonitor,
-        wsAdapter: req.services.wsAdapter
-      });
-      
-      res.json({
-        ...task,
-        git: gitInfo,
-        mergeInfo: mergeInfo,
-        claudeUrl: `http://${req.hostname}:7681/?arg=${encodeURIComponent(task.worktree_path)}`,
-        terminals: terminalsWithStatus
-      });
+      const taskService = req.services.TaskService;
+      const result = await taskService.getTaskDetails(taskId, projectId, req.githubToken);
+      res.json(result);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
-
   /**
    * Update task metadata (name, description)
    */
@@ -551,23 +398,12 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task || task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      const project = await this.models.projects.findById(task.project_id);
-      
-      // Check for conflicts using git analyzer
-      const analyzer = new GitAnalyzer(req.githubToken);
-      const conflicts = await analyzer.checkMergeConflicts(
-        task.worktree_path, 
-        `origin/${project.base_branch}`
-      );
-      
+      const taskService = req.services.TaskService;
+      const conflicts = await taskService.checkMergeConflicts(taskId, req.githubToken);
       res.json(conflicts);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
 

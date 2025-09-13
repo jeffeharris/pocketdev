@@ -390,6 +390,88 @@ export class TaskService {
   }
 
   /**
+   * List all tasks for a project with full status
+   * @param {string} projectId - Project ID
+   * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} monitors - Monitor services for live state
+   * @returns {Promise<Array>} Array of tasks with full status
+   */
+  async listProjectTasks(projectId, githubToken, monitors = {}) {
+    const tasks = await this.models.tasks.findByProjectId(projectId);
+    
+    // Get the project to know the base branch
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      throw new Error('Project not found');
+    }
+    
+    const baseBranch = `origin/${project.base_branch || 'main'}`;
+    
+    // Create GitStatusService
+    const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
+    
+    // Enrich tasks with git status and session state
+    const tasksWithFullStatus = await Promise.all(tasks.map(async (task) => {
+      let gitStatus = null;
+      
+      if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+        try {
+          gitStatus = await gitStatusService.getTaskGitStatus(task.id, githubToken);
+        } catch (error) {
+          console.error(`Failed to get git status for task ${task.id}:`, error.message);
+        }
+      }
+      
+      // Get session state from AI monitor (live) or database (persisted)
+      let sessionState = { status: 'not-started', lastStateChange: null };
+      
+      // First try to get live state from AI monitor
+      let liveStatus = null;
+      if (monitors.aiMonitor && monitors.aiMonitor.getSessionStatus) {
+        const sessionId = `task-${task.id}`;
+        liveStatus = monitors.aiMonitor.getSessionStatus(sessionId);
+        
+        if (liveStatus) {
+          // Use live state from AI monitor - this is the most accurate
+          sessionState = {
+            status: liveStatus.currentState,
+            lastStateChange: new Date().toISOString()
+          };
+        }
+      }
+      
+      // If no live state from AI monitor, get from database
+      if (!liveStatus) {
+        const sessions = await this.models.sessions.findByTaskId(task.id);
+        const activeSession = sessions.find(s => s.is_active);
+        if (activeSession) {
+          sessionState = {
+            state: activeSession.ai_state,
+            lastActivity: activeSession.last_activity
+          };
+        }
+      }
+      
+      // Calculate task state
+      let taskState = 'active';
+      if (task.status === 'merged' || task.merged_at) {
+        taskState = 'merged';
+      } else if (task.is_archived) {
+        taskState = 'archived';
+      }
+      
+      return {
+        ...task,
+        gitStatus,
+        taskState,
+        sessionState
+      };
+    }));
+    
+    return tasksWithFullStatus;
+  }
+
+  /**
    * Get comprehensive task state including git and session info
    * @param {string} taskId - Task ID
    * @param {Object} gitService - GitService instance for git operations
@@ -706,6 +788,97 @@ export class TaskService {
     // Delegate to TerminalService which handles session complexity
     const terminalService = await this._getTerminalService();
     return await terminalService.cleanupTaskSessions(taskId);
+  }
+
+  /**
+   * Check for merge conflicts with base branch
+   * @param {string} taskId - Task ID
+   * @param {string} githubToken - GitHub token for authentication
+   * @returns {Promise<Object>} Conflict check result
+   */
+  async checkMergeConflicts(taskId, githubToken) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    const project = await this.models.projects.findById(task.project_id);
+    if (!project) {
+      const error = new Error('Project not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Check for conflicts using git analyzer
+    const analyzer = new GitAnalyzer(githubToken);
+    const conflicts = await analyzer.checkMergeConflicts(
+      task.worktree_path, 
+      `origin/${project.base_branch}`
+    );
+    
+    return conflicts;
+  }
+
+  /**
+   * Get lightweight task status
+   * @param {string} taskId - Task ID
+   * @param {string} githubToken - GitHub token for authentication
+   * @param {Object} monitors - Monitor services
+   * @returns {Promise<Object>} Task status
+   */
+  async getTaskStatus(taskId, githubToken, monitors = {}) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Aggregate session data
+    const sessions = await this.models.sessions.findByTaskId(taskId);
+    task.sessions = sessions;
+    task.active_session_count = sessions.filter(s => s.is_active).length;
+    
+    // Add session state from active sessions
+    const activeSession = sessions.find(s => s.is_active);
+    if (activeSession) {
+      task.sessionState = {
+        state: activeSession.ai_state,
+        lastActivity: activeSession.last_activity
+      };
+    }
+    
+    // Get git status
+    let gitStatus = {
+      ahead: 0,
+      behind: 0,
+      hasConflicts: false
+    };
+    
+    if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+      const project = await this.models.projects.findById(task.project_id);
+      if (project) {
+        const gitStatusService = new GitStatusService(this.models, this.githubTokenService);
+        try {
+          gitStatus = await gitStatusService.getTaskGitStatus(taskId, githubToken);
+        } catch (error) {
+          console.error(`Error fetching git status for task ${taskId}:`, error);
+        }
+      }
+    }
+    
+    // Calculate task state
+    const taskState = task.status === 'merged' || task.merged_at ? 'merged' : 
+                     task.is_archived ? 'archived' : 'active';
+    
+    return {
+      id: task.id,
+      taskState,
+      sessionState: task.sessionState,
+      gitStatus
+    };
   }
 
   /**
