@@ -1,12 +1,5 @@
 import path from 'path';
-import fs from 'fs/promises';
-import fsSync from 'fs';
 import { WorktreeService } from '../services/worktree.service.js';
-import { SPLIT_EVENTS, TASK_EVENTS } from '../services/events.js';
-import { GitStatusService } from '../services/git-status.service.js';
-import { GitRepository } from '../services/git-repository.service.js';
-import { GitWorkingTree } from '../services/git-workingtree.service.js';
-import { GitAnalyzer } from '../services/git-analyzer.service.js';
 
 /**
  * Core task controller for CRUD operations
@@ -19,48 +12,7 @@ export class TaskController {
     this.worktreeService = new WorktreeService();
   }
 
-  /**
-   * Get task with aggregated session data
-   * Performs separate queries to maintain model separation
-   */
-  async getTaskWithSessionState(taskId) {
-    const task = await this.models.tasks.findById(taskId);
-    if (!task) return null;
-    
-    const sessions = await this.models.sessions.findByTaskId(taskId);
-    task.sessions = sessions;
-    task.active_session_count = sessions.filter(s => s.is_active).length;
-    
-    // Add session state from active sessions
-    const activeSession = sessions.find(s => s.is_active);
-    if (activeSession) {
-      task.sessionState = {
-        state: activeSession.ai_state,
-        lastActivity: activeSession.last_activity
-      };
-    }
-    
-    return task;
-  }
 
-  /**
-   * Helper: Generate task ID
-   */
-  generateTaskId() {
-    return require('crypto').randomBytes(4).toString('hex');
-  }
-
-
-  /**
-   * Trigger git status update after operations that change git state
-   */
-  async triggerStatusUpdate(taskId, req) {
-    if (req.services.gitStatusMonitor) {
-      req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
-        console.error(`Failed to update git status for task ${taskId}:`, err)
-      );
-    }
-  }
 
   /**
    * Create a new task (worktree) within a project
@@ -228,28 +180,12 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Verify task belongs to project
-      if (task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found in this project' });
-      }
-      
-      // Return split layout or default configuration
-      const defaultLayout = {
-        mode: 'tab',
-        orientation: 'horizontal',
-        primaryTerminalId: null,
-        secondaryTerminalId: null,
-        splitRatio: 0.5
-      };
-      
-      res.json(task.split_layout || defaultLayout);
+      const taskService = req.services.TaskService;
+      const layout = await taskService.getSplitLayout(taskId, projectId);
+      res.json(layout);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
 
@@ -261,49 +197,12 @@ export class TaskController {
     const splitLayout = req.body;
     
     try {
-      const task = await this.models.tasks.findById(taskId);
-      if (!task) {
-        return res.status(404).json({ error: 'Task not found' });
-      }
-      
-      // Verify task belongs to project
-      if (task.project_id !== projectId) {
-        return res.status(404).json({ error: 'Task not found in this project' });
-      }
-      
-      // Validate split layout structure
-      const validModes = ['tab', 'split', 'split-4'];
-      const validOrientations = ['horizontal', 'vertical'];
-      
-      if (splitLayout.mode && !validModes.includes(splitLayout.mode)) {
-        return res.status(400).json({ error: 'Invalid mode. Must be "tab", "split", or "split-4"' });
-      }
-      
-      if (splitLayout.orientation && !validOrientations.includes(splitLayout.orientation)) {
-        return res.status(400).json({ error: 'Invalid orientation. Must be "horizontal" or "vertical"' });
-      }
-      
-      if (splitLayout.splitRatio !== undefined) {
-        const ratio = parseFloat(splitLayout.splitRatio);
-        if (isNaN(ratio) || ratio < 0.1 || ratio > 0.9) {
-          return res.status(400).json({ error: 'Invalid splitRatio. Must be between 0.1 and 0.9' });
-        }
-        splitLayout.splitRatio = ratio;
-      }
-      
-      // Update the task with new split layout
-      const updatedTask = await this.models.tasks.update(taskId, {
-        split_layout: splitLayout
-      });
-      
-      // Emit split layout changed event
-      if (req.services?.EventEmitterService) {
-        req.services.EventEmitterService.emit(SPLIT_EVENTS.LAYOUT_CHANGED, { taskId, layout: splitLayout });
-      }
-      
-      res.json(splitLayout);
+      const taskService = req.services.TaskService;
+      const layout = await taskService.updateSplitLayout(taskId, projectId, splitLayout);
+      res.json(layout);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      const statusCode = error.statusCode || 500;
+      res.status(statusCode).json({ error: error.message });
     }
   }
 
@@ -376,8 +275,10 @@ export class TaskController {
       const result = await taskService.updateTask(taskId, req.githubToken, { method });
       
       // Trigger status update after successful update
-      if (result.success) {
-        await this.triggerStatusUpdate(taskId, req);
+      if (result.success && req.services.gitStatusMonitor) {
+        req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
+          console.error(`Failed to update git status for task ${taskId}:`, err)
+        );
       }
       
       res.json(result);
@@ -418,7 +319,11 @@ export class TaskController {
       const result = await taskService.mergeToBase(taskId, req.githubToken);
       
       // Trigger status update after successful merge
-      await this.triggerStatusUpdate(taskId, req);
+      if (req.services.gitStatusMonitor) {
+        req.services.gitStatusMonitor.checkTask(taskId).catch(err => 
+          console.error(`Failed to update git status for task ${taskId}:`, err)
+        );
+      }
       
       res.json(result);
     } catch (error) {
@@ -431,67 +336,5 @@ export class TaskController {
     }
   }
 
-  /**
-   * Private helper to check merge status
-   */
-  async _checkMergeStatus(task, project, repository) {
-    try {
-      // Get current HEAD
-      const headResult = await repository.execute('git rev-parse HEAD', task.worktree_path);
-      const currentHead = headResult.output.trim();
-      
-      // Check if we have commits since merge
-      let hasCommitsSinceMerge = false;
-      if (currentHead !== task.merge_commit_sha) {
-        // Count commits since merge
-        const countResult = await repository.execute(
-          `git rev-list ${task.merge_commit_sha}..HEAD --count 2>/dev/null || echo 0`,
-          task.worktree_path
-        );
-        const commitsSinceMerge = parseInt(countResult.output.trim()) || 0;
-        
-        // Check if there are actual differences with the base branch
-        if (project.base_branch) {
-          const analyzer = new GitAnalyzer(null); // No token needed for local diff
-          const diffResult = await analyzer.getDiff(task.worktree_path,
-            `${project.base_branch}..HEAD --name-only`);
-          const hasDifferences = diffResult.output.trim().length > 0;
-          hasCommitsSinceMerge = hasDifferences;
-        } else {
-          hasCommitsSinceMerge = commitsSinceMerge > 0;
-        }
-      }
-      
-      // Update database if status changed
-      if (hasCommitsSinceMerge !== task.has_commits_since_merge) {
-        await this.models.tasks.update(task.id, {
-          has_commits_since_merge: hasCommitsSinceMerge
-        });
-        task.has_commits_since_merge = hasCommitsSinceMerge;
-      }
-      
-      return {
-        mergedAt: task.merged_at,
-        mergeCommitSha: task.merge_commit_sha,
-        hasCommitsSinceMerge: hasCommitsSinceMerge,
-        currentHead: currentHead
-      };
-    } catch (error) {
-      console.error('Error checking merge status:', error);
-      return {
-        mergedAt: task.merged_at,
-        mergeCommitSha: task.merge_commit_sha,
-        error: 'Could not verify merge status'
-      };
-    }
-  }
 
-  /**
-   * Clean up all Shelltender sessions for a task
-   */
-  async cleanupTaskSessions(taskId) {
-    // Delegate to TerminalService which handles session complexity
-    const terminalService = new (await import('../services/terminal.service.js')).TerminalService(this.models);
-    return await terminalService.cleanupTaskSessions(taskId);
-  }
 }

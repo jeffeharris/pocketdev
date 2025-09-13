@@ -1,10 +1,9 @@
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
-import { TASK_EVENTS } from './events.js';
+import { TASK_EVENTS, SPLIT_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
 import { GitService } from './git.service.js';
-import { GitStatusService } from './git-status.service.js';
 import { getSessionInfo } from '../../shared/shelltender-client.js';
 
 /**
@@ -869,6 +868,186 @@ export class TaskService {
       sessionState: task.sessionState,
       gitStatus
     };
+  }
+
+  /**
+   * Get task with aggregated session data
+   */
+  async getTaskWithSessionState(taskId) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) return null;
+    
+    const sessions = await this.models.sessions.findByTaskId(taskId);
+    task.sessions = sessions;
+    task.active_session_count = sessions.filter(s => s.is_active).length;
+    
+    // Add session state from active sessions
+    const activeSession = sessions.find(s => s.is_active);
+    if (activeSession) {
+      task.sessionState = {
+        state: activeSession.ai_state,
+        lastActivity: activeSession.last_activity
+      };
+    }
+    
+    return task;
+  }
+
+  /**
+   * Generate task ID
+   */
+  generateTaskId() {
+    return require('crypto').randomBytes(4).toString('hex');
+  }
+
+  /**
+   * Get split layout configuration for a task
+   */
+  async getSplitLayout(taskId, projectId) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task || task.project_id !== projectId) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Return split layout or default configuration
+    const defaultLayout = {
+      mode: 'tab',
+      orientation: 'horizontal',
+      primaryTerminalId: null,
+      secondaryTerminalId: null,
+      splitRatio: 0.5
+    };
+    
+    return task.split_layout || defaultLayout;
+  }
+
+  /**
+   * Update split layout configuration for a task
+   */
+  async updateSplitLayout(taskId, projectId, splitLayout) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task || task.project_id !== projectId) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Validate split layout structure
+    const validModes = ['tab', 'split', 'split-4'];
+    const validOrientations = ['horizontal', 'vertical'];
+    
+    if (splitLayout.mode && !validModes.includes(splitLayout.mode)) {
+      const error = new Error('Invalid mode. Must be "tab", "split", or "split-4"');
+      error.statusCode = 400;
+      throw error;
+    }
+    
+    if (splitLayout.orientation && !validOrientations.includes(splitLayout.orientation)) {
+      const error = new Error('Invalid orientation. Must be "horizontal" or "vertical"');
+      error.statusCode = 400;
+      throw error;
+    }
+    
+    if (splitLayout.splitRatio !== undefined) {
+      const ratio = parseFloat(splitLayout.splitRatio);
+      if (isNaN(ratio) || ratio < 0.1 || ratio > 0.9) {
+        const error = new Error('Invalid splitRatio. Must be between 0.1 and 0.9');
+        error.statusCode = 400;
+        throw error;
+      }
+      splitLayout.splitRatio = ratio;
+    }
+    
+    // Update the task with new split layout
+    await this.models.tasks.update(taskId, {
+      split_layout: splitLayout
+    });
+    
+    // Emit split layout changed event
+    if (this.eventEmitterService) {
+      this.eventEmitterService.emit(SPLIT_EVENTS.LAYOUT_CHANGED, { taskId, layout: splitLayout });
+    }
+    
+    return splitLayout;
+  }
+
+  /**
+   * Check merge status for a task
+   * @private
+   */
+  async checkMergeStatus(taskId, githubToken = null) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task || !task.merged_at || !task.merge_commit_sha) {
+      return null;
+    }
+
+    const project = await this.models.projects.findById(task.project_id);
+    if (!project) {
+      return null;
+    }
+
+    const gitService = githubToken ? new GitService(githubToken) : this.gitService;
+
+    try {
+      // Get current HEAD
+      const currentHead = await gitService.getCurrentCommit(task.worktree_path);
+      
+      // Check if we have commits since merge
+      let hasCommitsSinceMerge = false;
+      if (currentHead !== task.merge_commit_sha) {
+        // Count commits since merge
+        const countResult = await gitService.execute(
+          `git rev-list ${task.merge_commit_sha}..HEAD --count 2>/dev/null || echo 0`,
+          task.worktree_path
+        );
+        const commitsSinceMerge = parseInt(countResult.output.trim()) || 0;
+        
+        // Check if there are actual differences with the base branch
+        if (project.base_branch) {
+          const diffResult = await gitService.execute(
+            `git diff ${project.base_branch}..HEAD --name-only`,
+            task.worktree_path
+          );
+          const hasDifferences = diffResult.output.trim().length > 0;
+          hasCommitsSinceMerge = hasDifferences;
+        } else {
+          hasCommitsSinceMerge = commitsSinceMerge > 0;
+        }
+      }
+      
+      // Update database if status changed
+      if (hasCommitsSinceMerge !== task.has_commits_since_merge) {
+        await this.models.tasks.update(task.id, {
+          has_commits_since_merge: hasCommitsSinceMerge
+        });
+        task.has_commits_since_merge = hasCommitsSinceMerge;
+      }
+      
+      return {
+        mergedAt: task.merged_at,
+        mergeCommitSha: task.merge_commit_sha,
+        hasCommitsSinceMerge: hasCommitsSinceMerge,
+        currentHead: currentHead
+      };
+    } catch (error) {
+      console.error('Error checking merge status:', error);
+      return {
+        mergedAt: task.merged_at,
+        mergeCommitSha: task.merge_commit_sha,
+        error: 'Could not verify merge status'
+      };
+    }
+  }
+
+  /**
+   * Clean up all Shelltender sessions for a task
+   */
+  async cleanupTaskSessions(taskId) {
+    // Delegate to TerminalService which handles session complexity
+    const terminalService = await this._getTerminalService();
+    return await terminalService.cleanupTaskSessions(taskId);
   }
 
   /**
