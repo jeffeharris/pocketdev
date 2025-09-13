@@ -115,7 +115,7 @@ export class ProjectService {
     }
     
     // Check for active tasks before deletion
-    const activeTasks = await this.models.tasks.findByProjectId(projectId, { includeArchived: false });
+    const activeTasks = await this.models.tasks.findByProjectId(projectId, false);
     if (activeTasks.length > 0 && !force) {
       throw new Error(`Cannot delete project: ${activeTasks.length} active tasks exist. Use force option to override.`);
     }
@@ -566,7 +566,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     }
     
     // Get all active tasks for this project
-    const tasks = await this.models.tasks.findByProjectId(projectId, { includeArchived: false });
+    const tasks = await this.models.tasks.findByProjectId(projectId, false);
     const needsAttention = [];
     
     // 1. Check base branch sync status

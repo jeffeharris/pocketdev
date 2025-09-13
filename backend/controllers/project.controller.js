@@ -14,7 +14,7 @@ import { ProjectService } from '../services/project.service.js';
 export async function listProjects(req, res, next) {
   try {
     const models = req.services.models;
-    const projects = await models.projects.findAll();
+    const projects = await models.projects.findActive();
     res.json(projects);
   } catch (error) {
     next(error);

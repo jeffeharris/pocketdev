@@ -14,13 +14,13 @@ const execAsync = promisify(exec);
 export async function cleanupOrphanedWorktrees(models) {
   try {
     console.log('Checking for orphaned worktrees...');
-    const orphans = await models.getOrphanedWorktrees();
+    const orphans = await models.worktreeRegistry.findOrphaned();
     
     if (orphans.length > 0) {
       console.log(`Found ${orphans.length} orphaned worktrees`);
       for (const orphan of orphans) {
         if (fsSync.existsSync(orphan.path)) {
-          console.log(`  - ${orphan.path} (${orphan.orphan_reason})`);
+          console.log(`  - ${orphan.path} (orphaned)`);
         }
       }
     }

@@ -36,23 +36,11 @@ class ProjectModel extends BaseModel {
   }
 
   /**
-   * Find all projects (matching old interface)
-   * @param {boolean} includeArchived - Whether to include archived projects
-   * @returns {Promise<Array>}
-   */
-  async findAll(includeArchived = false) {
-    if (includeArchived) {
-      return super.findAll({});
-    }
-    return super.findAll({ is_archived: 0 });
-  }
-
-  /**
    * Find all active projects
    * @returns {Promise<Array>}
    */
   async findActive() {
-    return this.findAll(false);
+    return this.findAll({ is_archived: 0 });
   }
 
   /**
@@ -60,7 +48,7 @@ class ProjectModel extends BaseModel {
    * @returns {Promise<Array>}
    */
   async findArchived() {
-    return super.findAll({ is_archived: 1 });
+    return this.findAll({ is_archived: 1 });
   }
 
   /**
@@ -82,11 +70,6 @@ class ProjectModel extends BaseModel {
       `UPDATE ${this.tableName} SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?`,
       [id]
     );
-  }
-
-  // Alias for consistency
-  async touchLastAccessed(id) {
-    return this.updateLastAccessed(id);
   }
 
   /**

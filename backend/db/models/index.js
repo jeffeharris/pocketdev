@@ -25,9 +25,6 @@ class Models {
     
     // Keep db reference for any remaining needs
     this.db = db;
-    
-    // Alias for backward compatibility during migration
-    this.terminalSession = this.sessions; // Some code uses terminalSession
   }
 
   // Settings convenience methods (delegating to SettingsModel)
@@ -65,24 +62,6 @@ class Models {
     };
   }
 
-  // TEMPORARY: Keep these methods until services are updated (Chunk 4)
-  async getOrphanedWorktrees() {
-    // This needs to move to WorktreeService
-    // For now, return orphaned worktrees without the cross-table data
-    const orphaned = await this.worktreeRegistry.findOrphaned();
-    
-    // Add minimal data for backward compatibility
-    return orphaned.map(w => ({
-      ...w,
-      orphan_reason: w.is_orphaned ? 'orphaned' : 'unknown'
-    }));
-  }
-  
-  async getWorktreeRegistry() {
-    // This needs to move to WorktreeService
-    // For now, return worktrees without cross-table data
-    return this.worktreeRegistry.findAll({});
-  }
 }
 
 export default Models;
