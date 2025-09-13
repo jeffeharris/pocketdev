@@ -2,15 +2,20 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import config from '../config/index.js';
 
-// GitHub token is now injected by middleware as req.services.git
+/**
+ * ProjectController - Thin HTTP adapter with 8 core methods matching ProjectService
+ * Additional endpoint functions delegate to these core methods for backward compatibility
+ */
+
+// ========== 8 CORE CONTROLLER METHODS ==========
 
 /**
- * List all projects
+ * Core list method
  */
-export async function listProjects(req, res, next) {
+async function list(req, res, next) {
   try {
     const projectService = req.services.ProjectService;
-    const projects = await projectService.list();
+    const projects = await projectService.list(req.query);
     res.json(projects);
   } catch (error) {
     next(error);
@@ -18,9 +23,9 @@ export async function listProjects(req, res, next) {
 }
 
 /**
- * Create a new project
+ * Core create method
  */
-export async function createProject(req, res, next) {
+async function create(req, res, next) {
   try {
     const { repoUrl, branch = 'main', projectName } = req.body;
     const projectService = req.services.ProjectService;
@@ -41,13 +46,37 @@ export async function createProject(req, res, next) {
 }
 
 /**
- * Get a specific project
+ * Core get method - handles all get variations
  */
-export async function getProject(req, res, next) {
+async function get(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const project = await projectService.get(projectId);
+    
+    // Determine includes based on the specific endpoint called
+    const routePath = req.route?.path || '';
+    let includes = [];
+    
+    if (routePath.includes('dashboard')) {
+      includes = ['tasks', 'status', 'branches', 'planning'];
+    } else if (routePath.includes('minimal')) {
+      includes = [];
+    } else if (routePath.includes('branches')) {
+      includes = ['branches'];
+    }
+    
+    const project = await projectService.get(projectId, includes);
+    
+    // Format response based on endpoint
+    if (routePath.includes('minimal')) {
+      return res.json({
+        id: project.id,
+        name: project.name,
+        repo_url: project.repo_url,
+        base_branch: project.base_branch
+      });
+    }
+    
     res.json(project);
   } catch (error) {
     if (error.statusCode === 404) {
@@ -58,16 +87,17 @@ export async function getProject(req, res, next) {
 }
 
 /**
- * Update a project
+ * Core update method
  */
-export async function updateProject(req, res, next) {
+async function update(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const updatedProject = await projectService.update(projectId, req.body);
-    res.json(updatedProject);
+    
+    const project = await projectService.update(projectId, req.body);
+    res.json(project);
   } catch (error) {
-    if (error.message === 'Project not found') {
+    if (error.statusCode === 404 || error.message === 'Project not found') {
       return res.status(404).json({ error: error.message });
     }
     next(error);
@@ -75,16 +105,15 @@ export async function updateProject(req, res, next) {
 }
 
 /**
- * Delete a project
+ * Core delete method  
  */
-export async function deleteProject(req, res, next) {
+async function deleteMethod(req, res, next) {
   try {
     const { projectId } = req.params;
-    const { force } = req.body; // Allow force deletion via request body
+    const { force } = req.body;
     const projectService = req.services.ProjectService;
     
     const result = await projectService.delete(projectId, { force });
-    
     res.json(result);
   } catch (error) {
     next(error);
@@ -92,20 +121,72 @@ export async function deleteProject(req, res, next) {
 }
 
 /**
- * Create a new branch
+ * Core sync method - handles fetch/pull/push
  */
-export async function createBranch(req, res, next) {
+async function sync(req, res, next) {
   try {
     const { projectId } = req.params;
     const projectService = req.services.ProjectService;
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: 'Branch name is required' });
-    }
-    const result = await projectService.createBranch(projectId, name, {
+    const routePath = req.route?.path || '';
+    
+    // Determine operation from route
+    let operation = 'fetch';
+    if (routePath.includes('pull')) operation = 'pull';
+    else if (routePath.includes('push')) operation = 'push';
+    else if (req.body?.operation) operation = req.body.operation;
+    
+    const result = await projectService.sync(projectId, operation, {
       githubToken: req.githubToken
     });
+    
+    // Some endpoints expect status back
+    if (routePath.includes('refresh') || routePath.includes('status')) {
+      const project = await projectService.get(projectId, ['status']);
+      return res.json(project.git_status || project);
+    }
+    
     res.json(result);
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ 
+        error: error.message,
+        ...(error.details && { details: error.details }),
+        ...(error.hasUncommitted && { hasUncommitted: error.hasUncommitted }),
+        ...(error.output && { output: error.output })
+      });
+    }
+    next(error);
+  }
+}
+
+/**
+ * Core branch method - handles create/list
+ */
+async function branch(req, res, next) {
+  try {
+    const { projectId } = req.params;
+    const { name } = req.body;
+    const projectService = req.services.ProjectService;
+    
+    // Determine operation from HTTP method
+    if (req.method === 'GET') {
+      // List branches
+      const branches = await projectService.branch(projectId, 'list', null, {
+        githubToken: req.githubToken
+      });
+      return res.json(branches);
+    } else if (req.method === 'POST') {
+      // Create branch
+      if (!name) {
+        return res.status(400).json({ error: 'Branch name is required' });
+      }
+      const result = await projectService.branch(projectId, 'create', name, {
+        githubToken: req.githubToken
+      });
+      return res.json(result);
+    }
+    
+    res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     if (error.message === 'Branch name is required') {
       return res.status(400).json({ error: error.message });
@@ -118,261 +199,60 @@ export async function createBranch(req, res, next) {
 }
 
 /**
- * List branches for a project
+ * Core planning method - handles get/update
  */
-export async function listBranches(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const result = await projectService.get(projectId, ['branches'], {
-      githubToken: req.githubToken
-    });
-    const branches = result.branches || [];
-    res.json(branches);
-  } catch (error) {
-    if (error.message === 'Project not found') {
-      return res.status(404).json({ error: error.message });
-    }
-    next(error);
-  }
-}
-
-/**
- * Sync project with remote
- */
-export async function syncProject(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    // Sync is basically a fetch followed by update status
-    const result = await projectService.sync(projectId, 'fetch', {
-      githubToken: req.githubToken
-    });
-    res.json(result);
-  } catch (error) {
-    if (error.message === 'Project not found') {
-      return res.status(404).json({ error: error.message });
-    }
-    if (error.message && error.message.includes('Failed to')) {
-      return res.status(500).json({ error: error.message });
-    }
-    next(error);
-  }
-}
-
-/**
- * Fetch remote updates for project
- */
-export async function fetchProject(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, 'fetch', {
-      githubToken: req.githubToken
-    });
-    res.json(result);
-  } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ error: error.message });
-    }
-    next(error);
-  }
-}
-
-/**
- * Get base branch sync status
- */
-export async function getBaseBranchStatus(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const status = await projectService.status(projectId, 'baseBranch', {
-      githubToken: req.githubToken
-    });
-    res.json(status);
-  } catch (error) {
-    if (error.message === 'Project not found') {
-      return res.status(404).json({ error: error.message });
-    }
-    // Handle directory not found as non-error response
-    if (error.message && error.message.includes('directory')) {
-      return res.json({ behind: 0, ahead: 0, error: error.message });
-    }
-    next(error);
-  }
-}
-
-/**
- * Pull base branch updates
- */
-export async function pullBaseBranch(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, 'pull', {
-      githubToken: req.githubToken
-    });
-    res.json(result);
-  } catch (error) {
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({ 
-        error: error.message,
-        ...(error.details && { details: error.details }),
-        ...(error.hasUncommitted && { hasUncommitted: error.hasUncommitted })
-      });
-    }
-    next(error);
-  }
-}
-
-/**
- * Push base branch to remote
- */
-export async function pushBaseBranch(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const result = await projectService.sync(projectId, 'push', {
-      githubToken: req.githubToken
-    });
-    res.json(result);
-  } catch (error) {
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({ 
-        error: error.message,
-        ...(error.output && { output: error.output })
-      });
-    }
-    next(error);
-  }
-}
-
-/**
- * Check update status for all tasks
- */
-export async function getUpdateStatus(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    
-    const result = await projectService.status(projectId, 'tasks', {
-      githubToken: req.githubToken
-    });
-    
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Get PLANNING.md content from base branch
- */
-export async function getProjectPlanning(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    
-    const planning = await projectService.getPlanning(projectId, {
-      githubToken: req.githubToken
-    });
-    
-    res.json(planning);
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Create or update PLANNING.md in the .pocketdev directory
- */
-export async function updateProjectPlanning(req, res, next) {
+async function planning(req, res, next) {
   try {
     const { projectId } = req.params;
     const { content } = req.body;
     const projectService = req.services.ProjectService;
     
-    const result = await projectService.updatePlanning(projectId, content, {
-      githubToken: req.githubToken
-    });
-    
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Get minimal project info for fast loading
- */
-export async function getProjectMinimal(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    // For minimal, just get basic project data
-    const project = await projectService.get(projectId);
-    res.json(project);
-  } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ error: error.message });
+    // Determine operation from HTTP method
+    if (req.method === 'GET') {
+      // Get planning
+      const result = await projectService.planning(projectId, 'get');
+      return res.json(result);
+    } else if (req.method === 'PUT') {
+      // Update planning
+      const result = await projectService.planning(projectId, 'update', content, {
+        githubToken: req.githubToken
+      });
+      return res.json(result);
     }
-    next(error);
-  }
-}
-
-/**
- * Get dashboard status from cache (no git fetch)
- */
-export async function getProjectDashboardCached(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
     
-    const dashboard = await projectService.get(projectId, ['dashboard'], {
-      githubToken: req.githubToken,
-      cached: true
-    });
-    
-    res.json(dashboard);
+    res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     next(error);
   }
 }
 
-/**
- * Trigger background refresh of git status
- */
-export async function refreshProjectStatus(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    const result = await projectService.status(projectId, 'refresh', {
-      githubToken: req.githubToken
-    });
-    res.json(result);
-  } catch (error) {
-    if (error.statusCode === 404) {
-      return res.status(404).json({ error: error.message });
-    }
-    next(error);
-  }
-}
+// ========== BACKWARD COMPATIBILITY EXPORTS ==========
 
-/**
- * Get comprehensive dashboard status for a project (includes git fetch)
- */
-export async function getProjectDashboard(req, res, next) {
-  try {
-    const { projectId } = req.params;
-    const projectService = req.services.ProjectService;
-    
-    const dashboard = await projectService.get(projectId, ['dashboard'], {
-      githubToken: req.githubToken,
-      cached: false
-    });
-    
-    res.json(dashboard);
-  } catch (error) {
-    next(error);
-  }
-}
+// Basic CRUD
+export const listProjects = list;
+export const createProject = create;
+export const getProject = get;
+export const updateProject = update;
+export const deleteProject = deleteMethod;
+
+// Sync variations
+export const syncProject = sync;
+export const fetchProject = sync;
+export const pullBaseBranch = sync;
+export const pushBaseBranch = sync;
+export const refreshProjectStatus = sync;
+export const getBaseBranchStatus = sync;
+export const getUpdateStatus = sync;
+
+// Get variations
+export const getProjectMinimal = get;
+export const getProjectDashboard = get;
+export const getProjectDashboardCached = get;
+
+// Branch operations
+export const createBranch = branch;
+export const listBranches = branch;
+
+// Planning operations
+export const getProjectPlanning = planning;
+export const updateProjectPlanning = planning;
