@@ -19,6 +19,37 @@ export class TaskController {
     this.worktreeService = new WorktreeService();
   }
 
+  /**
+   * Get task with aggregated session data
+   * Performs separate queries to maintain model separation
+   */
+  async getTaskWithSessionState(taskId) {
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) return null;
+    
+    const sessions = await this.models.sessions.findByTaskId(taskId);
+    task.sessions = sessions;
+    task.active_session_count = sessions.filter(s => s.is_active).length;
+    
+    // Add session state from active sessions
+    const activeSession = sessions.find(s => s.is_active);
+    if (activeSession) {
+      task.sessionState = {
+        state: activeSession.ai_state,
+        lastActivity: activeSession.last_activity
+      };
+    }
+    
+    return task;
+  }
+
+  /**
+   * Helper: Generate task ID
+   */
+  generateTaskId() {
+    return require('crypto').randomBytes(4).toString('hex');
+  }
+
 
   /**
    * Trigger git status update after operations that change git state
@@ -160,7 +191,7 @@ export class TaskController {
         // - No terminal session exists for this task
         // - Backend just restarted and hasn't received terminal data yet
         if (!liveStatus) {
-          const taskWithSession = await this.models.tasks.findByIdWithSessionState(task.id);
+          const taskWithSession = await this.getTaskWithSessionState(task.id);
           if (taskWithSession && taskWithSession.sessionState) {
             sessionState = taskWithSession.sessionState;
           }
@@ -195,7 +226,7 @@ export class TaskController {
     const { taskId } = req.params;
     
     try {
-      const task = await this.models.tasks.findByIdWithSessionState(taskId);
+      const task = await this.getTaskWithSessionState(taskId);
       if (!task) {
         return res.status(404).json({ error: 'Task not found' });
       }
@@ -522,8 +553,9 @@ export class TaskController {
           `Start by checking the current status and then perform the ${operation}.`;
         
         // Create a temporary merge task in the database
-        const mergeTaskId = this.models.tasks.generateId();
-        const mergeTask = await this.models.tasks.create(project.id, {
+        const mergeTaskId = this.generateTaskId();
+        const mergeTask = await this.models.tasks.create({
+          project_id: project.id,
           id: mergeTaskId,
           name: mergeTaskName,
           branch: task.branch,
@@ -657,7 +689,7 @@ export class TaskController {
       if (withClaude) {
         // Create a merge task for Claude assistance
         const mergeTaskName = `merge ${task.branch} into ${project.base_branch}`;
-        const mergeTaskId = this.models.tasks.generateId();
+        const mergeTaskId = this.generateTaskId();
         
         // Create a new branch for the merge
         const mergeBranch = `merge/${task.branch}-into-${project.base_branch}`.replace(/[^a-zA-Z0-9-]/g, '-');
@@ -674,7 +706,8 @@ export class TaskController {
         const mergeResult = await repository.merge(mergeWorktreePath, `origin/${task.branch}`);
         
         // Create merge task in database
-        const mergeTask = await this.models.tasks.create(project.id, {
+        const mergeTask = await this.models.tasks.create({
+          project_id: project.id,
           id: mergeTaskId,
           name: mergeTaskName,
           branch: mergeBranch,

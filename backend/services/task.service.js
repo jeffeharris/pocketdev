@@ -50,7 +50,8 @@ export class TaskService {
     }
     
     // Generate task ID and worktree path
-    const taskId = this.models.tasks.generateId();
+    const { v4: uuidv4 } = await import('uuid');
+    const taskId = uuidv4().slice(0, 8);
     const worktreePath = path.join(this.projectsDir, `${project.id}-task-${taskId}`);
     
     try {
@@ -67,8 +68,9 @@ export class TaskService {
       await GitRepository.configureCredentials(worktreePath, githubToken);
       
       // Create task in database
-      const task = await this.models.tasks.create(project.id, {
+      const task = await this.models.tasks.create({
         id: taskId,
+        project_id: project.id,
         name,
         branch,
         worktree_path: worktreePath
@@ -281,10 +283,15 @@ export class TaskService {
    * @returns {Promise<Object>} Complete task state
    */
   async getTaskState(taskId, githubToken, monitors = {}) {
-    const task = await this.models.tasks.findByIdWithSessionState(taskId);
+    const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
     }
+    
+    // Aggregate session data
+    const sessions = await this.models.sessions.findByTaskId(taskId);
+    task.sessions = sessions;
+    task.active_session_count = sessions.filter(s => s.is_active).length;
     
     const project = await this.models.projects.findById(task.project_id);
     
