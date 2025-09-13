@@ -157,6 +157,80 @@ export class ProjectService {
   }
 
   /**
+   * Get project by ID
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Object>} Project details
+   */
+  async getProject(projectId) {
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      const error = new Error('Project not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    return project;
+  }
+
+  /**
+   * Get minimal project info for fast loading
+   * @param {string} projectId - Project ID
+   * @returns {Promise<Object>} Minimal project details
+   */
+  async getProjectMinimal(projectId) {
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      const error = new Error('Project not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Return just the project info - no git operations
+    return {
+      id: project.id,
+      name: project.name,
+      repository: project.repo_url,
+      baseBranch: project.base_branch,
+      created: project.created_at,
+      local_path: project.local_path
+    };
+  }
+
+  /**
+   * Trigger background refresh of git status
+   * @param {string} projectId - Project ID
+   * @param {string} githubToken - GitHub token for authentication
+   * @returns {Promise<Object>} Refresh status
+   */
+  async refreshProjectStatus(projectId, githubToken) {
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      const error = new Error('Project not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Trigger git fetch in background (non-blocking)
+    const repository = new GitRepository(githubToken);
+    repository.fetch(project.local_path)
+      .then(() => console.log(`Background fetch completed for project ${projectId}`))
+      .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
+    
+    // Return immediately
+    return { 
+      message: 'Refresh triggered',
+      projectId 
+    };
+  }
+
+  /**
+   * List all active projects
+   * @returns {Promise<Array>} List of active projects
+   */
+  async listProjects() {
+    return await this.models.projects.findActive();
+  }
+
+  /**
    * Update project metadata
    * @param {string} projectId - Project ID
    * @param {Object} updates - Fields to update
@@ -271,6 +345,60 @@ export class ProjectService {
       branch: branchName,
       fromBranch,
       output: result.output
+    };
+  }
+
+  /**
+   * Fetch updates from remote repository
+   * @param {string} projectId - Project ID
+   * @param {string} githubToken - GitHub token for authentication
+   * @returns {Promise<Object>} Fetch result with branches
+   */
+  async fetchProject(projectId, githubToken) {
+    const project = await this.models.projects.findById(projectId);
+    if (!project) {
+      const error = new Error('Project not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Get git config from settings
+    const gitUserName = await this.models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_name']
+    );
+    
+    const gitUserEmail = await this.models.db.get(
+      'SELECT value FROM settings WHERE key = ?',
+      ['git_user_email']
+    );
+    
+    const gitConfig = {
+      name: gitUserName?.value || 'PocketDev User',
+      email: gitUserEmail?.value || 'user@pocketdev.local'
+    };
+    
+    // Ensure git credentials are configured
+    await GitRepository.configureCredentials(project.local_path, githubToken, gitConfig);
+    
+    // Fetch with git
+    const repository = new GitRepository(githubToken);
+    const result = await repository.fetch(project.local_path, { all: true, prune: true });
+    
+    // Get updated branch info
+    const branchResult = await repository.execute('git branch -r', project.local_path);
+    
+    const branches = branchResult.output
+      .split('\n')
+      .filter(b => b.trim())
+      .map(b => b.trim().replace('origin/', ''));
+    
+    await this.models.projects.updateLastAccessed(project.id);
+    
+    return { 
+      success: result.success, 
+      output: result.output,
+      branches: branches
     };
   }
 
