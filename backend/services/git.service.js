@@ -20,6 +20,18 @@ export class GitService {
     this.githubToken = githubToken;
   }
 
+  // ========== 10 PUBLIC METHODS ==========
+  // 1. clone - Clone a repository
+  // 2. sync - Fetch and pull updates (combines fetch + pull)
+  // 3. push - Push changes to remote
+  // 4. commit - Stage and commit changes
+  // 5. merge - Merge branches (with conflict checking)
+  // 6. branch - Manage branches (checkout, create, delete, list)
+  // 7. info - Get repository information (status, branches, log, current)
+  // 8. getDiff - Get differences between refs
+  // 9. checkConflicts - Check for merge conflicts
+  // 10. execute - Execute arbitrary git command (escape hatch)
+
   /**
    * Clone a repository
    * @param {string} repoUrl - Repository URL
@@ -40,30 +52,26 @@ export class GitService {
   }
 
   /**
-   * Fetch updates from remote
+   * Sync with remote (fetch + pull/merge)
    * @param {string} repoPath - Repository path
-   * @param {Object} options - Fetch options
+   * @param {Object} options - Sync options
    * @returns {Promise<Object>} Result with success, output, error
    */
-  async fetch(repoPath, options = {}) {
-    const { all = false, prune = false, tags = false } = options;
+  async sync(repoPath, options = {}) {
+    const { branch = null, remote = 'origin', fetchOnly = false } = options;
     
-    let command = 'git fetch';
-    if (all) command += ' --all';
-    if (prune) command += ' --prune';
-    if (tags) command += ' --tags';
+    // Always fetch first
+    const fetchResult = await this._execute('git fetch --prune', repoPath);
+    if (!fetchResult.success) {
+      return fetchResult;
+    }
     
-    return await this._execute(command, repoPath);
-  }
-
-  /**
-   * Pull updates from remote
-   * @param {string} repoPath - Repository path
-   * @param {string} remote - Remote name (default: origin)
-   * @param {string} branch - Branch name
-   * @returns {Promise<Object>} Result with success, output, error
-   */
-  async pull(repoPath, remote = 'origin', branch = null) {
+    // If fetch only, return
+    if (fetchOnly) {
+      return fetchResult;
+    }
+    
+    // Pull/merge changes
     const command = branch 
       ? `git pull ${remote} ${branch}`
       : `git pull`;
@@ -89,42 +97,6 @@ export class GitService {
     return await this._execute(command, repoPath);
   }
 
-  /**
-   * Get repository status
-   * @param {string} repoPath - Repository path
-   * @returns {Promise<Object>} Status information
-   */
-  async getStatus(repoPath) {
-    const result = await this._execute('git status --porcelain', repoPath);
-    
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-    
-    const files = result.output
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const status = line.substring(0, 2);
-        const file = line.substring(3);
-        return { status, file };
-      });
-    
-    // Get branch info
-    const branchResult = await this._execute('git branch --show-current', repoPath);
-    const branch = branchResult.success ? branchResult.output.trim() : 'unknown';
-    
-    // Get ahead/behind info
-    const aheadBehind = await this._getAheadBehind(repoPath, branch);
-    
-    return {
-      success: true,
-      branch,
-      files,
-      hasChanges: files.length > 0,
-      ...aheadBehind
-    };
-  }
 
   /**
    * Stage and commit changes
@@ -181,53 +153,84 @@ export class GitService {
   }
 
   /**
-   * Rebase current branch
+   * Manage branches (checkout, create, delete)
    * @param {string} repoPath - Repository path
-   * @param {string} targetBranch - Branch to rebase onto
-   * @returns {Promise<Object>} Result with success, output, error
+   * @param {string} operation - Operation: 'checkout', 'create', 'delete', 'list'
+   * @param {string} branch - Branch name (for checkout/create/delete)
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Result
    */
-  async rebase(repoPath, targetBranch) {
-    return await this._execute(`git rebase ${targetBranch}`, repoPath);
+  async branch(repoPath, operation, branch = null, options = {}) {
+    switch (operation) {
+      case 'checkout':
+        return await this._execute(`git checkout ${branch}`, repoPath);
+      
+      case 'create':
+        const createCmd = options.checkout 
+          ? `git checkout -b ${branch}`
+          : `git branch ${branch}`;
+        return await this._execute(createCmd, repoPath);
+      
+      case 'delete':
+        const deleteCmd = options.force 
+          ? `git branch -D ${branch}`
+          : `git branch -d ${branch}`;
+        return await this._execute(deleteCmd, repoPath);
+      
+      case 'list':
+        return await this.getBranches(repoPath, options);
+      
+      case 'current':
+        return await this.getCurrentBranch(repoPath);
+      
+      default:
+        return { success: false, error: `Unknown branch operation: ${operation}` };
+    }
   }
 
   /**
-   * Checkout a branch
+   * Get repository info (status, branches, commits)
    * @param {string} repoPath - Repository path
-   * @param {string} branch - Branch to checkout
-   * @returns {Promise<Object>} Result with success, output, error
+   * @param {string} infoType - Type of info: 'status', 'branches', 'log', 'current'
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Repository information
    */
-  async checkout(repoPath, branch) {
-    return await this._execute(`git checkout ${branch}`, repoPath);
+  async info(repoPath, infoType = 'status', options = {}) {
+    switch (infoType) {
+      case 'status':
+        return await this._getStatus(repoPath);
+      
+      case 'branches':
+        return await this._getBranches(repoPath, options);
+      
+      case 'log':
+        const { limit = 10, oneline = true } = options;
+        const logCmd = oneline 
+          ? `git log --oneline -n ${limit}`
+          : `git log -n ${limit}`;
+        const logResult = await this._execute(logCmd, repoPath);
+        return logResult.success 
+          ? { success: true, commits: logResult.output.split('\n').filter(l => l) }
+          : logResult;
+      
+      case 'current':
+        const branch = await this._getCurrentBranch(repoPath);
+        const commit = await this._getCurrentCommit(repoPath);
+        const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
+        return {
+          success: true,
+          branch,
+          commit,
+          ...aheadBehind
+        };
+      
+      default:
+        return { success: false, error: `Unknown info type: ${infoType}` };
+    }
   }
 
-  /**
-   * Get current commit SHA
-   * @param {string} repoPath - Repository path
-   * @returns {Promise<string>} Current commit SHA
-   */
-  async getCurrentCommit(repoPath) {
-    const result = await this._execute('git rev-parse HEAD', repoPath);
-    return result.success ? result.output.trim() : null;
-  }
-
-  /**
-   * Reset to a specific commit
-   * @param {string} repoPath - Repository path
-   * @param {string} target - Target commit or reference (e.g., 'HEAD~1')
-   * @param {string} mode - Reset mode (hard, soft, mixed)
-   * @returns {Promise<Object>} Result with success, output, error
-   */
-  async reset(repoPath, target = 'HEAD', mode = 'hard') {
-    return await this._execute(`git reset --${mode} ${target}`, repoPath);
-  }
-
-  /**
-   * Get list of branches
-   * @param {string} repoPath - Repository path
-   * @param {Object} options - Options for branch listing
-   * @returns {Promise<Array>} List of branch names
-   */
-  async getBranches(repoPath, options = {}) {
+  // Keep as internal helper for other methods
+  async _getBranches(repoPath, options = {}) {
     const { remote = false, all = false } = options;
     
     let command = 'git branch';
@@ -288,6 +291,27 @@ export class GitService {
   }
 
   /**
+   * Check for merge conflicts without actually merging
+   * @param {string} repoPath - Repository path
+   * @param {string} targetBranch - Branch to check conflicts against
+   * @returns {Promise<Object>} Conflict information
+   */
+  async checkConflicts(repoPath, targetBranch) {
+    return await this._checkMergeConflicts(repoPath, targetBranch);
+  }
+
+
+  /**
+   * Execute arbitrary git command (for advanced operations)
+   * @param {string} command - Git command to execute
+   * @param {string} repoPath - Repository path
+   * @returns {Promise<Object>} Result with success, output, error
+   */
+  async execute(command, repoPath) {
+    return await this._execute(command, repoPath);
+  }
+
+  /**
    * Configure git credentials
    * @param {string} repoPath - Repository path
    * @param {Object} gitConfig - Git configuration
@@ -307,6 +331,50 @@ export class GitService {
     }
     
     return { success: true };
+  }
+
+  // ========== HELPER METHODS (Internal Use) ==========
+  
+  // These were previously public but are now internal:
+  async _getStatus(repoPath) {
+    const result = await this._execute('git status --porcelain', repoPath);
+    
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    
+    const files = result.output
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        const status = line.substring(0, 2);
+        const file = line.substring(3);
+        return { status, file };
+      });
+    
+    // Get branch info
+    const branch = await this._getCurrentBranch(repoPath);
+    
+    // Get ahead/behind info
+    const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
+    
+    return {
+      success: true,
+      branch,
+      files,
+      hasChanges: files.length > 0,
+      ...aheadBehind
+    };
+  }
+
+  async _getCurrentBranch(repoPath) {
+    const result = await this._execute('git branch --show-current', repoPath);
+    return result.success ? result.output.trim() : null;
+  }
+
+  async _getCurrentCommit(repoPath) {
+    const result = await this._execute('git rev-parse HEAD', repoPath);
+    return result.success ? result.output.trim() : null;
   }
 
   // Private helper methods

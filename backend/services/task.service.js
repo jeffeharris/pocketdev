@@ -289,7 +289,7 @@ export class TaskService {
     const gitService = new GitService(githubToken);
     
     // Check for uncommitted changes
-    const status = await gitService.getStatus(task.worktree_path);
+    const status = await gitService.info(task.worktree_path, 'status');
     const hasUncommittedChanges = status.hasChanges;
     
     // Check for unpushed commits
@@ -408,7 +408,7 @@ export class TaskService {
     if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
       const gitService = new GitService(githubToken);
       
-      const status = await gitService.getStatus(task.worktree_path);
+      const status = await gitService.info(task.worktree_path, 'status');
       const diff = await gitService.getDiff(task.worktree_path, 'HEAD', 'HEAD', { stat: true });
       
       gitInfo = {
@@ -674,7 +674,8 @@ export class TaskService {
     
     let result;
     if (method === 'rebase') {
-      result = await gitService.rebase(task.worktree_path, baseBranch);
+      // Rebase is no longer a separate method - use execute for advanced operations
+      result = await gitService.execute(`git rebase ${baseBranch}`, task.worktree_path);
     } else {
       // Merge with conflict checking enabled
       result = await gitService.merge(task.worktree_path, baseBranch, { checkConflicts: true });
@@ -765,8 +766,8 @@ export class TaskService {
     }
     
     // Now ensure we're on the base branch and up to date
-    await gitService.checkout(project.local_path, project.base_branch);
-    await gitService.pull(project.local_path, 'origin', project.base_branch);
+    await gitService.branch(project.local_path, 'checkout', project.base_branch);
+    await gitService.sync(project.local_path, { branch: project.base_branch });
     
     // Merge the task branch (will check for conflicts internally)
     const mergeResult = await gitService.merge(
@@ -790,13 +791,15 @@ export class TaskService {
     }
     
     // Get the merge commit SHA
-    const mergeCommitSha = await gitService.getCurrentCommit(project.local_path);
+    const currentInfo = await gitService.info(project.local_path, 'current');
+    const mergeCommitSha = currentInfo.commit;
     
     // Push the merged changes to origin
     const pushBaseResult = await gitService.push(project.local_path, project.base_branch);
     if (!pushBaseResult.success) {
       // If push fails, we need to reset the merge
-      await gitService.reset(project.local_path, 'HEAD~1', 'hard');
+      // Reset is no longer a separate method - use execute for advanced operations
+      await gitService.execute('git reset --hard HEAD~1', project.local_path);
       const error = new Error('Failed to push merged changes to origin');
       error.statusCode = 500;
       error.details = pushBaseResult.error;
@@ -1123,7 +1126,8 @@ export class TaskService {
 
     try {
       // Get current HEAD
-      const currentHead = await gitService.getCurrentCommit(task.worktree_path);
+      const currentInfo = await gitService.info(task.worktree_path, 'current');
+      const currentHead = currentInfo.commit;
       
       // Check if we have commits since merge
       let hasCommitsSinceMerge = false;
@@ -1192,11 +1196,12 @@ export class TaskService {
     }
     
     const gitService = this.gitService || new GitService(githubToken);
-    const status = await gitService.getStatus(task.worktree_path);
+    const status = await gitService.info(task.worktree_path, 'status');
     
     // Get branch info
-    const currentBranch = await gitService.getCurrentBranch(task.worktree_path);
-    const aheadBehind = await gitService.getAheadBehind(task.worktree_path, task.branch);
+    const currentInfo = await gitService.info(task.worktree_path, 'current');
+    const currentBranch = currentInfo.branch;
+    const aheadBehind = { ahead: currentInfo.ahead, behind: currentInfo.behind };
     
     return {
       branch: currentBranch,

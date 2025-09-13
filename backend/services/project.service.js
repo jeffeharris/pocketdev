@@ -68,9 +68,10 @@ export class ProjectService {
     try {
       // Clone repository
       console.log(`Cloning ${repoUrl} to ${projectPath}...`);
-      const cloneResult = await gitService.command(
-        this.projectsDir,
-        `git clone ${repoUrl} ${projectId}`
+      const cloneResult = await gitService.clone(
+        repoUrl,
+        projectPath,
+        { branch: branch || 'main' }
       );
       
       if (!cloneResult.success) {
@@ -78,11 +79,11 @@ export class ProjectService {
       }
       
       // Configure git credentials
-      await gitService.configureCredentials(projectPath);
+      await GitService.configureCredentials(projectPath, githubToken);
       
       // Checkout branch if different from default
       if (branch && branch !== 'main') {
-        const checkoutResult = await gitService.checkout(projectPath, branch);
+        const checkoutResult = await gitService.branch(projectPath, 'checkout', branch);
         
         if (!checkoutResult.success) {
           // Clean up on failure
@@ -296,7 +297,7 @@ export class ProjectService {
     
     // Trigger git fetch in background (non-blocking)
     const gitService = new GitService(githubToken);
-    gitService.fetch(project.local_path, { all: true })
+    gitService.sync(project.local_path, { fetchOnly: true })
       .then(() => console.log(`Background fetch completed for project ${projectId}`))
       .catch(err => console.error(`Background fetch failed for project ${projectId}:`, err));
     
@@ -394,7 +395,7 @@ export class ProjectService {
     
     
     // Get all branches
-    const branchResult = await gitService.command(
+    const branchResult = await gitService.execute(
       project.local_path,
       'git branch -a'
     );
@@ -448,7 +449,7 @@ export class ProjectService {
     
     
     // Create branch
-    const result = await gitService.command(
+    const result = await gitService.execute(
       project.local_path,
       `git checkout -b ${branchName} ${fromBranch}`
     );
@@ -523,10 +524,10 @@ export class ProjectService {
     
     // Fetch with git
     const gitService = new GitService(githubToken);
-    const result = await gitService.fetch(project.local_path, { all: true, prune: true });
+    const result = await gitService.sync(project.local_path, { fetchOnly: true });
     
     // Get updated branch info
-    const branches = await gitService.getBranches(project.local_path, { remote: true });
+    const branches = await gitService.info(project.local_path, 'branches', { remote: true });
     
     await this.models.projects.updateLastAccessed(project.id);
     
@@ -554,7 +555,7 @@ export class ProjectService {
     
     
     // Fetch from remote
-    const fetchResult = await gitService.command(
+    const fetchResult = await gitService.execute(
       project.local_path,
       'git fetch --all --prune --tags'
     );
@@ -566,7 +567,7 @@ export class ProjectService {
     let pullResult = null;
     if (!fetchOnly) {
       // Pull current branch
-      pullResult = await gitService.command(
+      pullResult = await gitService.execute(
         project.local_path,
         'git pull'
       );
@@ -637,7 +638,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         
         if (success) {
           // Pull the changes to sync local repository
-                await gitService.command(
+                await gitService.execute(
             project.local_path,
             `git pull origin ${branch}`
           );
@@ -671,7 +672,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         -f content="${base64Content}" \
         -f branch="${branch}"`;
       
-        const createResult = await gitService.command(
+        const createResult = await gitService.execute(
         project.local_path,
         createFileCommand
       );
@@ -712,17 +713,17 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     try {
         
       // Fetch latest from remote to get accurate status
-      await gitService.command(project.local_path, 'git fetch origin');
+      await gitService.execute(project.local_path, 'git fetch origin');
       
       // Check if base branch is behind its remote
-      const behindResult = await gitService.command(
+      const behindResult = await gitService.execute(
         project.local_path,
         `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`
       );
       const behind = parseInt(behindResult.output.trim()) || 0;
       
       // Check if base branch has unpushed commits
-      const aheadResult = await gitService.command(
+      const aheadResult = await gitService.execute(
         project.local_path,
         `git rev-list --count origin/${project.base_branch}..${project.base_branch}`
       );
@@ -756,14 +757,14 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     
     // Check for uncommitted changes in base branch
-    const statusResult = await gitService.getStatus(project.local_path);
+    const statusResult = await gitService.info(project.local_path, 'status');
     
     if (statusResult.output && statusResult.output.trim()) {
       throw new Error('Cannot pull: Base branch has uncommitted changes');
     }
     
     // Pull updates for base branch
-    const result = await gitService.command(
+    const result = await gitService.execute(
       project.local_path,
       `git pull origin ${project.base_branch}`
     );
@@ -795,7 +796,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     
     // Push base branch
-    const result = await gitService.command(
+    const result = await gitService.execute(
       project.local_path,
       `git push origin ${project.base_branch}`
     );
@@ -880,7 +881,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       // 3. Check for merge conflicts (if not cached)
       if (!cached && task.status === 'active' && task.worktree_path) {
         try {
-                const mergeResult = await gitService.command(
+                const mergeResult = await gitService.execute(
             task.worktree_path,
             `git merge-tree $(git merge-base HEAD origin/${project.base_branch}) HEAD origin/${project.base_branch}`
           );
@@ -903,7 +904,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     // 4. Check for open PRs (if not cached and GitHub token available)
     if (!cached && gitService) {
       try {
-            const prResult = await gitService.command(
+            const prResult = await gitService.execute(
           project.local_path,
           `gh pr list --state open --json number,title,url,author,createdAt`
         );
@@ -979,7 +980,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     // Try to read from git
     try {
-        const result = await gitService.command(
+        const result = await gitService.execute(
         project.local_path,
         `git show ${project.base_branch}:.pocketdev/PLANNING.md`
       );
@@ -1015,7 +1016,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     
     
     // Ensure we're on the base branch
-    await gitService.command(
+    await gitService.execute(
       project.local_path,
       `git checkout ${project.base_branch}`
     );
@@ -1029,12 +1030,12 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
     await fs.writeFile(planningPath, content, 'utf8');
     
     // Add and commit the file
-    await gitService.command(
+    await gitService.execute(
       project.local_path,
       'git add .pocketdev/PLANNING.md'
     );
     
-    const commitResult = await gitService.command(
+    const commitResult = await gitService.execute(
       project.local_path,
       `git commit -m "Update PLANNING.md for project ${project.name}" || echo "No changes to commit"`
     );
@@ -1066,7 +1067,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
       
       try {
         // Check if branch is behind origin/base_branch
-        const behindResult = await gitService.command(
+        const behindResult = await gitService.execute(
           task.worktree_path,
           `git rev-list --count HEAD..origin/${project.base_branch}`
         );
@@ -1076,21 +1077,21 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         let ahead = 0;
         try {
           // First check if remote tracking branch exists
-          const remoteCheckResult = await gitService.command(
+          const remoteCheckResult = await gitService.execute(
             task.worktree_path,
             `git rev-parse --verify origin/${task.branch} 2>/dev/null`
           );
           
           if (remoteCheckResult.success) {
             // Remote branch exists, count unpushed commits
-            const aheadResult = await gitService.command(
+            const aheadResult = await gitService.execute(
               task.worktree_path,
               `git rev-list --count origin/${task.branch}..HEAD`
             );
             ahead = parseInt(aheadResult.output.trim()) || 0;
           } else {
             // No remote branch, count all commits ahead of base branch
-            const aheadResult = await gitService.command(
+            const aheadResult = await gitService.execute(
               task.worktree_path,
               `git rev-list --count origin/${project.base_branch}..HEAD`
             );
@@ -1098,7 +1099,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
           }
         } catch (e) {
           // Fallback to comparing with base branch
-          const aheadResult = await gitService.command(
+          const aheadResult = await gitService.execute(
             task.worktree_path,
             `git rev-list --count origin/${project.base_branch}..HEAD`
           );
@@ -1106,7 +1107,7 @@ ${project.name} - Created on ${new Date().toLocaleDateString()}
         }
         
         // Check for uncommitted changes
-        const statusResult = await gitService.getStatus(task.worktree_path);
+        const statusResult = await gitService.info(task.worktree_path);
         const hasUncommitted = statusResult.output.trim().length > 0;
         
         updateStatus.push({
