@@ -98,7 +98,13 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const tasks = await taskService.listProjectTasks(projectId, req.githubToken);
+      const tasks = await taskService.list(projectId, {
+        githubToken: req.githubToken,
+        monitors: {
+          aiMonitor: req.services.aiMonitor,
+          sessionMonitor: req.services.wsAdapter
+        }
+      });
       res.json(tasks);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -114,9 +120,21 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const status = await taskService.getTaskStatus(taskId, req.githubToken, {
-        aiMonitor: req.services.aiMonitor
+      const task = await taskService.get(taskId, {
+        includeGitStatus: true,
+        includeSessionState: true,
+        githubToken: req.githubToken
       });
+      
+      // Return status format expected by frontend
+      const status = {
+        id: task.id,
+        taskState: task.status === 'merged' || task.merged_at ? 'merged' : 
+                  task.is_archived ? 'archived' : 'active',
+        sessionState: task.sessionState || { status: 'not-started' },
+        gitStatus: task.gitStatus
+      };
+      
       res.json(status);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -165,7 +183,9 @@ export class TaskController {
       if (description !== undefined) updates.description = description;
       
       // Update task using service
-      const updatedTask = await taskService.updateTaskMetadata(taskId, updates);
+      const updatedTask = await taskService.update(taskId, {
+        metadata: updates
+      });
       
       res.json(updatedTask);
     } catch (error) {
@@ -181,7 +201,10 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const layout = await taskService.getSplitLayout(taskId, projectId);
+      const layout = await taskService.get(taskId, {
+        projectId,
+        includeSplitLayout: true
+      });
       res.json(layout);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -198,7 +221,10 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const layout = await taskService.updateSplitLayout(taskId, projectId, splitLayout);
+      const layout = await taskService.update(taskId, {
+        projectId,
+        splitLayout
+      });
       res.json(layout);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -272,7 +298,10 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const result = await taskService.updateTask(taskId, req.githubToken, { method });
+      const result = await taskService.update(taskId, {
+        gitOperation: { method },
+        githubToken: req.githubToken
+      });
       
       // Trigger status update after successful update
       if (result.success && req.services.gitStatusMonitor) {
@@ -300,7 +329,10 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const conflicts = await taskService.checkMergeConflicts(taskId, req.githubToken);
+      const conflicts = await taskService.merge(taskId, {
+        checkConflicts: true,
+        githubToken: req.githubToken
+      });
       res.json(conflicts);
     } catch (error) {
       const statusCode = error.statusCode || 500;
@@ -316,7 +348,9 @@ export class TaskController {
     
     try {
       const taskService = req.services.TaskService;
-      const result = await taskService.mergeToBase(taskId, req.githubToken);
+      const result = await taskService.merge(taskId, {
+        githubToken: req.githubToken
+      });
       
       // Trigger status update after successful merge
       if (req.services.gitStatusMonitor) {

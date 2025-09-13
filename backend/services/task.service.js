@@ -29,12 +29,19 @@ export class TaskService {
   /**
    * Create a new task with worktree and optional terminal session
    * @param {string} projectId - Project ID
-   * @param {Object} taskData - Task creation data
-   * @param {Object} gitService - GitService instance for git operations
-   * @param {Object} options - Additional options
+   * @param {Object} options - All task creation options
    * @returns {Promise<Object>} Created task with session info
    */
-  async createTask(projectId, taskData, githubToken, options = {}) {
+  async create(projectId, options = {}) {
+    const { name, branch, useExistingBranch, githubToken, createSession, hostname } = options;
+    return this._createTask(projectId, { name, branch, useExistingBranch }, githubToken, { createSession, hostname });
+  }
+
+  /**
+   * Internal create task implementation
+   * @private
+   */
+  async _createTask(projectId, taskData, githubToken, options = {}) {
     const { name, branch, useExistingBranch } = taskData;
     const { createSession = true, hostname } = options;
     
@@ -117,8 +124,12 @@ export class TaskService {
    * @param {Object} options - Deletion options
    * @returns {Promise<Object>} Deletion result
    */
-  async deleteTask(taskId, options = {}) {
-    const { force = false, softDelete = true } = options;
+  async delete(taskId, options = {}) {
+    const { force = false, softDelete = true, checkSafety = false, githubToken } = options;
+    
+    if (checkSafety) {
+      return this._checkTaskDeletionSafety(taskId, githubToken);
+    }
     
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
@@ -181,7 +192,34 @@ export class TaskService {
    * @param {Object} updates - Fields to update
    * @returns {Promise<Object>} Updated task
    */
-  async updateTaskMetadata(taskId, updates) {
+  /**
+   * Update task - metadata, git operations, or split layout
+   * @param {string} taskId - Task ID
+   * @param {Object} updates - Updates to apply
+   * @returns {Promise<Object>} Update result
+   */
+  async update(taskId, updates = {}) {
+    const { metadata, gitOperation, splitLayout, projectId, githubToken } = updates;
+    
+    // Update metadata if provided
+    if (metadata) {
+      return this._updateTaskMetadata(taskId, metadata);
+    }
+    
+    // Update split layout if provided
+    if (splitLayout && projectId) {
+      return this._updateSplitLayout(taskId, projectId, splitLayout);
+    }
+    
+    // Perform git operation if specified
+    if (gitOperation) {
+      return this._updateTask(taskId, githubToken, gitOperation);
+    }
+    
+    throw new Error('No valid update operation specified');
+  }
+
+  async _updateTaskMetadata(taskId, updates) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -217,7 +255,7 @@ export class TaskService {
    * @param {Object} gitService - GitService instance for git operations
    * @returns {Promise<Object>} Safety check results
    */
-  async checkTaskDeletionSafety(taskId, githubToken) {
+  async _checkTaskDeletionSafety(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -282,7 +320,39 @@ export class TaskService {
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Complete task details
    */
-  async getTaskDetails(taskId, projectId, githubToken, options = {}) {
+  /**
+   * Get task with various levels of detail
+   * @param {string} taskId - Task ID  
+   * @param {Object} options - Options for what to include
+   * @returns {Promise<Object>} Task with requested details
+   */
+  async get(taskId, options = {}) {
+    const { 
+      projectId,
+      includeGitStatus = false,
+      includeSessionState = false,
+      includeMergeStatus = false,
+      includeTerminals = false,
+      includeSplitLayout = false,
+      terminalLimit = 6,
+      githubToken = null
+    } = options;
+    
+    // Handle split layout as special case
+    if (includeSplitLayout && projectId) {
+      return this._getSplitLayout(taskId, projectId);
+    }
+    
+    return this._getTaskDetails(taskId, projectId, githubToken, { 
+      includeTerminals, 
+      terminalLimit,
+      includeGitStatus,
+      includeSessionState,
+      includeMergeStatus
+    });
+  }
+
+  async _getTaskDetails(taskId, projectId, githubToken, options = {}) {
     const { includeTerminals = true, terminalLimit = 6 } = options;
     
     const task = await this.models.tasks.findById(taskId);
@@ -393,7 +463,29 @@ export class TaskService {
    * @param {Object} monitors - Monitor services for live state
    * @returns {Promise<Array>} Array of tasks with full status
    */
-  async listProjectTasks(projectId, githubToken, monitors = {}) {
+  /**
+   * List tasks with configurable detail levels
+   * @param {string} projectId - Project ID
+   * @param {Object} options - List options
+   * @returns {Promise<Array>} Array of tasks
+   */
+  async list(projectId, options = {}) {
+    const { 
+      minimal = false,
+      includeGitStatus = true,
+      githubToken = null,
+      monitors = {}
+    } = options;
+    
+    if (minimal) {
+      // Simple list without enrichment
+      return this.models.tasks.findByProjectId(projectId);
+    }
+    
+    return this._listProjectTasks(projectId, githubToken, monitors);
+  }
+
+  async _listProjectTasks(projectId, githubToken, monitors = {}) {
     const tasks = await this.models.tasks.findByProjectId(projectId);
     
     // Get the project to know the base branch
@@ -475,7 +567,7 @@ export class TaskService {
    * @param {Object} monitors - Monitor services for live state
    * @returns {Promise<Object>} Complete task state
    */
-  async getTaskState(taskId, githubToken, monitors = {}) {
+  async _getTaskState(taskId, githubToken, monitors = {}) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -541,7 +633,7 @@ export class TaskService {
    * @param {Object} options - Update options
    * @returns {Promise<Object>} Update result
    */
-  async updateTask(taskId, githubToken, options = {}) {
+  async _updateTask(taskId, githubToken, options = {}) {
     const { method = 'merge' } = options;
     
     const task = await this.models.tasks.findById(taskId);
@@ -617,7 +709,28 @@ export class TaskService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} Merge result
    */
-  async mergeToBase(taskId, githubToken) {
+  /**
+   * Merge operations - check conflicts, merge to base, check status
+   * @param {string} taskId - Task ID
+   * @param {Object} options - Merge options
+   * @returns {Promise<Object>} Merge result
+   */
+  async merge(taskId, options = {}) {
+    const { checkConflicts = false, checkStatus = false, githubToken } = options;
+    
+    if (checkConflicts) {
+      return this._checkMergeConflicts(taskId, githubToken);
+    }
+    
+    if (checkStatus) {
+      return this._checkMergeStatus(taskId, githubToken);
+    }
+    
+    // Default to merging to base
+    return this._mergeToBase(taskId, githubToken);
+  }
+
+  async _mergeToBase(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       throw new Error('Task not found');
@@ -715,7 +828,23 @@ export class TaskService {
    * @param {Object} monitors - Monitor services
    * @returns {Promise<Object>} Session information
    */
-  async manageTaskTerminalSession(taskId, sessionData = {}, monitors = {}) {
+  /**
+   * Manage terminal sessions
+   * @param {string} taskId - Task ID
+   * @param {Object} options - Management options
+   * @returns {Promise<Object>} Action result
+   */
+  async manageTerminal(taskId, options = {}) {
+    const { sessionData = {}, monitors = {}, cleanup = false } = options;
+    
+    if (cleanup) {
+      return this._cleanupTaskSessions(taskId);
+    }
+    
+    return this._manageTaskTerminalSession(taskId, sessionData, monitors);
+  }
+
+  async _manageTaskTerminalSession(taskId, sessionData = {}, monitors = {}) {
     // Delegate to TerminalService which handles session complexity
     const terminalService = await this._getTerminalService();
     return await terminalService.createSession(taskId, sessionData, monitors);
@@ -779,7 +908,7 @@ export class TaskService {
    * @param {string} githubToken - GitHub token for authentication
    * @returns {Promise<Object>} Conflict check result
    */
-  async checkMergeConflicts(taskId, githubToken) {
+  async _checkMergeConflicts(taskId, githubToken) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       const error = new Error('Task not found');
@@ -817,7 +946,7 @@ export class TaskService {
    * @param {Object} monitors - Monitor services
    * @returns {Promise<Object>} Task status
    */
-  async getTaskStatus(taskId, githubToken, monitors = {}) {
+  async _getTaskStatus(taskId, githubToken, monitors = {}) {
     const task = await this.models.tasks.findById(taskId);
     if (!task) {
       const error = new Error('Task not found');
@@ -871,29 +1000,6 @@ export class TaskService {
   }
 
   /**
-   * Get task with aggregated session data
-   */
-  async getTaskWithSessionState(taskId) {
-    const task = await this.models.tasks.findById(taskId);
-    if (!task) return null;
-    
-    const sessions = await this.models.sessions.findByTaskId(taskId);
-    task.sessions = sessions;
-    task.active_session_count = sessions.filter(s => s.is_active).length;
-    
-    // Add session state from active sessions
-    const activeSession = sessions.find(s => s.is_active);
-    if (activeSession) {
-      task.sessionState = {
-        state: activeSession.ai_state,
-        lastActivity: activeSession.last_activity
-      };
-    }
-    
-    return task;
-  }
-
-  /**
    * Generate task ID
    */
   generateTaskId() {
@@ -901,9 +1007,10 @@ export class TaskService {
   }
 
   /**
-   * Get split layout configuration for a task
+   * Internal get split layout
+   * @private
    */
-  async getSplitLayout(taskId, projectId) {
+  async _getSplitLayout(taskId, projectId) {
     const task = await this.models.tasks.findById(taskId);
     if (!task || task.project_id !== projectId) {
       const error = new Error('Task not found');
@@ -924,9 +1031,10 @@ export class TaskService {
   }
 
   /**
-   * Update split layout configuration for a task
+   * Internal update split layout
+   * @private
    */
-  async updateSplitLayout(taskId, projectId, splitLayout) {
+  async _updateSplitLayout(taskId, projectId, splitLayout) {
     const task = await this.models.tasks.findById(taskId);
     if (!task || task.project_id !== projectId) {
       const error = new Error('Task not found');
@@ -977,7 +1085,7 @@ export class TaskService {
    * Check merge status for a task
    * @private
    */
-  async checkMergeStatus(taskId, githubToken = null) {
+  async _checkMergeStatus(taskId, githubToken = null) {
     const task = await this.models.tasks.findById(taskId);
     if (!task || !task.merged_at || !task.merge_commit_sha) {
       return null;
@@ -1044,7 +1152,7 @@ export class TaskService {
   /**
    * Clean up all Shelltender sessions for a task
    */
-  async cleanupTaskSessions(taskId) {
+  async _cleanupTaskSessions(taskId) {
     // Delegate to TerminalService which handles session complexity
     const terminalService = await this._getTerminalService();
     return await terminalService.cleanupTaskSessions(taskId);
