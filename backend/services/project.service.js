@@ -25,19 +25,26 @@ export class ProjectService {
   }
 
   /**
-   * Create project or branch
-   * @param {Object} data - Creation data
-   * @param {Object} options - Creation options
-   * @returns {Promise<Object>} Created project or branch
+   * Create a new project (not branches)
+   * @param {Object} data - Project creation data (repoUrl, branch, projectName)
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Created project
    */
   async create(data, options = {}) {
-    const { createBranch, projectId, branchName, githubToken } = options;
-    
-    if (createBranch && projectId) {
-      return this._createProjectBranch(projectId, branchName, githubToken);
-    }
-    
+    const { githubToken } = options;
     return this._createProject(data, this.gitService || new GitService(githubToken), options);
+  }
+  
+  /**
+   * Create a new branch in existing project
+   * @param {string} projectId - Project ID
+   * @param {string} branchName - New branch name
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Branch creation result
+   */
+  async createBranch(projectId, branchName, options = {}) {
+    const { githubToken } = options;
+    return this._createProjectBranch(projectId, { name: branchName }, this.gitService || new GitService(githubToken));
   }
 
   /**
@@ -188,32 +195,32 @@ export class ProjectService {
    * @returns {Promise<Object>} Project details
    */
   /**
-   * Get project with various levels of detail
+   * Get project details
    * @param {string} projectId - Project ID
-   * @param {Object} options - Options for what to include
+   * @param {Array} includes - Optional data to include: ['branches', 'dashboard']
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Project with requested details
    */
-  async get(projectId, options = {}) {
-    const {
-      minimal = false,
-      includeDashboard = false,
-      includeBranches = false,
-      githubToken = null
-    } = options;
+  async get(projectId, includes = [], options = {}) {
+    const { githubToken } = options;
     
-    if (minimal) {
-      return this._getProjectMinimal(projectId);
+    // Always get base project data
+    const project = await this._getProject(projectId);
+    
+    // Add optional includes
+    if (includes.includes('dashboard')) {
+      const gitService = this.gitService || new GitService(githubToken);
+      const dashboard = await this._getProjectDashboard(projectId, gitService, options);
+      return { ...project, ...dashboard };
     }
     
-    if (includeDashboard) {
-      return this._getProjectDashboard(projectId, this.gitService || new GitService(githubToken), options);
+    if (includes.includes('branches')) {
+      const gitService = this.gitService || new GitService(githubToken);
+      const branches = await this._getProjectBranches(projectId, gitService);
+      project.branches = branches;
     }
     
-    if (includeBranches) {
-      return this._getProjectBranches(projectId, this.gitService || new GitService(githubToken));
-    }
-    
-    return this._getProject(projectId);
+    return project;
   }
 
   async _getProject(projectId) {
@@ -257,13 +264,14 @@ export class ProjectService {
    * @returns {Promise<Object>} Refresh status
    */
   /**
-   * Get various status information
+   * Get project status information
    * @param {string} projectId - Project ID
-   * @param {Object} options - Status options
+   * @param {string} type - Status type: 'refresh', 'baseBranch', 'tasks'
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Status information
    */
-  async getStatus(projectId, options = {}) {
-    const { type = 'refresh', githubToken } = options;
+  async status(projectId, type = 'refresh', options = {}) {
+    const { githubToken } = options;
     const gitService = this.gitService || new GitService(githubToken);
     
     switch (type) {
@@ -271,7 +279,7 @@ export class ProjectService {
         return this._refreshProjectStatus(projectId, githubToken);
       case 'baseBranch':
         return this._getBaseBranchStatus(projectId, gitService);
-      case 'tasksUpdate':
+      case 'tasks':
         return this._getProjectTasksUpdateStatus(projectId, gitService);
       default:
         throw new Error(`Unknown status type: ${type}`);
@@ -323,20 +331,26 @@ export class ProjectService {
    * @returns {Promise<Object>} Updated project
    */
   /**
-   * Update project - metadata or planning
+   * Update project metadata only
    * @param {string} projectId - Project ID
-   * @param {Object} updates - Updates to apply
-   * @returns {Promise<Object>} Update result
+   * @param {Object} updates - Metadata updates (name, description, baseBranch)
+   * @returns {Promise<Object>} Updated project
    */
   async update(projectId, updates = {}) {
-    const { planning, metadata, githubToken } = updates;
-    
-    if (planning) {
-      return this._updateProjectPlanning(projectId, planning, this.gitService || new GitService(githubToken));
-    }
-    
-    // Default to metadata update
-    return this._updateProject(projectId, metadata || updates);
+    return this._updateProject(projectId, updates);
+  }
+  
+  /**
+   * Update project planning document
+   * @param {string} projectId - Project ID
+   * @param {string} content - Planning document content
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Update result
+   */
+  async updatePlanning(projectId, content, options = {}) {
+    const { githubToken } = options;
+    const gitService = this.gitService || new GitService(githubToken);
+    return this._updateProjectPlanning(projectId, content, gitService);
   }
 
   async _updateProject(projectId, updates) {
@@ -458,20 +472,19 @@ export class ProjectService {
    * @returns {Promise<Object>} Fetch result with branches
    */
   /**
-   * Sync operations - fetch, pull, push
+   * Sync project with remote repository
    * @param {string} projectId - Project ID
-   * @param {Object} options - Sync options
+   * @param {string} operation - Operation type: 'fetch', 'pull', 'push'
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Sync result
    */
-  async sync(projectId, options = {}) {
-    const { operation = 'fetch', githubToken } = options;
+  async sync(projectId, operation = 'fetch', options = {}) {
+    const { githubToken } = options;
     const gitService = this.gitService || new GitService(githubToken);
     
     switch (operation) {
       case 'fetch':
         return this._fetchProject(projectId, githubToken);
-      case 'sync':
-        return this._syncProject(projectId, gitService, options);
       case 'pull':
         return this._pullBaseBranch(projectId, gitService);
       case 'push':
