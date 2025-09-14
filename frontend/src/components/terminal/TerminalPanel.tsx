@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SplitViewContainer } from './SplitViewContainer';
 import { EmptyTerminalPanel } from './EmptyTerminalPanel';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
-import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminalStore';
+import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
 import { useShortcutContext } from '../../hooks/keyboard';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { ThrottledTerminal } from './ThrottledTerminal';
@@ -153,7 +153,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const terminalsFromStore = useTaskTerminals(task.id);
   const activeTerminalId = useActiveTerminalId(task.id);
   const focusedTerminalId = useFocusedTerminalId(task.id);
-  const { setTerminals, setActiveTerminal, addTerminal, removeTerminal, updateTerminal, setFocusedTerminal } = useTerminalStore();
+  const terminalStore = useTerminalStore();
   
   // Use terminals from task prop if store is empty (handles initial load and view switches)
   const terminals = terminalsFromStore.length > 0 ? terminalsFromStore : (task.terminals || []);
@@ -164,9 +164,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Force sync terminals when layout changes (fixes terminals not showing when switching views)
   useEffect(() => {
     if (task.terminals && task.terminals.length > 0 && terminalsFromStore.length === 0) {
-      setTerminals(task.id, task.terminals);
+      terminalStore.initializeTask(task.id, task.terminals);
     }
-  }, [layout.mode, task.id, task.terminals, terminalsFromStore.length, setTerminals]);
+  }, [layout.mode, task.id, task.terminals, terminalsFromStore.length, terminalStore]);
   
   // Initialize terminals from task prop on mount or when task changes
   useEffect(() => {
@@ -175,14 +175,17 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Check if store is empty or out of sync
       const currentStoreTerminals = useTerminalStore.getState().getTerminals(task.id);
       if (currentStoreTerminals.length === 0 || currentStoreTerminals.length !== task.terminals.length) {
-        setTerminals(task.id, task.terminals);
+        terminalStore.initializeTask(task.id, task.terminals);
       }
       // Set initial focus to active terminal if no focus set
       if (!focusedTerminalId && activeTabId) {
-        setFocusedTerminal(task.id, activeTabId);
+        terminalStore.updateTerminal(task.id, activeTabId, {
+          type: 'set-focus',
+          focus: true
+        });
       }
     }
-  }, [task.id, task.terminals, setTerminals, focusedTerminalId, activeTabId, setFocusedTerminal]);
+  }, [task.id, task.terminals, terminalStore, focusedTerminalId, activeTabId]);
   
   // Simple effect - just validate the saved tab exists
   useEffect(() => {
@@ -228,19 +231,22 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const tabToFocus = terminals.find(t => t.dbSessionId === focusTabId);
       if (tabToFocus) {
         setActiveTabId(focusTabId);
-        setActiveTerminal(task.id, focusTabId);
+        terminalStore.setActiveTerminal(task.id, focusTabId);
         localStorage.setItem(`activeTab-${task.id}`, focusTabId);
         // Clean up after using
         sessionStorage.removeItem(focusTabKey);
       }
     }
-  }, [task.id, terminals, setActiveTerminal]);
+  }, [task.id, terminals, terminalStore]);
 
   // Save when active tab changes
   const handleTabSelect = (tabId: string) => {
     setActiveTabId(tabId);
-    setActiveTerminal(task.id, tabId);
-    setFocusedTerminal(task.id, tabId);
+    terminalStore.setActiveTerminal(task.id, tabId);
+    terminalStore.updateTerminal(task.id, tabId, {
+      type: 'set-focus',
+      focus: true
+    });
     localStorage.setItem(`activeTab-${task.id}`, tabId);
     // Focus the terminal after switching
     setTimeout(() => {
@@ -517,7 +523,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       if (!terminal) return;
       
       // Optimistically update the store
-      updateTerminal(task.id, terminal.dbSessionId, { tabName: newName });
+      terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
+        type: 'rename',
+        name: newName
+      });
       
       // Update via API
       // Get normalized ID for the terminal
@@ -536,7 +545,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
       if (terminal) {
         const currentName = tabs.find(t => t.id === dbSessionId)?.name || 'Tab';
-        updateTerminal(task.id, terminal.dbSessionId, { tabName: currentName });
+        terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
+          type: 'rename',
+          name: currentName
+        });
       }
       showNotification('error', 'Failed to rename tab');
     }
@@ -657,7 +669,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           console.log('[performTabClose] Switching to next tab:', nextTabId);
           setActiveTabId(nextTabId);
           localStorage.setItem(`activeTab-${task.id}`, nextTabId);
-          setActiveTerminal(task.id, nextTabId);
+          terminalStore.setActiveTerminal(task.id, nextTabId);
         } else {
           console.log('[performTabClose] No remaining tabs after close');
         }
@@ -1115,7 +1127,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                   hasFocus={focusedTerminalId === (terminal.normalizedId || terminalService.getNormalizedId(terminal))}
                   onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
                   onFocusRequest={() => {
-                    setFocusedTerminal(task.id, terminal.normalizedId || terminalService.getNormalizedId(terminal));
+                    terminalStore.updateTerminal(task.id, terminal.normalizedId || terminalService.getNormalizedId(terminal), {
+                      type: 'set-focus',
+                      focus: true
+                    });
                   }}
                 />
               </div>

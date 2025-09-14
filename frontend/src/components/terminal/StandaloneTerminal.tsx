@@ -26,8 +26,8 @@ export function StandaloneTerminal() {
         
         // Initialize terminal store with task terminals
         if (taskData.terminals) {
-          const { setTerminals } = useTerminalStore.getState();
-          setTerminals(taskId, taskData.terminals);
+          const { initializeTask } = useTerminalStore.getState();
+          initializeTask(taskId, taskData.terminals);
         }
       } catch (err) {
         setError('Failed to load task');

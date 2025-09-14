@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { ChevronDown, ArrowLeftRight } from 'lucide-react';
 import { useSplitViewStore, useSplitLayout, useLayoutState, saveLayout } from '../../stores/splitViewStore';
-import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminalStore';
+import { useTaskTerminals, useFocusedTerminalId, useTerminalStore } from '../../stores/terminal/terminalStore.deep';
 import type { TerminalSession } from '../../types/task';
 
 interface SplitViewContainerProps {
@@ -34,7 +34,7 @@ export function SplitViewContainer({
   const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
-  const { setFocusedTerminal } = useTerminalStore();
+  const terminalStore = useTerminalStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
   const resizerRef = useRef<HTMLDivElement>(null);

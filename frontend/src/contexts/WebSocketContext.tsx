@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { useSplitViewStore } from '../stores/splitViewStore';
-import { handleTerminalWebSocketEvent } from '../stores/terminalStore';
+import { handleTerminalWebSocketEvent } from '../stores/terminal/terminalStore.deep';
 
 type WebSocketStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
