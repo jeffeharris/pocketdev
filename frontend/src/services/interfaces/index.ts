@@ -7,7 +7,6 @@ export type { ISettingsService } from './settings.service.interface';
 export type { IUploadService, TaskImage, UploadResult } from './upload.service.interface';
 export type { IGitService, GitOperationOptions, GitOperationResult } from './git.service.interface';
 export type { ITerminalService, CreateTerminalOptions, TerminalTabUpdate, CreateTerminalResult } from './terminal.service.interface';
-export type { IContainerService } from './container.service.interface';
 export type { IPullRequestService } from './pull-request.service.interface';
 export type { IProjectService, CreateProjectData, ProjectPlanning, ProjectDashboard } from './project.service.interface';
 export type { ITaskService, TaskListOptions, TaskUpdateData, CommitHistory } from './task.service.interface';

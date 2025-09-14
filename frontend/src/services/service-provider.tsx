@@ -15,13 +15,12 @@ import { SettingsService } from './settings.service';
 import { UploadService } from './upload.service';
 import { GitService } from './git.service';
 import { TerminalService } from './terminal.service';
-import { ContainerService } from './container.service';
 import { PullRequestService } from './pull-request.service';
 import { ProjectService } from './project.service';
 import { TaskService } from './task.service';
 
 // Service registry types
-export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload' | 'container' | 'pullRequest';
+export type ServiceType = 'project' | 'task' | 'git' | 'terminal' | 'settings' | 'upload' | 'pullRequest';
 
 export interface ServiceConfig {
   mockEnabled?: boolean;
@@ -36,7 +35,6 @@ export interface ServiceRegistry {
   terminal: TerminalService;   // Phase 2 implemented
   settings: SettingsService;   // Phase 1 implemented
   upload: UploadService;       // Phase 1 implemented
-  container: ContainerService; // Phase 3 implemented
   pullRequest: PullRequestService; // Phase 3 implemented
   
   // Infrastructure
@@ -126,7 +124,6 @@ export function ServiceProvider({ children, config = {} }: ServiceProviderProps)
           // Phase 4 services - actual implementations
           project: new ProjectService(serviceConfig),
           task: new TaskService(serviceConfig),
-          container: new ContainerService(serviceConfig),
           pullRequest: new PullRequestService(serviceConfig),
           
           // Phase 1 & 2 services - actual implementations

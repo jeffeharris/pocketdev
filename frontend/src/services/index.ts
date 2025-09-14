@@ -33,7 +33,6 @@ export type {
   ITerminalService,
   ISettingsService,
   IUploadService,
-  IContainerService,
   ISessionAdapter,
   
   // Pattern types
@@ -69,7 +68,6 @@ export { GitService } from './git.service';
 export { TerminalService } from './terminal.service';
 export { SettingsService } from './settings.service';
 export { UploadService } from './upload.service';
-export { ContainerService } from './container.service';
 export { PullRequestService } from './pull-request.service';
 
 // Legacy API removed - components now use services directly
