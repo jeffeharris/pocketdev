@@ -16,7 +16,7 @@ import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
 import { TerminalGrid } from './TerminalGrid';
 import { useLayoutConstraints } from './useLayoutConstraints';
 import { useTerminalStatus } from './useTerminalStatus';
-import { useTabManager } from './useTabManager';
+import { useTabManager, type TabAction } from './useTabManager';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
@@ -75,15 +75,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Use tab manager for all tab operations
   const {
-    activeTabId,
     tabs,
+    activeTabId,
     confirmClose,
-    handleTabSelect,
-    handleTabAdd,
-    handleTabClose,
-    handleTabRename,
-    handleTabReorder,
-    performTabClose,
+    modifyTab,
     cancelCloseConfirmation
   } = useTabManager({
     task,
@@ -448,12 +443,12 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             <TerminalTabs
               tabs={tabs}
               activeTabId={activeTabId}
-              onTabSelect={handleTabSelect}
-              onTabAdd={() => handleTabAdd()}
+              onTabSelect={(tabId) => modifyTab({ type: 'select', tabId })}
+              onTabAdd={() => modifyTab({ type: 'add' })}
               onTabAdvancedAdd={() => dispatch({ type: 'SHOW_SESSION_LAUNCHER' })}
-              onTabRename={handleTabRename}
-              onTabClose={handleTabClose}
-              onTabReorder={handleTabReorder}
+              onTabRename={(dbSessionId, newName) => modifyTab({ type: 'rename', dbSessionId, newName })}
+              onTabClose={(dbSessionId) => modifyTab({ type: 'close', dbSessionId })}
+              onTabReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
               maxTabs={6}
             />
             <div className="flex items-center gap-2 pr-4">
@@ -484,10 +479,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onEmptyPanelAction={(action) => {
           switch (action) {
             case 'claude':
-              handleTabAdd({ aiAgent: 'claude' });
+              modifyTab({ type: 'add', options: { aiAgent: 'claude' } });
               break;
             case 'bash':
-              handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+              modifyTab({ type: 'add', options: { aiAgent: 'none', tabName: 'Bash' } });
               break;
             case 'advanced':
               dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
@@ -497,7 +492,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onResetStateChange={(value) => 
           dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })
         }
-        onTerminalReorder={handleTabReorder}
+        onTerminalReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
         renderControlButtons={renderControlButtons}
         terminalRefs={terminalRefs}
       />
@@ -507,7 +502,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         isOpen={showSessionLauncher}
         onClose={() => dispatch({ type: 'HIDE_SESSION_LAUNCHER' })}
         onLaunch={(options) => {
-          handleTabAdd(options);
+          modifyTab({ type: 'add', options });
           dispatch({ type: 'HIDE_SESSION_LAUNCHER' });
         }}
         taskPath={task.worktree_path}
@@ -519,7 +514,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onClose={() => dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' })}
         onConfirm={() => {
           if (confirmClose) {
-            performTabClose(confirmClose.dbSessionId);
+            modifyTab({ type: 'forceClose', dbSessionId: confirmClose.dbSessionId });
           }
         }}
         title="Close Terminal Tab"

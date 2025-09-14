@@ -17,6 +17,15 @@ import type { Task } from '../../types/task';
 import type { TerminalSession } from '../../types/task';
 import type { Tab } from './TerminalTabs';
 
+// Tab modification actions - consolidates all operations
+export type TabAction = 
+  | { type: 'add'; options?: SessionOptions }
+  | { type: 'close'; dbSessionId: string }
+  | { type: 'forceClose'; dbSessionId: string }  // Bypass confirmation
+  | { type: 'rename'; dbSessionId: string; newName: string }
+  | { type: 'reorder'; tabs: Tab[] }
+  | { type: 'select'; tabId: string };
+
 interface SessionOptions {
   tabName?: string;
   aiAgent?: 'claude' | 'aider' | 'codex' | 'gemini' | 'none';
@@ -33,16 +42,12 @@ interface UseTabManagerProps {
   onTabsChange?: () => void;
 }
 
+// Simplified interface - only 5 public members
 interface UseTabManagerResult {
-  activeTabId: string;
   tabs: Tab[];
+  activeTabId: string;
   confirmClose: { dbSessionId: string; tabName: string } | null;
-  handleTabSelect: (tabId: string) => void;
-  handleTabAdd: (options?: SessionOptions) => Promise<void>;
-  handleTabClose: (dbSessionId: string) => Promise<void>;
-  handleTabRename: (dbSessionId: string, newName: string) => Promise<void>;
-  handleTabReorder: (reorderedTabs: Tab[]) => Promise<void>;
-  performTabClose: (dbSessionId: string) => Promise<void>;
+  modifyTab: (action: TabAction) => Promise<void>;
   cancelCloseConfirmation: () => void;
 }
 
@@ -100,8 +105,11 @@ export function useTabManager({
     // Find terminal and update state
     const terminal = terminals.find(t => t.normalizedId === tabId);
     if (terminal) {
-      terminalStore.updateTerminalSession(task.id, terminal.dbSessionId, {
-        lastActiveAt: Date.now()
+      terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
+        type: 'update',
+        updates: {
+          lastActivity: new Date().toISOString()
+        }
       });
     }
   }, [task.id, terminals, terminalStore]);
@@ -123,15 +131,17 @@ export function useTabManager({
       
       console.log('[useTabManager] New session created:', newSession);
       
-      // Add to store
-      terminalStore.addTerminalSession(task.id, {
-        sessionId: newSession.sessionId,
-        dbSessionId: newSession.dbSessionId,
-        shelltenderSessionId: newSession.shelltenderSessionId,
-        tabName: newSession.tabName,
-        tabOrder: newSession.tabOrder,
-        aiState: 'not-started',
-        aiAgent: newSession.aiAgent
+      // Add to store using the correct action pattern
+      terminalStore.updateTerminal(task.id, newSession.dbSessionId, {
+        type: 'create',
+        config: {
+          sessionId: newSession.sessionId,
+          dbSessionId: newSession.dbSessionId,
+          tabName: newSession.tabName,
+          tabOrder: newSession.tabOrder,
+          aiState: 'not-started',
+          autoFocus: true
+        }
       });
       
       // Switch to new tab
@@ -172,7 +182,10 @@ export function useTabManager({
       
       await terminalService.updateTerminalTab(terminal.normalizedId, { tabName: newName });
       
-      terminalStore.updateTerminalSession(task.id, dbSessionId, { tabName: newName });
+      terminalStore.updateTerminal(task.id, dbSessionId, {
+        type: 'rename',
+        name: newName
+      });
       onTabsChange?.();
     } catch (error) {
       console.error('Failed to rename tab:', error);
@@ -195,8 +208,9 @@ export function useTabManager({
       
       // Update store
       reorderedTabs.forEach(tab => {
-        terminalStore.updateTerminalSession(task.id, tab.id, {
-          tabOrder: tab.tabOrder
+        terminalStore.updateTerminal(task.id, tab.id, {
+          type: 'reorder',
+          order: tab.tabOrder
         });
       });
       
@@ -258,7 +272,9 @@ export function useTabManager({
       await terminalService.deleteTerminalSession(terminalToClose.normalizedId);
       
       // Remove from store
-      terminalStore.removeTerminalSession(task.id, dbSessionId);
+      terminalStore.updateTerminal(task.id, dbSessionId, {
+        type: 'remove'
+      });
       
       // Clear confirmation if it was set
       setConfirmClose(null);
@@ -274,7 +290,9 @@ export function useTabManager({
       if (error.message && error.message.includes('Session not found')) {
         console.log('[performTabClose] Session already deleted (race condition), ignoring error');
         setConfirmClose(null);
-        terminalStore.removeTerminalSession(task.id, dbSessionId);
+        terminalStore.updateTerminal(task.id, dbSessionId, {
+          type: 'remove'
+        });
       } else {
         console.error('Failed to close terminal:', error);
       }
@@ -295,16 +313,36 @@ export function useTabManager({
     }
   }, [activeTabId, terminals, handleTabSelect]);
   
+  // Single unified method for all tab modifications
+  const modifyTab = useCallback(async (action: TabAction) => {
+    switch (action.type) {
+      case 'select':
+        handleTabSelect(action.tabId);
+        break;
+      case 'add':
+        await handleTabAdd(action.options);
+        break;
+      case 'close':
+        await handleTabClose(action.dbSessionId);
+        break;
+      case 'forceClose':
+        await performTabClose(action.dbSessionId);
+        break;
+      case 'rename':
+        await handleTabRename(action.dbSessionId, action.newName);
+        break;
+      case 'reorder':
+        await handleTabReorder(action.tabs);
+        break;
+    }
+  }, [handleTabSelect, handleTabAdd, handleTabClose, performTabClose, handleTabRename, handleTabReorder]);
+  
+  // Simplified public interface
   return {
-    activeTabId,
     tabs,
+    activeTabId,
     confirmClose,
-    handleTabSelect,
-    handleTabAdd,
-    handleTabClose,
-    handleTabRename,
-    handleTabReorder,
-    performTabClose,
+    modifyTab,
     cancelCloseConfirmation
   };
 }
