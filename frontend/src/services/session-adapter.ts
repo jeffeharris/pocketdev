@@ -8,177 +8,124 @@
  * 
  * Solution: Components should only see one normalized ID type.
  * This adapter handles the mapping internally.
+ * 
+ * Deep module design:
+ * - Simple interface: 4 core methods
+ * - Hidden complexity: ID mapping, session storage, type conversions
+ * - Clear abstraction: Components only work with normalized IDs
  */
 
 import type { TerminalSession } from '../types/task';
 
 export type NormalizedSessionId = string;
 
-export interface SessionInfo {
-  /** Normalized ID for components to use */
-  id: NormalizedSessionId;
-  /** Database session ID (stable) */
+// Internal storage structure - not exposed
+interface SessionRecord {
+  normalizedId: NormalizedSessionId;
   dbSessionId: string;
-  /** Shelltender session ID (for WebSocket) */
   shelltenderSessionId: string;
-  /** Legacy session ID (for backward compatibility) */
   legacySessionId?: string;
-  /** Tab display name */
   tabName: string;
-  /** Tab order for sorting */
   tabOrder: number;
-  /** AI agent type */
   aiAgent: string;
-  /** Current AI state */
   aiState: string;
 }
 
 export class SessionAdapter {
-  private sessionMap = new Map<NormalizedSessionId, SessionInfo>();
+  private sessions = new Map<NormalizedSessionId, SessionRecord>();
+  private lookupIndex = new Map<string, NormalizedSessionId>(); // Any ID -> normalized ID
 
   /**
-   * Register a terminal session from the backend
+   * Register a terminal session and get its normalized ID
+   * This is the only way sessions enter the system
    */
-  registerSession(terminalSession: TerminalSession): NormalizedSessionId {
-    const normalizedId = this.generateNormalizedId(terminalSession);
+  registerSession(terminal: TerminalSession): NormalizedSessionId {
+    // Generate normalized ID
+    const normalizedId = `session-${terminal.dbSessionId.substring(0, 8)}`;
     
-    const sessionInfo: SessionInfo = {
-      id: normalizedId,
-      dbSessionId: terminalSession.dbSessionId,
-      shelltenderSessionId: terminalSession.shelltenderSessionId,
-      legacySessionId: terminalSession.sessionId,
-      tabName: terminalSession.tabName,
-      tabOrder: terminalSession.tabOrder,
-      aiAgent: terminalSession.aiAgent,
-      aiState: terminalSession.aiState
-    };
-
-    console.log('[SessionAdapter registerSession] Registering session:', {
+    // Store session
+    const record: SessionRecord = {
       normalizedId,
-      dbSessionId: terminalSession.dbSessionId,
-      shelltenderSessionId: terminalSession.shelltenderSessionId,
-      sessionId: terminalSession.sessionId
-    });
-
-    this.sessionMap.set(normalizedId, sessionInfo);
+      dbSessionId: terminal.dbSessionId,
+      shelltenderSessionId: terminal.shelltenderSessionId,
+      legacySessionId: terminal.sessionId,
+      tabName: terminal.tabName,
+      tabOrder: terminal.tabOrder,
+      aiAgent: terminal.aiAgent,
+      aiState: terminal.aiState
+    };
+    
+    this.sessions.set(normalizedId, record);
+    
+    // Build lookup index for all ID types
+    this.lookupIndex.set(normalizedId, normalizedId);
+    this.lookupIndex.set(terminal.dbSessionId, normalizedId);
+    this.lookupIndex.set(terminal.shelltenderSessionId, normalizedId);
+    if (terminal.sessionId) {
+      this.lookupIndex.set(terminal.sessionId, normalizedId);
+    }
+    
     return normalizedId;
   }
 
   /**
-   * Get session info by normalized ID
+   * Resolve a normalized ID to the specific ID type needed for operations
+   * Returns null if session not found
    */
-  getSessionInfo(normalizedId: NormalizedSessionId): SessionInfo | undefined {
-    return this.sessionMap.get(normalizedId);
+  getSessionInfo(normalizedId: NormalizedSessionId): { dbSessionId: string; shelltenderSessionId: string; legacySessionId?: string } | null {
+    const record = this.sessions.get(normalizedId);
+    if (!record) return null;
+    
+    return {
+      dbSessionId: record.dbSessionId,
+      shelltenderSessionId: record.shelltenderSessionId,
+      legacySessionId: record.legacySessionId
+    };
   }
 
   /**
-   * Find session by any ID type (for migration/compatibility)
+   * Update session properties (tab name, order, etc.)
+   * Returns true if successful
    */
-  findSessionByAnyId(anyId: string): SessionInfo | undefined {
-    // First try exact match
-    const direct = this.sessionMap.get(anyId);
-    if (direct) return direct;
-
-    // Search by any ID field
-    for (const sessionInfo of this.sessionMap.values()) {
-      if (
-        sessionInfo.dbSessionId === anyId ||
-        sessionInfo.shelltenderSessionId === anyId ||
-        sessionInfo.legacySessionId === anyId
-      ) {
-        return sessionInfo;
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Normalize any ID type to the standard format
-   * This is the main method components should use
-   */
-  normalize(anyId: string): NormalizedSessionId | null {
-    const sessionInfo = this.findSessionByAnyId(anyId);
-    return sessionInfo ? sessionInfo.id : null;
-  }
-
-  /**
-   * Get the database ID for API calls
-   */
-  getDbSessionId(normalizedId: NormalizedSessionId): string | null {
-    const sessionInfo = this.getSessionInfo(normalizedId);
-    return sessionInfo ? sessionInfo.dbSessionId : null;
-  }
-
-  /**
-   * Get the Shelltender ID for WebSocket connections
-   */
-  getShelltenderSessionId(normalizedId: NormalizedSessionId): string | null {
-    const sessionInfo = this.getSessionInfo(normalizedId);
-    return sessionInfo ? sessionInfo.shelltenderSessionId : null;
-  }
-
-  /**
-   * Get all registered sessions
-   */
-  getAllSessions(): SessionInfo[] {
-    return Array.from(this.sessionMap.values()).sort((a, b) => a.tabOrder - b.tabOrder);
-  }
-
-  /**
-   * Update session info (e.g., tab name, AI state)
-   */
-  updateSession(normalizedId: NormalizedSessionId, updates: Partial<SessionInfo>): boolean {
-    const existing = this.sessionMap.get(normalizedId);
-    if (!existing) return false;
-
-    this.sessionMap.set(normalizedId, { ...existing, ...updates });
+  updateSession(normalizedId: NormalizedSessionId, updates: { tabName?: string; tabOrder?: number; aiState?: string }): boolean {
+    const record = this.sessions.get(normalizedId);
+    if (!record) return false;
+    
+    // Apply updates
+    if (updates.tabName !== undefined) record.tabName = updates.tabName;
+    if (updates.tabOrder !== undefined) record.tabOrder = updates.tabOrder;
+    if (updates.aiState !== undefined) record.aiState = updates.aiState;
+    
     return true;
   }
 
   /**
-   * Remove a session
+   * Remove a session from the adapter
+   * Returns true if session was found and removed
    */
   removeSession(normalizedId: NormalizedSessionId): boolean {
-    return this.sessionMap.delete(normalizedId);
+    const record = this.sessions.get(normalizedId);
+    if (!record) return false;
+    
+    // Remove from lookup index
+    this.lookupIndex.delete(normalizedId);
+    this.lookupIndex.delete(record.dbSessionId);
+    this.lookupIndex.delete(record.shelltenderSessionId);
+    if (record.legacySessionId) {
+      this.lookupIndex.delete(record.legacySessionId);
+    }
+    
+    // Remove from sessions
+    return this.sessions.delete(normalizedId);
   }
 
   /**
-   * Clear all sessions
+   * Find normalized ID by any ID type (for compatibility during migration)
+   * This should eventually be removed once all code uses normalized IDs
    */
-  clear(): void {
-    this.sessionMap.clear();
-  }
-
-  /**
-   * Generate a normalized ID from terminal session data
-   * Format: session-{shortDbId} for human readability and uniqueness
-   */
-  private generateNormalizedId(terminalSession: TerminalSession): string {
-    // Use the database session ID as the base since it's stable
-    const shortId = terminalSession.dbSessionId.substring(0, 8);
-    return `session-${shortId}`;
-  }
-
-  /**
-   * Batch register sessions from an array
-   */
-  registerSessions(terminalSessions: TerminalSession[]): NormalizedSessionId[] {
-    return terminalSessions.map(session => this.registerSession(session));
-  }
-
-  /**
-   * Get session count
-   */
-  get sessionCount(): number {
-    return this.sessionMap.size;
-  }
-
-  /**
-   * Check if a session exists
-   */
-  hasSession(normalizedId: NormalizedSessionId): boolean {
-    return this.sessionMap.has(normalizedId);
+  findSessionByAnyId(anyId: string): { id: NormalizedSessionId } | null {
+    const normalizedId = this.lookupIndex.get(anyId);
+    return normalizedId ? { id: normalizedId } : null;
   }
 }
 
