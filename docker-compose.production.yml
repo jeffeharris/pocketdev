@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # Shelltender Terminal Service
+  shelltender:
+    build:
+      context: .
+      dockerfile: shelltender/Dockerfile
+    container_name: shelltender
+    volumes:
+      - /var/pocketdev/data:/app/data
+      - /var/pocketdev/projects:/projects
+    environment:
+      - SHELLTENDER_PORT=8080
+      - SHELLTENDER_DATA_DIR=/app/data/shelltender-sessions
+      - SHELLTENDER_MONITOR_AUTH_KEY=${MONITOR_AUTH_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    restart: unless-stopped
+    networks:
+      - pocketdev-net
+
+  # Backend API Service
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: backend
+    depends_on:
+      - shelltender
+    volumes:
+      - /var/pocketdev/projects:/projects
+      - /var/pocketdev/data:/app/data
+      - ./shared:/shared:ro
+    environment:
+      - PROJECTS_DIR=/projects
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - HOME=/home/pocketdev
+      - SHELLTENDER_API_URL=http://shelltender:8080
+      - SHELLTENDER_WS_URL=ws://shelltender:8080/ws
+      - SHELLTENDER_MONITOR_AUTH_KEY=${MONITOR_AUTH_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    restart: unless-stopped
+    networks:
+      - pocketdev-net
+
+  # Frontend (production build)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        - VITE_API_URL=/api
+    container_name: frontend
+    restart: unless-stopped
+    networks:
+      - pocketdev-net
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.production.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - frontend
+      - backend
+      - shelltender
+    restart: unless-stopped
+    networks:
+      - pocketdev-net
+
+networks:
+  pocketdev-net:
+    name: pocketdev-network
