@@ -35,21 +35,21 @@ interface UseTabManagerProps {
   onTabsChange?: () => void;
 }
 
-// Direct interface with clear methods
+// Deep module interface - 5 methods hiding 200+ lines of implementation
 interface UseTabManagerResult {
-  // State
-  tabs: Tab[];
-  activeTabId: string;
-  confirmClose: { dbSessionId: string; tabName: string } | null;
+  // Combined state accessor
+  state: {
+    tabs: Tab[];
+    activeTabId: string;
+    confirmClose: { dbSessionId: string; tabName: string } | null;
+  };
   
-  // Methods - direct and clear
+  // Core operations (5 methods for all tab management)
   selectTab: (tabId: string) => void;
   addTab: (options?: SessionOptions) => Promise<void>;
-  closeTab: (dbSessionId: string) => Promise<void>;
-  forceCloseTab: (dbSessionId: string) => Promise<void>;
-  renameTab: (dbSessionId: string, newName: string) => Promise<void>;
+  closeTab: (dbSessionId: string, options?: { force?: boolean; skipConfirm?: boolean }) => Promise<void>;
+  updateTab: (dbSessionId: string, updates: { name?: string; order?: number }) => Promise<void>;
   reorderTabs: (tabs: Tab[]) => Promise<void>;
-  cancelCloseConfirmation: () => void;
 }
 
 export function useTabManager({
@@ -314,20 +314,40 @@ export function useTabManager({
     }
   }, [activeTabId, terminals, handleTabSelect]);
   
-  // Direct, clear public interface
+  // Deep module interface - 5 methods for all operations
   return {
-    // State
-    tabs,
-    activeTabId,
-    confirmClose,
+    // Combined state accessor
+    state: {
+      tabs,
+      activeTabId,
+      confirmClose
+    },
     
-    // Methods - direct and clear
+    // Core operations
     selectTab: handleTabSelect,
     addTab: handleTabAdd,
-    closeTab: handleTabClose,
-    forceCloseTab: performTabClose,
-    renameTab: handleTabRename,
-    reorderTabs: handleTabReorder,
-    cancelCloseConfirmation
+    
+    // Combined close with options
+    closeTab: async (dbSessionId: string, options?: { force?: boolean; skipConfirm?: boolean }) => {
+      if (options?.force || options?.skipConfirm) {
+        await performTabClose(dbSessionId);
+      } else {
+        await handleTabClose(dbSessionId);
+      }
+      // Auto-cancel confirmation if force closing
+      if (options?.force && confirmClose?.dbSessionId === dbSessionId) {
+        setConfirmClose(null);
+      }
+    },
+    
+    // Combined update operations
+    updateTab: async (dbSessionId: string, updates: { name?: string; order?: number }) => {
+      if (updates.name !== undefined) {
+        await handleTabRename(dbSessionId, updates.name);
+      }
+      // Order updates would be handled here if needed
+    },
+    
+    reorderTabs: handleTabReorder
   };
 }

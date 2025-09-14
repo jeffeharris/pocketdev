@@ -121,18 +121,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // This component only reads from the store, maintaining clear data flow
   
   // Now we can use tab manager after terminals are defined
-  const {
-    tabs,
-    activeTabId,
-    confirmClose,
-    selectTab,
-    addTab,
-    closeTab,
-    forceCloseTab,
-    renameTab,
-    reorderTabs,
-    cancelCloseConfirmation
-  } = useTabManager({
+  const tabManager = useTabManager({
     task,
     terminals,
     terminalService,
@@ -140,6 +129,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     realtimeSessionStates,
     onTabsChange: () => setShouldForceRefresh(prev => prev + 1)
   });
+  
+  // Destructure for easier access
+  const { tabs, activeTabId, confirmClose } = tabManager.state;
+  const { selectTab, addTab, closeTab, updateTab, reorderTabs } = tabManager;
   
   // Handle active tab changes - focus terminal and update store
   useEffect(() => {
@@ -349,7 +342,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               onTabSelect={selectTab}
               onTabAdd={() => addTab()}
               onTabAdvancedAdd={() => dispatch({ type: 'SHOW_SESSION_LAUNCHER' })}
-              onTabRename={renameTab}
+              onTabRename={(dbSessionId, newName) => updateTab(dbSessionId, { name: newName })}
               onTabClose={closeTab}
               onTabReorder={reorderTabs}
               maxTabs={6}
@@ -421,7 +414,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onClose={() => dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' })}
         onConfirm={() => {
           if (confirmClose) {
-            forceCloseTab(confirmClose.dbSessionId);
+            closeTab(confirmClose.dbSessionId, { force: true });
           }
         }}
         title="Close Terminal Tab"
