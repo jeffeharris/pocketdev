@@ -41,14 +41,14 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-026 | Split View Store Shallow Module | Technical Debt | N/A | **High** | 17 methods, mixed concerns | Open | 2025-08-04 |
 | BUG-027 | Frontend Services Mock Data Pollution | Code Quality | 1000+ | **High** | 30-50% mock code in services | Open | 2025-08-04 |
 | BUG-016 | Remove Mock Code from Production | Code Quality | N/A | **Medium** | Mixed concerns in api.ts | Open | 2025-09-11 |
-| BUG-004 | project.controller.js needs modularization | Technical Debt | 654 | **Low** | 19 methods, needs service extraction | Open | 2025-08-03 |
+| BUG-004 | project.controller.js needs modularization | Technical Debt | 654→257 | **Low** | 19 methods, needs service extraction | **Resolved** | 2025-08-03 |
 | BUG-008 | Refactor MergeWorkflowPrototype | Technical Debt | 1,173 | **Low** | Prototype cleanup | Open | 2025-09-10 |
 
 ## Resolution Summary (2025-08-03)
 
 ### Bugs Resolved 
 
-**11 bugs resolved** (10 via service extraction/refactoring + 1 functional fix):
+**12 bugs resolved** (11 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -97,7 +97,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Reduced from 10 methods to clean event pattern
 
 8. **BUG-004** (Low): project.controller.js modularization - **RESOLVED**
-   - Reduced from 1,117 lines to ~80 lines
+   - Reduced from 1,117 lines to 257 lines
    - Created ProjectService with 12 methods
    - Complex operations hidden behind simple interface
 
@@ -148,7 +148,6 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 - **BUG-024**: Create PR fails for unpushed branches - breaks common developer workflow
 
 ### Low (Nice to Have)
-- **BUG-004**: project.controller.js (1,117 lines) less critical after service layer
 - **BUG-008**: MergeWorkflowPrototype is just prototype cleanup, not production code
 
 ## Overarching Patterns Identified

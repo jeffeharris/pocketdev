@@ -3,23 +3,29 @@
  * 
  * Complete, self-contained terminal tab management including:
  * - Tab lifecycle (create, close, rename, reorder)
- * - Session refresh and reconnection
+ * - Session refresh and reconnection logic
  * - Focus management
  * - Terminal state coordination
  * 
  * This is a "feature module" following AI-assisted architecture principles:
  * One concept, one file, complete implementation.
+ * 
+ * Now includes terminal refresh logic that was previously in terminal-refresh.service.ts
+ * to create a truly complete, self-contained feature module.
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTerminalStore } from '../stores/terminal/terminalStore.deep';
 import { TerminalService } from '../services/terminal.service';
-import { terminalRefreshService } from '../services/terminal-refresh.service';
 import { getFirstByOrder, findTerminalById } from '../utils/terminal-utils';
 import type { Task, TerminalSession } from '../types/task';
 import type { Tab } from '../components/terminal/TerminalTabs';
 import type { DirectTerminalHandle } from '../components/terminal/DirectTerminal';
+
+// ============================================================================
+// Types and Interfaces
+// ============================================================================
 
 // Session options for creating new tabs
 export interface SessionOptions {
@@ -36,6 +42,28 @@ export interface TerminalTabCallbacks {
   reloadTask: () => Promise<void>;
 }
 
+// Domain events that describe what happened during refresh (from terminal-refresh.service)
+type RefreshEvent = 
+  | { type: 'session-disconnected'; terminalId: string; sessionName: string }
+  | { type: 'session-reconnected'; terminalId: string }
+  | { type: 'reconnection-failed'; terminalId: string; reason: string }
+  | { type: 'task-reload-required'; reason: string }
+  | { type: 'refresh-completed'; terminalId: string }
+  | { type: 'refresh-failed'; terminalId: string; error: string };
+
+interface RefreshOptions {
+  taskId: string;
+  activeTerminalId: string;
+  terminals: Array<TerminalSession & { normalizedId: string }>;
+  sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>;
+}
+
+interface RefreshResult {
+  success: boolean;
+  message: string;
+  events: RefreshEvent[];
+}
+
 // Configuration for the feature
 export interface TerminalTabConfig {
   task: Task;
@@ -47,6 +75,125 @@ export interface TerminalTabConfig {
   callbacks: TerminalTabCallbacks;
   onTabsChange?: () => void;
 }
+
+// ============================================================================
+// Terminal Refresh Logic (merged from terminal-refresh.service.ts)
+// ============================================================================
+
+/**
+ * Assess the state of a terminal session
+ * Internal helper function
+ */
+function assessSessionState(
+  activeTerminalId: string,
+  terminals: Array<TerminalSession & { normalizedId: string }>,
+  sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>
+) {
+  const terminal = terminals.find(t => t.normalizedId === activeTerminalId);
+  const sessionStatus = sessionStatuses.get(activeTerminalId);
+  const isDisconnected = sessionStatus === 'disconnected' || sessionStatus === 'error';
+  
+  return {
+    terminal,
+    sessionStatus,
+    isDisconnected
+  };
+}
+
+/**
+ * Analyze session state and determine what refresh events occurred
+ * Returns domain events, not UI instructions
+ */
+async function refreshSession(options: RefreshOptions): Promise<RefreshResult> {
+  const { activeTerminalId, terminals, sessionStatuses } = options;
+  const events: RefreshEvent[] = [];
+  
+  // Phase 1: Assess current state
+  const assessment = assessSessionState(activeTerminalId, terminals, sessionStatuses);
+  if (!assessment.terminal) {
+    return {
+      success: false,
+      message: 'No active terminal to refresh',
+      events: []
+    };
+  }
+  
+  // Phase 2: Report domain events based on state
+  if (assessment.isDisconnected) {
+    events.push({
+      type: 'session-disconnected',
+      terminalId: activeTerminalId,
+      sessionName: assessment.terminal.tabName || 'Unknown'
+    });
+    
+    // Disconnected sessions require task reload
+    events.push({
+      type: 'task-reload-required',
+      reason: 'Session disconnected - full reload needed'
+    });
+  } else {
+    // Session is connected, just needs refresh
+    events.push({
+      type: 'refresh-completed',
+      terminalId: activeTerminalId
+    });
+  }
+  
+  return {
+    success: true,
+    message: assessment.isDisconnected ? 'Session disconnected - reconnecting...' : 'Terminal refreshed',
+    events
+  };
+}
+
+/**
+ * Analyze reconnection requirements for a specific session
+ * Returns domain events about the reconnection attempt
+ */
+function getReconnectEvents(
+  dbSessionId: string,
+  terminals: Array<TerminalSession & { normalizedId: string }>,
+  sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>
+): RefreshEvent[] {
+  const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+  if (!terminal) {
+    return [{
+      type: 'reconnection-failed',
+      terminalId: dbSessionId,
+      reason: 'Terminal not found'
+    }];
+  }
+  
+  const status = sessionStatuses.get(terminal.normalizedId);
+  const events: RefreshEvent[] = [];
+  
+  if (status === 'disconnected' || status === 'error') {
+    // Report disconnection
+    events.push({
+      type: 'session-disconnected',
+      terminalId: terminal.normalizedId,
+      sessionName: terminal.tabName || 'Unknown'
+    });
+    
+    // Disconnected sessions need full reload
+    events.push({
+      type: 'task-reload-required',
+      reason: `Terminal "${terminal.tabName}" requires reconnection`
+    });
+  } else {
+    // Session is connected, just refresh
+    events.push({
+      type: 'refresh-completed',
+      terminalId: terminal.normalizedId
+    });
+  }
+  
+  return events;
+}
+
+// ============================================================================
+// Main Feature Interface
+// ============================================================================
 
 // Complete feature interface - combines tab management with refresh/reconnect
 export interface TerminalTabsFeature {
@@ -286,7 +433,7 @@ export function useTerminalTabs(config: TerminalTabConfig): TerminalTabsFeature 
     callbacks.dispatch({ type: 'START_RESET' });
     
     try {
-      const result = await terminalRefreshService.refreshSession({
+      const result = await refreshSession({
         taskId: task.id,
         activeTerminalId: activeTabId,
         terminals,
@@ -338,7 +485,7 @@ export function useTerminalTabs(config: TerminalTabConfig): TerminalTabsFeature 
   }, [task, activeTabId, terminals, sessionStatuses, terminalRefs, callbacks]);
   
   const reconnectTab = useCallback(async (dbSessionId: string) => {
-    const events = terminalRefreshService.getReconnectEvents(
+    const events = getReconnectEvents(
       dbSessionId,
       terminals,
       sessionStatuses
