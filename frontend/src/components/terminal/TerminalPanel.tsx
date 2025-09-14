@@ -6,6 +6,7 @@ import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
 import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { useService } from '../../services';
+import { terminalRefreshService } from '../../services/terminal-refresh.service';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
@@ -193,66 +194,27 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   }), [activeTabId, terminals, handleTabSelect]);
   
   const handleRefreshSession = async () => {
-    setIsResetting(true);
+    dispatch({ type: 'START_RESET' });
     try {
-      // Tab mode - use the normal logic
-      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
-      if (!activeTerminal) {
-        showNotification('warning', 'No active terminal to refresh');
-        return;
-      }
-
-      // Check if session is disconnected
-      const sessionStatus = sessionStatuses.get(activeTabId); // Already using normalized ID
-      const isDisconnected = sessionStatus === 'disconnected' || sessionStatus === 'error';
+      const result = await terminalRefreshService.refreshSession({
+        taskId: task.id,
+        activeTerminalId: activeTabId,
+        terminals,
+        terminalRefs: terminalRefs.current,
+        sessionStatuses,
+        task
+      });
       
-      // Get the terminal ref for the active terminal
-      const terminalRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
-      
-      if (terminalRef?.refresh) {
-        // Call the refresh method which will:
-        // 1. Reconnect WebSocket if needed
-        // 2. Restore terminal buffer
-        // 3. Fit terminal to container
-        terminalRef.refresh();
-        
-        // Also trigger a fit after a short delay to ensure proper sizing
-        setTimeout(() => {
-          terminalRef.fit();
-        }, 200);
-        
-        // If we were disconnected, also try to reload task data
-        if (isDisconnected && task.onReload) {
-          await task.onReload();
-        }
-        
-        showNotification('success', isDisconnected ? 'Reconnecting terminal session...' : 'Terminal refreshed');
+      if (result.success) {
+        showNotification('success', result.message);
       } else {
-        // Fallback: reload the entire task
-        if (task.onReload) {
-          await task.onReload();
-          showNotification('success', 'Reloading terminal session...');
-        }
+        showNotification('warning', result.message);
       }
-      
-      // Update the session status to trigger any necessary UI updates
-      await triggerStatusUpdate(task.id, activeTabId);
-      
     } catch (error) {
       console.error('[TerminalPanel] Failed to refresh session:', error);
       showNotification('error', 'Failed to refresh terminal session');
     } finally {
       setTimeout(() => dispatch({ type: 'FINISH_RESET' }), 1000);
-    }
-  };
-  
-  // Helper to trigger status update
-  const triggerStatusUpdate = async (taskId: string, sessionId: string) => {
-    // This would trigger any status checks or updates needed
-    // For now, we'll just ensure the terminal gets properly sized
-    const terminalRef = terminalRefs.current.get(sessionId);
-    if (terminalRef?.fit) {
-      terminalRef.fit();
     }
   };
 
@@ -266,26 +228,26 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    if (!terminal) return;
-
     try {
-      // Try to reconnect by reloading the terminal
-      const terminalRef = terminalRefs.current.get(dbSessionId);
-      if (terminalRef) {
-        // Reload task to force reconnection
-        if (task.onReload) {
-          task.onReload();
-        }
+      const success = await terminalRefreshService.reconnectSession(
+        dbSessionId,
+        terminals,
+        terminalRefs.current,
+        task
+      );
+      
+      if (!success) {
+        const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+        showNotification('error', `Failed to reconnect terminal "${terminal?.tabName || 'unknown'}"`);
       }
     } catch (error) {
       console.error(`[TerminalPanel] Failed to reconnect session:`, error);
-      showNotification('error', `Failed to reconnect terminal "${terminal.tabName}"`);
+      showNotification('error', 'Failed to reconnect terminal');
     }
   };
 
   // Use terminal status hook for session management
-  const { handleSessionStatus, hasDisconnectedSessions, getSessionStatus } = useTerminalStatus({
+  const { handleSessionStatus, getSessionStatus } = useTerminalStatus({
     terminals,
     sessionStatuses,
     getNormalizedId: (terminal) => terminal.normalizedId,
@@ -293,6 +255,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     showNotification,
     handleReconnectSession
   });
+  
+  const hasDisconnectedSessions = terminalRefreshService.hasDisconnectedSessions(sessionStatuses);
 
 
   // Render control buttons (reusable for both tab mode and split view)
