@@ -9,6 +9,7 @@ import { TaskGitOperations } from './internal/task-git-operations.js';
 import { TaskTerminalManager } from './internal/task-terminal-manager.js';
 import { Task as TaskDomain, ValidationError } from '../../shared/domain/index.js';
 import { TaskRepository as DomainTaskRepository } from '../repositories/task.repository.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * TaskService - Orchestrates task operations using internal services
@@ -31,6 +32,7 @@ export class TaskService {
     this.gitService = gitService;
     this.projectsDir = projectsDir;
     this.worktreeService = new WorktreeService();
+    this.logger = new Logger('TaskService');
   }
 
   /**
@@ -39,8 +41,9 @@ export class TaskService {
   async create(projectId, options = {}) {
     const { name, branch, useExistingBranch = false, githubToken = null, createSession = false, hostname = null } = options;
     
-    // Get project
-    const project = await this.models.projects.findById(projectId);
+    return await this.logger.timeOperation('task.create', async () => {
+      // Get project
+      const project = await this.models.projects.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
@@ -104,17 +107,18 @@ export class TaskService {
       }
       
       return result;
-    } catch (error) {
-      // Cleanup on failure
-      try {
-        if (fsSync.existsSync(worktreePath)) {
-          await this.worktreeService.remove(project.local_path, worktreePath);
+      } catch (error) {
+        // Cleanup on failure
+        try {
+          if (fsSync.existsSync(worktreePath)) {
+            await this.worktreeService.remove(project.local_path, worktreePath);
+          }
+        } catch (cleanupError) {
+          console.error('Failed to cleanup after task creation failure:', cleanupError);
         }
-      } catch (cleanupError) {
-        console.error('Failed to cleanup after task creation failure:', cleanupError);
+        throw error;
       }
-      throw error;
-    }
+    }, { projectId, name, branch });
   }
 
   /**

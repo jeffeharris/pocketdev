@@ -7,6 +7,7 @@ import { ProjectGitOperations } from './internal/project-git-operations.js';
 import { ProjectPlanningManager } from './internal/project-planning-manager.js';
 import { GitService } from './git.service.js';
 import { Project as ProjectDomain, ValidationError } from '../../shared/domain/index.js';
+import { Logger } from '../utils/logger.js';
 
 /**
  * ProjectService - Orchestrates project operations using internal services
@@ -24,6 +25,7 @@ export class ProjectService {
     this.githubTokenService = githubTokenService;
     this.githubService = githubService;
     this.projectsDir = projectsDir;
+    this.logger = new Logger('ProjectService');
   }
 
   /**
@@ -33,36 +35,38 @@ export class ProjectService {
     const { repoUrl, branch = 'main', projectName } = projectData;
     const { githubToken = null } = options;
     
-    // Generate project ID
-    const projectId = crypto.randomBytes(4).toString('hex');
-    const name = projectName || repoUrl.split('/').pop().replace('.git', '');
-    
-    // Use domain object for validation
-    const projectDomain = new ProjectDomain(projectId, name, repoUrl, branch);
-    
-    // Clone the repository
-    const projectPath = await this.gitOps.cloneProject(repoUrl, projectId, branch, githubToken);
-    
-    // Create project in database
-    const project = await this.repository.create({
-      id: projectId,
-      name,
-      repo_url: repoUrl,
-      base_branch: branch,
-      local_path: projectPath,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
-    
-    // Create default planning document
-    await this.planningManager.createDefaultPlanningDocument(project, repoUrl);
-    
-    // Store GitHub token if provided
-    if (githubToken) {
-      await this.githubTokenService.storeToken(projectId, githubToken);
-    }
-    
-    return project;
+    return await this.logger.timeOperation('project.create', async () => {
+      // Generate project ID
+      const projectId = crypto.randomBytes(4).toString('hex');
+      const name = projectName || repoUrl.split('/').pop().replace('.git', '');
+      
+      // Use domain object for validation
+      const projectDomain = new ProjectDomain(projectId, name, repoUrl, branch);
+      
+      // Clone the repository
+      const projectPath = await this.gitOps.cloneProject(repoUrl, projectId, branch, githubToken);
+      
+      // Create project in database
+      const project = await this.repository.create({
+        id: projectId,
+        name,
+        repo_url: repoUrl,
+        base_branch: branch,
+        local_path: projectPath,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+      // Create default planning document
+      await this.planningManager.createDefaultPlanningDocument(project, repoUrl);
+      
+      // Store GitHub token if provided
+      if (githubToken) {
+        await this.githubTokenService.storeToken(projectId, githubToken);
+      }
+      
+      return project;
+    }, { repoUrl, branch });
   }
 
   /**
@@ -166,40 +170,42 @@ export class ProjectService {
   async sync(projectId, operation = 'fetch', options = {}) {
     const { githubToken = null } = options;
     
-    const project = await this.repository.findById(projectId);
-    
-    // Get stored token if not provided
-    const token = githubToken || await this.githubTokenService.getToken(projectId);
-    
-    // Configure git with token if available
-    if (token) {
-      await GitService.configureCredentials(project.local_path, token);
-    }
-    
-    let result;
-    switch (operation) {
-      case 'fetch':
-        result = await this.gitOps.fetchProject(project.local_path);
-        break;
+    return await this.logger.timeOperation(`project.sync.${operation}`, async () => {
+      const project = await this.repository.findById(projectId);
       
-      case 'pull':
-        result = await this.gitOps.pullProject(project.local_path, project.base_branch);
-        break;
+      // Get stored token if not provided
+      const token = githubToken || await this.githubTokenService.getToken(projectId);
       
-      case 'push':
-        result = await this.gitOps.pushProject(project.local_path, project.base_branch);
-        break;
+      // Configure git with token if available
+      if (token) {
+        await GitService.configureCredentials(project.local_path, token);
+      }
       
-      default:
-        throw new Error(`Unknown sync operation: ${operation}`);
-    }
-    
-    // Update project timestamp
-    await this.repository.update(projectId, {
-      updated_at: new Date().toISOString()
-    });
-    
-    return result;
+      let result;
+      switch (operation) {
+        case 'fetch':
+          result = await this.gitOps.fetchProject(project.local_path);
+          break;
+        
+        case 'pull':
+          result = await this.gitOps.pullProject(project.local_path, project.base_branch);
+          break;
+        
+        case 'push':
+          result = await this.gitOps.pushProject(project.local_path, project.base_branch);
+          break;
+        
+        default:
+          throw new Error(`Unknown sync operation: ${operation}`);
+      }
+      
+      // Update project timestamp
+      await this.repository.update(projectId, {
+        updated_at: new Date().toISOString()
+      });
+      
+      return result;
+    }, { projectId, operation });
   }
 
   /**

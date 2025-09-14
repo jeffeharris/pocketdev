@@ -13,12 +13,14 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
 import { GitStatus } from '../../shared/domain/index.js';
+import { Logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
 export class GitService {
   constructor(githubToken = null) {
     this.githubToken = githubToken;
+    this.logger = new Logger('GitService');
   }
 
   // ========== CORE GIT OPERATIONS ==========
@@ -34,13 +36,16 @@ export class GitService {
   async clone(repoUrl, destination, options = {}) {
     const { branch = 'main', depth = null } = options;
     
-    // Build clone command
-    let command = `git clone`;
-    if (depth) command += ` --depth ${depth}`;
-    if (branch) command += ` --branch ${branch}`;
-    command += ` ${this._addAuthToUrl(repoUrl)} "${destination}"`;
-    
-    return await this._execute(command);
+    return await this.logger.timeOperation('git.clone', async () => {
+      // Build clone command
+      let command = `git clone`;
+      if (depth) command += ` --depth ${depth}`;
+      if (branch) command += ` --branch ${branch}`;
+      command += ` ${this._addAuthToUrl(repoUrl)} "${destination}"`;
+      
+      this.logger.debug('Cloning repository', { repoUrl, destination, branch });
+      return await this._execute(command);
+    }, { repoUrl, destination, branch });
   }
 
   /**
@@ -52,23 +57,25 @@ export class GitService {
   async sync(repoPath, options = {}) {
     const { branch = null, remote = 'origin', fetchOnly = false } = options;
     
-    // Always fetch first
-    const fetchResult = await this._execute('git fetch --prune', repoPath);
-    if (!fetchResult.success) {
-      return fetchResult;
-    }
-    
-    // If fetch only, return
-    if (fetchOnly) {
-      return fetchResult;
-    }
-    
-    // Pull/merge changes
-    const command = branch 
-      ? `git pull ${remote} ${branch}`
-      : `git pull`;
-    
-    return await this._execute(command, repoPath);
+    return await this.logger.timeOperation('git.sync', async () => {
+      // Always fetch first
+      const fetchResult = await this._execute('git fetch --prune', repoPath);
+      if (!fetchResult.success) {
+        return fetchResult;
+      }
+      
+      // If fetch only, return
+      if (fetchOnly) {
+        return fetchResult;
+      }
+      
+      // Pull/merge changes
+      const command = branch 
+        ? `git pull ${remote} ${branch}`
+        : `git pull`;
+      
+      return await this._execute(command, repoPath);
+    }, { repoPath, branch, fetchOnly });
   }
 
   /**
@@ -123,25 +130,31 @@ export class GitService {
   async merge(repoPath, sourceBranch, options = {}) {
     const { strategy = 'recursive', noCommit = false, checkConflicts = true } = options;
     
-    // First check for conflicts if requested
-    if (checkConflicts) {
-      const conflicts = await this._checkMergeConflicts(repoPath, sourceBranch);
-      if (conflicts.hasConflicts) {
-        return {
-          success: false,
-          error: 'Merge would result in conflicts',
-          conflicts: conflicts.conflicts,
-          hasConflicts: true
-        };
+    return await this.logger.timeOperation('git.merge', async () => {
+      // First check for conflicts if requested
+      if (checkConflicts) {
+        const conflicts = await this._checkMergeConflicts(repoPath, sourceBranch);
+        if (conflicts.hasConflicts) {
+          this.logger.warn('Merge would result in conflicts', { 
+            sourceBranch, 
+            conflictCount: conflicts.conflicts.length 
+          });
+          return {
+            success: false,
+            error: 'Merge would result in conflicts',
+            conflicts: conflicts.conflicts,
+            hasConflicts: true
+          };
+        }
       }
-    }
-    
-    // Perform merge
-    let command = `git merge ${sourceBranch}`;
-    if (strategy) command += ` --strategy=${strategy}`;
-    if (noCommit) command += ' --no-commit';
-    
-    return await this._execute(command, repoPath);
+      
+      // Perform merge
+      let command = `git merge ${sourceBranch}`;
+      if (strategy) command += ` --strategy=${strategy}`;
+      if (noCommit) command += ' --no-commit';
+      
+      return await this._execute(command, repoPath);
+    }, { repoPath, sourceBranch });
   }
 
   /**
@@ -214,6 +227,7 @@ export class GitService {
    * Returns both raw data and a GitStatus domain object
    */
   async getStatus(repoPath) {
+    const startTime = Date.now();
     const result = await this._execute('git status --porcelain', repoPath);
     
     if (!result.success) {
@@ -270,6 +284,14 @@ export class GitService {
       branch,
       upstream
     );
+    
+    const duration = Date.now() - startTime;
+    this.logger.debug('Git status retrieved', { 
+      repoPath, 
+      branch, 
+      fileCount: files.length,
+      duration_ms: duration 
+    });
     
     return {
       success: true,
