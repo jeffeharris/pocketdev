@@ -14,31 +14,23 @@
 import React, { forwardRef } from 'react';
 import { DirectTerminal } from './DirectTerminal';
 import { EmptyTerminalPanel } from './EmptyTerminalPanel';
-import { SplitViewContainer } from './SplitViewContainer';
 import type { TerminalSession } from '../../types/task';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
-import type { DirectTerminalHandle } from './DirectTerminal';
 import { useTerminalGridContext } from './TerminalGridContext';
 
-// Simplified interface - reduced from 16+ props to 6
+// Simplified interface - reduced from 16+ props to 2
 interface TerminalGridProps {
   // Layout configuration
   layout: SplitLayoutConfig;
   
   // Actions that vary per usage
   onEmptyPanelAction: (action: 'claude' | 'bash' | 'advanced') => void;
-  onTerminalReorder: (draggedId: string, targetId: string) => void;
-  
-  // Render props
-  renderControlButtons: () => React.ReactNode;
 }
 
 // Internal component that uses context
 const TerminalGridInternal = forwardRef<HTMLDivElement, TerminalGridProps>(({
   layout,
-  onEmptyPanelAction,
-  onTerminalReorder,
-  renderControlButtons
+  onEmptyPanelAction
 }, ref) => {
   // Get most values from context
   const {
@@ -47,11 +39,9 @@ const TerminalGridInternal = forwardRef<HTMLDivElement, TerminalGridProps>(({
     activeTabId,
     isVisible,
     focusedTerminalId,
-    isResetting,
     terminalRefs,
     onSessionStatus,
-    onFocusRequest,
-    onResetStateChange
+    onFocusRequest
   } = useTerminalGridContext();
   // Helper functions (moved from props to internal implementation)
   const shouldShowTerminal = (
@@ -172,22 +162,6 @@ const TerminalGridInternal = forwardRef<HTMLDivElement, TerminalGridProps>(({
           </>
         )}
       </div>
-      
-      {/* Overlay split view controls when in split/quad modes */}
-      {(layout.mode === 'split' || layout.mode === 'split-4') && (
-        <SplitViewContainer
-          taskId={task.id}
-          projectId={task.project_id}
-          worktreePath={task.worktree_path}
-          isVisible={isVisible}
-          onSessionStatus={onSessionStatus}
-          activeTabId={activeTabId}
-          controlButtons={renderControlButtons()}
-          isResetting={isResetting}
-          setIsResetting={onResetStateChange}
-          onTerminalReorder={onTerminalReorder}
-        />
-      )}
     </div>
   );
 });

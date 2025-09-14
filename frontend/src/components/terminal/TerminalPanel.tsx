@@ -15,7 +15,7 @@ import { useShortcutContext } from '../../hooks/keyboard';
 import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
 import { TerminalGrid } from './TerminalGrid';
 import { TerminalGridProvider } from './TerminalGridContext';
-import { useLayoutConstraints } from './useLayoutConstraints';
+import { useSplitView } from '../../features/split-view';
 import { useTerminalStatus } from './useTerminalStatus';
 import { ControlButtons } from './ControlButtons';
 import './TerminalPanel.css';
@@ -58,17 +58,17 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
   
   
-  // Viewport constraints are now in reducer state
-  
-  // Use layout constraints hook to manage viewport-based layout rules
-  const { canShowQuad, canShowHorizontal, canShowVertical } = useLayoutConstraints({
-    layout,
-    terminalContainerRef,
-    updateLayout,
-    onConstraintsChange: () => {
-      // Constraints are returned directly from the hook, no need to store in state
-    }
+  // Use split view feature for layout management
+  const splitView = useSplitView({
+    taskId: task.id,
+    projectId: task.project_id,
+    terminals,
+    activeTabId,
+    containerRef: terminalContainerRef,
+    isVisible
   });
+  
+  const { canShowQuad, canShowHorizontal, canShowVertical } = splitView.constraints;
   
   // Split view state
   const layout = useSplitLayout();
@@ -306,8 +306,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                 break;
             }
           }}
-          onTerminalReorder={reorderTabs}
-          renderControlButtons={renderControlButtons}
         />
       </TerminalGridProvider>
 
