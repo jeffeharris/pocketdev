@@ -12,6 +12,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs/promises';
+import { GitStatus } from '../../shared/domain/index.js';
 
 const execAsync = promisify(exec);
 
@@ -210,6 +211,7 @@ export class GitService {
 
   /**
    * Get repository status
+   * Returns both raw data and a GitStatus domain object
    */
   async getStatus(repoPath) {
     const result = await this._execute('git status --porcelain', repoPath);
@@ -230,12 +232,58 @@ export class GitService {
     const branch = await this.getCurrentBranch(repoPath);
     const aheadBehind = branch ? await this._getAheadBehind(repoPath, branch) : { ahead: 0, behind: 0 };
     
+    // Count file states for GitStatus
+    let staged = 0, unstaged = 0, untracked = 0, conflicts = 0;
+    
+    for (const file of files) {
+      const [index, working] = file.status.split('');
+      
+      // Conflicts (both modified)
+      if (file.status === 'UU' || file.status === 'AA' || file.status === 'DD') {
+        conflicts++;
+      }
+      // Staged changes (index column not space or ?)
+      else if (index !== ' ' && index !== '?') {
+        staged++;
+      }
+      // Unstaged changes (working column not space or ?)
+      if (working !== ' ' && working !== '?') {
+        unstaged++;
+      }
+      // Untracked files
+      if (file.status === '??') {
+        untracked++;
+      }
+    }
+    
+    // Get upstream branch
+    const upstream = await this._getUpstream(repoPath, branch);
+    
+    // Create domain object
+    const gitStatus = new GitStatus(
+      aheadBehind.ahead,
+      aheadBehind.behind,
+      staged,
+      unstaged,
+      untracked,
+      conflicts,
+      branch,
+      upstream
+    );
+    
     return {
       success: true,
       branch,
       files,
       hasChanges: files.length > 0,
-      ...aheadBehind
+      ...aheadBehind,
+      // Include domain object
+      gitStatus,
+      // Include domain methods for convenience
+      isClean: gitStatus.isClean(),
+      canMerge: gitStatus.canMerge(),
+      canPush: gitStatus.canPush(),
+      recommendedAction: gitStatus.getRecommendedAction()
     };
   }
 
@@ -455,6 +503,20 @@ export class GitService {
       };
     } catch {
       return { ahead: 0, behind: 0 };
+    }
+  }
+  
+  async _getUpstream(repoPath, branch) {
+    if (!branch) return null;
+    
+    try {
+      const result = await this._execute(
+        `git rev-parse --abbrev-ref ${branch}@{upstream}`,
+        repoPath
+      );
+      return result.success ? result.output.trim() : null;
+    } catch {
+      return null;
     }
   }
 

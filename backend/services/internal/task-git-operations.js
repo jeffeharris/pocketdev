@@ -39,12 +39,13 @@ export class TaskGitOperations {
   async pullUpdates(task, project, githubToken) {
     const gitService = new GitService(githubToken);
     
-    // First, check for uncommitted changes
+    // Use domain object to check if we can pull
     const status = await gitService.getStatus(task.worktree_path);
-    if (status.hasChanges && !status.isClean) {
-      const error = new Error('Cannot update: You have uncommitted changes');
+    if (!status.gitStatus.canPull()) {
+      const error = new Error(`Cannot update: ${status.gitStatus.getSummary()}`);
       error.statusCode = 409;
-      error.hasUncommitted = true;
+      error.hasUncommitted = status.gitStatus.hasUncommittedChanges();
+      error.hasConflicts = status.gitStatus.hasConflicts();
       error.changes = status.files || [];
       throw error;
     }

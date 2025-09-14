@@ -7,6 +7,8 @@ import { GitService } from './git.service.js';
 import { TaskRepository } from './internal/task-repository.js';
 import { TaskGitOperations } from './internal/task-git-operations.js';
 import { TaskTerminalManager } from './internal/task-terminal-manager.js';
+import { Task as TaskDomain, ValidationError } from '../../shared/domain/index.js';
+import { TaskRepository as DomainTaskRepository } from '../repositories/task.repository.js';
 
 /**
  * TaskService - Orchestrates task operations using internal services
@@ -18,6 +20,9 @@ export class TaskService {
     this.repository = new TaskRepository(models);
     this.gitOps = new TaskGitOperations(models, githubTokenService);
     this.terminalManager = new TaskTerminalManager(models, eventEmitterService);
+    
+    // NEW: Domain repository for gradual migration
+    this.domainRepository = new DomainTaskRepository(models);
     
     // Core dependencies
     this.models = models;
@@ -34,10 +39,6 @@ export class TaskService {
   async create(projectId, options = {}) {
     const { name, branch, useExistingBranch = false, githubToken = null, createSession = false, hostname = null } = options;
     
-    if (!name || !branch) {
-      throw new Error('Task name and branch are required');
-    }
-    
     // Get project
     const project = await this.models.projects.findById(projectId);
     if (!project) {
@@ -48,6 +49,18 @@ export class TaskService {
     const { v4: uuidv4 } = await import('uuid');
     const taskId = uuidv4().slice(0, 8);
     const worktreePath = path.join(this.projectsDir, `${project.id}-task-${taskId}`);
+    
+    // Use domain object for validation
+    const taskDomain = new TaskDomain(
+      taskId,
+      projectId,
+      name,
+      branch,
+      worktreePath,
+      'active',
+      false,
+      false
+    );
     
     try {
       // Create worktree
@@ -372,6 +385,72 @@ export class TaskService {
     }
   }
 
+  /**
+   * Get task as domain object (NEW - for gradual migration)
+   */
+  async getTaskDomain(taskId) {
+    return await this.domainRepository.findById(taskId);
+  }
+  
+  /**
+   * Check if task can be merged using domain rules
+   */
+  async canMerge(taskId) {
+    const task = await this.domainRepository.findById(taskId);
+    
+    // Get latest git status to update the domain object
+    const gitStatus = await this.gitOps.getStatus(task.worktreePath);
+    task.hasUncommittedChanges = gitStatus.hasUncommittedChanges || false;
+    task.hasConflicts = gitStatus.hasConflicts || false;
+    task.aheadCount = gitStatus.ahead || 0;
+    task.behindCount = gitStatus.behind || 0;
+    
+    return {
+      canMerge: task.canMerge(),
+      reason: !task.canMerge() ? this._getMergeBlockReason(task) : null,
+      needsPull: task.needsPull(),
+      needsPush: task.needsPush()
+    };
+  }
+  
+  /**
+   * Archive merged tasks using domain rules
+   */
+  async archiveMergedTasks(projectId, daysOld = 30) {
+    const tasks = await this.domainRepository.findByProject(projectId);
+    const archived = [];
+    
+    for (const task of tasks) {
+      if (task.state === 'merged' && task.canArchive()) {
+        // Check age if needed
+        const dbTask = await this.models.tasks.findById(task.id);
+        const mergedDate = new Date(dbTask.merged_at);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+        
+        if (mergedDate < cutoffDate) {
+          task.archive();
+          await this.domainRepository.save(task);
+          archived.push(task);
+          
+          // Emit event
+          if (this.eventEmitterService) {
+            this.eventEmitterService.emit(TASK_EVENTS.ARCHIVED, { taskId: task.id });
+          }
+        }
+      }
+    }
+    
+    return archived;
+  }
+  
+  _getMergeBlockReason(task) {
+    if (task.hasConflicts) return 'Task has merge conflicts';
+    if (task.hasUncommittedChanges) return 'Task has uncommitted changes';
+    if (task.state !== 'active') return `Task is ${task.state}`;
+    return 'Unknown reason';
+  }
+  
   /**
    * Check deletion safety (private)
    */

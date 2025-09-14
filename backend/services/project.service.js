@@ -6,6 +6,7 @@ import { ProjectRepository } from './internal/project-repository.js';
 import { ProjectGitOperations } from './internal/project-git-operations.js';
 import { ProjectPlanningManager } from './internal/project-planning-manager.js';
 import { GitService } from './git.service.js';
+import { Project as ProjectDomain, ValidationError } from '../../shared/domain/index.js';
 
 /**
  * ProjectService - Orchestrates project operations using internal services
@@ -32,13 +33,12 @@ export class ProjectService {
     const { repoUrl, branch = 'main', projectName } = projectData;
     const { githubToken = null } = options;
     
-    if (!repoUrl) {
-      throw new Error('Repository URL is required');
-    }
-    
     // Generate project ID
     const projectId = crypto.randomBytes(4).toString('hex');
     const name = projectName || repoUrl.split('/').pop().replace('.git', '');
+    
+    // Use domain object for validation
+    const projectDomain = new ProjectDomain(projectId, name, repoUrl, branch);
     
     // Clone the repository
     const projectPath = await this.gitOps.cloneProject(repoUrl, projectId, branch, githubToken);

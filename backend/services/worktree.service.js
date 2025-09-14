@@ -3,9 +3,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { GitRepository } from './git-repository.service.js';
-import { GitWorkingTree } from './git-workingtree.service.js';
-import { GitAnalyzer } from './git-analyzer.service.js';
+import { GitService } from './git.service.js';
+import { Worktree } from '../../shared/domain/index.js';
 
 const execAsync = promisify(exec);
 
@@ -68,7 +67,7 @@ export async function initializeWorktree(options) {
     
     // Configure git credentials if token provided
     if (githubToken) {
-      await GitRepository.configureCredentials(worktreePath, githubToken);
+      await GitService.configureCredentials(worktreePath, githubToken);
     }
     
     return { success: true };
@@ -258,7 +257,26 @@ export class WorktreeService {
     this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
   }
 
-  async create(mainRepoPath, branch, worktreePath, baseBranch, useExistingBranch = false) {
+  async create(mainRepoPath, branch, worktreePath, baseBranch, useExistingBranch = false, projectId = null, taskId = null) {
+    // Validate with domain object first
+    if (projectId && taskId) {
+      const worktree = new Worktree(
+        `wt-${taskId}`,
+        projectId,
+        taskId,
+        worktreePath,
+        branch,
+        baseBranch,
+        false,
+        false
+      );
+      
+      // Check if we can create
+      if (!worktree.canModify()) {
+        throw new Error('Cannot create worktree - it is locked');
+      }
+    }
+    
     const result = await initializeWorktree({
       mainRepoPath,
       worktreePath,
@@ -270,6 +288,20 @@ export class WorktreeService {
     
     if (!result.success) {
       throw new Error(result.error);
+    }
+    
+    // Return with domain object if IDs provided
+    if (projectId && taskId) {
+      result.worktree = new Worktree(
+        `wt-${taskId}`,
+        projectId,
+        taskId,
+        worktreePath,
+        branch,
+        baseBranch,
+        false,
+        false
+      );
     }
     
     return result;
@@ -298,5 +330,65 @@ export class WorktreeService {
 
   async prune(mainRepoPath) {
     return pruneWorktrees(mainRepoPath);
+  }
+  
+  /**
+   * Check worktree health and repair if needed
+   * Uses Worktree domain object for business rules
+   */
+  async checkHealth(worktreePath, projectId, taskId, branch) {
+    // Create domain object to check state
+    const worktree = new Worktree(
+      `wt-${taskId}`,
+      projectId,
+      taskId,
+      worktreePath,
+      branch,
+      'main',
+      false,
+      false
+    );
+    
+    // Check if path exists
+    try {
+      await fs.access(worktreePath);
+    } catch {
+      // Path doesn't exist - mark as orphaned
+      worktree.markOrphaned();
+      return {
+        healthy: false,
+        needsRepair: worktree.needsRepair(),
+        canCheckout: worktree.canCheckout(),
+        reason: 'Worktree path does not exist'
+      };
+    }
+    
+    // Check git status
+    try {
+      await execAsync('git status', { cwd: worktreePath });
+    } catch (error) {
+      // Git command failed - worktree is broken
+      worktree.markOrphaned();
+      return {
+        healthy: false,
+        needsRepair: worktree.needsRepair(),
+        canCheckout: worktree.canCheckout(),
+        reason: 'Git status failed - worktree may be corrupt'
+      };
+    }
+    
+    return {
+      healthy: true,
+      needsRepair: worktree.needsRepair(),
+      canCheckout: worktree.canCheckout(),
+      canModify: worktree.canModify()
+    };
+  }
+  
+  /**
+   * Generate standard worktree path
+   */
+  static generatePath(projectsDir, projectId, taskId) {
+    return Worktree.generatePath(projectsDir, projectId, taskId);
   }
 }
