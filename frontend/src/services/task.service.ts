@@ -20,6 +20,7 @@ import type {
 import type { Task, CreateTaskDTO, TaskState } from '../types/task';
 import { sessionAdapter } from './session-adapter';
 import { mockTasks, mockCommitHistory } from './mocks/task.mock';
+import { DataAdapter } from './data-adapter';
 
 export class TaskService extends BaseService implements ITaskService {
   constructor(config: { baseUrl?: string; mockEnabled?: boolean } = {}) {
@@ -56,9 +57,7 @@ export class TaskService extends BaseService implements ITaskService {
       : `/projects/${projectId}/tasks`;
       
     const response = await this.get<unknown[]>(endpoint);
-    
-    // Map backend format to our Task type
-    return response.map(t => this.mapBackendTaskResponse(t));
+    return DataAdapter.transformTasks(response);
   }
 
   async getTask(projectId: string, taskId: string): Promise<Task> {
@@ -71,8 +70,7 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.get<unknown>(`/projects/${projectId}/tasks/${taskId}`);
-    
-    return this.mapBackendTaskResponse(response);
+    return DataAdapter.transformTask(response);
   }
 
   async createTask(projectId: string, taskData: CreateTaskDTO): Promise<Task> {
@@ -101,8 +99,7 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.post<unknown>(`/projects/${projectId}/tasks`, taskData);
-    
-    return this.mapBackendTaskResponse(response);
+    return DataAdapter.transformTask(response);
   }
 
   async updateTask(projectId: string, taskId: string, updates: TaskUpdateData): Promise<Task> {
@@ -119,8 +116,7 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.patch<unknown>(`/projects/${projectId}/tasks/${taskId}`, updates);
-    
-    return this.mapBackendTaskResponse(response);
+    return DataAdapter.transformTask(response);
   }
 
   async archiveTask(projectId: string, taskId: string): Promise<void> {
@@ -142,9 +138,7 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.get<unknown[]>(`/projects/${projectId}/tasks/${taskId}/commits`);
-    
-    // Map backend format to our CommitHistory type
-    return response.map(commit => this.mapBackendCommitResponse(commit));
+    return DataAdapter.transformCommits(response);
   }
 
   async updateBranch(projectId: string, taskId: string): Promise<GitOperationResult> {
@@ -205,61 +199,4 @@ export class TaskService extends BaseService implements ITaskService {
     }
   }
 
-  private mapBackendTaskResponse(response: unknown): Task {
-    // Type guard: ensure response is an object
-    if (!response || typeof response !== 'object') {
-      throw new Error('Invalid task response format');
-    }
-    
-    const r = response as Record<string, unknown>;
-    
-    // Process and register terminals
-    const terminals = Array.isArray(r.terminals) ? r.terminals : [];
-    
-    // Register each terminal with the session adapter
-    terminals.forEach((terminal: any) => {
-      sessionAdapter.registerSession(terminal);
-    });
-    
-    return {
-      id: String(r.id || ''),
-      name: String(r.name || 'Untitled Task'),
-      description: String(r.description || ''),
-      branch: String(r.branch || ''),
-      worktree_path: String(r.worktree_path || ''),
-      created_at: String(r.created_at || new Date().toISOString()),
-      taskState: (r.task_state || r.taskState || 'active') as TaskState,
-      sessionState: (r.session_state || r.sessionState || {
-        status: 'not-started',
-        lastStateChange: null
-      }) as Task['sessionState'],
-      gitStatus: r.git_status || r.gitStatus,
-      containerId: r.container_id || r.containerId,
-      validationStatus: r.validation_status || r.validationStatus,
-      previewUrl: r.preview_url || r.previewUrl,
-      prUrl: r.pr_url || r.prUrl,
-      project_id: r.project_id,
-      is_archived: r.is_archived,
-      merged_at: r.merged_at,
-      has_uncommitted_changes: r.has_uncommitted_changes,
-      terminals: terminals
-    } as Task;
-  }
-
-  private mapBackendCommitResponse(response: unknown): CommitHistory {
-    // Type guard: ensure response is an object
-    if (!response || typeof response !== 'object') {
-      throw new Error('Invalid commit response format');
-    }
-    
-    const r = response as Record<string, unknown>;
-    
-    return {
-      hash: String(r.hash || r.id || ''),
-      message: String(r.message || ''),
-      author: String(r.author || r.author_name || ''),
-      date: String(r.date || r.committed_date || ''),
-      isMerge: Boolean(r.is_merge || r.isMerge || false)
-    };
-  }
 }

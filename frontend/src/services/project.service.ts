@@ -19,6 +19,7 @@ import type {
 } from './interfaces/project.service.interface';
 import type { Project } from '../types/project';
 import { mockProjects, mockBranches, mockPlanningContent } from './mocks/project.mock';
+import { DataAdapter } from './data-adapter';
 
 export class ProjectService extends BaseService implements IProjectService {
   constructor(config: { baseUrl?: string; mockEnabled?: boolean } = {}) {
@@ -33,16 +34,7 @@ export class ProjectService extends BaseService implements IProjectService {
     }
     
     const response = await this.get<any[]>('/projects');
-    
-    // Map backend format to our Project type
-    return response.map(p => ({
-      id: p.id,
-      name: p.name,
-      repository: p.repo_url,
-      baseBranch: p.base_branch,
-      created: p.created_at,
-      tasksCount: p.task_count || 0
-    }));
+    return DataAdapter.transformProjects(response);
   }
 
   async getProject(projectId: string, options?: { minimal?: boolean }): Promise<Project> {
@@ -59,16 +51,7 @@ export class ProjectService extends BaseService implements IProjectService {
       : `/projects/${projectId}`;
     
     const response = await this.get<any>(endpoint);
-    
-    // Map backend format to our Project type
-    return {
-      id: response.id,
-      name: response.name,
-      repository: response.repo_url || response.repository,
-      baseBranch: response.base_branch || response.baseBranch,
-      created: response.created_at || response.created,
-      tasksCount: response.task_count || response.tasksCount || 0
-    };
+    return DataAdapter.transformProject(response);
   }
 
   async createProject(data: CreateProjectData): Promise<Project> {
