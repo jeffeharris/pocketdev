@@ -31,7 +31,7 @@ export function SplitViewContainer({
 }: SplitViewContainerProps) {
   const layout = useSplitLayout();
   const layoutState = useLayoutState();
-  const { setSplitRatio, setResizing, setPrimaryTerminal, setSecondaryTerminal, setTertiaryTerminal, setQuaternaryTerminal, updateLayout, swapPanes } = useSplitViewStore();
+  const { setSplitRatio, setResizing, updateLayout } = useSplitViewStore();
   const terminals = useTaskTerminals(taskId);
   const focusedTerminalId = useFocusedTerminalId(taskId);
   const terminalStore = useTerminalStore();
@@ -71,8 +71,28 @@ export function SplitViewContainer({
   // The dropdowns allow reordering by swapping terminals in the array
 
   const handleSwapPanes = useCallback(() => {
-    swapPanes();
-  }, [swapPanes]);
+    if (!onTerminalReorder || terminals.length < 2) return;
+    
+    const newTerminals = [...terminals];
+    if (layout.mode === 'split-4' && terminals.length >= 4) {
+      // For quad view, rotate all four
+      const temp = newTerminals[0];
+      newTerminals[0] = newTerminals[1];
+      newTerminals[1] = newTerminals[3];
+      newTerminals[3] = newTerminals[2];
+      newTerminals[2] = temp;
+    } else {
+      // For split view, swap first two
+      [newTerminals[0], newTerminals[1]] = [newTerminals[1], newTerminals[0]];
+    }
+    
+    // Update tabOrder to match new positions
+    const reorderedTerminals = newTerminals.map((t, index) => ({
+      ...t,
+      tabOrder: index
+    }));
+    onTerminalReorder(reorderedTerminals);
+  }, [onTerminalReorder, terminals, layout.mode]);
 
   const handleDoubleClick = useCallback(() => {
     setSplitRatio(0.5);

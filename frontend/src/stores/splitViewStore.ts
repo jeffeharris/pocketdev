@@ -5,11 +5,9 @@ import { immer } from 'zustand/middleware/immer';
 export interface SplitLayoutConfig {
   mode: 'tab' | 'split' | 'split-4';
   orientation: 'horizontal' | 'vertical';
-  primaryTerminalId: string | null;
-  secondaryTerminalId: string | null;
-  tertiaryTerminalId?: string | null;
-  quaternaryTerminalId?: string | null;
   splitRatio: number;
+  // Terminal display is order-based (terminals[0], terminals[1], etc.)
+  // No terminal IDs are stored - display is determined by array order
 }
 
 interface SplitViewState {
@@ -36,19 +34,13 @@ interface SplitViewState {
   setSplitRatio: (ratio: number) => void;
   setActivePane: (pane: 'primary' | 'secondary') => void;
   setResizing: (resizing: boolean) => void;
-  swapPanes: () => void;
-  setPrimaryTerminal: (terminalId: string | null) => void;
-  setSecondaryTerminal: (terminalId: string | null) => void;
-  setTertiaryTerminal: (terminalId: string | null) => void;
-  setQuaternaryTerminal: (terminalId: string | null) => void;
+  // Note: swapPanes is no longer needed - terminals are reordered via onTerminalReorder callback
   clearLayout: () => void;
 }
 
 const defaultLayout: SplitLayoutConfig = {
   mode: 'tab',
   orientation: 'vertical',
-  primaryTerminalId: null,
-  secondaryTerminalId: null,
   splitRatio: 0.5
 };
 
@@ -163,57 +155,6 @@ export const useSplitViewStore = create<SplitViewState>()(
           });
         },
         
-        swapPanes: () => {
-          set(draft => {
-            if (!draft.currentLayout) return;
-            
-            if (draft.currentLayout.mode === 'split-4') {
-              // For quad view, swap all four in a rotation
-              const temp = draft.currentLayout.primaryTerminalId;
-              draft.currentLayout.primaryTerminalId = draft.currentLayout.secondaryTerminalId;
-              draft.currentLayout.secondaryTerminalId = draft.currentLayout.quaternaryTerminalId;
-              draft.currentLayout.quaternaryTerminalId = draft.currentLayout.tertiaryTerminalId;
-              draft.currentLayout.tertiaryTerminalId = temp;
-            } else {
-              // For split view, just swap primary and secondary
-              const temp = draft.currentLayout.primaryTerminalId;
-              draft.currentLayout.primaryTerminalId = draft.currentLayout.secondaryTerminalId;
-              draft.currentLayout.secondaryTerminalId = temp;
-            }
-          });
-        },
-        
-        setPrimaryTerminal: (terminalId) => {
-          set(draft => {
-            if (draft.currentLayout) {
-              draft.currentLayout.primaryTerminalId = terminalId;
-            }
-          });
-        },
-        
-        setSecondaryTerminal: (terminalId) => {
-          set(draft => {
-            if (draft.currentLayout) {
-              draft.currentLayout.secondaryTerminalId = terminalId;
-            }
-          });
-        },
-        
-        setTertiaryTerminal: (terminalId) => {
-          set(draft => {
-            if (draft.currentLayout) {
-              draft.currentLayout.tertiaryTerminalId = terminalId;
-            }
-          });
-        },
-        
-        setQuaternaryTerminal: (terminalId) => {
-          set(draft => {
-            if (draft.currentLayout) {
-              draft.currentLayout.quaternaryTerminalId = terminalId;
-            }
-          });
-        },
         
         clearLayout: () => {
           set(draft => {

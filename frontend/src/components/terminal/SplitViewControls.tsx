@@ -14,16 +14,18 @@ interface SplitViewControlsProps {
   taskId: string;
   activeTabId: string;
   onTerminalSelect?: (dbSessionId: string) => void;
+  onTerminalReorder?: (reorderedTerminals: TerminalSession[]) => void;
 }
 
 export function SplitViewControls({
   taskId,
   activeTabId,
-  onTerminalSelect
+  onTerminalSelect,
+  onTerminalReorder
 }: SplitViewControlsProps) {
   const layout = useSplitLayout();
   const terminals = useTaskTerminals(taskId);
-  const { updateLayout, swapPanes, setPrimaryTerminal, setSecondaryTerminal } = useSplitViewStore();
+  const { updateLayout } = useSplitViewStore();
   
   // Helper to get AI state color
   const getStateColor = (state?: string) => {
@@ -71,9 +73,9 @@ export function SplitViewControls({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Get terminal names
-  const primaryTerminal = terminals.find(t => t.dbSessionId === layout.primaryTerminalId);
-  const secondaryTerminal = terminals.find(t => t.dbSessionId === layout.secondaryTerminalId);
+  // Get terminals by order (display is order-based)
+  const primaryTerminal = terminals[0];
+  const secondaryTerminal = terminals[1];
 
   // Only show controls if we have 2+ terminals and not on mobile
   if (terminals.length < 2 || isMobile) {
@@ -89,7 +91,7 @@ export function SplitViewControls({
           <button
             onClick={() => setShowPrimaryDropdown(!showPrimaryDropdown)}
             className={`px-3 py-2 text-sm border-r border-gray-600 relative transition-colors cursor-pointer flex items-center gap-2 ${
-              layout.primaryTerminalId === activeTabId
+              primaryTerminal?.dbSessionId === activeTabId
                 ? 'bg-gray-700 text-gray-200'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
             }`}
@@ -108,22 +110,34 @@ export function SplitViewControls({
                     <button
                       key={terminal.dbSessionId}
                       onClick={() => {
-                        setPrimaryTerminal(terminal.dbSessionId);
-                        saveLayout();
+                        // Swap the selected terminal to the primary position
+                        if (onTerminalReorder) {
+                          const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
+                          if (selectedIndex > 0) {
+                            const newTerminals = [...terminals];
+                            [newTerminals[0], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[0]];
+                            // Update tabOrder to match new positions
+                            const reorderedTerminals = newTerminals.map((t, index) => ({
+                              ...t,
+                              tabOrder: index
+                            }));
+                            onTerminalReorder(reorderedTerminals);
+                          }
+                        }
                         setShowPrimaryDropdown(false);
                         if (onTerminalSelect) {
                           onTerminalSelect(terminal.dbSessionId);
                         }
                       }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
-                        terminal.dbSessionId === layout.primaryTerminalId ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
+                        terminal === primaryTerminal ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
                       }`}
-                      disabled={terminal.dbSessionId === layout.secondaryTerminalId}
+                      disabled={terminal === secondaryTerminal}
                     >
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${getStateColor(terminal.aiState)}`}></div>
                         <span className="truncate flex-1">{terminal.tabName}</span>
-                        {terminal.dbSessionId === layout.secondaryTerminalId && (
+                        {terminal === secondaryTerminal && (
                           <span className="text-xs text-gray-500">(in use)</span>
                         )}
                       </div>
@@ -138,7 +152,7 @@ export function SplitViewControls({
           <button
             onClick={() => setShowSecondaryDropdown(!showSecondaryDropdown)}
             className={`px-3 py-2 text-sm border-r border-gray-600 relative transition-colors cursor-pointer flex items-center gap-2 ${
-              layout.secondaryTerminalId === activeTabId
+              secondaryTerminal?.dbSessionId === activeTabId
                 ? 'bg-gray-700 text-gray-200'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
             }`}
@@ -157,22 +171,34 @@ export function SplitViewControls({
                     <button
                       key={terminal.dbSessionId}
                       onClick={() => {
-                        setSecondaryTerminal(terminal.dbSessionId);
-                        saveLayout();
+                        // Swap the selected terminal to the secondary position
+                        if (onTerminalReorder) {
+                          const selectedIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
+                          if (selectedIndex !== 1 && selectedIndex >= 0) {
+                            const newTerminals = [...terminals];
+                            [newTerminals[1], newTerminals[selectedIndex]] = [newTerminals[selectedIndex], newTerminals[1]];
+                            // Update tabOrder to match new positions
+                            const reorderedTerminals = newTerminals.map((t, index) => ({
+                              ...t,
+                              tabOrder: index
+                            }));
+                            onTerminalReorder(reorderedTerminals);
+                          }
+                        }
                         setShowSecondaryDropdown(false);
                         if (onTerminalSelect) {
                           onTerminalSelect(terminal.dbSessionId);
                         }
                       }}
                       className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${
-                        terminal.dbSessionId === layout.secondaryTerminalId ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
+                        terminal === secondaryTerminal ? 'bg-gray-700 text-gray-200' : 'text-gray-300'
                       }`}
-                      disabled={terminal.dbSessionId === layout.primaryTerminalId}
+                      disabled={terminal === primaryTerminal}
                     >
                       <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${getStateColor(terminal.aiState)}`}></div>
                         <span className="truncate flex-1">{terminal.tabName}</span>
-                        {terminal.dbSessionId === layout.primaryTerminalId && (
+                        {terminal === primaryTerminal && (
                           <span className="text-xs text-gray-500">(in use)</span>
                         )}
                       </div>
@@ -220,8 +246,17 @@ export function SplitViewControls({
         {/* Swap Button */}
         <button
           onClick={() => {
-            swapPanes();
-            saveLayout();
+            if (onTerminalReorder && terminals.length >= 2) {
+              // Swap first two terminals
+              const newTerminals = [...terminals];
+              [newTerminals[0], newTerminals[1]] = [newTerminals[1], newTerminals[0]];
+              // Update tabOrder to match new positions
+              const reorderedTerminals = newTerminals.map((t, index) => ({
+                ...t,
+                tabOrder: index
+              }));
+              onTerminalReorder(reorderedTerminals);
+            }
           }}
           className="p-1 bg-gray-700 rounded hover:bg-gray-600 transition-colors text-gray-400 hover:text-gray-200"
           title="Swap terminals"
