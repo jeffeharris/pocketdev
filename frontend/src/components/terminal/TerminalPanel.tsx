@@ -13,8 +13,11 @@ import { EmptyTerminalPanel } from './EmptyTerminalPanel';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
 import { useShortcutContext } from '../../hooks/keyboard';
-import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { ThrottledTerminal } from './ThrottledTerminal';
+import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
+import { TerminalGrid } from './TerminalGrid';
+import { useLayoutConstraints } from './useLayoutConstraints';
+import { useTerminalStatus } from './useTerminalStatus';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
@@ -65,10 +68,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     isResetting, 
     showSessionLauncher, 
     sessionStatuses, 
-    confirmClose,
-    canShowQuad,
-    canShowHorizontal,
-    canShowVertical
+    confirmClose
   } = state;
   
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
@@ -81,80 +81,24 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Viewport constraints are now in reducer state
   
-  useEffect(() => {
-    const checkViewport = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      // Get actual terminal container height if available
-      const terminalHeight = terminalContainerRef.current?.offsetHeight || height;
-      
-      // Use terminal container height for constraints when in validation mode
-      const effectiveHeight = validationMode ? terminalHeight : height;
-      
-      // Quad view needs large screen and sufficient terminal height
-      // Horizontal and quad splits need the same height threshold
-      const minHeightForHorizontalSplits = 600;
-      
+  // Use layout constraints hook to manage viewport-based layout rules
+  const { canShowQuad, canShowHorizontal, canShowVertical } = useLayoutConstraints({
+    layout,
+    terminalContainerRef,
+    updateLayout,
+    onConstraintsChange: (constraints) => {
       dispatch({
         type: 'UPDATE_VIEWPORT_CONSTRAINTS',
-        constraints: {
-          quad: width >= 1400 && effectiveHeight >= minHeightForHorizontalSplits,
-          horizontal: effectiveHeight >= minHeightForHorizontalSplits,
-          vertical: width >= 1000
-        }
+        constraints
       });
-    };
-    
-    checkViewport();
-    window.addEventListener('resize', checkViewport);
-    
-    // Also check when validation mode changes
-    const resizeObserver = new ResizeObserver(checkViewport);
-    if (terminalContainerRef.current) {
-      resizeObserver.observe(terminalContainerRef.current);
     }
-    
-    return () => {
-      window.removeEventListener('resize', checkViewport);
-      resizeObserver.disconnect();
-    };
-  }, [validationMode]);
+  });
   
   // Split view state
   const layout = useSplitLayout();
   const { toggleSplitMode, updateLayout, setCurrentTask } = useSplitViewStore();
   
-  // Auto-downgrade layout if viewport becomes too small
-  useEffect(() => {
-    // If in quad view but screen too small, downgrade
-    if (layout.mode === 'split-4' && !canShowQuad) {
-      // Try horizontal split first, then vertical, then tab
-      if (canShowHorizontal) {
-        updateLayout( { mode: 'split', orientation: 'horizontal' });
-      } else if (canShowVertical) {
-        updateLayout( { mode: 'split', orientation: 'vertical' });
-      } else {
-        updateLayout( { mode: 'tab' });
-      }
-    }
-    // If in horizontal split but screen too short, switch to vertical or tab
-    else if (layout.mode === 'split' && layout.orientation === 'horizontal' && !canShowHorizontal) {
-      if (canShowVertical) {
-        updateLayout( { orientation: 'vertical' });
-      } else {
-        updateLayout( { mode: 'tab' });
-      }
-    }
-    // If in vertical split but screen too narrow, switch to horizontal or tab
-    else if (layout.mode === 'split' && layout.orientation === 'vertical' && !canShowVertical) {
-      if (canShowHorizontal) {
-        updateLayout( { orientation: 'horizontal' });
-      } else {
-        updateLayout( { mode: 'tab' });
-      }
-    }
-  }, [layout.mode, layout.orientation, canShowQuad, canShowHorizontal, canShowVertical, task.id, updateLayout]);
+  // Layout constraints hook handles auto-downgrade logic internally
   
   // Set current task for split view on mount
   useEffect(() => {
@@ -212,7 +156,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     
     if (terminals.length > 0) {
       const savedId = localStorage.getItem(`activeTab-${task.id}`);
-      const currentTab = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
+      const currentTab = terminals.find(t => t.normalizedId === activeTabId);
       const validTab = terminals.find(t => t.dbSessionId === savedId);
       
       console.log('[TerminalPanel useEffect@186] Tab state:', {
@@ -224,12 +168,12 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       
       // Only update if we don't have a current valid tab
       if (!currentTab && !validTab && terminals[0]) {
-        const firstTerminalId = terminals[0].normalizedId || terminalService.getNormalizedId(terminals[0]);
+        const firstTerminalId = terminals[0].normalizedId;
         console.log('[TerminalPanel useEffect@186] Setting activeTabId to first terminal:', firstTerminalId);
         setActiveTabId(firstTerminalId);
         // Don't set focus here - let the initial terminals effect handle it
       } else if (!currentTab && validTab) {
-        const validTabId = validTab.normalizedId || terminalService.getNormalizedId(validTab);
+        const validTabId = validTab.normalizedId;
         console.log('[TerminalPanel useEffect@186] Setting activeTabId to saved tab:', validTabId);
         setActiveTabId(validTabId);
       }
@@ -273,7 +217,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   useImperativeHandle(ref, () => ({
     focus: () => {
       // Focus the active terminal
-      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
+      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
       const activeRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       activeRef?.focus();
     },
@@ -281,7 +225,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Check if the tab exists
       const tab = terminals.find(t => t.dbSessionId === dbSessionId);
       if (tab) {
-        const normalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
+        const normalizedId = terminal.normalizedId;
         handleTabSelect(normalizedId);
       }
     }
@@ -291,7 +235,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     setIsResetting(true);
     try {
       // Tab mode - use the normal logic
-      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
+      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
       if (!activeTerminal) {
         showNotification('warning', 'No active terminal to refresh');
         return;
@@ -357,7 +301,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const tabCount = terminals.length;
       
       // Get the currently active terminal to copy history from
-      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
+      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
       
       // Use provided options or generate next available "Tab #"
       const aiAgent = options?.aiAgent || 'claude';
@@ -387,7 +331,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       };
       
       // Use normalized ID for tracking active tab
-      const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+      const normalizedId = newSession.normalizedId;
       
       // Just update the active tab - backend has already added it to the database
       dispatch({ type: 'SET_ACTIVE_TAB', tabId: normalizedId });
@@ -403,7 +347,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         // Wait for terminal connection to be established
         setTimeout(async () => {
           try {
-            const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+            const normalizedId = newSession.normalizedId;
             await terminalService.launchAgent(normalizedId, aiAgent, {
               workingDirectory: options?.workingDirectory,
               initialPrompt: options?.initialPrompt,
@@ -453,7 +397,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       
       // Update via API
       // Get normalized ID for the terminal
-      const normalizedId = terminalService.getNormalizedId(terminal);
+      const normalizedId = terminal.normalizedId;
       await terminalService.updateTerminalTab(normalizedId, {
         tabName: newName
       });
@@ -485,7 +429,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         // Find the terminal for this tab to get normalized ID
         const terminal = terminals.find(t => t.dbSessionId === tab.dbSessionId);
         if (!terminal) return Promise.resolve();
-        const normalizedId = terminalService.getNormalizedId(terminal);
+        const normalizedId = terminal.normalizedId;
         return terminalService.updateTerminalTab(normalizedId, {
           tabOrder: tab.tabOrder
         });
@@ -504,40 +448,42 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   };
 
 
-  // Handle session status changes
-  const handleSessionStatus = (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => {
-    // Find terminal and get normalized ID
+  // Show notification using Shelltender's toast system
+  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
+    // showToast expects (message: string, duration?: number)
+    // For now, ignore the type parameter as the toast library doesn't support variants
+    showToast(message, 5000);
+  };
+
+  // Handle session reconnection
+  const handleReconnectSession = async (dbSessionId: string) => {
     const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
-    
-    const normalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
-    
-    // Update status map with normalized ID
-    setSessionStatuses(prev => {
-      const newMap = new Map(prev);
-      newMap.set(normalizedId, status);
-      return newMap;
-    });
-    if (!terminal) return;
 
-    if (status === 'disconnected') {
-      console.warn(`[TerminalPanel] Session disconnected for ${terminal.tabName}`);
-      // Attempt automatic reconnection after a delay
-      setTimeout(() => {
-        handleReconnectSession(dbSessionId);
-      }, 2000);
-    } else if (status === 'error') {
-      console.error(`[TerminalPanel] Session error for ${terminal.tabName}`);
-      // Show error notification
-      showNotification('error', `Terminal "${terminal.tabName}" encountered an error`);
-    } else if (status === 'connected') {
-      // Clear any error state
-      const prevStatus = sessionStatuses.get(dbSessionId);
-      if (prevStatus === 'disconnected' || prevStatus === 'error') {
-        showNotification('success', `Terminal "${terminal.tabName}" reconnected`);
+    try {
+      // Try to reconnect by reloading the terminal
+      const terminalRef = terminalRefs.current.get(dbSessionId);
+      if (terminalRef) {
+        // Reload task to force reconnection
+        if (task.onReload) {
+          task.onReload();
+        }
       }
+    } catch (error) {
+      console.error(`[TerminalPanel] Failed to reconnect session:`, error);
+      showNotification('error', `Failed to reconnect terminal "${terminal.tabName}"`);
     }
   };
+
+  // Use terminal status hook for session management
+  const { handleSessionStatus, hasDisconnectedSessions, getSessionStatus } = useTerminalStatus({
+    terminals,
+    sessionStatuses,
+    getNormalizedId: (terminal) => terminal.normalizedId,
+    dispatch,
+    showNotification,
+    handleReconnectSession
+  });
 
   // Handle tab close
   const handleTabClose = async (dbSessionId: string) => {
@@ -547,7 +493,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     
     // Get the real-time state for this session
     const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    const normalizedId = terminal ? (terminal.normalizedId || terminalService.getNormalizedId(terminal)) : dbSessionId;
+    const normalizedId = terminal ? terminal.normalizedId : dbSessionId;
     const realtimeState = realtimeSessionStates?.find(s => s.id === dbSessionId);
     const currentAiState = realtimeState?.aiState || terminalToClose.aiState;
     
@@ -568,7 +514,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     console.log('[performTabClose] Starting close for:', dbSessionId, {
       currentTerminals: terminals.map(t => ({ id: t.dbSessionId, name: t.tabName })),
       activeTabId,
-      isClosingActiveTab: (terminalToClose ? (terminalToClose.normalizedId || terminalService.getNormalizedId(terminalToClose)) : dbSessionId) === activeTabId
+      isClosingActiveTab: (terminalToClose ? terminalToClose.normalizedId : dbSessionId) === activeTabId
     });
     
     try {
@@ -580,7 +526,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       }
       
       // If closing the active tab, switch to another tab first
-      const closingTerminalNormalizedId = terminalToClose ? (terminalToClose.normalizedId || terminalService.getNormalizedId(terminalToClose)) : dbSessionId;
+      const closingTerminalNormalizedId = terminalToClose ? terminalToClose.normalizedId : dbSessionId;
       if (closingTerminalNormalizedId === activeTabId) {
         const remainingTabs = terminals.filter(t => t.dbSessionId !== dbSessionId);
         console.log('[performTabClose] Closing active tab, remaining tabs:', remainingTabs.length);
@@ -588,7 +534,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         if (remainingTabs.length > 0) {
           // Find the next tab and switch to it BEFORE deleting
           const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          const nextTabId = nextTab.normalizedId || terminalService.getNormalizedId(nextTab);
+          const nextTabId = nextTab.normalizedId;
           console.log('[performTabClose] Switching to next tab:', nextTabId);
           setActiveTabId(nextTabId);
           localStorage.setItem(`activeTab-${task.id}`, nextTabId);
@@ -601,7 +547,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Delete the terminal session
       console.log('[performTabClose] Calling terminalService.deleteTerminalSession');
       // Get normalized ID for deletion
-      const normalizedId = terminalService.getNormalizedId(terminalToClose);
+      const normalizedId = terminalToClose.normalizedId;
       await terminalService.deleteTerminalSession(normalizedId);
       
       // Clear confirm close state if it exists
@@ -633,34 +579,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Clear confirm close state on error too
       dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
     }
-  };
-
-  // Handle session reconnection
-  const handleReconnectSession = async (dbSessionId: string) => {
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    if (!terminal) return;
-
-    
-    try {
-      // Try to reconnect by reloading the terminal
-      const terminalRef = terminalRefs.current.get(dbSessionId);
-      if (terminalRef) {
-        // Reload task to force reconnection
-        if (task.onReload) {
-          task.onReload();
-        }
-      }
-    } catch (error) {
-      console.error(`[TerminalPanel] Failed to reconnect session:`, error);
-      showNotification('error', `Failed to reconnect terminal "${terminal.tabName}"`);
-    }
-  };
-
-  // Show notification using Shelltender's toast system
-  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
-    // showToast expects (message: string, duration?: number)
-    // For now, ignore the type parameter as the toast library doesn't support variants
-    showToast(message, 5000);
   };
 
   // Render control buttons (reusable for both tab mode and split view)
@@ -781,7 +699,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = terminals.map(t => {
-    const normalizedId = t.normalizedId || terminalService.getNormalizedId(t);
+    const normalizedId = t.normalizedId;
     const connectionStatus = sessionStatuses.get(normalizedId) || 'connected';
     
     // Use real-time AI state if available, otherwise fall back to initial state
@@ -801,189 +719,23 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     };
   });
   
-  // Listen for keyboard shortcut events
-  useEffect(() => {
-    const handleTerminalShortcut = (event: CustomEvent) => {
-      switch (event.type) {
-        case 'terminal-new-tab':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          if (terminals.length < 6) {
-            handleTabAdd();
-          }
-          break;
-        case 'terminal-close-tab':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          if (activeTabId && terminals.length > 1) {
-            handleTabClose(activeTabId);
-          }
-          break;
-        case 'terminal-next-tab':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          {
-            const currentIndex = terminals.findIndex(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
-            const nextIndex = (currentIndex + 1) % terminals.length;
-            if (terminals[nextIndex]) {
-              const nextTerminalId = terminals[nextIndex].normalizedId || terminalService.getNormalizedId(terminals[nextIndex]);
-              handleTabSelect(nextTerminalId);
-            }
-          }
-          break;
-        case 'terminal-previous-tab':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          {
-            const currentIndex = terminals.findIndex(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
-            const prevIndex = currentIndex === 0 ? terminals.length - 1 : currentIndex - 1;
-            if (terminals[prevIndex]) {
-              const prevTerminalId = terminals[prevIndex].normalizedId || terminalService.getNormalizedId(terminals[prevIndex]);
-              handleTabSelect(prevTerminalId);
-            }
-          }
-          break;
-        case 'terminal-switch-tab':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          {
-            const detail = (event as CustomEvent).detail;
-            if (detail && typeof detail.index === 'number' && terminals[detail.index]) {
-              const targetTerminalId = terminals[detail.index].normalizedId || terminalService.getNormalizedId(terminals[detail.index]);
-              handleTabSelect(targetTerminalId);
-            }
-          }
-          break;
-        case 'terminal-toggle-split':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          if (layout.mode === 'tab') {
-            // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
-            if (canShowVertical) {
-              updateLayout( { mode: 'split', orientation: 'vertical' });
-            } else if (canShowHorizontal) {
-              updateLayout( { mode: 'split', orientation: 'horizontal' });
-            }
-            // If neither split view is possible, stay in tab mode
-          } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
-            // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
-            if (canShowHorizontal) {
-              updateLayout( { orientation: 'horizontal' });
-            } else if (canShowQuad) {
-              updateLayout( { mode: 'split-4' });
-            } else {
-              updateLayout( { mode: 'tab' });
-            }
-          } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
-            // Switch to quad view if allowed, otherwise back to tab
-            if (canShowQuad) {
-              updateLayout( { mode: 'split-4' });
-            } else {
-              updateLayout( { mode: 'tab' });
-            }
-          } else {
-            // From quad view, always go back to tab mode
-            updateLayout( { mode: 'tab' });
-          }
-          // Save layout after any changes
-          saveLayout();
-          break;
-        case 'terminal-toggle-fullscreen':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          onToggleSidebar();
-          break;
-        case 'terminal-refresh':
-          // Only handle this event if this task is currently visible
-          if (!isVisible) break;
-          
-          // Simulate a click on the refresh button to ensure consistent behavior
-          const refreshButton = document.querySelector('[data-action="refresh"]') as HTMLButtonElement;
-          if (refreshButton) {
-            refreshButton.click();
-          }
-          break;
-      }
-    };
-
-    // Add event listeners
-    document.addEventListener('terminal-new-tab', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-close-tab', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
-    document.addEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
-
-    return () => {
-      // Remove event listeners
-      document.removeEventListener('terminal-new-tab', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-close-tab', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-next-tab', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-previous-tab', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-switch-tab', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-toggle-split', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-toggle-fullscreen', handleTerminalShortcut as EventListener);
-      document.removeEventListener('terminal-refresh', handleTerminalShortcut as EventListener);
-    };
-  }, [terminals, activeTabId, layout.mode, layout.orientation, task.id, toggleSplitMode, updateLayout, canShowVertical, canShowHorizontal, canShowQuad, onToggleSidebar, handleRefreshSession, isVisible]);
-
-  // Helper function to determine if a terminal should be visible
-  const shouldShowTerminal = (
-    terminal: TerminalSession, 
-    layout: SplitLayoutConfig, 
-    activeTabId: string
-  ): boolean => {
-    const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
-    const terminalNormalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
-    
-    switch (layout.mode) {
-      case 'tab':
-        return terminalNormalizedId === activeTabId;
-      case 'split':
-        // Always show first 2 terminals in split mode, regardless of assignments
-        // This ensures we always have 2 panels visible
-        return terminalIndex >= 0 && terminalIndex < 2;
-      case 'split-4':
-        // Always show first 4 terminals in quad mode, regardless of assignments
-        // This ensures we always have 4 panels visible
-        return terminalIndex >= 0 && terminalIndex < 4;
-      default:
-        return false;
-    }
-  };
-
-  // Helper function to get CSS class for terminal based on position
-  const getTerminalClassName = (
-    terminal: TerminalSession, 
-    layout: SplitLayoutConfig
-  ): string => {
-    if (layout.mode === 'tab') return 'terminal terminal-tab';
-    
-    const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
-    
-    // For split/quad modes, always use order-based positioning
-    // The dropdowns will handle which terminal appears in which position
-    if (layout.mode === 'split') {
-      if (terminalIndex === 0) return 'terminal terminal-primary';
-      if (terminalIndex === 1) return 'terminal terminal-secondary';
-    } else if (layout.mode === 'split-4') {
-      if (terminalIndex === 0) return 'terminal terminal-primary';
-      if (terminalIndex === 1) return 'terminal terminal-secondary';
-      if (terminalIndex === 2) return 'terminal terminal-tertiary';
-      if (terminalIndex === 3) return 'terminal terminal-quaternary';
-    }
-    
-    return 'terminal terminal-hidden';
-  };
+  // Register keyboard shortcuts
+  useTerminalKeyboardShortcuts({
+    isVisible,
+    terminals,
+    activeTabId,
+    layout,
+    canShowVertical,
+    canShowHorizontal,
+    canShowQuad,
+    handleTabAdd,
+    handleTabClose,
+    handleTabSelect,
+    handleRefreshSession,
+    updateLayout,
+    saveLayout,
+    onToggleSidebar
+  });
 
   return (
     <div 
@@ -1012,203 +764,43 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         </div>
       )}
 
-      {/* Terminal Content - All terminals rendered persistently */}
-      <div ref={terminalContainerRef} className="flex-1 bg-gray-900 relative overflow-hidden min-h-0">
-        {/* Render all terminals with CSS-based visibility */}
-        <div 
-          className={`terminals-container mode-${layout.mode} ${layout.mode === 'split' ? `orientation-${layout.orientation}` : ''}`}
-          style={{
-            '--split-ratio': `${layout.splitRatio * 100}%`,
-            '--split-ratio-fr': `${layout.splitRatio}fr`,
-            '--split-complement-fr': `${1 - layout.splitRatio}fr`
-          } as React.CSSProperties}>
-          {terminals.map(terminal => {
-            const isVisibleTerminal = shouldShowTerminal(terminal, layout, activeTabId);
-            const terminalClassName = getTerminalClassName(terminal, layout);
-            
-            return (
-              <div
-                key={terminal.dbSessionId}
-                className={`terminal-wrapper ${terminalClassName}`}
-                style={{ 
-                  display: isVisibleTerminal ? 'block' : 'none'
-                }}
-              >
-                <DirectTerminal
-                  ref={(el) => {
-                    if (el) {
-                      terminalRefs.current.set(terminal.dbSessionId, el);
-                    } else {
-                      terminalRefs.current.delete(terminal.dbSessionId);
-                    }
-                  }}
-                  taskId={task.id}
-                  dbSessionId={terminal.dbSessionId}
-                  shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
-                  worktreePath={task.worktree_path}
-                  isVisible={isVisibleTerminal && isVisible}
-                  hasFocus={focusedTerminalId === (terminal.normalizedId || terminalService.getNormalizedId(terminal))}
-                  onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
-                  onFocusRequest={() => {
-                    terminalStore.updateTerminal(task.id, terminal.normalizedId || terminalService.getNormalizedId(terminal), {
-                      type: 'set-focus',
-                      focus: true
-                    });
-                  }}
-                />
-              </div>
-            );
-          })}
-          
-          {/* Render empty panels for missing terminals in split/quad modes */}
-          {layout.mode === 'split' && terminals.length < 2 && (
-            <>
-              {terminals.length === 0 && (
-                <div className="terminal-wrapper terminal-primary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-              {terminals.length <= 1 && (
-                <div className="terminal-wrapper terminal-secondary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-            </>
-          )}
-          
-          {/* Render empty panels for quad mode */}
-          {layout.mode === 'split-4' && terminals.length < 4 && (
-            <>
-              {terminals.length === 0 && (
-                <div className="terminal-wrapper terminal-primary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-              {terminals.length <= 1 && (
-                <div className="terminal-wrapper terminal-secondary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-              {terminals.length <= 2 && (
-                <div className="terminal-wrapper terminal-tertiary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-              {terminals.length <= 3 && (
-                <div className="terminal-wrapper terminal-quaternary">
-                  <EmptyTerminalPanel 
-                    onCreateTerminal={(type) => {
-                      switch (type) {
-                        case 'claude':
-                          handleTabAdd({ aiAgent: 'claude' });
-                          break;
-                        case 'bash':
-                          handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
-                          break;
-                        case 'advanced':
-                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-                          break;
-                      }
-                    }}
-                    layout={layout}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        
-        {/* Overlay split view controls when in split/quad modes */}
-        {(layout.mode === 'split' || layout.mode === 'split-4') && (
-          <SplitViewContainer
-            taskId={task.id}
-            projectId={task.project_id}
-            worktreePath={task.worktree_path}
-            isVisible={isVisible}
-            onSessionStatus={handleSessionStatus}
-            activeTabId={activeTabId}
-            controlButtons={renderControlButtons()}
-            isResetting={isResetting}
-            setIsResetting={(value) => dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })}
-            onTerminalReorder={handleTabReorder}
-          />
-        )}
-      </div>
+      {/* Terminal Content - Delegated to TerminalGrid component */}
+      <TerminalGrid
+        ref={terminalContainerRef}
+        task={task}
+        terminals={terminals}
+        layout={layout}
+        activeTabId={activeTabId}
+        isVisible={isVisible}
+        focusedTerminalId={focusedTerminalId}
+        isResetting={isResetting}
+        onSessionStatus={handleSessionStatus}
+        onFocusRequest={(terminalId) => {
+          terminalStore.updateTerminal(task.id, terminalId, {
+            type: 'set-focus',
+            focus: true
+          });
+        }}
+        onEmptyPanelAction={(action) => {
+          switch (action) {
+            case 'claude':
+              handleTabAdd({ aiAgent: 'claude' });
+              break;
+            case 'bash':
+              handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
+              break;
+            case 'advanced':
+              dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
+              break;
+          }
+        }}
+        onResetStateChange={(value) => 
+          dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })
+        }
+        onTerminalReorder={handleTabReorder}
+        renderControlButtons={renderControlButtons}
+        terminalRefs={terminalRefs}
+      />
 
       {/* Session Launcher Modal */}
       <SessionLauncher

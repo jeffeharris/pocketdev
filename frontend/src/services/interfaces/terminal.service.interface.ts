@@ -74,11 +74,4 @@ export interface ITerminalService {
    * @returns Promise<{ url: string }> Terminal URL
    */
   openTerminal(taskId: string): Promise<{ url: string }>;
-
-  /**
-   * Get normalized session ID from a session object or any ID type
-   * @param sessionOrId Session object or ID string
-   * @returns Normalized session ID
-   */
-  getNormalizedId(sessionOrId: TerminalSession | string): string;
 }
