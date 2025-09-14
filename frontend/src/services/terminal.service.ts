@@ -20,15 +20,24 @@ import type {
   TerminalTabUpdate
 } from './interfaces/terminal.service.interface';
 import type { TerminalSession } from '../types/task';
+import {
+  initialMockSessions,
+  mockTerminalSessions,
+  generateMockSessionId,
+  createMockSession,
+  createMockTerminalResult,
+  getNextTabOrder
+} from './mocks/terminal.mock';
 
 export class TerminalService extends BaseService implements ITerminalService {
-  private mockSessions: Map<string, TerminalSession[]> = new Map();
+  private mockSessions: Map<string, TerminalSession[]> = new Map(initialMockSessions);
 
   constructor(config: { baseUrl?: string; mockEnabled?: boolean } = {}) {
     super(config);
     
     if (this.isMockEnabled) {
-      this.initializeMockData();
+      // Register mock sessions with adapter
+      mockTerminalSessions.forEach(session => sessionAdapter.registerSession(session));
     }
   }
 
@@ -163,38 +172,26 @@ export class TerminalService extends BaseService implements ITerminalService {
   // Complex implementation hidden from users
 
   private handleMockCreation(taskId: string, options: CreateTerminalOptions): CreateTerminalResult {
-    const dbSessionId = this.generateMockSessionId();
-    const shelltenderSessionId = `task-${taskId}-${dbSessionId}`;
+    const dbSessionId = generateMockSessionId();
+    const existingSessions = this.mockSessions.get(taskId) || [];
+    const tabOrder = getNextTabOrder(existingSessions);
     
-    const mockSession: TerminalSession = {
-      sessionId: shelltenderSessionId, // Legacy compatibility
+    const mockSession = createMockSession(
+      taskId,
       dbSessionId,
-      shelltenderSessionId,
-      tabName: options.tabName || 'New Tab',
-      tabOrder: this.getNextTabOrder(taskId),
-      aiState: 'not-started',
-      aiAgent: options.aiAgent || 'claude',
-      shelltenderStatus: 'active'
-    };
+      options.tabName || 'New Tab',
+      tabOrder,
+      options.aiAgent || 'claude'
+    );
     
     // Add to mock storage
-    const existingSessions = this.mockSessions.get(taskId) || [];
     existingSessions.push(mockSession);
     this.mockSessions.set(taskId, existingSessions);
     
     // Register with adapter
     sessionAdapter.registerSession(mockSession);
     
-    const result: CreateTerminalResult = {
-      ...mockSession,
-      isReconnected: false,
-      createdAt: new Date().toISOString(),
-      cols: 80,
-      rows: 24,
-      wsUrl: `ws://localhost:8080/ws/${shelltenderSessionId}`
-    };
-    
-    return result;
+    return createMockTerminalResult(mockSession);
   }
 
   private handleMockDeletion(dbSessionId: string): void {
@@ -208,47 +205,6 @@ export class TerminalService extends BaseService implements ITerminalService {
     }
   }
 
-  private generateMockSessionId(): string {
-    return Math.random().toString(36).substring(2, 10);
-  }
-
-  private getNextTabOrder(taskId: string): number {
-    const existingSessions = this.mockSessions.get(taskId) || [];
-    return existingSessions.length + 1;
-  }
-
-  protected initializeMockData(): void {
-    // Initialize with sample terminal sessions for development
-    const mockSessions: TerminalSession[] = [
-      {
-        sessionId: 'task-mock1-abc123',
-        dbSessionId: 'sess_abc123',
-        shelltenderSessionId: 'task-mock1-abc123',
-        tabName: 'Claude',
-        tabOrder: 1,
-        aiState: 'idle',
-        aiAgent: 'claude',
-        shelltenderStatus: 'active'
-      },
-      {
-        sessionId: 'task-mock1-def456',
-        dbSessionId: 'sess_def456',
-        shelltenderSessionId: 'task-mock1-def456',
-        tabName: 'Terminal',
-        tabOrder: 2,
-        aiState: 'not-started',
-        aiAgent: 'terminal',
-        shelltenderStatus: 'active'
-      }
-    ];
-    
-    // Add sample sessions for different tasks
-    this.mockSessions.set('task_1', mockSessions);
-    this.mockSessions.set('task_2', [mockSessions[0]]); // Single session
-    
-    // Register mock sessions with adapter
-    mockSessions.forEach(session => sessionAdapter.registerSession(session));
-  }
 
   // Utility methods for session management
 

@@ -18,82 +18,18 @@ import type {
   GitOperationResult 
 } from './interfaces/project.service.interface';
 import type { Project } from '../types/project';
+import { mockProjects, mockBranches, mockPlanningContent } from './mocks/project.mock';
 
 export class ProjectService extends BaseService implements IProjectService {
-  private mockProjects: Project[] = [
-    {
-      id: '17db1cde',
-      name: 'pocketdev',
-      repository: 'https://github.com/jeffeharris/pocketdev',
-      baseBranch: 'simple-server',
-      created: '2025-01-01T10:00:00Z',
-      tasksCount: 3,
-    },
-    {
-      id: '5650a417',
-      name: 'shelltender',
-      repository: 'https://github.com/shelltender/shelltender',
-      baseBranch: 'main',
-      created: '2025-01-05T14:30:00Z',
-      tasksCount: 1,
-    },
-    {
-      id: 'abc12345',
-      name: 'my-react-app',
-      repository: 'https://github.com/user/my-react-app',
-      baseBranch: 'develop',
-      created: '2025-01-10T09:15:00Z',
-      tasksCount: 5,
-    },
-  ];
-
-  private mockBranches: string[] = [
-    'main', 
-    'develop', 
-    'feature/user-auth', 
-    'feature/api-refactor', 
-    'fix/memory-leak',
-    'hotfix/security-patch'
-  ];
-
-  private mockPlanningContent = `# Project Planning
-
-## 🐛 Bugs
-- [ ] Cart total not updating when quantity changes
-- [ ] Login redirect loop on mobile Safari
-- [ ] Memory leak in WebSocket connections
-
-## 💡 Ideas
-- [ ] Add dark mode toggle
-- [ ] Implement offline support
-- [ ] Add keyboard shortcuts
-- [ ] Migrate to React 19 features
-
-## 📋 Sprint Planning
-### Current Sprint (Jan 15 - Jan 29)
-- [x] Fix authentication issues
-- [ ] Implement new dashboard
-- [ ] Add unit tests for core modules
-
-### Backlog
-- Refactor legacy components
-- Add integration tests
-- Performance optimization
-- Accessibility improvements`;
-
   constructor(config: { baseUrl?: string; mockEnabled?: boolean } = {}) {
     super(config);
-    
-    if (this.isMockEnabled) {
-      this.initializeMockData();
-    }
   }
 
   // Public interface - 8 methods for comprehensive project management
 
   async getProjects(): Promise<Project[]> {
     if (this.isMockEnabled) {
-      return [...this.mockProjects];
+      return [...mockProjects];
     }
     
     const response = await this.get<any[]>('/projects');
@@ -111,7 +47,7 @@ export class ProjectService extends BaseService implements IProjectService {
 
   async getProject(projectId: string, options?: { minimal?: boolean }): Promise<Project> {
     if (this.isMockEnabled) {
-      const project = this.mockProjects.find(p => p.id === projectId);
+      const project = mockProjects.find(p => p.id === projectId);
       if (!project) {
         throw new Error('Project not found');
       }
@@ -146,7 +82,7 @@ export class ProjectService extends BaseService implements IProjectService {
         tasksCount: 0
       };
       
-      this.mockProjects.push(newProject);
+      mockProjects.push(newProject);
       return { ...newProject };
     }
     
@@ -167,7 +103,7 @@ export class ProjectService extends BaseService implements IProjectService {
 
   async getProjectDashboard(projectId: string, options?: { cached?: boolean }): Promise<ProjectDashboard> {
     if (this.isMockEnabled) {
-      const project = this.mockProjects.find(p => p.id === projectId);
+      const project = mockProjects.find(p => p.id === projectId);
       if (!project) {
         throw new Error('Project not found');
       }
@@ -217,7 +153,7 @@ export class ProjectService extends BaseService implements IProjectService {
     if (this.isMockEnabled) {
       return {
         exists: true,
-        content: this.mockPlanningContent
+        content: mockPlanningContent
       };
     }
     
@@ -238,7 +174,7 @@ export class ProjectService extends BaseService implements IProjectService {
 
   async getProjectBranches(projectId: string): Promise<string[]> {
     if (this.isMockEnabled) {
-      return [...this.mockBranches];
+      return [...mockBranches];
     }
     
     const response = await this.get<Array<{ name: string; isRemote: boolean; fullName: string }>>(`/projects/${projectId}/branches`);
@@ -287,13 +223,8 @@ export class ProjectService extends BaseService implements IProjectService {
 
   // Private helper methods
 
-  protected initializeMockData(): void {
-    // Mock data is initialized in constructor
-    // This method can be used for any additional mock setup if needed
-  }
-
   private findMockProject(projectId: string): Project {
-    const project = this.mockProjects.find(p => p.id === projectId);
+    const project = mockProjects.find(p => p.id === projectId);
     if (!project) {
       throw new Error(`Project with ID ${projectId} not found`);
     }

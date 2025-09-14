@@ -19,169 +19,18 @@ import type {
 } from './interfaces/task.service.interface';
 import type { Task, CreateTaskDTO, TaskState } from '../types/task';
 import { sessionAdapter } from './session-adapter';
+import { mockTasks, mockCommitHistory } from './mocks/task.mock';
 
 export class TaskService extends BaseService implements ITaskService {
-  private mockTasks: Task[] = [
-    {
-      id: '17db1cde001',
-      name: 'Update the task view page',
-      description: 'Improve the task view UI and add better status indicators',
-      branch: 'feature/task-view-page',
-      worktree_path: '/projects/17db1cde-task-001',
-      created_at: '2025-01-15T22:27:16Z',
-      taskState: 'active' as TaskState,
-      sessionState: {
-        status: 'working' as const,
-        lastStateChange: '2025-01-15T22:50:00Z'
-      },
-      gitStatus: {
-        ahead: 3,
-        behind: 0,
-        hasConflicts: false,
-        staged: 2,
-        unstaged: 1,
-        untracked: 0
-      },
-      terminals: [
-        {
-          sessionId: 'session-001',
-          dbSessionId: 'db-session-001',
-          shelltenderSessionId: 'session-001',
-          tabName: 'Main',
-          tabOrder: 0,
-          aiState: 'working' as const,
-          aiAgent: 'claude',
-          shelltenderStatus: 'active' as const
-        }
-      ]
-    },
-    {
-      id: '17db1cde002',
-      name: 'Add user authentication',
-      description: 'Implement JWT-based authentication with login/register',
-      branch: 'feature/add-auth-system',
-      worktree_path: '/projects/17db1cde-task-002',
-      created_at: '2025-01-15T21:45:12Z',
-      taskState: 'active' as TaskState,
-      sessionState: {
-        status: 'waiting' as const,
-        lastStateChange: '2025-01-15T23:00:00Z'
-      },
-      gitStatus: {
-        ahead: 5,
-        behind: 2,
-        hasConflicts: true,
-        staged: 0,
-        unstaged: 3,
-        untracked: 1
-      },
-      terminals: [
-        {
-          sessionId: 'session-002',
-          dbSessionId: 'db-session-002',
-          shelltenderSessionId: 'session-002',
-          tabName: 'Auth Dev',
-          tabOrder: 0,
-          aiState: 'waiting' as const,
-          aiAgent: 'claude',
-          shelltenderStatus: 'active' as const
-        }
-      ]
-    },
-    {
-      id: '17db1cde003',
-      name: 'Fix memory leak in worker',
-      description: 'Investigate and fix memory leak in background worker process',
-      branch: 'fix/memory-leak-worker',
-      worktree_path: '/projects/17db1cde-task-003',
-      created_at: '2025-01-15T18:30:00Z',
-      taskState: 'merged' as TaskState,
-      sessionState: {
-        status: 'idle' as const,
-        lastStateChange: '2025-01-15T21:00:00Z'
-      },
-      merged_at: '2025-01-15T21:00:00Z',
-      terminals: []
-    },
-    {
-      id: '5650a417001',
-      name: 'Optimize shell performance',
-      description: 'Improve shell response times and memory usage',
-      branch: 'perf/shell-optimization',
-      worktree_path: '/projects/5650a417-task-001',
-      created_at: '2025-01-16T09:15:00Z',
-      taskState: 'active' as TaskState,
-      sessionState: {
-        status: 'idle' as const,
-        lastStateChange: '2025-01-16T09:30:00Z'
-      },
-      gitStatus: {
-        ahead: 1,
-        behind: 0,
-        hasConflicts: false,
-        staged: 1,
-        unstaged: 0,
-        untracked: 0
-      },
-      terminals: [
-        {
-          sessionId: 'session-003',
-          dbSessionId: 'db-session-003',
-          shelltenderSessionId: 'session-003',
-          tabName: 'Performance',
-          tabOrder: 0,
-          aiState: 'idle' as const,
-          aiAgent: 'claude',
-          shelltenderStatus: 'active' as const
-        }
-      ]
-    }
-  ];
-
-  private mockCommitHistory: CommitHistory[] = [
-    {
-      hash: 'abc123def456',
-      message: 'Fix responsive layout in header',
-      author: 'You',
-      date: '2 hours ago',
-      isMerge: false
-    },
-    {
-      hash: 'def456ghi789',
-      message: 'Add loading states to buttons',
-      author: 'Claude',
-      date: '4 hours ago',
-      isMerge: false
-    },
-    {
-      hash: 'ghi789jkl012',
-      message: 'Merge branch main into feature branch',
-      author: 'System',
-      date: '1 day ago',
-      isMerge: true
-    },
-    {
-      hash: 'jkl012mno345',
-      message: 'Initial task setup and planning',
-      author: 'You',
-      date: '2 days ago',
-      isMerge: false
-    }
-  ];
-
   constructor(config: { baseUrl?: string; mockEnabled?: boolean } = {}) {
     super(config);
-    
-    if (this.isMockEnabled) {
-      this.initializeMockData();
-    }
   }
 
   // Public interface - 8 methods for comprehensive task management
 
   async getTasks(projectId: string, options?: TaskListOptions): Promise<Task[]> {
     if (this.isMockEnabled) {
-      const projectTasks = this.mockTasks.filter(t => 
+      const projectTasks = mockTasks.filter(t => 
         t.id.startsWith(projectId.slice(0, 8))
       );
       
@@ -214,7 +63,7 @@ export class TaskService extends BaseService implements ITaskService {
 
   async getTask(projectId: string, taskId: string): Promise<Task> {
     if (this.isMockEnabled) {
-      const task = this.mockTasks.find(t => t.id === taskId);
+      const task = mockTasks.find(t => t.id === taskId);
       if (!task) {
         throw new Error('Task not found');
       }
@@ -247,7 +96,7 @@ export class TaskService extends BaseService implements ITaskService {
         terminals: []
       };
       
-      this.mockTasks.push(newTask);
+      mockTasks.push(newTask);
       return { ...newTask };
     }
     
@@ -258,13 +107,13 @@ export class TaskService extends BaseService implements ITaskService {
 
   async updateTask(projectId: string, taskId: string, updates: TaskUpdateData): Promise<Task> {
     if (this.isMockEnabled) {
-      const taskIndex = this.mockTasks.findIndex(t => t.id === taskId);
+      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
       if (taskIndex >= 0) {
-        this.mockTasks[taskIndex] = { 
-          ...this.mockTasks[taskIndex], 
+        mockTasks[taskIndex] = { 
+          ...mockTasks[taskIndex], 
           ...updates 
         };
-        return { ...this.mockTasks[taskIndex] };
+        return { ...mockTasks[taskIndex] };
       }
       throw new Error('Task not found');
     }
@@ -276,9 +125,9 @@ export class TaskService extends BaseService implements ITaskService {
 
   async archiveTask(projectId: string, taskId: string): Promise<void> {
     if (this.isMockEnabled) {
-      const taskIndex = this.mockTasks.findIndex(t => t.id === taskId);
+      const taskIndex = mockTasks.findIndex(t => t.id === taskId);
       if (taskIndex >= 0) {
-        this.mockTasks[taskIndex].taskState = 'archived' as TaskState;
+        mockTasks[taskIndex].taskState = 'archived' as TaskState;
       }
       return;
     }
@@ -289,7 +138,7 @@ export class TaskService extends BaseService implements ITaskService {
 
   async getCommitHistory(projectId: string, taskId: string): Promise<CommitHistory[]> {
     if (this.isMockEnabled) {
-      return [...this.mockCommitHistory];
+      return [...mockCommitHistory];
     }
     
     const response = await this.get<unknown[]>(`/projects/${projectId}/tasks/${taskId}/commits`);
@@ -336,13 +185,8 @@ export class TaskService extends BaseService implements ITaskService {
 
   // Private helper methods
 
-  protected initializeMockData(): void {
-    // Mock data is initialized in constructor
-    // This method can be used for any additional mock setup if needed
-  }
-
   private findMockTask(taskId: string): Task {
-    const task = this.mockTasks.find(t => t.id === taskId);
+    const task = mockTasks.find(t => t.id === taskId);
     if (!task) {
       throw new Error(`Task with ID ${taskId} not found`);
     }
