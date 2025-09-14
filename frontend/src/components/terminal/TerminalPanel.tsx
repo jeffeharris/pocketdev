@@ -1,4 +1,4 @@
-import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { useState, forwardRef, useImperativeHandle, useRef, useEffect, useReducer } from 'react';
 import { Eye, EyeOff, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows, Grid2x2 } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
@@ -16,6 +16,7 @@ import { useShortcutContext } from '../../hooks/keyboard';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 import { ThrottledTerminal } from './ThrottledTerminal';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
+import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
 
 export type TerminalPanelHandle = {
@@ -42,32 +43,44 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     isFullscreen = false
   } = props;
   const terminalService = useService('terminal');
-  const [isResetting, setIsResetting] = useState(false);
-  const [activeTabId, setActiveTabId] = useState(() => {
-    // Check if there's a focus request first
-    const focusTabKey = `focus-tab-${task.id}`;
-    const focusTabId = sessionStorage.getItem(focusTabKey);
-    if (focusTabId) return focusTabId;
-    
-    // Otherwise use saved preference
-    return localStorage.getItem(`activeTab-${task.id}`) || '';
-  });
-  const [showSessionLauncher, setShowSessionLauncher] = useState(false);
-  const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
-  const [launchingClaude, setLaunchingClaude] = useState<Set<string>>(new Set());
+  
+  // Use reducer for all component state
+  const [state, dispatch] = useReducer(
+    terminalPanelReducer,
+    task.id,
+    (taskId) => {
+      // Check for focus request first
+      const focusTabKey = `focus-tab-${taskId}`;
+      const focusTabId = sessionStorage.getItem(focusTabKey);
+      if (focusTabId) {
+        const initialState = createInitialState(taskId);
+        return { ...initialState, activeTabId: focusTabId };
+      }
+      return createInitialState(taskId);
+    }
+  );
+  
+  const { 
+    activeTabId, 
+    isResetting, 
+    showSessionLauncher, 
+    sessionStatuses, 
+    launchingAgents, 
+    confirmClose,
+    canShowQuad,
+    canShowHorizontal,
+    canShowVertical
+  } = state;
+  
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
-  const [confirmClose, setConfirmClose] = useState<{ dbSessionId: string; tabName: string } | null>(null);
   
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
   
   
-  // Viewport constraints for split views
-  const [canShowQuad, setCanShowQuad] = useState(false);
-  const [canShowHorizontal, setCanShowHorizontal] = useState(false);
-  const [canShowVertical, setCanShowVertical] = useState(false);
+  // Viewport constraints are now in reducer state
   
   useEffect(() => {
     const checkViewport = () => {
@@ -83,13 +96,15 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       // Quad view needs large screen and sufficient terminal height
       // Horizontal and quad splits need the same height threshold
       const minHeightForHorizontalSplits = 600;
-      setCanShowQuad(width >= 1400 && effectiveHeight >= minHeightForHorizontalSplits);
       
-      // Horizontal split needs sufficient terminal height (same as quad)
-      setCanShowHorizontal(effectiveHeight >= minHeightForHorizontalSplits);
-      
-      // Vertical split only depends on width - works with any height
-      setCanShowVertical(width >= 1000);
+      dispatch({
+        type: 'UPDATE_VIEWPORT_CONSTRAINTS',
+        constraints: {
+          quad: width >= 1400 && effectiveHeight >= minHeightForHorizontalSplits,
+          horizontal: effectiveHeight >= minHeightForHorizontalSplits,
+          vertical: width >= 1000
+        }
+      });
     };
     
     checkViewport();
@@ -323,7 +338,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       console.error('[TerminalPanel] Failed to refresh session:', error);
       showNotification('error', 'Failed to refresh terminal session');
     } finally {
-      setTimeout(() => setIsResetting(false), 1000);
+      setTimeout(() => dispatch({ type: 'FINISH_RESET' }), 1000);
     }
   };
   
@@ -376,7 +391,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
       
       // Just update the active tab - backend has already added it to the database
-      setActiveTabId(normalizedId);
+      dispatch({ type: 'SET_ACTIVE_TAB', tabId: normalizedId });
       localStorage.setItem(`activeTab-${task.id}`, normalizedId);
       
       // Reload task to get updated terminals list
@@ -410,7 +425,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         // Mark as launching if we have a prompt or need to change directory
         if (options.workingDirectory || options.initialPrompt) {
           const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-          setLaunchingClaude(prev => new Set(prev).add(normalizedId));
+          dispatch({ type: 'START_AGENT_LAUNCH', terminalId: normalizedId });
           
           setTimeout(async () => {
             try {
@@ -462,20 +477,12 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               // Remove launching state
               setTimeout(() => {
                 const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-                setLaunchingClaude(prev => {
-                  const newSet = new Set(prev);
-                  newSet.delete(normalizedId);
-                  return newSet;
-                });
+                dispatch({ type: 'FINISH_AGENT_LAUNCH', terminalId: normalizedId });
               }, 1000);
             } catch (error) {
               console.error('[TerminalPanel] Failed to execute advanced launch:', error);
               const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-              setLaunchingClaude(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(normalizedId);
-                return newSet;
-              });
+              dispatch({ type: 'FINISH_AGENT_LAUNCH', terminalId: normalizedId });
             }
           }, 500); // Quick delay to ensure terminal connection is established
         }
@@ -682,7 +689,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       await terminalService.deleteTerminalSession(normalizedId);
       
       // Clear confirm close state if it exists
-      setConfirmClose(null);
+      dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
       
       // Reload task to get updated terminals list
       if (task.onReload) {
@@ -697,7 +704,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       if (error.message && error.message.includes('Session not found')) {
         console.log('[performTabClose] Session already deleted (race condition), ignoring error');
         // Clear confirm close state
-        setConfirmClose(null);
+        dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
         // Still reload to ensure UI is in sync
         if (task.onReload) {
           await task.onReload();
@@ -708,7 +715,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       console.error('[TerminalPanel] Failed to close tab:', error);
       showNotification('error', 'Failed to close tab');
       // Clear confirm close state on error too
-      setConfirmClose(null);
+      dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
     }
   };
 
@@ -1075,7 +1082,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               activeTabId={activeTabId}
               onTabSelect={handleTabSelect}
               onTabAdd={() => handleTabAdd()}
-              onTabAdvancedAdd={() => setShowSessionLauncher(true)}
+              onTabAdvancedAdd={() => dispatch({ type: 'SHOW_SESSION_LAUNCHER' })}
               onTabRename={handleTabRename}
               onTabClose={handleTabClose}
               onTabReorder={handleTabReorder}
@@ -1152,7 +1159,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1172,7 +1179,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1198,7 +1205,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1218,7 +1225,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1238,7 +1245,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1258,7 +1265,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                           handleTabAdd({ aiAgent: 'none', tabName: 'Bash' });
                           break;
                         case 'advanced':
-                          setShowSessionLauncher(true);
+                          dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                           break;
                       }
                     }}
@@ -1281,7 +1288,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             activeTabId={activeTabId}
             controlButtons={renderControlButtons()}
             isResetting={isResetting}
-            setIsResetting={setIsResetting}
+            setIsResetting={(value) => dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })}
             onTerminalReorder={handleTabReorder}
           />
         )}
@@ -1290,10 +1297,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       {/* Session Launcher Modal */}
       <SessionLauncher
         isOpen={showSessionLauncher}
-        onClose={() => setShowSessionLauncher(false)}
+        onClose={() => dispatch({ type: 'HIDE_SESSION_LAUNCHER' })}
         onLaunch={(options) => {
           handleTabAdd(options);
-          setShowSessionLauncher(false);
+          dispatch({ type: 'HIDE_SESSION_LAUNCHER' });
         }}
         taskPath={task.worktree_path}
       />
@@ -1301,11 +1308,11 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       {/* Confirm Close Dialog */}
       <ConfirmDialog
         isOpen={!!confirmClose}
-        onClose={() => setConfirmClose(null)}
+        onClose={() => dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' })}
         onConfirm={() => {
           if (confirmClose) {
             performTabClose(confirmClose.dbSessionId);
-            setConfirmClose(null);
+            dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
           }
         }}
         title="Close Terminal Tab"
