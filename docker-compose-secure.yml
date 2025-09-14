@@ -79,6 +79,9 @@ services:
       # Non-sensitive configuration
       - FRONTEND_URL=http://localhost:5173
       - SHELLTENDER_URL=http://shelltender-secure:8080
+      # Observability settings
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_REQUESTS=${LOG_REQUESTS:-true}
     secrets:
       - github_token
       - encryption_key

@@ -54,6 +54,8 @@ services:
       - SHELLTENDER_WS_URL=ws://shelltender:8080/ws
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_REQUESTS=${LOG_REQUESTS:-true}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]

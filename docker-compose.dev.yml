@@ -28,6 +28,8 @@ services:
   backend:
     environment:
       - NODE_ENV=development
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_REQUESTS=${LOG_REQUESTS:-true}
     user: root
     command: sh -c "cd /app/backend && npm install && npm run dev"
     volumes:
