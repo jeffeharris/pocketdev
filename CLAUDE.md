@@ -22,18 +22,30 @@ This codebase is designed for **AI-assisted development** - optimizing for clari
 
 ### Architectural Approach
 We use different patterns for different layers:
-- **Services**: Ousterhout's deep modules (simple interface, complex implementation)
-- **UI Components**: React patterns (compound components, container/presentational)
-- **Features**: Self-contained modules (all related logic in one file)
 
-### Current Architecture Challenges
-The codebase has many **shallow modules** - interfaces nearly as complex as implementations:
-- `api.ts`: 44 public methods (should be ~8)
-- `git.service.js`: 32+ methods (should be 4-5)
-- `terminalStore`: 30+ methods (should be ~10)
-- `task.controller.js`: 17 methods mixing multiple concerns
+#### Services & Domain Logic
+Use **Ousterhout's deep modules** - simple interface, complex implementation:
+- GitService: ~10 public methods hiding git complexity
+- TaskService: ~8 methods orchestrating task operations
+- Hide implementation details, expose clean APIs
 
-See `/plan-pocketdev/bugs/` for ongoing refactoring efforts to create deeper modules.
+#### Feature Modules  
+Use **complete self-contained modules** - all related logic in one file:
+- `features/terminal-tabs.ts`: ALL tab logic (466 lines)
+- `features/split-view.ts`: ALL split-view logic (556 lines)
+- 500-1000 lines is fine if it's complete and cohesive
+- Wide interfaces are OK here - transparency helps AI understand
+
+#### UI Components
+Use **React patterns** - compound components, hooks:
+- Container/presentational separation
+- Custom hooks for reusable logic
+- Keep components focused on rendering
+
+### Key Insight
+**For features**: Complete visibility > theoretical purity. A 500-line file with everything about tabs is better for AI than 10 files with perfect separation.
+
+**For services**: Deep modules with narrow interfaces work well because they hide genuine complexity (git operations, database queries).
 
 ### Additional Resources
 - **AI Architecture Guide**: `/plan-pocketdev/steering/ai-assisted-architecture.md` - Patterns for AI collaboration
@@ -83,12 +95,19 @@ import { Task } from '../types/task';
 import { Project } from '../types/project';
 ```
 
-### Module Design Rules
-1. **Hide implementation details**: Never expose data structures (Maps, arrays)
+### Module Design Guidelines
+
+#### For Services (Backend/Domain Logic)
+1. **Hide implementation details**: Never expose data structures
 2. **Limit public methods**: Maximum 10 per module, prefer 5-7
-3. **Single responsibility**: If you need "and" to describe it, split it
-4. **Push complexity down**: Common cases should be simple
-5. **Define errors out of existence**: Design APIs that can't be misused
+3. **Single responsibility**: One clear purpose per service
+4. **Define errors out of existence**: Design APIs that can't be misused
+
+#### For Feature Modules (Frontend)
+1. **Complete implementation**: All related logic in one file
+2. **Wide interfaces OK**: Transparency helps AI comprehension
+3. **500-1000 lines is fine**: If it's cohesive and complete
+4. **Prefer visibility**: Don't hide unless there's real complexity
 
 ### Common Anti-Patterns to Avoid
 - **God objects**: Classes/components doing too many things
