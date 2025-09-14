@@ -12,9 +12,16 @@
  * - Pull Request Operations
  * - Container Operations
  * - Layout/UI State Operations
+ * 
+ * @typedef {import('../../shared/types/index').Task} Task
+ * @typedef {import('../../shared/types/index').CreateTaskDTO} CreateTaskDTO
+ * @typedef {import('../../shared/types/index').UpdateTaskDTO} UpdateTaskDTO
+ * @typedef {import('../../shared/types/index').GitStatus} GitStatus
+ * @typedef {import('../../shared/types/index').APIResponse} APIResponse
  */
 
 import { Logger } from '../utils/logger.js';
+import { TaskState } from '../../shared/types/index.js';
 
 export class TaskController {
   constructor(models, projectsDir = '/projects') {
