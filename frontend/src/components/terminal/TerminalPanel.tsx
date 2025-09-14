@@ -1,27 +1,23 @@
-import { useState, forwardRef, useImperativeHandle, useRef, useEffect, useReducer } from 'react';
+import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { useToast } from '@shelltender/client';
 import { findTerminalById } from '../../utils/terminal-utils';
-import type { Task, TerminalSession } from '../../types/task';
-import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
-import { TerminalTabs, type Tab } from './TerminalTabs';
-import { SessionLauncher, type SessionOptions } from './SessionLauncher';
+import type { Task } from '../../types/task';
+import type { DirectTerminalHandle } from './DirectTerminal';
+import { TerminalTabs } from './TerminalTabs';
+import { SessionLauncher } from './SessionLauncher';
 import { useService } from '../../services';
-import { terminalOrchestrator } from '../../services/terminal-orchestrator.service';
+import { useTerminalTabs } from '../../features/terminal-tabs';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
-import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
+import { useTerminalStore, useTaskTerminals, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
 import { useShortcutContext } from '../../hooks/keyboard';
-import { ThrottledTerminal } from './ThrottledTerminal';
 import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
 import { TerminalGrid } from './TerminalGrid';
 import { TerminalGridProvider } from './TerminalGridContext';
 import { useLayoutConstraints } from './useLayoutConstraints';
 import { useTerminalStatus } from './useTerminalStatus';
-import { useTabManager } from './useTabManager';
 import { ControlButtons } from './ControlButtons';
-import type { SplitLayoutConfig } from '../../stores/splitViewStore';
-import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
 
 export type TerminalPanelHandle = {
@@ -49,32 +45,14 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   } = props;
   const terminalService = useService('terminal');
   
-  // Use reducer for UI state only (tab management moved to useTabManager)
-  const [state, dispatch] = useReducer(
-    terminalPanelReducer,
-    task.id,
-    (taskId) => {
-      // Check for focus request first
-      const focusTabKey = `focus-tab-${taskId}`;
-      const focusTabId = sessionStorage.getItem(focusTabKey);
-      if (focusTabId) {
-        const initialState = createInitialState(taskId);
-        return { ...initialState };
-      }
-      return createInitialState(taskId);
-    }
-  );
-  
-  const { 
-    isResetting, 
-    showSessionLauncher, 
-    sessionStatuses
-  } = state;
+  // Simple UI state (replaced reducer with useState for clarity)
+  const [isResetting, setIsResetting] = useState(false);
+  const [showSessionLauncher, setShowSessionLauncher] = useState(false);
+  const [sessionStatuses, setSessionStatuses] = useState<Map<string, 'connected' | 'disconnected' | 'error'>>(new Map());
   
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
-  const [shouldForceRefresh, setShouldForceRefresh] = useState(0);
   
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
@@ -87,23 +65,19 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     layout,
     terminalContainerRef,
     updateLayout,
-    onConstraintsChange: (constraints) => {
-      dispatch({
-        type: 'UPDATE_VIEWPORT_CONSTRAINTS',
-        constraints
-      });
+    onConstraintsChange: () => {
+      // Constraints are returned directly from the hook, no need to store in state
     }
   });
   
   // Split view state
   const layout = useSplitLayout();
-  const { toggleSplitMode, updateLayout, setCurrentTask } = useSplitViewStore();
+  const { updateLayout, setCurrentTask } = useSplitViewStore();
   
   // Layout constraints hook handles auto-downgrade logic internally
   
   // Get terminals from the store (single source of truth)
   const terminals = useTaskTerminals(task.id);
-  const activeTerminalId = useActiveTerminalId(task.id);
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const terminalStore = useTerminalStore();
   
@@ -120,19 +94,47 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Note: Terminal store initialization happens at task load level (TaskWorkspace/StandaloneTerminal)
   // This component only reads from the store, maintaining clear data flow
   
-  // Now we can use tab manager after terminals are defined
-  const tabManager = useTabManager({
+  // Use consolidated terminal tabs feature
+  const terminalTabs = useTerminalTabs({
     task,
     terminals,
     terminalService,
     sessionStatuses,
+    terminalRefs,
     realtimeSessionStates,
-    onTabsChange: () => setShouldForceRefresh(prev => prev + 1)
+    callbacks: {
+      showNotification,
+      dispatch: (action: { type: string; dbSessionId?: string; status?: 'connected' | 'disconnected' | 'error' }) => {
+        // Map legacy dispatch calls to new state setters
+        switch (action.type) {
+          case 'START_RESET':
+            setIsResetting(true);
+            break;
+          case 'FINISH_RESET':
+            setIsResetting(false);
+            break;
+          case 'SHOW_SESSION_LAUNCHER':
+            setShowSessionLauncher(true);
+            break;
+          case 'HIDE_SESSION_LAUNCHER':
+            setShowSessionLauncher(false);
+            break;
+          case 'UPDATE_SESSION_STATUS':
+            setSessionStatuses(prev => {
+              const next = new Map(prev);
+              next.set(action.dbSessionId, action.status);
+              return next;
+            });
+            break;
+        }
+      },
+      reloadTask: task.onReload || (() => Promise.resolve())
+    }
   });
   
   // Destructure for easier access
-  const { tabs, activeTabId, confirmClose } = tabManager.state;
-  const { selectTab, addTab, closeTab, updateTab, reorderTabs } = tabManager;
+  const { tabs, activeTabId, confirmClose } = terminalTabs.state;
+  const { selectTab, addTab, closeTab, updateTab, reorderTabs, cancelCloseConfirmation, refreshActiveTab, reconnectTab, switchToTab } = terminalTabs;
   
   // Handle active tab changes - focus terminal and update store
   useEffect(() => {
@@ -161,34 +163,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const activeRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       activeRef?.focus();
     },
-    switchToTab: async (dbSessionId: string) => {
-      await terminalOrchestrator.switchToTab(
-        {
-          taskId: task.id,
-          terminals,
-          sessionStatuses,
-          terminalRefs: terminalRefs.current
-        },
-        dbSessionId
-      );
-    }
-  }), [activeTabId, terminals, selectTab]);
+    switchToTab
+  }), [activeTabId, terminals, switchToTab]);
   
-  const handleRefreshSession = async () => {
-    const result = await terminalOrchestrator.refreshActiveTerminal(
-      {
-        taskId: task.id,
-        terminals,
-        sessionStatuses,
-        terminalRefs: terminalRefs.current
-      },
-      activeTabId
-    );
-    
-    if (!result.success) {
-      showNotification('error', result.message || 'Failed to refresh terminal session');
-    }
-  };
+  const handleRefreshSession = refreshActiveTab;
 
 
   // Show notification using Shelltender's toast system
@@ -198,45 +176,28 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     showToast(message, 5000);
   };
   
-  // Initialize orchestrator with UI callbacks on mount
-  useEffect(() => {
-    terminalOrchestrator.initialize({
-      showNotification,
-      dispatch,
-      reloadTask: task.onReload || (() => Promise.resolve()),
-      selectTab
-    });
-  }, [task.onReload, selectTab]);
 
   // Handle session reconnection
-  const handleReconnectSession = async (dbSessionId: string) => {
-    const result = await terminalOrchestrator.reconnectSession(
-      {
-        taskId: task.id,
-        terminals,
-        sessionStatuses,
-        terminalRefs: terminalRefs.current
-      },
-      dbSessionId
-    );
-    
-    if (!result.success) {
-      const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
-      showNotification('error', `Failed to reconnect terminal "${terminal?.tabName || 'unknown'}"`);
-    }
-  };
+  const handleReconnectSession = reconnectTab;
 
   // Use terminal status hook for session management
-  const { handleSessionStatus, getSessionStatus } = useTerminalStatus({
+  const { handleSessionStatus } = useTerminalStatus({
     terminals,
     sessionStatuses,
     getNormalizedId: (terminal) => terminal.normalizedId,
-    dispatch,
+    dispatch: (action: { type: string; dbSessionId?: string; status?: 'connected' | 'disconnected' | 'error' }) => {
+      // Map dispatch calls for useTerminalStatus
+      if (action.type === 'UPDATE_SESSION_STATUS' && action.dbSessionId && action.status) {
+        setSessionStatuses(prev => {
+          const next = new Map(prev);
+          next.set(action.dbSessionId, action.status);
+          return next;
+        });
+      }
+    },
     showNotification,
     handleReconnectSession
   });
-  
-  const hasDisconnectedSessions = terminalRefreshService.hasDisconnectedSessions(sessionStatuses);
 
 
   // Render control buttons using the extracted component
@@ -294,7 +255,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               activeTabId={activeTabId}
               onTabSelect={selectTab}
               onTabAdd={() => addTab()}
-              onTabAdvancedAdd={() => dispatch({ type: 'SHOW_SESSION_LAUNCHER' })}
+              onTabAdvancedAdd={() => setShowSessionLauncher(true)}
               onTabRename={(dbSessionId, newName) => updateTab(dbSessionId, { name: newName })}
               onTabClose={closeTab}
               onTabReorder={reorderTabs}
@@ -326,7 +287,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             });
           },
           onResetStateChange: (value) => 
-            dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })
+            value ? setIsResetting(true) : setIsResetting(false)
         }}
       >
         <TerminalGrid
@@ -341,7 +302,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                 addTab({ aiAgent: 'none', tabName: 'Bash' });
                 break;
               case 'advanced':
-                dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
+                setShowSessionLauncher(true);
                 break;
             }
           }}
@@ -353,10 +314,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       {/* Session Launcher Modal */}
       <SessionLauncher
         isOpen={showSessionLauncher}
-        onClose={() => dispatch({ type: 'HIDE_SESSION_LAUNCHER' })}
+        onClose={() => setShowSessionLauncher(false)}
         onLaunch={(options) => {
           addTab(options);
-          dispatch({ type: 'HIDE_SESSION_LAUNCHER' });
+          setShowSessionLauncher(false);
         }}
         taskPath={task.worktree_path}
       />
@@ -364,7 +325,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       {/* Confirm Close Dialog */}
       <ConfirmDialog
         isOpen={!!confirmClose}
-        onClose={() => dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' })}
+        onClose={cancelCloseConfirmation}
         onConfirm={() => {
           if (confirmClose) {
             closeTab(confirmClose.dbSessionId, { force: true });
