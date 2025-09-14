@@ -2,44 +2,44 @@
  * TerminalRefreshService - Domain service for terminal refresh operations
  * 
  * This deep module encapsulates the complex refresh logic that was previously
- * mixed into TerminalPanel. It handles:
- * - WebSocket reconnection
- * - Terminal buffer restoration  
- * - UI synchronization
- * - Task data reloading
- * - Error recovery
+ * mixed into TerminalPanel. It determines what refresh actions are needed
+ * but doesn't directly manipulate UI components.
  * 
- * Following Ousterhout's principles, this service provides a simple interface
- * hiding significant complexity.
+ * Following Ousterhout's principles and separation of concerns:
+ * - Service layer determines WHAT needs to be done
+ * - UI layer handles HOW to do it
  */
 
 import type { Task, TerminalSession } from '../types/task';
-import type { DirectTerminalHandle } from '../components/terminal/DirectTerminal';
+
+// Actions that the UI layer should perform
+export type RefreshAction = 
+  | { type: 'refresh-terminal'; terminalId: string }
+  | { type: 'reload-task' }
+  | { type: 'fit-terminal'; terminalId: string }
+  | { type: 'show-notification'; message: string; level: 'success' | 'warning' | 'error' };
 
 export interface RefreshOptions {
   taskId: string;
   activeTerminalId: string;
   terminals: Array<TerminalSession & { normalizedId: string }>;
-  terminalRefs: Map<string, DirectTerminalHandle>;
   sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>;
-  task: Task;
 }
 
 export interface RefreshResult {
   success: boolean;
   message: string;
-  wasDisconnected: boolean;
-  terminalRefreshed: boolean;
-  taskReloaded: boolean;
+  actions: RefreshAction[];
 }
 
 export class TerminalRefreshService {
   /**
-   * Refresh the active terminal session
-   * Handles all the complex orchestration of reconnection, restoration, and synchronization
+   * Determine what refresh actions are needed
+   * Returns a list of actions for the UI to perform
    */
   async refreshSession(options: RefreshOptions): Promise<RefreshResult> {
-    const { activeTerminalId, terminals, terminalRefs, sessionStatuses, task } = options;
+    const { activeTerminalId, terminals, sessionStatuses } = options;
+    const actions: RefreshAction[] = [];
     
     // Phase 1: Assess current state
     const assessment = this.assessSessionState(activeTerminalId, terminals, sessionStatuses);
@@ -47,96 +47,66 @@ export class TerminalRefreshService {
       return {
         success: false,
         message: 'No active terminal to refresh',
-        wasDisconnected: false,
-        terminalRefreshed: false,
-        taskReloaded: false
+        actions: []
       };
     }
     
-    // Phase 2: Attempt terminal refresh
-    const terminalRef = terminalRefs.get(assessment.terminal.dbSessionId);
-    let terminalRefreshed = false;
-    
-    if (terminalRef?.refresh) {
-      try {
-        // Refresh terminal (reconnects WebSocket, restores buffer, fits to container)
-        terminalRef.refresh();
-        terminalRefreshed = true;
-        
-        // Ensure proper sizing after refresh
-        await this.ensureTerminalFit(terminalRef);
-      } catch (error) {
-        console.error('[TerminalRefreshService] Terminal refresh failed:', error);
-      }
+    // Phase 2: Determine refresh actions needed
+    if (assessment.isDisconnected) {
+      // For disconnected sessions, we need a full reload
+      actions.push({ type: 'reload-task' });
+      actions.push({ 
+        type: 'show-notification', 
+        message: 'Reconnecting terminal session...', 
+        level: 'warning' 
+      });
+    } else {
+      // For connected sessions, just refresh the terminal
+      actions.push({ type: 'refresh-terminal', terminalId: activeTerminalId });
+      actions.push({ type: 'fit-terminal', terminalId: activeTerminalId });
     }
     
-    // Phase 3: Reload task data if needed
-    let taskReloaded = false;
-    if (assessment.isDisconnected || !terminalRefreshed) {
-      if (task.onReload) {
-        try {
-          await task.onReload();
-          taskReloaded = true;
-        } catch (error) {
-          console.error('[TerminalRefreshService] Task reload failed:', error);
-        }
-      }
-    }
-    
-    // Phase 4: Final synchronization
-    await this.synchronizeTerminalSize(terminalRefs, activeTerminalId);
-    
-    // Determine result message
-    const message = this.determineResultMessage(
-      assessment.isDisconnected,
-      terminalRefreshed,
-      taskReloaded
-    );
+    // Phase 3: Add fitting actions with delay
+    // Terminal fitting needs to happen after DOM updates
+    setTimeout(() => {
+      actions.push({ type: 'fit-terminal', terminalId: activeTerminalId });
+    }, 200);
     
     return {
-      success: terminalRefreshed || taskReloaded,
-      message,
-      wasDisconnected: assessment.isDisconnected,
-      terminalRefreshed,
-      taskReloaded
+      success: true,
+      message: assessment.isDisconnected ? 'Reconnecting...' : 'Terminal refreshed',
+      actions
     };
   }
   
   /**
-   * Reconnect a disconnected session
+   * Determine reconnection actions for a specific session
    */
-  async reconnectSession(
+  getReconnectActions(
     dbSessionId: string,
     terminals: Array<TerminalSession & { normalizedId: string }>,
-    terminalRefs: Map<string, DirectTerminalHandle>,
-    task: Task
-  ): Promise<boolean> {
+    sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>
+  ): RefreshAction[] {
     const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    if (!terminal) return false;
+    if (!terminal) return [];
     
-    const terminalRef = terminalRefs.get(dbSessionId);
-    if (!terminalRef) {
-      // No ref available, try task reload
-      if (task.onReload) {
-        await task.onReload();
-        return true;
-      }
-      return false;
+    const status = sessionStatuses.get(terminal.normalizedId);
+    const actions: RefreshAction[] = [];
+    
+    if (status === 'disconnected' || status === 'error') {
+      // Disconnected sessions need a full reload
+      actions.push({ type: 'reload-task' });
+      actions.push({ 
+        type: 'show-notification', 
+        message: `Reconnecting terminal "${terminal.tabName}"...`, 
+        level: 'warning' 
+      });
+    } else {
+      // Connected sessions just need refresh
+      actions.push({ type: 'refresh-terminal', terminalId: terminal.normalizedId });
     }
     
-    // Attempt to refresh the specific terminal
-    if (terminalRef.refresh) {
-      try {
-        terminalRef.refresh();
-        await this.ensureTerminalFit(terminalRef);
-        return true;
-      } catch (error) {
-        console.error(`[TerminalRefreshService] Failed to reconnect session ${dbSessionId}:`, error);
-        return false;
-      }
-    }
-    
-    return false;
+    return actions;
   }
   
   /**
@@ -167,46 +137,6 @@ export class TerminalRefreshService {
       sessionStatus,
       isDisconnected
     };
-  }
-  
-  private async ensureTerminalFit(terminalRef: DirectTerminalHandle): Promise<void> {
-    // Fit immediately
-    if (terminalRef.fit) {
-      terminalRef.fit();
-    }
-    
-    // Fit again after DOM settles
-    await new Promise(resolve => setTimeout(resolve, 200));
-    if (terminalRef.fit) {
-      terminalRef.fit();
-    }
-  }
-  
-  private async synchronizeTerminalSize(
-    terminalRefs: Map<string, DirectTerminalHandle>,
-    activeTerminalId: string
-  ): Promise<void> {
-    const terminalRef = terminalRefs.get(activeTerminalId);
-    if (terminalRef?.fit) {
-      terminalRef.fit();
-    }
-  }
-  
-  private determineResultMessage(
-    wasDisconnected: boolean,
-    terminalRefreshed: boolean,
-    taskReloaded: boolean
-  ): string {
-    if (wasDisconnected && terminalRefreshed) {
-      return 'Reconnecting terminal session...';
-    }
-    if (terminalRefreshed) {
-      return 'Terminal refreshed';
-    }
-    if (taskReloaded) {
-      return 'Reloading terminal session...';
-    }
-    return 'Refresh attempted';
   }
 }
 

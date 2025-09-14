@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, X, GripVertical } from 'lucide-react';
+import { sortByTabOrder } from '../../utils/terminal-utils';
 import {
   DndContext,
   closestCenter,
@@ -177,7 +178,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Sort tabs by tabOrder
-  const sortedTabs = [...tabs].sort((a, b) => a.tabOrder - b.tabOrder);
+  const sortedTabs = sortByTabOrder(tabs);
   
   // Setup drag and drop sensors
   const sensors = useSensors(

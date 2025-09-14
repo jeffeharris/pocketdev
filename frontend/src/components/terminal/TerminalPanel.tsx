@@ -1,5 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect, useReducer } from 'react';
 import { useToast } from '@shelltender/client';
+import { findTerminalById } from '../../utils/terminal-utils';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
@@ -17,7 +18,7 @@ import { TerminalGrid } from './TerminalGrid';
 import { TerminalGridProvider } from './TerminalGridContext';
 import { useLayoutConstraints } from './useLayoutConstraints';
 import { useTerminalStatus } from './useTerminalStatus';
-import { useTabManager, type TabAction } from './useTabManager';
+import { useTabManager } from './useTabManager';
 import { ControlButtons } from './ControlButtons';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
@@ -75,22 +76,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const { showToast } = useToast();
   const [shouldForceRefresh, setShouldForceRefresh] = useState(0);
   
-  // Use tab manager for all tab operations
-  const {
-    tabs,
-    activeTabId,
-    confirmClose,
-    modifyTab,
-    cancelCloseConfirmation
-  } = useTabManager({
-    task,
-    terminals,
-    terminalService,
-    sessionStatuses,
-    realtimeSessionStates,
-    onTabsChange: () => setShouldForceRefresh(prev => prev + 1)
-  });
-  
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
   
@@ -116,83 +101,95 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Layout constraints hook handles auto-downgrade logic internally
   
-  // Set current task for split view on mount
-  useEffect(() => {
-    if (task.project_id) {
-      setCurrentTask(task.id, task.project_id);
-    }
-  }, [task.id, task.project_id, setCurrentTask]);
-
-  // Get terminals from the store
-  const terminalsFromStore = useTaskTerminals(task.id);
+  // Get terminals from the store (single source of truth)
+  const terminals = useTaskTerminals(task.id);
   const activeTerminalId = useActiveTerminalId(task.id);
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const terminalStore = useTerminalStore();
   
-  // Use terminals from task prop if store is empty (handles initial load and view switches)
-  const terminals = terminalsFromStore.length > 0 ? terminalsFromStore : (task.terminals || []);
-  
   // Activate terminal keyboard context only when visible (priority 10 for feature-level)
   useShortcutContext('terminal', { enabled: isVisible, priority: 10 });
   
-  // Force sync terminals when layout changes (fixes terminals not showing when switching views)
+  // Single consolidated mount/unmount effect for initialization
   useEffect(() => {
-    if (task.terminals && task.terminals.length > 0 && terminalsFromStore.length === 0) {
-      terminalStore.initializeTask(task.id, task.terminals);
+    // Initialize split view task context
+    if (task.project_id) {
+      setCurrentTask(task.id, task.project_id);
     }
-  }, [layout.mode, task.id, task.terminals, terminalsFromStore.length, terminalStore]);
-  
-  // Initialize terminals from task prop on mount or when task changes
-  useEffect(() => {
-    // Always sync terminals from task prop to store when available
+    
+    // Initialize terminal store from task data
     if (task.terminals && task.terminals.length > 0) {
-      // Check if store is empty or out of sync
-      const currentStoreTerminals = useTerminalStore.getState().getTerminals(task.id);
-      if (currentStoreTerminals.length === 0 || currentStoreTerminals.length !== task.terminals.length) {
+      const currentState = terminalStore.getTaskState(task.id);
+      
+      // Only initialize if store is empty - happens once on mount
+      if (currentState.terminals.length === 0) {
         terminalStore.initializeTask(task.id, task.terminals);
       }
-      // Set initial focus to active terminal if no focus set
-      if (!focusedTerminalId && activeTabId) {
-        terminalStore.updateTerminal(task.id, activeTabId, {
-          type: 'set-focus',
-          focus: true
-        });
-      }
     }
-  }, [task.id, task.terminals, terminalStore, focusedTerminalId, activeTabId]);
+    
+    // Cleanup on unmount
+    return () => {
+      // Optionally dispose task on unmount if needed
+      // terminalStore.disposeTask(task.id);
+    };
+  }, [task.id, task.project_id, task.terminals, setCurrentTask, terminalStore]);
   
-  // Focus terminal when tab is selected
+  // Now we can use tab manager after terminals are defined
+  const {
+    tabs,
+    activeTabId,
+    confirmClose,
+    selectTab,
+    addTab,
+    closeTab,
+    forceCloseTab,
+    renameTab,
+    reorderTabs,
+    cancelCloseConfirmation
+  } = useTabManager({
+    task,
+    terminals,
+    terminalService,
+    sessionStatuses,
+    realtimeSessionStates,
+    onTabsChange: () => setShouldForceRefresh(prev => prev + 1)
+  });
+  
+  // Handle active tab changes - focus terminal and update store
   useEffect(() => {
-    if (activeTabId) {
-      terminalStore.updateTerminal(task.id, activeTabId, {
-        type: 'set-focus',
-        focus: true
-      });
-      // Focus the terminal after switching
-      setTimeout(() => {
-        const terminalRef = terminalRefs.current.get(activeTabId);
-        terminalRef?.focus();
-      }, 100);
-    }
+    if (!activeTabId) return;
+    
+    // Update store focus state
+    terminalStore.updateTerminal(task.id, activeTabId, {
+      type: 'set-focus',
+      focus: true
+    });
+    
+    // Focus the actual terminal element after DOM update
+    const focusTimer = setTimeout(() => {
+      const terminalRef = terminalRefs.current.get(activeTabId);
+      terminalRef?.focus();
+    }, 100);
+    
+    return () => clearTimeout(focusTimer);
   }, [activeTabId, task.id, terminalStore]);
 
   // Expose methods to parent components
   useImperativeHandle(ref, () => ({
     focus: () => {
       // Focus the active terminal
-      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
+      const activeTerminal = findTerminalById(terminals, activeTabId, 'dbSessionId');
       const activeRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       activeRef?.focus();
     },
     switchToTab: (dbSessionId: string) => {
       // Check if the tab exists
-      const tab = terminals.find(t => t.dbSessionId === dbSessionId);
+      const tab = findTerminalById(terminals, dbSessionId, 'dbSessionId');
       if (tab) {
-        const normalizedId = terminal.normalizedId;
-        handleTabSelect(normalizedId);
+        selectTab(dbSessionId);
       }
     }
-  }), [activeTabId, terminals, handleTabSelect]);
+  }), [activeTabId, terminals, selectTab]);
   
   const handleRefreshSession = async () => {
     dispatch({ type: 'START_RESET' });
@@ -201,10 +198,39 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         taskId: task.id,
         activeTerminalId: activeTabId,
         terminals,
-        terminalRefs: terminalRefs.current,
-        sessionStatuses,
-        task
+        sessionStatuses
       });
+      
+      // Process the actions returned by the service
+      for (const action of result.actions) {
+        switch (action.type) {
+          case 'refresh-terminal': {
+            const terminalRef = terminalRefs.current.get(action.terminalId);
+            if (terminalRef?.refresh) {
+              terminalRef.refresh();
+            }
+            break;
+          }
+          case 'reload-task': {
+            // Reload the task to get fresh terminal data
+            if (task.onReload) {
+              await task.onReload();
+            }
+            break;
+          }
+          case 'fit-terminal': {
+            const terminalRef = terminalRefs.current.get(action.terminalId);
+            if (terminalRef?.fit) {
+              terminalRef.fit();
+            }
+            break;
+          }
+          case 'show-notification': {
+            showNotification(action.level, action.message);
+            break;
+          }
+        }
+      }
       
       if (result.success) {
         showNotification('success', result.message);
@@ -230,15 +256,37 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
     try {
-      const success = await terminalRefreshService.reconnectSession(
+      const actions = terminalRefreshService.getReconnectActions(
         dbSessionId,
         terminals,
-        terminalRefs.current,
-        task
+        sessionStatuses
       );
       
-      if (!success) {
-        const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+      // Process reconnection actions
+      for (const action of actions) {
+        switch (action.type) {
+          case 'refresh-terminal': {
+            const terminalRef = terminalRefs.current.get(action.terminalId);
+            if (terminalRef?.refresh) {
+              terminalRef.refresh();
+            }
+            break;
+          }
+          case 'reload-task': {
+            if (task.onReload) {
+              await task.onReload();
+            }
+            break;
+          }
+          case 'show-notification': {
+            showNotification(action.level, action.message);
+            break;
+          }
+        }
+      }
+      
+      if (actions.length === 0) {
+        const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
         showNotification('error', `Failed to reconnect terminal "${terminal?.tabName || 'unknown'}"`);
       }
     } catch (error) {
@@ -293,9 +341,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     canShowVertical,
     canShowHorizontal,
     canShowQuad,
-    handleTabAdd,
-    handleTabClose,
-    handleTabSelect,
+    handleTabAdd: () => addTab(),
+    handleTabClose: closeTab,
+    handleTabSelect: selectTab,
     handleRefreshSession,
     updateLayout,
     saveLayout,
@@ -313,12 +361,12 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
             <TerminalTabs
               tabs={tabs}
               activeTabId={activeTabId}
-              onTabSelect={(tabId) => modifyTab({ type: 'select', tabId })}
-              onTabAdd={() => modifyTab({ type: 'add' })}
+              onTabSelect={selectTab}
+              onTabAdd={() => addTab()}
               onTabAdvancedAdd={() => dispatch({ type: 'SHOW_SESSION_LAUNCHER' })}
-              onTabRename={(dbSessionId, newName) => modifyTab({ type: 'rename', dbSessionId, newName })}
-              onTabClose={(dbSessionId) => modifyTab({ type: 'close', dbSessionId })}
-              onTabReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
+              onTabRename={renameTab}
+              onTabClose={closeTab}
+              onTabReorder={reorderTabs}
               maxTabs={6}
             />
             <div className="flex items-center gap-2 pr-4">
@@ -356,17 +404,17 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           onEmptyPanelAction={(action) => {
             switch (action) {
               case 'claude':
-                modifyTab({ type: 'add', options: { aiAgent: 'claude' } });
+                addTab({ aiAgent: 'claude' });
                 break;
               case 'bash':
-                modifyTab({ type: 'add', options: { aiAgent: 'none', tabName: 'Bash' } });
+                addTab({ aiAgent: 'none', tabName: 'Bash' });
                 break;
               case 'advanced':
                 dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
                 break;
             }
           }}
-          onTerminalReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
+          onTerminalReorder={reorderTabs}
           renderControlButtons={renderControlButtons}
         />
       </TerminalGridProvider>
@@ -376,7 +424,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         isOpen={showSessionLauncher}
         onClose={() => dispatch({ type: 'HIDE_SESSION_LAUNCHER' })}
         onLaunch={(options) => {
-          modifyTab({ type: 'add', options });
+          addTab(options);
           dispatch({ type: 'HIDE_SESSION_LAUNCHER' });
         }}
         taskPath={task.worktree_path}
@@ -388,7 +436,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onClose={() => dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' })}
         onConfirm={() => {
           if (confirmClose) {
-            modifyTab({ type: 'forceClose', dbSessionId: confirmClose.dbSessionId });
+            forceCloseTab(confirmClose.dbSessionId);
           }
         }}
         title="Close Terminal Tab"

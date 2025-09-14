@@ -13,20 +13,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTerminalStore } from '../../stores/terminal/terminalStore.deep';
 import { TerminalService } from '../../services/terminal.service';
+import { getFirstByOrder, findTerminalById } from '../../utils/terminal-utils';
 import type { Task } from '../../types/task';
 import type { TerminalSession } from '../../types/task';
 import type { Tab } from './TerminalTabs';
 
-// Tab modification actions - consolidates all operations
-export type TabAction = 
-  | { type: 'add'; options?: SessionOptions }
-  | { type: 'close'; dbSessionId: string }
-  | { type: 'forceClose'; dbSessionId: string }  // Bypass confirmation
-  | { type: 'rename'; dbSessionId: string; newName: string }
-  | { type: 'reorder'; tabs: Tab[] }
-  | { type: 'select'; tabId: string };
-
-interface SessionOptions {
+// Session options for creating new tabs
+export interface SessionOptions {
   tabName?: string;
   aiAgent?: 'claude' | 'aider' | 'codex' | 'gemini' | 'none';
   workingDirectory?: string;
@@ -42,12 +35,20 @@ interface UseTabManagerProps {
   onTabsChange?: () => void;
 }
 
-// Simplified interface - only 5 public members
+// Direct interface with clear methods
 interface UseTabManagerResult {
+  // State
   tabs: Tab[];
   activeTabId: string;
   confirmClose: { dbSessionId: string; tabName: string } | null;
-  modifyTab: (action: TabAction) => Promise<void>;
+  
+  // Methods - direct and clear
+  selectTab: (tabId: string) => void;
+  addTab: (options?: SessionOptions) => Promise<void>;
+  closeTab: (dbSessionId: string) => Promise<void>;
+  forceCloseTab: (dbSessionId: string) => Promise<void>;
+  renameTab: (dbSessionId: string, newName: string) => Promise<void>;
+  reorderTabs: (tabs: Tab[]) => Promise<void>;
   cancelCloseConfirmation: () => void;
 }
 
@@ -103,7 +104,7 @@ export function useTabManager({
     localStorage.setItem(`activeTab-${task.id}`, tabId);
     
     // Find terminal and update state
-    const terminal = terminals.find(t => t.normalizedId === tabId);
+    const terminal = findTerminalById(terminals, tabId, 'normalizedId');
     if (terminal) {
       terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
         type: 'update',
@@ -177,7 +178,7 @@ export function useTabManager({
   // Rename tab
   const handleTabRename = useCallback(async (dbSessionId: string, newName: string) => {
     try {
-      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+      const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
       if (!terminal) return;
       
       await terminalService.updateTerminalTab(terminal.normalizedId, { tabName: newName });
@@ -222,7 +223,7 @@ export function useTabManager({
   
   // Handle close with confirmation
   const handleTabClose = useCallback(async (dbSessionId: string) => {
-    const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
+    const terminalToClose = findTerminalById(terminals, dbSessionId, 'dbSessionId');
     if (!terminalToClose) return;
     
     // Check if it has uncommitted changes
@@ -243,7 +244,7 @@ export function useTabManager({
     console.log('[performTabClose] Starting close for:', dbSessionId);
     
     try {
-      const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
+      const terminalToClose = findTerminalById(terminals, dbSessionId, 'dbSessionId');
       if (!terminalToClose) {
         console.log('[performTabClose] Terminal not found, aborting');
         return;
@@ -256,7 +257,7 @@ export function useTabManager({
         
         if (remainingTabs.length > 0) {
           // Switch to next tab BEFORE deleting
-          const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
+          const nextTab = getFirstByOrder(remainingTabs);
           const nextTabId = nextTab.normalizedId;
           console.log('[performTabClose] Switching to next tab:', nextTabId);
           setActiveTabId(nextTabId);
@@ -306,43 +307,27 @@ export function useTabManager({
   // Auto-select first terminal if none selected
   useEffect(() => {
     if (!activeTabId && terminals.length > 0) {
-      const firstTerminal = terminals.sort((a, b) => a.tabOrder - b.tabOrder)[0];
+      const firstTerminal = getFirstByOrder(terminals);
       if (firstTerminal) {
         handleTabSelect(firstTerminal.normalizedId);
       }
     }
   }, [activeTabId, terminals, handleTabSelect]);
   
-  // Single unified method for all tab modifications
-  const modifyTab = useCallback(async (action: TabAction) => {
-    switch (action.type) {
-      case 'select':
-        handleTabSelect(action.tabId);
-        break;
-      case 'add':
-        await handleTabAdd(action.options);
-        break;
-      case 'close':
-        await handleTabClose(action.dbSessionId);
-        break;
-      case 'forceClose':
-        await performTabClose(action.dbSessionId);
-        break;
-      case 'rename':
-        await handleTabRename(action.dbSessionId, action.newName);
-        break;
-      case 'reorder':
-        await handleTabReorder(action.tabs);
-        break;
-    }
-  }, [handleTabSelect, handleTabAdd, handleTabClose, performTabClose, handleTabRename, handleTabReorder]);
-  
-  // Simplified public interface
+  // Direct, clear public interface
   return {
+    // State
     tabs,
     activeTabId,
     confirmClose,
-    modifyTab,
+    
+    // Methods - direct and clear
+    selectTab: handleTabSelect,
+    addTab: handleTabAdd,
+    closeTab: handleTabClose,
+    forceCloseTab: performTabClose,
+    renameTab: handleTabRename,
+    reorderTabs: handleTabReorder,
     cancelCloseConfirmation
   };
 }
