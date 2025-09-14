@@ -1,5 +1,12 @@
 # Implementation Plan: Timeout-Based State Detection
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Context
 The AI state monitoring system is getting stuck in incorrect states (idle/working/waiting) when Claude exits. Currently it tries to detect bash prompts to know when to transition to 'not-started' (gray), but this is fragile and not working with current prompt configurations.
 

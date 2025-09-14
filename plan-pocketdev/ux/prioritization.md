@@ -1,5 +1,12 @@
 # UX Prioritization & Status
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-18
+Status: active
+-->
+
+
 ## Overview
 This document tracks the prioritization and status of all filed UX issues in the PocketDev project. A clear pattern has emerged: **interfaces that make users think too much** throughout the application, violating Steve Krug's fundamental principles. The goal is to make PocketDev so intuitive that users focus on their work, not on figuring out the tool.
 

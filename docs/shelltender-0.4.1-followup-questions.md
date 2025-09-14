@@ -1,5 +1,12 @@
 # Shelltender v0.4.1 Follow-up Questions
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Context
 We followed the guidance from the previous answers:
 - Removed WebSocketProvider wrapper

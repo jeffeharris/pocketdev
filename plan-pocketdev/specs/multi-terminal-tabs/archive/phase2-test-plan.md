@@ -1,5 +1,12 @@
 # Phase 2 Test Plan - Basic Tab UI
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Test Environment Setup
 1. Ensure all services are running: `make dev`
 2. Open a project with at least one task

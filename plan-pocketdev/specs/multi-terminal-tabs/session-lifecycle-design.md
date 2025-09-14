@@ -1,5 +1,12 @@
 # Session Lifecycle Design
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Current State
 Currently, sessions have only two states:
 - **Active** (`is_active = 1`) - Session is running and visible

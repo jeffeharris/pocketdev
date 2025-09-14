@@ -1,6 +1,16 @@
 # PocketDev Hetzner Deployment Guide
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Quick Start (5 minutes)
+
+### 🔐 Security Note
+This deployment includes **basic authentication** to protect your PocketDev instance. During setup, you'll create a username/password for access.
 
 ### 1. Get a Hetzner VPS
 - Go to [Hetzner Cloud](https://www.hetzner.com/cloud)
@@ -24,6 +34,11 @@ curl -O https://raw.githubusercontent.com/jeffeharris/pocketdev/main/deploy-hetz
 chmod +x deploy-hetzner.sh
 ./deploy-hetzner.sh
 ```
+
+**During setup, you'll be prompted to:**
+- Choose a username for basic auth
+- Set a password (will be hidden as you type)
+- Add your API keys
 
 ### 4. Configure API Keys
 Edit the `.env.production` file:
@@ -150,6 +165,33 @@ docker compose -f docker-compose.production.yml restart nginx
 ```
 
 ## Maintenance
+
+### Managing User Access
+
+#### Add a new user
+```bash
+htpasswd /var/pocketdev/.htpasswd newusername
+```
+
+#### Remove a user
+```bash
+htpasswd -D /var/pocketdev/.htpasswd username
+```
+
+#### List all users
+```bash
+cat /var/pocketdev/.htpasswd | cut -d: -f1
+```
+
+#### Change a password
+```bash
+htpasswd /var/pocketdev/.htpasswd existinguser
+```
+
+After any user changes, restart nginx:
+```bash
+docker compose -f docker-compose.production.yml restart nginx
+```
 
 ### View Logs
 ```bash

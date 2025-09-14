@@ -1,5 +1,12 @@
 # BUG-023: API Response Format Inconsistency
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 Backend API endpoints have inconsistent response formats, with some returning bare objects and others wrapping responses in `{ success: true/false, ... }` objects. This creates confusion and potential bugs when frontend code expects one format but receives another.
 

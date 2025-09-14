@@ -1,5 +1,12 @@
 # Final Integration Test Plan - Multi-Terminal Tabs & Session Management
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Overview
 This test plan covers all features implemented in the session management and tab persistence branch.
 

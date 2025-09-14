@@ -1,5 +1,12 @@
 # PocketDev Remote Project Manager
 
+<!-- Document Metadata
+Created: 2025-06-04
+Modified: 2025-08-18
+Status: active
+-->
+
+
 A remote management system for Claude Code that enables managing multiple projects through git worktrees, with GitHub integration, IDE connectivity, and SQLite persistence.
 
 ## Overview

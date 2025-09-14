@@ -1,5 +1,12 @@
 # BUG-010: task.controller.js needs modularization
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Issue
 The `task.controller.js` has grown to 965 lines with 17 public methods mixing git operations, sessions, websockets, and CRUD operations. This creates a shallow module where the interface is complex and implementation details leak throughout. The controller should be a thin HTTP layer but instead contains extensive business logic.
 

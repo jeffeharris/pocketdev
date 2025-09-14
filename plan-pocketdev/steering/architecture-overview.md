@@ -1,5 +1,12 @@
 # PocketDev Architecture Overview
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-09-12
+Status: active
+-->
+
+
 This document provides a comprehensive view of PocketDev's architecture after the v2.0.0 service layer transformation.
 
 ## Current Architecture (v2.0.0)

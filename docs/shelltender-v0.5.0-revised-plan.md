@@ -1,5 +1,12 @@
 # Shelltender v0.5.0 - Revised Implementation Plan
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Current Situation
 
 The `shelltender-unified.js` file is NOT using Shelltender properly. It's reimplementing everything manually with raw WebSocket, which explains why it's not working correctly.

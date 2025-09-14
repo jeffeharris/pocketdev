@@ -1,5 +1,12 @@
 # Module Design Examples for PocketDev
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 This document provides concrete examples of good and bad module design in the PocketDev codebase, helping developers understand how to create deep modules.
 
 ## 🎯 The Goal: Deep Modules

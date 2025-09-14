@@ -1,5 +1,12 @@
 # Frontend Testing Guide
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This guide explains how to write and run tests for the PocketDev frontend application.
 
 ## Test Setup

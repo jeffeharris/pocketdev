@@ -1,5 +1,12 @@
 # BUG-021: Database Models Have Cross-Table Query Contamination
 
+<!-- Document Metadata
+Created: 2025-09-12
+Modified: 2025-09-12
+Status: active
+-->
+
+
 ## Summary
 Database models directly query other models' tables, creating tight coupling and violating abstraction boundaries. The Models class adds no value while the individual models leak into each other's domains.
 

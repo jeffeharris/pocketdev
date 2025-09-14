@@ -1,5 +1,12 @@
 # Split Views Component Tests
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This directory contains comprehensive test suites for the split view terminal feature components.
 
 ## Test Files

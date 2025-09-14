@@ -1,5 +1,12 @@
 # BUG-005: DiffViewerModal.tsx needs decomposition
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Issue
 The `DiffViewerModal.tsx` component has ballooned to 1207 lines, making it the largest component in the frontend. This modal is handling too many responsibilities and has become difficult to maintain.
 

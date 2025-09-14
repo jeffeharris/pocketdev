@@ -1,5 +1,12 @@
 # Task Archive System Requirements
 
+<!-- Document Metadata
+Created: 2025-08-18
+Modified: 2025-08-18
+Status: active
+-->
+
+
 ## Overview
 The task archive system provides a way to soft-delete tasks while preserving their data for potential restoration. This spec defines the complete lifecycle and storage management for archived tasks.
 

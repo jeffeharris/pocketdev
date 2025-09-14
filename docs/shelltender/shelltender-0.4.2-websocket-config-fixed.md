@@ -1,5 +1,12 @@
 # Shelltender v0.4.2 WebSocket Configuration - Fixed!
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## The Issue in v0.4.1
 
 In v0.4.1, there was a critical bug where the Terminal component created its own WebSocketService instance instead of using the shared one from the `useWebSocket` hook. This meant that WebSocketProvider configuration was completely ignored.

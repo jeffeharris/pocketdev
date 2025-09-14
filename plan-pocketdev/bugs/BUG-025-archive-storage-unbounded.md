@@ -1,5 +1,12 @@
 # BUG-025: Archive Storage Grows Unbounded
 
+<!-- Document Metadata
+Created: 2025-08-18
+Modified: 2025-08-18
+Status: active
+-->
+
+
 ## Problem
 The task archive system stores complete project worktrees indefinitely with no automatic cleanup, leading to unbounded storage growth.
 

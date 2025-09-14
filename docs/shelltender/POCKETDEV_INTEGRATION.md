@@ -1,5 +1,12 @@
 # Shelltender + pocketdev Integration Guide
 
+<!-- Document Metadata
+Created: 2025-06-28
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Overview
 
 This document outlines how Shelltender serves as the terminal infrastructure for pocketdev, enabling AI developers to work seamlessly across devices with full persistence, scrollback, and modern terminal UI support.

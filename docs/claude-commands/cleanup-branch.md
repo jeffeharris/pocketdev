@@ -1,5 +1,12 @@
 # /cleanup-branch
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 Clean up the current branch by removing debug code, updating documentation, and organizing commits logically.
 
 ## Usage

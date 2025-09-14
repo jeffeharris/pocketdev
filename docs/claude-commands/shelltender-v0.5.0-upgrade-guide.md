@@ -1,5 +1,12 @@
 # Shelltender v0.5.0 Upgrade Guide
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 > **Target Audience**: Claude AI executing upgrade
 > **Version**: v0.4.x → v0.5.0
 > **Estimated Time**: 30-45 minutes

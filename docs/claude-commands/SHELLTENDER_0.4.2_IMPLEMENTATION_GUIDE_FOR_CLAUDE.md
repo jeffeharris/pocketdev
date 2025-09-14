@@ -1,5 +1,12 @@
 # Shelltender v0.4.2 Implementation Guide for Claude
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 This guide provides exact instructions for Claude to implement Shelltender v0.4.2 updates. The v0.4.2 release fixes the WebSocket configuration bug where Terminal ignored WebSocketProvider configuration.
 
 ## Pre-Implementation Environment Check

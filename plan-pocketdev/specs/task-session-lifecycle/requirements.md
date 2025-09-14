@@ -1,5 +1,12 @@
 # Task and Session Lifecycle Management Requirements
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Desired Outcome Statement
 
 The PocketDev system shall provide comprehensive lifecycle management for tasks and terminal sessions that enables users to efficiently manage their AI-assisted development workflows through clear state transitions, preserves valuable work context across sessions, supports recovery from interruptions, and maintains clean separation between task management (git branches/worktrees) and session management (AI terminal contexts), while ensuring no work is lost and all resources are properly cleaned up when no longer needed.

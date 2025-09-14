@@ -1,5 +1,12 @@
 # Split View Viability Tests
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This directory contains the Phase 0 viability tests for the split views feature.
 
 ## Running the Tests

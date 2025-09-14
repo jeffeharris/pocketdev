@@ -1,5 +1,12 @@
 # Claude Code Input Detection System
 
+<!-- Document Metadata
+Created: 2025-06-28
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 > **NOTE: This document should be moved to the PocketDev repository as it contains Claude-specific implementation details. Shelltender provides generic terminal event detection through TERMINAL_EVENT_SYSTEM.md**
 
 ## Overview

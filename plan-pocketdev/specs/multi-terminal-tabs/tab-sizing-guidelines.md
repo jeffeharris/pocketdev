@@ -1,5 +1,12 @@
 # Tab Sizing Guidelines
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Best Practices for Dynamic Tab Sizing
 
 ### Browser Tab Behavior References

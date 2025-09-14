@@ -1,5 +1,12 @@
 # Using Shelltender v0.6.0
 
+<!-- Document Metadata
+Created: 2025-07-12
+Modified: 2025-07-12
+Status: ????
+-->
+
+
 This guide shows how to use the new simplified APIs introduced in v0.6.0.
 
 ## 🚀 Quick Start

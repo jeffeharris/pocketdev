@@ -1,5 +1,12 @@
 # Terminal Mounting Strategy Requirements
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 Keep terminal sessions mounted in the DOM to prevent connection drops when switching between split view layouts.
 

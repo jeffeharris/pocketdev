@@ -1,5 +1,12 @@
 # BUG-016: Remove Mock Code from Production
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 The frontend api.ts file contains mock code mixed with production code using `if (USE_MOCKS)` checks throughout, violating Ousterhout's principle of pulling complexity downward and information hiding.
 

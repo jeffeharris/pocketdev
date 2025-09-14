@@ -1,5 +1,12 @@
 # Quad View Layout Modes Design
 
+<!-- Document Metadata
+Created: 2025-07-30
+Modified: 2025-07-30
+Status: ????
+-->
+
+
 ## Overview
 
 Quad view will support 3 layout modes with **equal-sized terminals** in each mode. No complex resizing - just clean, predictable layouts.

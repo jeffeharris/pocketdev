@@ -1,5 +1,12 @@
 # /create-guide (Deprecated)
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 > **⚠️ This command has been split into two specialized commands:**
 > - **`/create-claude-guide`** - For Claude-executable process guides with TodoWrite integration
 > - **`/create-human-guide`** - For human-readable documentation with explanations

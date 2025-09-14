@@ -1,5 +1,12 @@
 # /create-human-guide
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 Generate documentation optimized for human developers. These guides focus on understanding, learning, and troubleshooting with clear explanations and examples.
 
 ## Usage

@@ -1,5 +1,12 @@
 # BUG-003: Terminal Sessions Not Loading on Task Open
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 When opening a task that has existing terminal sessions, the terminals are not displayed until a new terminal is created. Once a new terminal is created, all previously existing terminals suddenly appear.
 

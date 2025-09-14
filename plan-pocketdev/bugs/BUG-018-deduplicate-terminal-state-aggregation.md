@@ -1,5 +1,12 @@
 # BUG-018: Deduplicate Terminal State Aggregation Logic
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 Terminal state aggregation logic is duplicated between TaskListItem and TaskStatus components, violating the DRY principle and Ousterhout's concept of pulling complexity downward. While TaskStatus has been improved, TaskListItem still maintains its own aggregation logic.
 

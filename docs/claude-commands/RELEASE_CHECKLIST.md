@@ -1,5 +1,12 @@
 # Release Checklist for v0.2.5
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Pre-release Checks
 
 ### ✅ Completed

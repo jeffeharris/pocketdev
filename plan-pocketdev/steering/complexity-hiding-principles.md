@@ -1,5 +1,12 @@
 # Complexity Hiding: A Unified Approach to Architecture and UX
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Executive Summary
 
 PocketDev currently violates the fundamental principle of **information hiding** at both the architectural and user interface levels. This document presents a unified approach to fixing both, based on the insight that good architecture and good UX share the same core principle: **hide complexity behind simple interfaces**.

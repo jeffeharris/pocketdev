@@ -1,5 +1,12 @@
 # PocketDev Technology Choices
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This document explains key technology decisions and patterns for the PocketDev codebase.
 
 ## State Management: Zustand

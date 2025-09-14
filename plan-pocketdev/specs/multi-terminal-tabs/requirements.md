@@ -1,5 +1,12 @@
 # Multi-Terminal Tabs Requirements
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Introduction
 
 The Multi-Terminal Tabs feature enhances PocketDev by allowing developers to run multiple concurrent AI sessions within a single task. This eliminates the need to switch between tasks for different development activities (implementation, testing, planning, merge resolution) and enables more efficient AI-assisted development workflows.

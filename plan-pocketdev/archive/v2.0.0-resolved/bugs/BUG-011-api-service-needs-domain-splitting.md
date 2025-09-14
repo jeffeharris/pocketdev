@@ -1,5 +1,12 @@
 # BUG-011: api.ts needs domain splitting
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Issue
 The `api.ts` file is 848 lines with a single `ApiService` class containing 44 methods across 7 different domains. This creates an extremely shallow module with the worst interface-to-implementation ratio in the codebase - the interface (44 public methods) is nearly as complex as the implementation itself, violating Ousterhout's deep module principle.
 

@@ -1,5 +1,12 @@
 # BUG-006: Simplify PrototypeMergeConflict component
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Issue
 The `PrototypeMergeConflict.tsx` component is 1,041 lines and overly complex for what should be a straightforward merge conflict UI. It contains duplicate code, overly clever features, and unnecessary complexity that makes it hard to integrate into production.
 

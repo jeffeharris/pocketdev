@@ -1,5 +1,12 @@
 # BUG-026: Split View Store Shallow Module
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 The splitViewStore exposes 17 public methods for what should be simple view state management. It mixes layout control, terminal assignment, UI state, and network operations in a single interface, creating a shallow module that violates information hiding principles.
 

@@ -1,5 +1,12 @@
 # Terminal Configuration Improvements
 
+<!-- Document Metadata
+Created: 2025-07-22
+Modified: 2025-07-22
+Status: ????
+-->
+
+
 ## Overview
 We've implemented several improvements to make the terminal experience more pleasant and functional, including proper bash initialization, custom prompts, and task-scoped command history that branches from the active terminal.
 

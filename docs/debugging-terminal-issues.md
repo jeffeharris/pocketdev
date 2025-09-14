@@ -1,5 +1,12 @@
 # Debugging Terminal Issues
 
+<!-- Document Metadata
+Created: 2025-07-22
+Modified: 2025-07-22
+Status: ????
+-->
+
+
 ## Current Issues
 1. No bash prompt showing
 2. Claude not auto-launching

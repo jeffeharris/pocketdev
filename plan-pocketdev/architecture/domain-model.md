@@ -1,5 +1,12 @@
 # PocketDev Domain Model & Architecture
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Architecture Decisions (Confirmed)
 1. **Domain Complexity**: Lightweight domain objects with validation
 2. **State Management**: Keep Zustand with domain/UI organization  

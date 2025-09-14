@@ -1,5 +1,12 @@
 # BUG-012: Extract Migration System from server.js
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 The backend entry point (server.js) contains hardcoded database migration checks and execution logic that violates Ousterhout's principles of deep modules and proper abstraction layers.
 

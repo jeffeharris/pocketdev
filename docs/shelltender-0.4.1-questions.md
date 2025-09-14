@@ -1,5 +1,12 @@
 # Shelltender v0.4.1 Implementation Questions
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Context
 We're upgrading from v0.3.0 to v0.4.1 to fix terminal focus and resize issues. The v0.4.0 release notes mentioned "Ref-based API for manual control (fit method)" and you confirmed v0.4.1 adds focus() method. However, we're having trouble implementing this.
 

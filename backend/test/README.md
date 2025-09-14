@@ -1,5 +1,12 @@
 # Backend Test Suite
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This directory contains the test suite for the PocketDev backend, using Vitest as the testing framework.
 
 ## Setup

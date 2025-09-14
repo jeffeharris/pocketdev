@@ -1,5 +1,12 @@
 # Shelltender Prompt Fix for Auto-Launch
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## The Problem
 Shelltender terminals don't always show a bash prompt immediately after creation, which prevents our auto-launch from working reliably. The Shelltender demo app doesn't do any special prompt handling - it relies on bash's default behavior.
 

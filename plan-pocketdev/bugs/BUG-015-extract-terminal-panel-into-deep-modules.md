@@ -1,5 +1,12 @@
 # BUG-015: Extract TerminalPanel into Deep Modules
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 TerminalPanel.tsx is a 1087-line React component managing 10+ different concerns, violating Ousterhout's deep module principle. It has become a "god component" with excessive responsibilities.
 

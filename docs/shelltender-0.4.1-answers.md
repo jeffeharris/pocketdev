@@ -1,5 +1,12 @@
 # Shelltender v0.4.1 Implementation Answers
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Important Update
 The `focus()` method IS included in npm v0.4.1! I've verified the published package includes both `fit()` and `focus()` methods in the TerminalHandle interface.
 

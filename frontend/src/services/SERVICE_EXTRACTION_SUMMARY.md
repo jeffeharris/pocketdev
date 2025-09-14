@@ -1,5 +1,12 @@
 # Service Extraction Summary
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Overview
 Analysis of `api.ts` (49 methods) for extraction into domain services following deep modules principle.
 

@@ -1,5 +1,12 @@
 # Domain Model Migration Guide
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Overview
 This guide shows how to gradually adopt the lightweight domain model in PocketDev without breaking existing code.
 

@@ -1,5 +1,12 @@
 # BUG-017: Consolidate Session Identity Abstraction
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 The frontend has three different session ID fields (sessionId, dbSessionId, shelltenderSessionId) that expose implementation details and create confusion throughout the codebase. This violates Ousterhout's information hiding principle.
 

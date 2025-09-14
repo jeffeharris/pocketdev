@@ -1,5 +1,12 @@
 # BUG-008: Refactor MergeWorkflowPrototype to focus on its core purpose
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Issue
 The `MergeWorkflowPrototype.tsx` component has grown to 1,173 lines, far beyond what a prototype should be. It's trying to test multiple unrelated features in one file, making it difficult to extract useful parts for production.
 

@@ -1,5 +1,12 @@
 # AI Agents Documentation and Citations
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 This document provides detailed information about each AI agent supported by PocketDev, including command-line usage, installation instructions, and official documentation references.
 
 *Last Updated: July 2025*

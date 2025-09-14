@@ -1,5 +1,12 @@
 # Shelltender v0.4.2 WebSocket Configuration Investigation
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## User Report Summary
 
 A user reported that v0.4.2 still has the WebSocket configuration bug:

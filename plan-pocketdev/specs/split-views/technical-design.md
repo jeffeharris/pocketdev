@@ -1,5 +1,12 @@
 # Split Views Technical Design Guide
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Executive Summary
 
 This document provides the technical design for implementing split view functionality in PocketDev, allowing users to view multiple terminal sessions simultaneously within a single task. Based on the requirements and current architecture analysis, I present implementation options with recommendations.

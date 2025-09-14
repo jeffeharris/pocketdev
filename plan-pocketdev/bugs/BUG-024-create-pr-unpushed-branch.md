@@ -1,5 +1,12 @@
 # BUG-024: Create Pull Request Fails on Unpushed Branches
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 The "Create Pull Request" functionality fails when the branch hasn't been pushed to remote yet, with error: "aborted: you must first push the current branch to a remote, or use the --head flag"
 

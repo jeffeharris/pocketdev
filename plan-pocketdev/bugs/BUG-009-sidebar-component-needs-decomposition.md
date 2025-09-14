@@ -1,5 +1,12 @@
 # BUG-009: Sidebar component needs decomposition
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Issue
 The `Sidebar.tsx` component has grown to 903 lines and is handling too many responsibilities. It's become a kitchen sink for task management, git operations, modals, and attachments.
 

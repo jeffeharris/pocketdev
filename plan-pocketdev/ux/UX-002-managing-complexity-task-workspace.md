@@ -1,5 +1,12 @@
 # UX-002: Managing Complexity - Task Workspace
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Problem Statement
 
 The TaskWorkspace is necessarily complex - it's a power-user interface where developers manage multiple AI sessions, git operations, and file attachments. The challenge isn't to remove features, but to make the complexity *manageable* by following Krug's principle: "Get rid of half the words on each page, then get rid of half of what's left" - but applied to cognitive load, not features.

@@ -1,5 +1,12 @@
 # Validation Panel Resize Feature
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 This document describes the implementation of the resizable validation/merge panel and its interaction with split view modes.
 

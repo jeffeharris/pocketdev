@@ -1,5 +1,12 @@
 # Troubleshooting Shelltender Terminal Sessions
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Quick Diagnostics
 
 1. **Run the debug script**:

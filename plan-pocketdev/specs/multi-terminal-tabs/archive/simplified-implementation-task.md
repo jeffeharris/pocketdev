@@ -1,5 +1,12 @@
 # Task: Simplified Tab Persistence Implementation
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Problem Statement
 
 The current implementation of tab persistence is overcomplicated and not working. Despite multiple attempts to fix it, we have:

@@ -1,5 +1,12 @@
 # Split View Phase 2 Update
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Overview
 Phase 2 improvements to the split view feature focus on UI/UX enhancements, making the split view mode more intuitive and visually consistent with the rest of the application.
 

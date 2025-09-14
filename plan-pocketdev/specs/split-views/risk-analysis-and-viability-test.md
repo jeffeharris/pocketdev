@@ -1,5 +1,12 @@
 # Split Views: Risk Analysis & Viability Testing Plan
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Critical Risks Identified
 
 ### 1. 🔴 **Performance Collapse with Multiple xterm.js Instances**

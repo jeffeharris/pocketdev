@@ -1,5 +1,12 @@
 # Observability Guide
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Overview
 The backend now includes built-in observability features for better debugging and monitoring.
 

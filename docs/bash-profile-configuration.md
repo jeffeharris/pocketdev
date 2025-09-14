@@ -1,5 +1,12 @@
 # Bash Profile Configuration Architecture
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 This document explains how bash profiles and shell configuration work in PocketDev after the centralization cleanup.
 
 ## Overview

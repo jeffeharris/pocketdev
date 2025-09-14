@@ -1,5 +1,12 @@
 # Keyboard Shortcuts Design Principles
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Overview
 
 This document outlines the design principles for keyboard shortcuts in PocketDev, with special attention to terminal interaction and avoiding conflicts.

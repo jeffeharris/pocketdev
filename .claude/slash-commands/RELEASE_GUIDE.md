@@ -1,5 +1,12 @@
 # Shelltender Release Guide for Claude
 
+<!-- Document Metadata
+Created: 2025-07-08
+Modified: 2025-07-08
+Status: ????
+-->
+
+
 This guide provides exact instructions for Claude to execute release procedures autonomously. Every decision point has explicit criteria.
 
 ## Pre-Flight Release Summary

@@ -1,5 +1,12 @@
 # Shelltender v0.4.1 Upgrade Guide for Claude
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 This guide provides exact instructions for Claude to execute the Shelltender v0.4.1 upgrade autonomously. Every decision point has explicit criteria and exact code to implement.
 
 ## Pre-Upgrade Environment Check

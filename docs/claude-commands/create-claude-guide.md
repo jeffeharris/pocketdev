@@ -1,5 +1,12 @@
 # /create-claude-guide
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 Generate implementation guides optimized for Claude Code execution. These guides enable Claude to manage complex processes autonomously with clear decision points and progress tracking.
 
 ## Usage

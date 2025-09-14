@@ -1,5 +1,12 @@
 # Multi-Terminal Tabs Investigation Findings
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Current State
 
 ### Frontend Implementation

@@ -1,5 +1,12 @@
 # BUG-013: Implement Service Layer Architecture
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 Controllers throughout the codebase are performing service-level work, directly executing git commands, managing file systems, and handling business logic. This violates Ousterhout's principle of different layers having different abstractions.
 

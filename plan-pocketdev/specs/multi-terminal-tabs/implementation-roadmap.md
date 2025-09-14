@@ -1,5 +1,12 @@
 # Multi-Terminal Tabs Implementation Roadmap
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Introduction
 
 Multiple terminal tabs within a task will allow developers to run concurrent AI sessions for different purposes (implementation, testing, planning, merge resolution) without switching between tasks. This feature leverages Shelltender's existing multi-session capabilities to provide a more efficient development workflow.

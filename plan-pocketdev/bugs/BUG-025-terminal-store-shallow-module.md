@@ -1,5 +1,12 @@
 # BUG-025: Terminal Store Shallow Module Violates Deep Module Principles
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 The terminalStore violates Ousterhout's deep module principles with 34+ public methods, creating a shallow module where the interface complexity nearly matches the implementation complexity. This makes the code harder to understand, maintain, and change.
 

@@ -1,5 +1,12 @@
 # Horizontal Split View Animation Bug Investigation Report
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-08-03
+Status: ????
+-->
+
+
 ## Summary
 When switching to horizontal split mode, the divider line starts at the bottom of the screen and animates upward but doesn't reach the center (50% position). After a page refresh, it displays correctly at 50%.
 

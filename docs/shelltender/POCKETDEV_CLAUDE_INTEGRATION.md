@@ -1,5 +1,12 @@
 # PocketDev Claude Integration
 
+<!-- Document Metadata
+Created: 2025-06-28
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Overview
 How PocketDev can use shelltender's terminal event system to monitor Claude Code sessions and provide a better mobile experience.
 

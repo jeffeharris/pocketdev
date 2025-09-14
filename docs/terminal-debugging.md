@@ -1,5 +1,12 @@
 # Terminal Debugging Guide
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 This guide explains the terminal debugging tools available in PocketDev for troubleshooting WebSocket and terminal buffer issues.
 
 ## Terminal Buffer Restoration

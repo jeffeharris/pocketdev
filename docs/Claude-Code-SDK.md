@@ -1,5 +1,12 @@
 # SDK
 
+<!-- Document Metadata
+Created: 2025-06-05
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 > Programmatically integrate Claude Code into your applications using the SDK.
 
 The Claude Code SDK allows developers to programmatically integrate Claude Code into their applications. It enables running Claude Code as a subprocess, providing a way to build AI-powered coding assistants and tools that leverage Claude's capabilities.

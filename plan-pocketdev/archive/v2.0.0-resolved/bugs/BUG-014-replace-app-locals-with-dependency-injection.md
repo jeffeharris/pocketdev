@@ -1,5 +1,12 @@
 # BUG-014: Replace app.locals with Dependency Injection
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-09-12
+Status: active
+-->
+
+
 ## Summary
 The backend uses `app.locals` as a global service locator, violating Ousterhout's information hiding principle. This creates implicit dependencies and makes testing difficult.
 

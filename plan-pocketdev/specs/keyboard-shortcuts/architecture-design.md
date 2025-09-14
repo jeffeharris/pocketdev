@@ -1,5 +1,12 @@
 # Keyboard Shortcuts Architecture Design
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Overview
 
 This document outlines a centralized, context-aware keyboard shortcut system for PocketDev that provides:

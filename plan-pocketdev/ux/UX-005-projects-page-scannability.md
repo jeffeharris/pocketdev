@@ -1,5 +1,12 @@
 # UX-005: Projects Page Scannability Analysis
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 **Component**: Projects listing page (`/frontend/src/pages/Projects.tsx`)  
 **Date**: 2025-08-01  
 **Analyst**: Steve Krug UX Detective

@@ -1,5 +1,12 @@
 # Claude Session Tracking Requirements
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 Enable PocketDev to capture and track Claude Code session IDs using Claude's SessionStart hook mechanism, providing visibility into AI agent sessions within the PocketDev terminal infrastructure.
 

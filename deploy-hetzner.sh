@@ -32,6 +32,23 @@ mkdir -p /var/pocketdev/data
 mkdir -p /var/pocketdev/projects
 mkdir -p /var/pocketdev/backups
 
+# 2b. Setup basic authentication
+if [ ! -f "/var/pocketdev/.htpasswd" ]; then
+    echo "🔐 Setting up basic authentication..."
+    apt-get install -y apache2-utils
+    
+    echo "Choose a username for PocketDev access:"
+    read -p "Username: " AUTH_USER
+    
+    echo "Choose a password (will be hidden):"
+    htpasswd -c /var/pocketdev/.htpasswd "$AUTH_USER"
+    
+    echo "✅ Basic auth configured for user: $AUTH_USER"
+    echo "   You can add more users later with: htpasswd /var/pocketdev/.htpasswd newuser"
+else
+    echo "🔐 Basic auth already configured (using existing .htpasswd)"
+fi
+
 # 3. Clone repository if not exists
 if [ ! -d "/opt/pocketdev" ]; then
     echo "📥 Cloning PocketDev repository..."

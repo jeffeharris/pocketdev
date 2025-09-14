@@ -1,5 +1,12 @@
 # Session Management Technical Design
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Overview
 This document describes the technical design for implementing proper Shelltender session management, tab persistence, and renaming functionality based on the requirements defined in `session-management-requirements.md`.
 

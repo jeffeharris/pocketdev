@@ -1,5 +1,12 @@
 # CLAUDE.md
 
+<!-- Document Metadata
+Created: 2025-06-04
+Modified: 2025-09-14
+Status: active
+-->
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview

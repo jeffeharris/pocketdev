@@ -1,5 +1,12 @@
 # Session Management Requirements for Multi-Terminal Tabs
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Overview
 This document defines requirements for proper Shelltender session management, tab persistence, and naming in EARS (Easy Approach to Requirements Syntax) format.
 

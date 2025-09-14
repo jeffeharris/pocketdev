@@ -1,5 +1,12 @@
 # Version 2.0.0 Archive
 
+<!-- Document Metadata
+Created: 2025-08-03
+Modified: 2025-09-12
+Status: active
+-->
+
+
 This directory contains bugs and documentation that were resolved or completed as part of the v2.0.0 architectural transformation.
 
 ## Resolved Bugs

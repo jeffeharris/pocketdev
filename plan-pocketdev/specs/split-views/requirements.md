@@ -1,5 +1,12 @@
 # Split Views Feature Requirements
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 
 This document defines requirements for enabling split view functionality in PocketDev, allowing developers to view multiple terminal sessions simultaneously within a single task.

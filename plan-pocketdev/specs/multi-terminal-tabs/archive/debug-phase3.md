@@ -1,5 +1,12 @@
 # Debugging Phase 3 Auto-Launch
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Issue
 The auto-launch functionality is not working - Claude is not being launched when creating new tabs.
 

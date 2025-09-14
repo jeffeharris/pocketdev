@@ -1,5 +1,12 @@
 # Keyboard Shortcuts Implementation Example
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 ## Complete Working Example
 
 Here's a full implementation example showing how the keyboard shortcut system would work in PocketDev.

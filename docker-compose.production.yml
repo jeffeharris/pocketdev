@@ -68,6 +68,7 @@ services:
       - ./nginx.production.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
+      - /var/pocketdev/.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
       - frontend
       - backend

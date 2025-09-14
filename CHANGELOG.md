@@ -1,5 +1,12 @@
 # Changelog
 
+<!-- Document Metadata
+Created: 2025-06-05
+Modified: 2025-08-18
+Status: active
+-->
+
+
 All notable changes to the PocketDev Simple Server will be documented in this file.
 
 ## [Unreleased]

@@ -1,5 +1,12 @@
 # UX-001: Visual Hierarchy - Project Dashboard
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Problem Statement
 
 The Project Dashboard violates Steve Krug's "Don't Make Me Think" principles by presenting all information with equal visual weight, forcing users to actively parse and prioritize content rather than having a clear visual hierarchy guide their attention.

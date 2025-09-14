@@ -1,5 +1,12 @@
 # Shelltender v0.6.1 Monitoring Architecture
 
+<!-- Document Metadata
+Created: 2025-07-18
+Modified: 2025-07-18
+Status: ????
+-->
+
+
 ## Overview
 
 After upgrading to Shelltender v0.6.1, the monitoring architecture changed significantly. This document explains how PocketDev monitors AI sessions with the new version.

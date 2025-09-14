@@ -1,5 +1,12 @@
 # BUG-022: useTaskStatus Hook Violates Single Responsibility
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 The useTaskStatus hook combines WebSocket handling, state management, and time formatting into a single 200+ line module. This violates single responsibility and creates a shallow module with multiple concerns.
 

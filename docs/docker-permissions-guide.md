@@ -1,5 +1,12 @@
 # Docker Permissions Guide
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Overview
 
 This document explains the Docker permissions challenges encountered during PocketDev development and the solutions implemented.

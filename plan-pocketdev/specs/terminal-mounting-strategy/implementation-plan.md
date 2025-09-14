@@ -1,5 +1,12 @@
 # Terminal Mounting Strategy Implementation Plan (Simplified)
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 Simple implementation to keep terminals mounted using CSS visibility control.
 

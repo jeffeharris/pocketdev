@@ -1,5 +1,12 @@
 # Multi-Terminal Tabs Technical Design
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Architecture Overview
 
 ### Component Structure

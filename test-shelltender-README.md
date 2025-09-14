@@ -1,5 +1,12 @@
 # Shelltender Integration Test Tools
 
+<!-- Document Metadata
+Created: 2025-07-22
+Modified: 2025-07-22
+Status: ????
+-->
+
+
 These test tools help debug the Shelltender integration and command execution issues.
 
 ## Test Tools

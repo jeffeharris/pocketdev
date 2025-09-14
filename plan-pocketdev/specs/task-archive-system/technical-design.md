@@ -1,5 +1,12 @@
 # Task Archive System Technical Design
 
+<!-- Document Metadata
+Created: 2025-08-18
+Modified: 2025-08-18
+Status: active
+-->
+
+
 ## Architecture Overview
 
 ```

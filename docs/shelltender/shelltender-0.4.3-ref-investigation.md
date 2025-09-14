@@ -1,5 +1,12 @@
 # Shelltender v0.4.3 Terminal Ref Investigation
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Issue Summary
 
 The Terminal component ref callback is never called in v0.4.3, preventing access to `focus()` and `fit()` methods.

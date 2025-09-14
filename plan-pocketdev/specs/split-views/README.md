@@ -1,5 +1,12 @@
 # Split Views Feature Specification
 
+<!-- Document Metadata
+Created: 2025-07-29
+Modified: 2025-07-29
+Status: ????
+-->
+
+
 This directory contains all documentation for implementing split view functionality in PocketDev.
 
 ## Quick Start for Implementers

@@ -1,5 +1,12 @@
 # Terminal Mounting Strategy Technical Design (Simplified)
 
+<!-- Document Metadata
+Created: 2025-07-31
+Modified: 2025-07-31
+Status: ????
+-->
+
+
 ## Overview
 Use CSS display property to show/hide terminals instead of conditional rendering, keeping all terminals mounted.
 

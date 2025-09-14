@@ -1,5 +1,12 @@
 # BUG-020: Terminal Store Exposes Internal Structure
 
+<!-- Document Metadata
+Created: 2025-08-01
+Modified: 2025-08-01
+Status: ????
+-->
+
+
 ## Summary
 The terminal store in the frontend exposes its nested Map implementation details and includes 30+ methods in its interface. This violates information hiding and creates a shallow module with high cognitive load.
 

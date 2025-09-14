@@ -1,5 +1,12 @@
 # Cedana Integration Guide for Claude - Terminal Session Persistence
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 This guide provides exact instructions for Claude to test and integrate Cedana for persistent terminal sessions across server reboots.
 
 ## Pre-Integration Analysis

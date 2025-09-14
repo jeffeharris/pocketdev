@@ -1,5 +1,12 @@
 # Multi-Terminal Tabs & Session Management - Implementation Summary
 
+<!-- Document Metadata
+Created: 2025-07-28
+Modified: 2025-07-28
+Status: ????
+-->
+
+
 ## Branch: `fix/session-management-and-tab-persistence`
 
 ## Overview

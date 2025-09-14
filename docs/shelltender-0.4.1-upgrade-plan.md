@@ -1,5 +1,12 @@
 # Shelltender v0.4.1 Upgrade Implementation Plan
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Overview
 This document outlines the steps to upgrade from @shelltender/client v0.3.0 to v0.4.1, taking advantage of the new Terminal ref API with focus() and fit() methods.
 
