@@ -8,8 +8,6 @@ import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { useService } from '../../services';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
-import { SplitViewContainer } from './SplitViewContainer';
-import { EmptyTerminalPanel } from './EmptyTerminalPanel';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useActiveTerminalId, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
 import { useShortcutContext } from '../../hooks/keyboard';
@@ -18,6 +16,7 @@ import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
 import { TerminalGrid } from './TerminalGrid';
 import { useLayoutConstraints } from './useLayoutConstraints';
 import { useTerminalStatus } from './useTerminalStatus';
+import { useTabManager } from './useTabManager';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
@@ -47,7 +46,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   } = props;
   const terminalService = useService('terminal');
   
-  // Use reducer for all component state
+  // Use reducer for UI state only (tab management moved to useTabManager)
   const [state, dispatch] = useReducer(
     terminalPanelReducer,
     task.id,
@@ -57,23 +56,43 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const focusTabId = sessionStorage.getItem(focusTabKey);
       if (focusTabId) {
         const initialState = createInitialState(taskId);
-        return { ...initialState, activeTabId: focusTabId };
+        return { ...initialState };
       }
       return createInitialState(taskId);
     }
   );
   
   const { 
-    activeTabId, 
     isResetting, 
     showSessionLauncher, 
-    sessionStatuses, 
-    confirmClose
+    sessionStatuses
   } = state;
   
   const terminalRefs = useRef<Map<string, DirectTerminalHandle>>(new Map());
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
+  const [shouldForceRefresh, setShouldForceRefresh] = useState(0);
+  
+  // Use tab manager for all tab operations
+  const {
+    activeTabId,
+    tabs,
+    confirmClose,
+    handleTabSelect,
+    handleTabAdd,
+    handleTabClose,
+    handleTabRename,
+    handleTabReorder,
+    performTabClose,
+    cancelCloseConfirmation
+  } = useTabManager({
+    task,
+    terminals,
+    terminalService,
+    sessionStatuses,
+    realtimeSessionStates,
+    onTabsChange: () => setShouldForceRefresh(prev => prev + 1)
+  });
   
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
@@ -145,73 +164,20 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     }
   }, [task.id, task.terminals, terminalStore, focusedTerminalId, activeTabId]);
   
-  // Simple effect - just validate the saved tab exists
+  // Focus terminal when tab is selected
   useEffect(() => {
-    console.log('[TerminalPanel useEffect@186] Running tab validation effect:', {
-      taskId: task.id,
-      terminalsLength: terminals.length,
-      activeTabId,
-      terminals: terminals.map(t => ({ dbSessionId: t.dbSessionId, tabName: t.tabName }))
-    });
-    
-    if (terminals.length > 0) {
-      const savedId = localStorage.getItem(`activeTab-${task.id}`);
-      const currentTab = terminals.find(t => t.normalizedId === activeTabId);
-      const validTab = terminals.find(t => t.dbSessionId === savedId);
-      
-      console.log('[TerminalPanel useEffect@186] Tab state:', {
-        savedId,
-        currentTab: currentTab?.dbSessionId,
-        validTab: validTab?.dbSessionId,
-        willUpdate: (!currentTab && !validTab && terminals[0]) || (!currentTab && validTab)
+    if (activeTabId) {
+      terminalStore.updateTerminal(task.id, activeTabId, {
+        type: 'set-focus',
+        focus: true
       });
-      
-      // Only update if we don't have a current valid tab
-      if (!currentTab && !validTab && terminals[0]) {
-        const firstTerminalId = terminals[0].normalizedId;
-        console.log('[TerminalPanel useEffect@186] Setting activeTabId to first terminal:', firstTerminalId);
-        setActiveTabId(firstTerminalId);
-        // Don't set focus here - let the initial terminals effect handle it
-      } else if (!currentTab && validTab) {
-        const validTabId = validTab.normalizedId;
-        console.log('[TerminalPanel useEffect@186] Setting activeTabId to saved tab:', validTabId);
-        setActiveTabId(validTabId);
-      }
+      // Focus the terminal after switching
+      setTimeout(() => {
+        const terminalRef = terminalRefs.current.get(activeTabId);
+        terminalRef?.focus();
+      }, 100);
     }
-  }, [task.id, terminals.length]); // Use terminals.length instead of terminals to avoid re-runs on terminal updates
-
-  // Check for focus tab request
-  useEffect(() => {
-    const focusTabKey = `focus-tab-${task.id}`;
-    const focusTabId = sessionStorage.getItem(focusTabKey);
-    
-    if (focusTabId && terminals.length > 0) {
-      const tabToFocus = terminals.find(t => t.dbSessionId === focusTabId);
-      if (tabToFocus) {
-        setActiveTabId(focusTabId);
-        terminalStore.setActiveTerminal(task.id, focusTabId);
-        localStorage.setItem(`activeTab-${task.id}`, focusTabId);
-        // Clean up after using
-        sessionStorage.removeItem(focusTabKey);
-      }
-    }
-  }, [task.id, terminals, terminalStore]);
-
-  // Save when active tab changes
-  const handleTabSelect = (tabId: string) => {
-    setActiveTabId(tabId);
-    terminalStore.setActiveTerminal(task.id, tabId);
-    terminalStore.updateTerminal(task.id, tabId, {
-      type: 'set-focus',
-      focus: true
-    });
-    localStorage.setItem(`activeTab-${task.id}`, tabId);
-    // Focus the terminal after switching
-    setTimeout(() => {
-      const terminalRef = terminalRefs.current.get(tabId);
-      terminalRef?.focus();
-    }, 100);
-  };
+  }, [activeTabId, task.id, terminalStore]);
 
   // Expose methods to parent components
   useImperativeHandle(ref, () => ({
@@ -296,158 +262,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   };
 
 
-  const handleTabAdd = async (options?: SessionOptions) => {
-    try {
-      const tabCount = terminals.length;
-      
-      // Get the currently active terminal to copy history from
-      const activeTerminal = terminals.find(t => t.normalizedId === activeTabId);
-      
-      // Use provided options or generate next available "Tab #"
-      const aiAgent = options?.aiAgent || 'claude';
-      const tabName = options?.tabName || getNextAvailableTabName(terminals);
-      
-      const newSession = await terminalService.createTerminalSession(task.id, {
-        tabName,
-        aiAgent,
-        copyHistoryFrom: activeTerminal?.sessionId || null
-      });
-      
-      console.log('[TerminalPanel handleTabAdd] New session created:', {
-        sessionId: newSession.sessionId,
-        dbSessionId: newSession.dbSessionId,
-        shelltenderSessionId: newSession.shelltenderSessionId,
-        fullObject: newSession
-      });
-      
-      const newTerminal: TerminalSession = {
-        sessionId: newSession.sessionId,
-        dbSessionId: newSession.dbSessionId,
-        shelltenderSessionId: newSession.shelltenderSessionId,
-        tabName: newSession.tabName,
-        tabOrder: newSession.tabOrder,
-        aiState: 'not-started',
-        aiAgent: newSession.aiAgent
-      };
-      
-      // Use normalized ID for tracking active tab
-      const normalizedId = newSession.normalizedId;
-      
-      // Just update the active tab - backend has already added it to the database
-      dispatch({ type: 'SET_ACTIVE_TAB', tabId: normalizedId });
-      localStorage.setItem(`activeTab-${task.id}`, normalizedId);
-      
-      // Reload task to get updated terminals list
-      if (task.onReload) {
-        task.onReload();
-      }
-      
-      // Auto-launch AI agent if specified
-      if (aiAgent && aiAgent !== 'none') {
-        // Wait for terminal connection to be established
-        setTimeout(async () => {
-          try {
-            const normalizedId = newSession.normalizedId;
-            await terminalService.launchAgent(normalizedId, aiAgent, {
-              workingDirectory: options?.workingDirectory,
-              initialPrompt: options?.initialPrompt,
-              worktreePath: task.worktree_path
-            });
-          } catch (error) {
-            console.error('[TerminalPanel] Failed to launch agent:', error);
-          }
-        }, 500);
-      }
-    } catch (error) {
-      console.error('[TerminalPanel] Failed to create new terminal:', error);
-    }
-  };
-
-
-  // Get next available "Tab #" name that doesn't already exist
-  const getNextAvailableTabName = (existingTabs: TerminalSession[]): string => {
-    const existingTabNumbers = existingTabs
-      .map(t => {
-        const match = t.tabName.match(/^Tab (\d+)$/);
-        return match ? parseInt(match[1]) : null;
-      })
-      .filter((n): n is number => n !== null);
-    
-    // Find the first available number starting from 1
-    let nextNumber = 1;
-    while (existingTabNumbers.includes(nextNumber)) {
-      nextNumber++;
-    }
-    
-    return `Tab ${nextNumber}`;
-  };
-
-  // Handle tab rename
-  const handleTabRename = async (dbSessionId: string, newName: string) => {
-    try {
-      // Find the terminal
-      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-      if (!terminal) return;
-      
-      // Optimistically update the store
-      terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
-        type: 'rename',
-        name: newName
-      });
-      
-      // Update via API
-      // Get normalized ID for the terminal
-      const normalizedId = terminal.normalizedId;
-      await terminalService.updateTerminalTab(normalizedId, {
-        tabName: newName
-      });
-      
-      // Reload task to get updated terminals list
-      if (task.onReload) {
-        task.onReload();
-      }
-    } catch (error) {
-      console.error('[TerminalPanel] Failed to rename tab:', error);
-      // Revert on error
-      const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-      if (terminal) {
-        const currentName = tabs.find(t => t.id === dbSessionId)?.name || 'Tab';
-        terminalStore.updateTerminal(task.id, terminal.dbSessionId, {
-          type: 'rename',
-          name: currentName
-        });
-      }
-      showNotification('error', 'Failed to rename tab');
-    }
-  };
-
-  // Handle tab reorder
-  const handleTabReorder = async (reorderedTabs: Tab[]) => {
-    try {
-      // Update each tab's order in the backend
-      const updatePromises = reorderedTabs.map(tab => {
-        // Find the terminal for this tab to get normalized ID
-        const terminal = terminals.find(t => t.dbSessionId === tab.dbSessionId);
-        if (!terminal) return Promise.resolve();
-        const normalizedId = terminal.normalizedId;
-        return terminalService.updateTerminalTab(normalizedId, {
-          tabOrder: tab.tabOrder
-        });
-      });
-      
-      await Promise.all(updatePromises);
-      
-      // Reload task to get updated terminals list
-      if (task.onReload) {
-        task.onReload();
-      }
-    } catch (error) {
-      console.error('[TerminalPanel] Failed to reorder tabs:', error);
-      showNotification('error', 'Failed to reorder tabs');
-    }
-  };
-
-
   // Show notification using Shelltender's toast system
   const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
     // showToast expects (message: string, duration?: number)
@@ -485,101 +299,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     handleReconnectSession
   });
 
-  // Handle tab close
-  const handleTabClose = async (dbSessionId: string) => {
-    // Find the terminal being closed
-    const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
-    if (!terminalToClose) return;
-    
-    // Get the real-time state for this session
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    const normalizedId = terminal ? terminal.normalizedId : dbSessionId;
-    const realtimeState = realtimeSessionStates?.find(s => s.id === dbSessionId);
-    const currentAiState = realtimeState?.aiState || terminalToClose.aiState;
-    
-    // If AI is active (not 'not-started'), show confirmation
-    if (currentAiState !== 'not-started') {
-      setConfirmClose({ 
-        dbSessionId, 
-        tabName: terminalToClose.tabName 
-      });
-      return;
-    }
-    
-    // Otherwise, close immediately
-    await performTabClose(dbSessionId);
-  };
-  
-  const performTabClose = async (dbSessionId: string) => {
-    console.log('[performTabClose] Starting close for:', dbSessionId, {
-      currentTerminals: terminals.map(t => ({ id: t.dbSessionId, name: t.tabName })),
-      activeTabId,
-      isClosingActiveTab: (terminalToClose ? terminalToClose.normalizedId : dbSessionId) === activeTabId
-    });
-    
-    try {
-      // Find the terminal being closed
-      const terminalToClose = terminals.find(t => t.dbSessionId === dbSessionId);
-      if (!terminalToClose) {
-        console.log('[performTabClose] Terminal not found, aborting');
-        return;
-      }
-      
-      // If closing the active tab, switch to another tab first
-      const closingTerminalNormalizedId = terminalToClose ? terminalToClose.normalizedId : dbSessionId;
-      if (closingTerminalNormalizedId === activeTabId) {
-        const remainingTabs = terminals.filter(t => t.dbSessionId !== dbSessionId);
-        console.log('[performTabClose] Closing active tab, remaining tabs:', remainingTabs.length);
-        
-        if (remainingTabs.length > 0) {
-          // Find the next tab and switch to it BEFORE deleting
-          const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          const nextTabId = nextTab.normalizedId;
-          console.log('[performTabClose] Switching to next tab:', nextTabId);
-          setActiveTabId(nextTabId);
-          localStorage.setItem(`activeTab-${task.id}`, nextTabId);
-          terminalStore.setActiveTerminal(task.id, nextTabId);
-        } else {
-          console.log('[performTabClose] No remaining tabs after close');
-        }
-      }
-      
-      // Delete the terminal session
-      console.log('[performTabClose] Calling terminalService.deleteTerminalSession');
-      // Get normalized ID for deletion
-      const normalizedId = terminalToClose.normalizedId;
-      await terminalService.deleteTerminalSession(normalizedId);
-      
-      // Clear confirm close state if it exists
-      dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
-      
-      // Reload task to get updated terminals list
-      if (task.onReload) {
-        await task.onReload();
-      }
-      
-      // Skip the success notification to avoid terminal re-render issues
-      // The tab closing is already visually apparent to the user
-    } catch (error: any) {
-      // Check if this is a "Session not found" error - this can happen when closing multiple
-      // tabs quickly due to race conditions with WebSocket events
-      if (error.message && error.message.includes('Session not found')) {
-        console.log('[performTabClose] Session already deleted (race condition), ignoring error');
-        // Clear confirm close state
-        dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
-        // Still reload to ensure UI is in sync
-        if (task.onReload) {
-          await task.onReload();
-        }
-        return;
-      }
-      
-      console.error('[TerminalPanel] Failed to close tab:', error);
-      showNotification('error', 'Failed to close tab');
-      // Clear confirm close state on error too
-      dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
-    }
-  };
 
   // Render control buttons (reusable for both tab mode and split view)
   const renderControlButtons = () => (
@@ -698,26 +417,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   );
 
   // Convert terminals to Tab format for TerminalTabs component
-  const tabs: Tab[] = terminals.map(t => {
-    const normalizedId = t.normalizedId;
-    const connectionStatus = sessionStatuses.get(normalizedId) || 'connected';
-    
-    // Use real-time AI state if available, otherwise fall back to initial state
-    const realtimeState = realtimeSessionStates?.find(s => s.id === t.dbSessionId);
-    const currentAiState = realtimeState?.aiState || t.aiState;
-    
-    
-    return {
-      sessionId: t.sessionId,
-      dbSessionId: t.dbSessionId,
-      normalizedId: normalizedId,
-      tabName: t.tabName,
-      tabOrder: t.tabOrder,
-      aiState: currentAiState,
-      aiAgent: t.aiAgent,
-      connectionStatus: connectionStatus
-    };
-  });
+  // Tabs are now provided by useTabManager
   
   // Register keyboard shortcuts
   useTerminalKeyboardShortcuts({
@@ -820,7 +520,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         onConfirm={() => {
           if (confirmClose) {
             performTabClose(confirmClose.dbSessionId);
-            dispatch({ type: 'CANCEL_CLOSE_CONFIRMATION' });
           }
         }}
         title="Close Terminal Tab"
