@@ -43,22 +43,25 @@ export class TerminalService extends BaseService implements ITerminalService {
 
   // Simple public interface - 6 core methods (deep module principle)
 
-  async getTerminalSessions(taskId: string): Promise<TerminalSession[]> {
+  async getTerminalSessions(taskId: string): Promise<Array<TerminalSession & { normalizedId: NormalizedSessionId }>> {
     if (this.isMockEnabled) {
       const sessions = this.mockSessions.get(taskId) || [];
-      // Register sessions with adapter for ID normalization
-      sessions.forEach(session => sessionAdapter.registerSession(session));
-      return sessions;
+      // Register sessions and include normalized IDs
+      return sessions.map(session => ({
+        ...session,
+        normalizedId: sessionAdapter.registerSession(session)
+      }));
     }
     
     // Get task details which includes terminals
     const response = await this.get<{ terminals?: TerminalSession[] }>(`/tasks/${taskId}`);
     const sessions = response.terminals || [];
     
-    // Register all sessions with the adapter
-    sessions.forEach(session => sessionAdapter.registerSession(session));
-    
-    return sessions;
+    // Register all sessions and include normalized IDs
+    return sessions.map(session => ({
+      ...session,
+      normalizedId: sessionAdapter.registerSession(session)
+    }));
   }
 
   async createTerminalSession(taskId: string, options: CreateTerminalOptions = {}): Promise<CreateTerminalResult> {
@@ -82,17 +85,20 @@ export class TerminalService extends BaseService implements ITerminalService {
       aiAgent: result.aiAgent
     };
     
-    // Register the new session with the adapter
-    sessionAdapter.registerSession(terminalSession);
+    // Register the new session with the adapter and include normalized ID
+    const normalizedId = sessionAdapter.registerSession(terminalSession);
     
-    return result;
+    return {
+      ...result,
+      normalizedId
+    };
   }
 
-  async updateTerminalTab(sessionId: string, updates: TerminalTabUpdate): Promise<TerminalTabUpdate> {
-    // Normalize the session ID for API calls
-    const sessionInfo = sessionAdapter.findSessionByAnyId(sessionId);
+  async updateTerminalTab(normalizedId: NormalizedSessionId, updates: TerminalTabUpdate): Promise<TerminalTabUpdate> {
+    // Only accept normalized IDs - components should not pass raw IDs
+    const sessionInfo = sessionAdapter.getSessionInfo(normalizedId);
     if (!sessionInfo) {
-      throw new Error(`Session not found: ${sessionId}`);
+      throw new Error(`Session not found: ${normalizedId}`);
     }
     
     if (this.isMockEnabled) {
@@ -110,14 +116,14 @@ export class TerminalService extends BaseService implements ITerminalService {
     return result;
   }
 
-  async deleteTerminalSession(sessionId: string): Promise<void> {
-    console.log('[TerminalService] deleteTerminalSession called with:', sessionId);
+  async deleteTerminalSession(normalizedId: NormalizedSessionId): Promise<void> {
+    console.log('[TerminalService] deleteTerminalSession called with:', normalizedId);
     
-    // Normalize the session ID for API calls
-    const sessionInfo = sessionAdapter.findSessionByAnyId(sessionId);
+    // Only accept normalized IDs
+    const sessionInfo = sessionAdapter.getSessionInfo(normalizedId);
     if (!sessionInfo) {
-      console.log('[TerminalService] Session not found in adapter:', sessionId);
-      throw new Error(`Session not found: ${sessionId}`);
+      console.log('[TerminalService] Session not found in adapter:', normalizedId);
+      throw new Error(`Session not found: ${normalizedId}`);
     }
     
     console.log('[TerminalService] Found session info:', sessionInfo);
@@ -137,15 +143,15 @@ export class TerminalService extends BaseService implements ITerminalService {
     sessionAdapter.removeSession(sessionInfo.id);
   }
 
-  async executeCommand(sessionId: string, command: string): Promise<void> {
-    console.log('[TerminalService executeCommand] Called with sessionId:', sessionId);
+  async executeCommand(normalizedId: NormalizedSessionId, command: string): Promise<void> {
+    console.log('[TerminalService executeCommand] Called with normalizedId:', normalizedId);
     
-    // Normalize the session ID for API calls
-    const sessionInfo = sessionAdapter.findSessionByAnyId(sessionId);
+    // Only accept normalized IDs
+    const sessionInfo = sessionAdapter.getSessionInfo(normalizedId);
     console.log('[TerminalService executeCommand] Found session info:', sessionInfo);
     
     if (!sessionInfo) {
-      throw new Error(`Session not found: ${sessionId}`);
+      throw new Error(`Session not found: ${normalizedId}`);
     }
     
     if (this.isMockEnabled) {
@@ -209,10 +215,21 @@ export class TerminalService extends BaseService implements ITerminalService {
   // Utility methods for session management
 
   /**
-   * Get normalized session ID for components to use
+   * Get normalized session ID from any session object or ID
+   * This is the primary way components should get IDs to use with this service
    */
-  public normalizeSessionId(anySessionId: string): NormalizedSessionId | null {
-    return sessionAdapter.normalize(anySessionId);
+  public getNormalizedId(sessionOrId: TerminalSession | string): NormalizedSessionId {
+    if (typeof sessionOrId === 'string') {
+      // Try to find existing session
+      const sessionInfo = sessionAdapter.findSessionByAnyId(sessionOrId);
+      if (sessionInfo) {
+        return sessionInfo.id;
+      }
+      throw new Error(`Session not found: ${sessionOrId}`);
+    } else {
+      // Register or get existing normalized ID for session object
+      return sessionAdapter.registerSession(sessionOrId);
+    }
   }
 
   /**

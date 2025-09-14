@@ -26,15 +26,16 @@ export interface CreateTerminalResult extends TerminalSession {
   cols: number;
   rows: number;
   wsUrl: string;
+  normalizedId?: string;
 }
 
 export interface ITerminalService {
   /**
    * Get all terminal sessions for a task
    * @param taskId Task identifier
-   * @returns Promise<TerminalSession[]> List of terminal sessions
+   * @returns Promise<Array<TerminalSession & { normalizedId: string }>> List of terminal sessions with normalized IDs
    */
-  getTerminalSessions(taskId: string): Promise<TerminalSession[]>;
+  getTerminalSessions(taskId: string): Promise<Array<TerminalSession & { normalizedId: string }>>;
 
   /**
    * Create a new terminal session
@@ -73,4 +74,11 @@ export interface ITerminalService {
    * @returns Promise<{ url: string }> Terminal URL
    */
   openTerminal(taskId: string): Promise<{ url: string }>;
+
+  /**
+   * Get normalized session ID from a session object or any ID type
+   * @param sessionOrId Session object or ID string
+   * @returns Normalized session ID
+   */
+  getNormalizedId(sessionOrId: TerminalSession | string): string;
 }

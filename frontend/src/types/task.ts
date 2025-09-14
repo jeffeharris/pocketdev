@@ -57,6 +57,7 @@ export interface TerminalSession {
   sessionId: string;           // Shelltender session ID (for backward compatibility)
   dbSessionId: string;         // Database session ID (stable identifier)
   shelltenderSessionId: string; // Shelltender session ID (explicit)
+  normalizedId?: string;       // Normalized ID for consistent component tracking
   tabName: string;
   tabOrder: number;
   aiState: WorkerStatus;

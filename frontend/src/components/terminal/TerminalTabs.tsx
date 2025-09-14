@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities';
 export interface Tab {
   sessionId: string;
   dbSessionId: string;
+  normalizedId: string;  // Normalized ID for consistent tracking
   tabName: string;
   tabOrder: number;
   aiState: 'not-started' | 'idle' | 'working' | 'waiting';
@@ -244,7 +245,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
     // Set a timeout for single click
     clickTimeoutRef.current = setTimeout(() => {
       if (!editingTabId) {
-        onTabSelect(tab.dbSessionId);
+        onTabSelect(tab.normalizedId);
       }
       clickTimeoutRef.current = null;
     }, 200);
@@ -292,7 +293,7 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
             strategy={horizontalListSortingStrategy}
           >
             {sortedTabs.map((tab) => {
-              const isActive = tab.dbSessionId === activeTabId;
+              const isActive = tab.normalizedId === activeTabId;
               const isEditing = editingTabId === tab.dbSessionId;
               
               return (

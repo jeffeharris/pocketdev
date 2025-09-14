@@ -195,7 +195,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     
     if (terminals.length > 0) {
       const savedId = localStorage.getItem(`activeTab-${task.id}`);
-      const currentTab = terminals.find(t => t.dbSessionId === activeTabId);
+      const currentTab = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
       const validTab = terminals.find(t => t.dbSessionId === savedId);
       
       console.log('[TerminalPanel useEffect@186] Tab state:', {
@@ -207,12 +207,14 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       
       // Only update if we don't have a current valid tab
       if (!currentTab && !validTab && terminals[0]) {
-        console.log('[TerminalPanel useEffect@186] Setting activeTabId to first terminal:', terminals[0].dbSessionId);
-        setActiveTabId(terminals[0].dbSessionId);
+        const firstTerminalId = terminals[0].normalizedId || terminalService.getNormalizedId(terminals[0]);
+        console.log('[TerminalPanel useEffect@186] Setting activeTabId to first terminal:', firstTerminalId);
+        setActiveTabId(firstTerminalId);
         // Don't set focus here - let the initial terminals effect handle it
       } else if (!currentTab && validTab) {
-        console.log('[TerminalPanel useEffect@186] Setting activeTabId to saved tab:', validTab.dbSessionId);
-        setActiveTabId(validTab.dbSessionId);
+        const validTabId = validTab.normalizedId || terminalService.getNormalizedId(validTab);
+        console.log('[TerminalPanel useEffect@186] Setting activeTabId to saved tab:', validTabId);
+        setActiveTabId(validTabId);
       }
     }
   }, [task.id, terminals.length]); // Use terminals.length instead of terminals to avoid re-runs on terminal updates
@@ -251,14 +253,16 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   useImperativeHandle(ref, () => ({
     focus: () => {
       // Focus the active terminal
-      const activeRef = terminalRefs.current.get(activeTabId);
+      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
+      const activeRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       activeRef?.focus();
     },
     switchToTab: (dbSessionId: string) => {
       // Check if the tab exists
       const tab = terminals.find(t => t.dbSessionId === dbSessionId);
       if (tab) {
-        handleTabSelect(dbSessionId);
+        const normalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
+        handleTabSelect(normalizedId);
       }
     }
   }), [activeTabId, terminals, handleTabSelect]);
@@ -267,18 +271,18 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     setIsResetting(true);
     try {
       // Tab mode - use the normal logic
-      const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
+      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
       if (!activeTerminal) {
         showNotification('warning', 'No active terminal to refresh');
         return;
       }
 
       // Check if session is disconnected
-      const sessionStatus = sessionStatuses.get(activeTabId);
+      const sessionStatus = sessionStatuses.get(activeTabId); // Already using normalized ID
       const isDisconnected = sessionStatus === 'disconnected' || sessionStatus === 'error';
       
       // Get the terminal ref for the active terminal
-      const terminalRef = terminalRefs.current.get(activeTabId);
+      const terminalRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       
       if (terminalRef?.refresh) {
         // Call the refresh method which will:
@@ -333,7 +337,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const tabCount = terminals.length;
       
       // Get the currently active terminal to copy history from
-      const activeTerminal = terminals.find(t => t.dbSessionId === activeTabId);
+      const activeTerminal = terminals.find(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
       
       // Use provided options or generate next available "Tab #"
       const aiAgent = options?.aiAgent || 'claude';
@@ -362,9 +366,12 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         aiAgent: newSession.aiAgent
       };
       
+      // Use normalized ID for tracking active tab
+      const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+      
       // Just update the active tab - backend has already added it to the database
-      setActiveTabId(newSession.dbSessionId);
-      localStorage.setItem(`activeTab-${task.id}`, newSession.dbSessionId);
+      setActiveTabId(normalizedId);
+      localStorage.setItem(`activeTab-${task.id}`, normalizedId);
       
       // Reload task to get updated terminals list
       if (task.onReload) {
@@ -383,8 +390,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           
           // Small delay then send claude command
           setTimeout(async () => {
-            console.log('[TerminalPanel] About to execute claude with sessionId:', newSession.sessionId);
-            await terminalService.executeCommand(newSession.sessionId, 'claude');
+            const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+            console.log('[TerminalPanel] About to execute claude with normalizedId:', normalizedId);
+            await terminalService.executeCommand(normalizedId, 'claude');
           }, 500);
         } catch (error) {
           console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
@@ -395,7 +403,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         
         // Mark as launching if we have a prompt or need to change directory
         if (options.workingDirectory || options.initialPrompt) {
-          setLaunchingClaude(prev => new Set(prev).add(newSession.dbSessionId));
+          const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+          setLaunchingClaude(prev => new Set(prev).add(normalizedId));
           
           setTimeout(async () => {
             try {
@@ -438,24 +447,27 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
               
               // Execute commands in sequence
               for (const command of commands) {
-                await terminalService.executeCommand(newSession.shelltenderSessionId, command);
+                const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
+                await terminalService.executeCommand(normalizedId, command);
                 // Minimal delay between commands
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               
               // Remove launching state
               setTimeout(() => {
+                const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
                 setLaunchingClaude(prev => {
                   const newSet = new Set(prev);
-                  newSet.delete(newSession.dbSessionId);
+                  newSet.delete(normalizedId);
                   return newSet;
                 });
               }, 1000);
             } catch (error) {
               console.error('[TerminalPanel] Failed to execute advanced launch:', error);
+              const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
               setLaunchingClaude(prev => {
                 const newSet = new Set(prev);
-                newSet.delete(newSession.dbSessionId);
+                newSet.delete(normalizedId);
                 return newSet;
               });
             }
@@ -508,7 +520,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       updateTerminal(task.id, terminal.dbSessionId, { tabName: newName });
       
       // Update via API
-      await terminalService.updateTerminalTab(dbSessionId, {
+      // Get normalized ID for the terminal
+      const normalizedId = terminalService.getNormalizedId(terminal);
+      await terminalService.updateTerminalTab(normalizedId, {
         tabName: newName
       });
       
@@ -532,11 +546,15 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const handleTabReorder = async (reorderedTabs: Tab[]) => {
     try {
       // Update each tab's order in the backend
-      const updatePromises = reorderedTabs.map(tab => 
-        terminalService.updateTerminalTab(tab.dbSessionId, {
+      const updatePromises = reorderedTabs.map(tab => {
+        // Find the terminal for this tab to get normalized ID
+        const terminal = terminals.find(t => t.dbSessionId === tab.dbSessionId);
+        if (!terminal) return Promise.resolve();
+        const normalizedId = terminalService.getNormalizedId(terminal);
+        return terminalService.updateTerminalTab(normalizedId, {
           tabOrder: tab.tabOrder
-        })
-      );
+        });
+      });
       
       await Promise.all(updatePromises);
       
@@ -553,14 +571,18 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   // Handle session status changes
   const handleSessionStatus = (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => {
-    // Update status map
+    // Find terminal and get normalized ID
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    if (!terminal) return;
+    
+    const normalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
+    
+    // Update status map with normalized ID
     setSessionStatuses(prev => {
       const newMap = new Map(prev);
-      newMap.set(dbSessionId, status);
+      newMap.set(normalizedId, status);
       return newMap;
     });
-
-    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) return;
 
     if (status === 'disconnected') {
@@ -589,6 +611,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     if (!terminalToClose) return;
     
     // Get the real-time state for this session
+    const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
+    const normalizedId = terminal ? (terminal.normalizedId || terminalService.getNormalizedId(terminal)) : dbSessionId;
     const realtimeState = realtimeSessionStates?.find(s => s.id === dbSessionId);
     const currentAiState = realtimeState?.aiState || terminalToClose.aiState;
     
@@ -609,7 +633,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     console.log('[performTabClose] Starting close for:', dbSessionId, {
       currentTerminals: terminals.map(t => ({ id: t.dbSessionId, name: t.tabName })),
       activeTabId,
-      isClosingActiveTab: dbSessionId === activeTabId
+      isClosingActiveTab: (terminalToClose ? (terminalToClose.normalizedId || terminalService.getNormalizedId(terminalToClose)) : dbSessionId) === activeTabId
     });
     
     try {
@@ -621,17 +645,19 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       }
       
       // If closing the active tab, switch to another tab first
-      if (dbSessionId === activeTabId) {
+      const closingTerminalNormalizedId = terminalToClose ? (terminalToClose.normalizedId || terminalService.getNormalizedId(terminalToClose)) : dbSessionId;
+      if (closingTerminalNormalizedId === activeTabId) {
         const remainingTabs = terminals.filter(t => t.dbSessionId !== dbSessionId);
         console.log('[performTabClose] Closing active tab, remaining tabs:', remainingTabs.length);
         
         if (remainingTabs.length > 0) {
           // Find the next tab and switch to it BEFORE deleting
           const nextTab = remainingTabs.sort((a, b) => a.tabOrder - b.tabOrder)[0];
-          console.log('[performTabClose] Switching to next tab:', nextTab.dbSessionId);
-          setActiveTabId(nextTab.dbSessionId);
-          localStorage.setItem(`activeTab-${task.id}`, nextTab.dbSessionId);
-          setActiveTerminal(task.id, nextTab.dbSessionId);
+          const nextTabId = nextTab.normalizedId || terminalService.getNormalizedId(nextTab);
+          console.log('[performTabClose] Switching to next tab:', nextTabId);
+          setActiveTabId(nextTabId);
+          localStorage.setItem(`activeTab-${task.id}`, nextTabId);
+          setActiveTerminal(task.id, nextTabId);
         } else {
           console.log('[performTabClose] No remaining tabs after close');
         }
@@ -639,7 +665,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       
       // Delete the terminal session
       console.log('[performTabClose] Calling terminalService.deleteTerminalSession');
-      await terminalService.deleteTerminalSession(dbSessionId);
+      // Get normalized ID for deletion
+      const normalizedId = terminalService.getNormalizedId(terminalToClose);
+      await terminalService.deleteTerminalSession(normalizedId);
       
       // Clear confirm close state if it exists
       setConfirmClose(null);
@@ -818,7 +846,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
 
   // Convert terminals to Tab format for TerminalTabs component
   const tabs: Tab[] = terminals.map(t => {
-    const connectionStatus = sessionStatuses.get(t.dbSessionId) || 'connected';
+    const normalizedId = t.normalizedId || terminalService.getNormalizedId(t);
+    const connectionStatus = sessionStatuses.get(normalizedId) || 'connected';
     
     // Use real-time AI state if available, otherwise fall back to initial state
     const realtimeState = realtimeSessionStates?.find(s => s.id === t.dbSessionId);
@@ -828,6 +857,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     return {
       sessionId: t.sessionId,
       dbSessionId: t.dbSessionId,
+      normalizedId: normalizedId,
       tabName: t.tabName,
       tabOrder: t.tabOrder,
       aiState: currentAiState,
@@ -861,10 +891,11 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           if (!isVisible) break;
           
           {
-            const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
+            const currentIndex = terminals.findIndex(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
             const nextIndex = (currentIndex + 1) % terminals.length;
             if (terminals[nextIndex]) {
-              handleTabSelect(terminals[nextIndex].dbSessionId);
+              const nextTerminalId = terminals[nextIndex].normalizedId || terminalService.getNormalizedId(terminals[nextIndex]);
+              handleTabSelect(nextTerminalId);
             }
           }
           break;
@@ -873,10 +904,11 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           if (!isVisible) break;
           
           {
-            const currentIndex = terminals.findIndex(t => t.dbSessionId === activeTabId);
+            const currentIndex = terminals.findIndex(t => (t.normalizedId || terminalService.getNormalizedId(t)) === activeTabId);
             const prevIndex = currentIndex === 0 ? terminals.length - 1 : currentIndex - 1;
             if (terminals[prevIndex]) {
-              handleTabSelect(terminals[prevIndex].dbSessionId);
+              const prevTerminalId = terminals[prevIndex].normalizedId || terminalService.getNormalizedId(terminals[prevIndex]);
+              handleTabSelect(prevTerminalId);
             }
           }
           break;
@@ -887,7 +919,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
           {
             const detail = (event as CustomEvent).detail;
             if (detail && typeof detail.index === 'number' && terminals[detail.index]) {
-              handleTabSelect(terminals[detail.index].dbSessionId);
+              const targetTerminalId = terminals[detail.index].normalizedId || terminalService.getNormalizedId(terminals[detail.index]);
+              handleTabSelect(targetTerminalId);
             }
           }
           break;
@@ -975,10 +1008,11 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     activeTabId: string
   ): boolean => {
     const terminalIndex = terminals.findIndex(t => t.dbSessionId === terminal.dbSessionId);
+    const terminalNormalizedId = terminal.normalizedId || terminalService.getNormalizedId(terminal);
     
     switch (layout.mode) {
       case 'tab':
-        return terminal.dbSessionId === activeTabId;
+        return terminalNormalizedId === activeTabId;
       case 'split':
         // Always show first 2 terminals in split mode, regardless of assignments
         // This ensures we always have 2 panels visible
@@ -1078,10 +1112,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
                   shelltenderSessionId={terminal.shelltenderSessionId || terminal.sessionId}
                   worktreePath={task.worktree_path}
                   isVisible={isVisibleTerminal && isVisible}
-                  hasFocus={focusedTerminalId === terminal.dbSessionId}
+                  hasFocus={focusedTerminalId === (terminal.normalizedId || terminalService.getNormalizedId(terminal))}
                   onSessionStatus={(status) => handleSessionStatus(terminal.dbSessionId, status)}
                   onFocusRequest={() => {
-                    setFocusedTerminal(task.id, terminal.dbSessionId);
+                    setFocusedTerminal(task.id, terminal.normalizedId || terminalService.getNormalizedId(terminal));
                   }}
                 />
               </div>
