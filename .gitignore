@@ -17,6 +17,10 @@ node_modules/
 # System files
 .DS_Store
 *.log
+*.bak
+*.backup
+*.tmp
+*~
 
 # Session data
 .tmux-*
@@ -28,3 +32,12 @@ node_modules/
 
 *.db
 *.sqlite
+
+# IDE files
+.idea/
+.vscode/
+
+# Test results
+e2e/test-results/
+playwright-report/
+test-results/
