@@ -1,5 +1,4 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect, useReducer } from 'react';
-import { Eye, EyeOff, RefreshCw, ExternalLink, Monitor, Square, Columns, Rows, Grid2x2 } from 'lucide-react';
 import { useToast } from '@shelltender/client';
 import type { Task, TerminalSession } from '../../types/task';
 import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
@@ -15,9 +14,11 @@ import { useShortcutContext } from '../../hooks/keyboard';
 import { ThrottledTerminal } from './ThrottledTerminal';
 import { useTerminalKeyboardShortcuts } from './useTerminalKeyboardShortcuts';
 import { TerminalGrid } from './TerminalGrid';
+import { TerminalGridProvider } from './TerminalGridContext';
 import { useLayoutConstraints } from './useLayoutConstraints';
 import { useTerminalStatus } from './useTerminalStatus';
 import { useTabManager, type TabAction } from './useTabManager';
+import { ControlButtons } from './ControlButtons';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { terminalPanelReducer, createInitialState, selectors } from './terminalPanelReducer';
 import './TerminalPanel.css';
@@ -259,120 +260,25 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const hasDisconnectedSessions = terminalRefreshService.hasDisconnectedSessions(sessionStatuses);
 
 
-  // Render control buttons (reusable for both tab mode and split view)
+  // Render control buttons using the extracted component
   const renderControlButtons = () => (
-    <>
-      {/* Split View Toggle */}
-      <button 
-          onClick={() => {
-            if (layout.mode === 'tab') {
-              // Switch to vertical split if allowed, otherwise horizontal, otherwise stay in tab
-              if (canShowVertical) {
-                updateLayout( { mode: 'split', orientation: 'vertical' });
-              } else if (canShowHorizontal) {
-                updateLayout( { mode: 'split', orientation: 'horizontal' });
-              }
-              // If neither split view is possible, stay in tab mode
-            } else if (layout.mode === 'split' && layout.orientation === 'vertical') {
-              // Switch to horizontal split if allowed, otherwise quad if allowed, otherwise tab
-              if (canShowHorizontal) {
-                updateLayout( { orientation: 'horizontal' });
-              } else if (canShowQuad) {
-                updateLayout( { mode: 'split-4' });
-              } else {
-                updateLayout( { mode: 'tab' });
-              }
-            } else if (layout.mode === 'split' && layout.orientation === 'horizontal') {
-              // Switch to quad view if allowed, otherwise back to tab
-              if (canShowQuad) {
-                updateLayout( { mode: 'split-4' });
-              } else {
-                updateLayout( { mode: 'tab' });
-              }
-            } else {
-              // From quad view, always go back to tab mode
-              updateLayout( { mode: 'tab' });
-            }
-            // Save layout after any changes
-            saveLayout();
-          }}
-          className={`p-1 transition-colors ${
-            layout.mode !== 'tab' 
-              ? 'text-blue-400 hover:text-blue-300' 
-              : 'text-gray-400 hover:text-gray-200'
-          }`}
-          title={
-            layout.mode === 'tab' 
-              ? (!canShowVertical && !canShowHorizontal) ? 'Screen too small for split view' : 'Enable split view (Alt+D)' 
-              : layout.mode === 'split' && layout.orientation === 'vertical'
-              ? !canShowHorizontal ? 'Switch to single tab view (Alt+D) - Screen too narrow for horizontal split' : 'Switch to horizontal split (Alt+D)'
-              : layout.mode === 'split' && layout.orientation === 'horizontal'
-              ? !canShowQuad ? 'Switch to single tab view (Alt+D) - Screen too small for quad view' : 'Switch to quad view (Alt+D)'
-              : layout.mode === 'split-4'
-              ? 'Switch to single tab view (Alt+D)'
-              : 'Switch to single tab view (Alt+D)'
-          }
-        >
-          {layout.mode === 'tab' 
-            ? <Square className="w-4 h-4" />
-            : layout.mode === 'split' && layout.orientation === 'vertical'
-            ? <Columns className="w-4 h-4" />  // Columns icon for vertical split (side by side)
-            : layout.mode === 'split' && layout.orientation === 'horizontal'
-            ? <Rows className="w-4 h-4" />     // Rows icon for horizontal split (top/bottom)
-            : <Grid2x2 className="w-4 h-4" />  // Grid icon for quad view
-          }
-        </button>
-      <button 
-        onClick={onToggleSidebar}
-        className="text-gray-400 hover:text-gray-200 p-1"
-        title={isFullscreen ? "Exit fullscreen (Alt+F)" : "Enter fullscreen (Alt+F)"}
-      >
-        {isFullscreen ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-      </button>
-      <button 
-        onClick={(e) => {
-          // In split view mode, let the SplitViewContainer handle it
-          if (layout.mode === 'split' || layout.mode === 'split-4') {
-            // Just mark the button with data-action, the event will bubble up
-            return;
-          }
-          // In tab mode, handle it here
-          handleRefreshSession();
-        }}
-        data-action="refresh"
-        className={`p-1 transition-colors ${
-          isResetting 
-            ? 'text-blue-400 animate-spin' 
-            : Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error')
-            ? 'text-orange-400 hover:text-orange-300'
-            : 'text-gray-400 hover:text-gray-200'
-        }`}
-        disabled={isResetting}
-        title={Array.from(sessionStatuses.values()).some(s => s === 'disconnected' || s === 'error') 
-          ? "Reconnect and restore terminal session (Ctrl+Shift+R)" 
-          : "Refresh terminal - sync state, reload buffer, restore cursor (Ctrl+Shift+R)"}
-      >
-        <RefreshCw className="w-4 h-4" />
-      </button>
-      <button 
-        onClick={() => {
-          // Open terminal in a new window
-          const url = `/terminal/${task.project_id}/${task.id}`;
-          const features = 'width=1400,height=800,menubar=no,toolbar=no,location=no,status=no';
-          window.open(url, `terminal-${task.id}`, features);
-        }}
-        className="text-gray-400 hover:text-gray-200 p-1"
-        title="Open in new window"
-      >
-        <ExternalLink className="w-4 h-4" />
-      </button>
-      <button 
-        onClick={onToggleValidation}
-        className={`p-1 transition-colors ${validationMode ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}`}
-      >
-        <Monitor className="w-4 h-4" />
-      </button>
-    </>
+    <ControlButtons
+      layout={layout}
+      canShowVertical={canShowVertical}
+      canShowHorizontal={canShowHorizontal}
+      canShowQuad={canShowQuad}
+      isFullscreen={isFullscreen}
+      isResetting={isResetting}
+      validationMode={validationMode}
+      sessionStatuses={sessionStatuses}
+      taskProjectId={task.project_id}
+      taskId={task.id}
+      onLayoutUpdate={updateLayout}
+      onLayoutSave={saveLayout}
+      onToggleSidebar={onToggleSidebar}
+      onRefreshSession={handleRefreshSession}
+      onToggleValidation={onToggleValidation}
+    />
   );
 
   // Convert terminals to Tab format for TerminalTabs component
@@ -424,42 +330,46 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       )}
 
       {/* Terminal Content - Delegated to TerminalGrid component */}
-      <TerminalGrid
-        ref={terminalContainerRef}
-        task={task}
-        terminals={terminals}
-        layout={layout}
-        activeTabId={activeTabId}
-        isVisible={isVisible}
-        focusedTerminalId={focusedTerminalId}
-        isResetting={isResetting}
-        onSessionStatus={handleSessionStatus}
-        onFocusRequest={(terminalId) => {
-          terminalStore.updateTerminal(task.id, terminalId, {
-            type: 'set-focus',
-            focus: true
-          });
+      <TerminalGridProvider
+        value={{
+          task,
+          terminals,
+          activeTabId,
+          isVisible,
+          focusedTerminalId,
+          isResetting,
+          terminalRefs,
+          onSessionStatus: handleSessionStatus,
+          onFocusRequest: (terminalId) => {
+            terminalStore.updateTerminal(task.id, terminalId, {
+              type: 'set-focus',
+              focus: true
+            });
+          },
+          onResetStateChange: (value) => 
+            dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })
         }}
-        onEmptyPanelAction={(action) => {
-          switch (action) {
-            case 'claude':
-              modifyTab({ type: 'add', options: { aiAgent: 'claude' } });
-              break;
-            case 'bash':
-              modifyTab({ type: 'add', options: { aiAgent: 'none', tabName: 'Bash' } });
-              break;
-            case 'advanced':
-              dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
-              break;
-          }
-        }}
-        onResetStateChange={(value) => 
-          dispatch({ type: value ? 'START_RESET' : 'FINISH_RESET' })
-        }
-        onTerminalReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
-        renderControlButtons={renderControlButtons}
-        terminalRefs={terminalRefs}
-      />
+      >
+        <TerminalGrid
+          ref={terminalContainerRef}
+          layout={layout}
+          onEmptyPanelAction={(action) => {
+            switch (action) {
+              case 'claude':
+                modifyTab({ type: 'add', options: { aiAgent: 'claude' } });
+                break;
+              case 'bash':
+                modifyTab({ type: 'add', options: { aiAgent: 'none', tabName: 'Bash' } });
+                break;
+              case 'advanced':
+                dispatch({ type: 'SHOW_SESSION_LAUNCHER' });
+                break;
+            }
+          }}
+          onTerminalReorder={(tabs) => modifyTab({ type: 'reorder', tabs })}
+          renderControlButtons={renderControlButtons}
+        />
+      </TerminalGridProvider>
 
       {/* Session Launcher Modal */}
       <SessionLauncher

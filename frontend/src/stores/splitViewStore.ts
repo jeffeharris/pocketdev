@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { layoutAPI } from '../services/layout-api.service';
 
 export interface SplitLayoutConfig {
   mode: 'tab' | 'split' | 'split-4';
@@ -71,32 +72,17 @@ export const useSplitViewStore = create<SplitViewState>()(
             draft.layoutError = null;
           });
           
-          try {
-            const response = await fetch(
-              `/api/projects/${projectId}/tasks/${taskId}/split-layout`
-            );
-            
-            if (response.ok) {
-              const layout = await response.json();
-              set(draft => {
-                draft.currentLayout = layout;
-                draft.layoutState = 'loaded';
-              });
+          const layout = await layoutAPI.loadLayout(projectId, taskId);
+          
+          set(draft => {
+            if (layout) {
+              draft.currentLayout = layout;
             } else {
               // Use default layout if none exists
-              set(draft => {
-                draft.currentLayout = { ...defaultLayout };
-                draft.layoutState = 'loaded';
-              });
-            }
-          } catch (error) {
-            console.error('Error loading split layout:', error);
-            set(draft => {
               draft.currentLayout = { ...defaultLayout };
-              draft.layoutState = 'error';
-              draft.layoutError = error instanceof Error ? error.message : 'Failed to load layout';
-            });
-          }
+            }
+            draft.layoutState = 'loaded';
+          });
         },
         
         updateLayout: (changes) => {
@@ -202,20 +188,5 @@ export const saveLayout = async () => {
     return;
   }
   
-  try {
-    const response = await fetch(
-      `/api/projects/${currentProjectId}/tasks/${currentTaskId}/split-layout`,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentLayout)
-      }
-    );
-    
-    if (!response.ok) {
-      console.error('Failed to save split layout');
-    }
-  } catch (error) {
-    console.error('Error saving split layout:', error);
-  }
+  await layoutAPI.saveLayout(currentProjectId, currentTaskId, currentLayout);
 };

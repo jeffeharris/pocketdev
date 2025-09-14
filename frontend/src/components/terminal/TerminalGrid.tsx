@@ -15,56 +15,44 @@ import React, { forwardRef } from 'react';
 import { DirectTerminal } from './DirectTerminal';
 import { EmptyTerminalPanel } from './EmptyTerminalPanel';
 import { SplitViewContainer } from './SplitViewContainer';
-import type { TerminalSession, Task } from '../../types/task';
+import type { TerminalSession } from '../../types/task';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import type { DirectTerminalHandle } from './DirectTerminal';
+import { useTerminalGridContext } from './TerminalGridContext';
 
+// Simplified interface - reduced from 16+ props to 6
 interface TerminalGridProps {
-  // Core data
-  task: Task;
-  terminals: TerminalSession[];
-  
   // Layout configuration
   layout: SplitLayoutConfig;
-  activeTabId: string;
   
-  // Visibility and focus
-  isVisible: boolean;
-  focusedTerminalId: string | null;
-  
-  // State flags
-  isResetting: boolean;
-  
-  // Callbacks
-  onSessionStatus: (dbSessionId: string, status: 'connected' | 'disconnected' | 'error') => void;
-  onFocusRequest: (terminalId: string) => void;
+  // Actions that vary per usage
   onEmptyPanelAction: (action: 'claude' | 'bash' | 'advanced') => void;
-  onResetStateChange: (isResetting: boolean) => void;
   onTerminalReorder: (draggedId: string, targetId: string) => void;
   
   // Render props
   renderControlButtons: () => React.ReactNode;
-  
-  // Ref management
-  terminalRefs: React.MutableRefObject<Map<string, DirectTerminalHandle>>;
 }
 
-export const TerminalGrid = forwardRef<HTMLDivElement, TerminalGridProps>(({
-  task,
-  terminals,
+// Internal component that uses context
+const TerminalGridInternal = forwardRef<HTMLDivElement, TerminalGridProps>(({
   layout,
-  activeTabId,
-  isVisible,
-  focusedTerminalId,
-  isResetting,
-  onSessionStatus,
-  onFocusRequest,
   onEmptyPanelAction,
-  onResetStateChange,
   onTerminalReorder,
-  renderControlButtons,
-  terminalRefs
+  renderControlButtons
 }, ref) => {
+  // Get most values from context
+  const {
+    task,
+    terminals,
+    activeTabId,
+    isVisible,
+    focusedTerminalId,
+    isResetting,
+    terminalRefs,
+    onSessionStatus,
+    onFocusRequest,
+    onResetStateChange
+  } = useTerminalGridContext();
   // Helper functions (moved from props to internal implementation)
   const shouldShowTerminal = (
     terminal: TerminalSession, 
@@ -204,4 +192,7 @@ export const TerminalGrid = forwardRef<HTMLDivElement, TerminalGridProps>(({
   );
 });
 
-TerminalGrid.displayName = 'TerminalGrid';
+TerminalGridInternal.displayName = 'TerminalGridInternal';
+
+// Public component that can be used with or without context
+export const TerminalGrid = TerminalGridInternal;
