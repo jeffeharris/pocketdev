@@ -2,12 +2,12 @@
  * TerminalOrchestrator Service
  * 
  * Deep module that handles all terminal coordination logic.
- * Extracted from TerminalPanel to separate orchestration from presentation.
+ * Processes all actions internally instead of returning them for UI to handle.
  * 
  * Following Ousterhout's principles:
  * - Simple interface (4 methods) hiding complex coordination
  * - Single responsibility: orchestrating terminal operations
- * - No UI coupling - returns actions for UI to perform
+ * - Processes actions internally - no leaking to UI layer
  */
 
 import { terminalRefreshService, type RefreshEvent } from './terminal-refresh.service';
@@ -15,16 +15,13 @@ import { useTerminalStore } from '../stores/terminal/terminalStore.deep';
 import type { Task, TerminalSession } from '../types/task';
 import type { DirectTerminalHandle } from '../components/terminal/DirectTerminal';
 
-// Actions the UI should perform based on orchestration decisions
-export type OrchestratorAction =
-  | { type: 'refresh-terminal'; terminalId: string }
-  | { type: 'reload-task' }
-  | { type: 'fit-terminal'; terminalId: string }
-  | { type: 'focus-terminal'; terminalId: string }
-  | { type: 'show-notification'; message: string; level: 'success' | 'warning' | 'error' }
-  | { type: 'start-refresh-ui' }
-  | { type: 'end-refresh-ui' }
-  | { type: 'switch-tab'; tabId: string };
+// UI callbacks the orchestrator needs to perform its work
+export interface OrchestratorCallbacks {
+  showNotification: (level: 'success' | 'warning' | 'error', message: string) => void;
+  dispatch: (action: any) => void;
+  reloadTask: () => Promise<void>;
+  selectTab: (tabId: string) => void;
+}
 
 // Configuration for orchestrator operations
 export interface OrchestratorConfig {
@@ -35,15 +32,85 @@ export interface OrchestratorConfig {
 }
 
 export class TerminalOrchestrator {
+  private callbacks: OrchestratorCallbacks | null = null;
+  
+  /**
+   * Initialize the orchestrator with UI callbacks
+   * This allows the orchestrator to process actions internally
+   */
+  initialize(callbacks: OrchestratorCallbacks): void {
+    this.callbacks = callbacks;
+  }
+  
+  /**
+   * Process actions internally instead of returning them
+   */
+  private async processActions(actions: Array<{ type: string; [key: string]: any }>): Promise<void> {
+    if (!this.callbacks) {
+      console.error('[TerminalOrchestrator] Not initialized with callbacks');
+      return;
+    }
+    
+    for (const action of actions) {
+      switch (action.type) {
+        case 'refresh-terminal': {
+          const ref = action.terminalRef;
+          if (ref?.refresh) {
+            ref.refresh();
+          }
+          break;
+        }
+        case 'reload-task': {
+          await this.callbacks.reloadTask();
+          break;
+        }
+        case 'fit-terminal': {
+          const ref = action.terminalRef;
+          if (ref?.fit) {
+            ref.fit();
+          }
+          break;
+        }
+        case 'focus-terminal': {
+          const ref = action.terminalRef;
+          if (ref?.focus) {
+            ref.focus();
+          }
+          break;
+        }
+        case 'show-notification': {
+          this.callbacks.showNotification(action.level, action.message);
+          break;
+        }
+        case 'start-refresh-ui': {
+          this.callbacks.dispatch({ type: 'START_RESET' });
+          break;
+        }
+        case 'end-refresh-ui': {
+          this.callbacks.dispatch({ type: 'FINISH_RESET' });
+          break;
+        }
+        case 'switch-tab': {
+          this.callbacks.selectTab(action.tabId);
+          break;
+        }
+      }
+    }
+  }
+  
   /**
    * Refresh the active terminal session
-   * Coordinates between refresh service, store, and UI
+   * Processes all coordination internally
    */
   async refreshActiveTerminal(
     config: OrchestratorConfig,
     activeTerminalId: string
-  ): Promise<{ actions: OrchestratorAction[]; success: boolean }> {
-    const actions: OrchestratorAction[] = [];
+  ): Promise<{ success: boolean; message?: string }> {
+    if (!this.callbacks) {
+      return { success: false, message: 'Orchestrator not initialized' };
+    }
+    
+    const actions: any[] = [];
     
     // Start UI refresh state
     actions.push({ type: 'start-refresh-ui' });
@@ -57,7 +124,7 @@ export class TerminalOrchestrator {
         sessionStatuses: config.sessionStatuses
       });
       
-      // Translate domain events to UI actions
+      // Translate domain events to internal actions
       for (const event of refreshResult.events) {
         switch (event.type) {
           case 'session-disconnected':
@@ -71,8 +138,9 @@ export class TerminalOrchestrator {
             actions.push({ type: 'reload-task' });
             break;
           case 'refresh-completed':
-            actions.push({ type: 'refresh-terminal', terminalId: event.terminalId });
-            actions.push({ type: 'fit-terminal', terminalId: event.terminalId });
+            const terminalRef = config.terminalRefs.get(event.terminalId);
+            actions.push({ type: 'refresh-terminal', terminalRef });
+            actions.push({ type: 'fit-terminal', terminalRef });
             break;
           case 'refresh-failed':
             actions.push({
@@ -86,26 +154,38 @@ export class TerminalOrchestrator {
       
       // Focus terminal after refresh
       if (activeTerminalId) {
-        actions.push({ type: 'focus-terminal', terminalId: activeTerminalId });
+        const terminalRef = config.terminalRefs.get(activeTerminalId);
+        actions.push({ type: 'focus-terminal', terminalRef });
       }
       
-      return { actions, success: refreshResult.success };
-    } finally {
-      // Always end refresh UI state
+      // Process all actions internally
+      await this.processActions(actions);
+      
+      // Schedule UI refresh end
       setTimeout(() => {
-        actions.push({ type: 'end-refresh-ui' });
+        this.processActions([{ type: 'end-refresh-ui' }]);
       }, 1000);
+      
+      return { success: refreshResult.success };
+    } catch (error) {
+      console.error('[TerminalOrchestrator] Refresh failed:', error);
+      await this.processActions([{ type: 'end-refresh-ui' }]);
+      return { success: false, message: 'Refresh failed' };
     }
   }
   
   /**
    * Reconnect a specific terminal session
-   * Handles individual session recovery
+   * Handles all coordination internally
    */
   async reconnectSession(
     config: OrchestratorConfig,
     dbSessionId: string
-  ): Promise<{ actions: OrchestratorAction[]; success: boolean }> {
+  ): Promise<{ success: boolean }> {
+    if (!this.callbacks) {
+      return { success: false };
+    }
+    
     // Get domain events from service
     const events = terminalRefreshService.getReconnectEvents(
       dbSessionId,
@@ -113,8 +193,8 @@ export class TerminalOrchestrator {
       config.sessionStatuses
     );
     
-    // Translate domain events to UI actions
-    const actions: OrchestratorAction[] = [];
+    // Translate domain events to internal actions
+    const actions: any[] = [];
     for (const event of events) {
       switch (event.type) {
         case 'session-disconnected':
@@ -128,7 +208,8 @@ export class TerminalOrchestrator {
           actions.push({ type: 'reload-task' });
           break;
         case 'refresh-completed':
-          actions.push({ type: 'refresh-terminal', terminalId: event.terminalId });
+          const terminalRef = config.terminalRefs.get(event.terminalId);
+          actions.push({ type: 'refresh-terminal', terminalRef });
           break;
         case 'reconnection-failed':
           actions.push({
@@ -140,28 +221,28 @@ export class TerminalOrchestrator {
       }
     }
     
-    // If terminal needs focus after reconnection
+    // Focus terminal after reconnection
     const terminal = config.terminals.find(t => t.dbSessionId === dbSessionId);
     if (terminal) {
-      actions.push({ type: 'focus-terminal', terminalId: terminal.normalizedId });
+      const terminalRef = config.terminalRefs.get(terminal.normalizedId);
+      actions.push({ type: 'focus-terminal', terminalRef });
     }
     
-    return { 
-      actions,
-      success: actions.length > 0 
-    };
+    // Process all actions internally
+    await this.processActions(actions);
+    
+    return { success: events.length > 0 && !events.some(e => e.type === 'reconnection-failed') };
   }
   
   /**
    * Handle terminal focus coordination
-   * Manages focus between store state and UI elements
+   * Manages focus internally
    */
   focusTerminal(
     taskId: string,
     terminalId: string,
     terminalRefs: Map<string, DirectTerminalHandle>
-  ): OrchestratorAction[] {
-    const actions: OrchestratorAction[] = [];
+  ): void {
     const store = useTerminalStore.getState();
     
     // Update store focus state
@@ -170,52 +251,47 @@ export class TerminalOrchestrator {
       focus: true
     });
     
-    // Request UI focus
-    actions.push({ type: 'focus-terminal', terminalId });
-    
-    // Handle actual DOM focus after a delay
-    setTimeout(() => {
-      const ref = terminalRefs.get(terminalId);
-      if (ref?.focus) {
-        ref.focus();
-      }
-    }, 100);
-    
-    return actions;
+    // Focus the terminal after a delay
+    const terminalRef = terminalRefs.get(terminalId);
+    if (terminalRef) {
+      setTimeout(() => {
+        this.processActions([{ type: 'focus-terminal', terminalRef }]);
+      }, 100);
+    }
   }
   
   /**
    * Coordinate tab switching
-   * Ensures proper state updates and focus management
+   * Handles all coordination internally
    */
-  switchToTab(
+  async switchToTab(
     config: OrchestratorConfig,
     dbSessionId: string
-  ): OrchestratorAction[] {
-    const actions: OrchestratorAction[] = [];
+  ): Promise<void> {
+    if (!this.callbacks) {
+      return;
+    }
     
     // Check if tab exists
     const terminal = config.terminals.find(t => t.dbSessionId === dbSessionId);
     if (!terminal) {
-      actions.push({ 
+      await this.processActions([{ 
         type: 'show-notification', 
         message: `Tab not found: ${dbSessionId}`,
         level: 'error'
-      });
-      return actions;
+      }]);
+      return;
     }
     
     // Switch tab
-    actions.push({ type: 'switch-tab', tabId: dbSessionId });
+    await this.processActions([{ type: 'switch-tab', tabId: dbSessionId }]);
     
     // Focus the terminal
-    actions.push(...this.focusTerminal(
+    this.focusTerminal(
       config.taskId,
       terminal.normalizedId,
       config.terminalRefs
-    ));
-    
-    return actions;
+    );
   }
 }
 

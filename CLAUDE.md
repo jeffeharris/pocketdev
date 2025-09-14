@@ -6,15 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PocketDev is a web-based system for managing AI development teams. It treats AI developers (Claude, Codex, Gemini) like a real development team, where you can assign tasks, monitor progress, and merge their work - essentially turning you into an engineering manager for AI developers.
 
-## 🎯 Design Philosophy: Deep Modules
+## 🎯 Design Philosophy: AI-Optimized Architecture
 
-This codebase follows John Ousterhout's "A Philosophy of Software Design" principles. The most important concept is **deep modules** - simple interfaces that hide significant complexity.
+This codebase is designed for **AI-assisted development** - optimizing for clarity and comprehension when working with AI tools like Claude.
 
-### What Makes a Deep Module
-- **Simple interface**: 5-10 public methods maximum
-- **Hidden complexity**: Implementation significantly more complex than interface
-- **Clear abstraction**: Users don't need to know how it works
-- **Single responsibility**: One module, one job
+### Core Principle
+**"One concept, one file, complete implementation"** - AI understands complete modules better than scattered logic.
+
+### Architectural Approach
+We use different patterns for different layers:
+- **Services**: Ousterhout's deep modules (simple interface, complex implementation)
+- **UI Components**: React patterns (compound components, container/presentational)
+- **Features**: Self-contained modules (all related logic in one file)
 
 ### Current Architecture Challenges
 The codebase has many **shallow modules** - interfaces nearly as complex as implementations:
@@ -26,6 +29,7 @@ The codebase has many **shallow modules** - interfaces nearly as complex as impl
 See `/plan-pocketdev/bugs/` for ongoing refactoring efforts to create deeper modules.
 
 ### Additional Resources
+- **AI Architecture Guide**: `/plan-pocketdev/steering/ai-assisted-architecture.md` - Patterns for AI collaboration
 - **Design Guidance**: `/plan-pocketdev/steering/developer-guidance.md` - Architectural principles and patterns
 - **Code Examples**: `/plan-pocketdev/steering/module-design-examples.md` - Before/after refactoring examples
 - **Tech Choices**: `/plan-pocketdev/steering/tech-choices.md` - Technology decisions and rationale

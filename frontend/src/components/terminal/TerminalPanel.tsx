@@ -161,8 +161,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       const activeRef = activeTerminal ? terminalRefs.current.get(activeTerminal.dbSessionId) : undefined;
       activeRef?.focus();
     },
-    switchToTab: (dbSessionId: string) => {
-      const actions = terminalOrchestrator.switchToTab(
+    switchToTab: async (dbSessionId: string) => {
+      await terminalOrchestrator.switchToTab(
         {
           taskId: task.id,
           terminals,
@@ -171,7 +171,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         },
         dbSessionId
       );
-      processOrchestratorActions(actions);
     }
   }), [activeTabId, terminals, selectTab]);
   
@@ -186,11 +185,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       activeTabId
     );
     
-    // Process orchestrator actions
-    await processOrchestratorActions(result.actions);
-    
     if (!result.success) {
-      showNotification('error', 'Failed to refresh terminal session');
+      showNotification('error', result.message || 'Failed to refresh terminal session');
     }
   };
 
@@ -202,56 +198,15 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     showToast(message, 5000);
   };
   
-  // Process actions from orchestrator service
-  const processOrchestratorActions = async (actions: any[]) => {
-    for (const action of actions) {
-      switch (action.type) {
-        case 'refresh-terminal': {
-          const terminalRef = terminalRefs.current.get(action.terminalId);
-          if (terminalRef?.refresh) {
-            terminalRef.refresh();
-          }
-          break;
-        }
-        case 'reload-task': {
-          if (task.onReload) {
-            await task.onReload();
-          }
-          break;
-        }
-        case 'fit-terminal': {
-          const terminalRef = terminalRefs.current.get(action.terminalId);
-          if (terminalRef?.fit) {
-            terminalRef.fit();
-          }
-          break;
-        }
-        case 'focus-terminal': {
-          const terminalRef = terminalRefs.current.get(action.terminalId);
-          if (terminalRef?.focus) {
-            terminalRef.focus();
-          }
-          break;
-        }
-        case 'show-notification': {
-          showNotification(action.level, action.message);
-          break;
-        }
-        case 'start-refresh-ui': {
-          dispatch({ type: 'START_RESET' });
-          break;
-        }
-        case 'end-refresh-ui': {
-          dispatch({ type: 'FINISH_RESET' });
-          break;
-        }
-        case 'switch-tab': {
-          selectTab(action.tabId);
-          break;
-        }
-      }
-    }
-  };
+  // Initialize orchestrator with UI callbacks on mount
+  useEffect(() => {
+    terminalOrchestrator.initialize({
+      showNotification,
+      dispatch,
+      reloadTask: task.onReload || (() => Promise.resolve()),
+      selectTab
+    });
+  }, [task.onReload, selectTab]);
 
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
@@ -264,8 +219,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       },
       dbSessionId
     );
-    
-    await processOrchestratorActions(result.actions);
     
     if (!result.success) {
       const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
