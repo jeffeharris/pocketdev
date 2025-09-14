@@ -24,7 +24,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-12 |
 | BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | **RESOLVED** | 2025-09-11 |
 | BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087→344 | **High** | Complex god component | **Resolved** | 2025-08-16 |
-| BUG-010 | task.controller.js needs modularization | Technical Debt | 907 | **High** | 13 methods mixing concerns | Open | 2025-08-03 |
+| BUG-010 | task.controller.js needs modularization | Technical Debt | 907→535 | **High** | 13 methods mixing concerns | **Resolved** | 2025-08-03 |
 | BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **RESOLVED** | 2025-08-18 |
 | BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-22 |
 | BUG-017 | Consolidate Session Identity Abstraction | Technical Debt | N/A | **High** | Leaky abstraction in 21+ files | **RESOLVED** | 2025-08-03 |
@@ -48,7 +48,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**18 bugs resolved** (17 via service extraction/refactoring + 1 functional fix):
+**19 bugs resolved** (18 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -139,6 +139,12 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Split view logic consolidated into `/features/split-view.ts` feature module
    - Feature module exposes only 3 public exports
    - Store complexity hidden behind simple feature interface
+
+16. **BUG-010** (High): task.controller.js modularization - **RESOLVED** (2025-09-14)
+   - Reduced from 890 lines to 535 lines (40% reduction)
+   - Created async wrapper to eliminate 30 try-catch blocks (~450 lines of boilerplate)
+   - Maintains consolidated controller structure per architecture philosophy
+   - All 31 methods now use consistent error handling pattern
 
 ### Metrics Achieved
 - **Backend**: Controllers reduced by 90%+ in size
