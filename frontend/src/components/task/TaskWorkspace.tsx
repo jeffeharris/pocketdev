@@ -123,8 +123,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
         
         // Also update the terminal store
         if (taskDetails.terminals) {
-          const { setTerminals } = useTerminalStore.getState();
-          setTerminals(taskId, taskDetails.terminals);
+          useTerminalStore.getState().initializeTask(taskId, taskDetails.terminals);
         }
       } catch (error: any) {
         console.error('Failed to load task details:', error);
@@ -352,8 +351,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                         
                         // Also update the terminal store
                         if (taskDetails.terminals) {
-                          const { setTerminals } = useTerminalStore.getState();
-                          setTerminals(task.id, taskDetails.terminals);
+                          useTerminalStore.getState().initializeTask(task.id, taskDetails.terminals);
                         }
                       });
                     }

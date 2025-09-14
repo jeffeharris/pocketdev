@@ -48,8 +48,7 @@ export function StandaloneTerminal() {
       setTask(taskData);
       
       if (taskData.terminals) {
-        const { setTerminals } = useTerminalStore.getState();
-        setTerminals(taskId, taskData.terminals);
+        useTerminalStore.getState().initializeTask(taskId, taskData.terminals);
       }
     } catch (err) {
       console.error('Error reloading task:', err);

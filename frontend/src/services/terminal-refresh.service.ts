@@ -2,22 +2,24 @@
  * TerminalRefreshService - Domain service for terminal refresh operations
  * 
  * This deep module encapsulates the complex refresh logic that was previously
- * mixed into TerminalPanel. It determines what refresh actions are needed
+ * mixed into TerminalPanel. It determines what refresh events occur
  * but doesn't directly manipulate UI components.
  * 
  * Following Ousterhout's principles and separation of concerns:
- * - Service layer determines WHAT needs to be done
- * - UI layer handles HOW to do it
+ * - Service layer determines WHAT happened (domain events)
+ * - Orchestrator/UI layer determines HOW to respond
  */
 
-import type { Task, TerminalSession } from '../types/task';
+import type { TerminalSession } from '../types/task';
 
-// Actions that the UI layer should perform
-export type RefreshAction = 
-  | { type: 'refresh-terminal'; terminalId: string }
-  | { type: 'reload-task' }
-  | { type: 'fit-terminal'; terminalId: string }
-  | { type: 'show-notification'; message: string; level: 'success' | 'warning' | 'error' };
+// Domain events that describe what happened, not what to do
+export type RefreshEvent = 
+  | { type: 'session-disconnected'; terminalId: string; sessionName: string }
+  | { type: 'session-reconnected'; terminalId: string }
+  | { type: 'reconnection-failed'; terminalId: string; reason: string }
+  | { type: 'task-reload-required'; reason: string }
+  | { type: 'refresh-completed'; terminalId: string }
+  | { type: 'refresh-failed'; terminalId: string; error: string };
 
 export interface RefreshOptions {
   taskId: string;
@@ -29,17 +31,17 @@ export interface RefreshOptions {
 export interface RefreshResult {
   success: boolean;
   message: string;
-  actions: RefreshAction[];
+  events: RefreshEvent[];
 }
 
 export class TerminalRefreshService {
   /**
-   * Determine what refresh actions are needed
-   * Returns a list of actions for the UI to perform
+   * Analyze session state and determine what refresh events occurred
+   * Returns domain events, not UI instructions
    */
   async refreshSession(options: RefreshOptions): Promise<RefreshResult> {
     const { activeTerminalId, terminals, sessionStatuses } = options;
-    const actions: RefreshAction[] = [];
+    const events: RefreshEvent[] = [];
     
     // Phase 1: Assess current state
     const assessment = this.assessSessionState(activeTerminalId, terminals, sessionStatuses);
@@ -47,70 +49,86 @@ export class TerminalRefreshService {
       return {
         success: false,
         message: 'No active terminal to refresh',
-        actions: []
+        events: []
       };
     }
     
-    // Phase 2: Determine refresh actions needed
+    // Phase 2: Report domain events based on state
     if (assessment.isDisconnected) {
-      // For disconnected sessions, we need a full reload
-      actions.push({ type: 'reload-task' });
-      actions.push({ 
-        type: 'show-notification', 
-        message: 'Reconnecting terminal session...', 
-        level: 'warning' 
+      events.push({
+        type: 'session-disconnected',
+        terminalId: activeTerminalId,
+        sessionName: assessment.terminal.tabName || 'Unknown'
+      });
+      
+      // Disconnected sessions require task reload
+      events.push({
+        type: 'task-reload-required',
+        reason: 'Session disconnected - full reload needed'
       });
     } else {
-      // For connected sessions, just refresh the terminal
-      actions.push({ type: 'refresh-terminal', terminalId: activeTerminalId });
-      actions.push({ type: 'fit-terminal', terminalId: activeTerminalId });
+      // Session is connected, just needs refresh
+      events.push({
+        type: 'refresh-completed',
+        terminalId: activeTerminalId
+      });
     }
-    
-    // Phase 3: Add fitting actions with delay
-    // Terminal fitting needs to happen after DOM updates
-    setTimeout(() => {
-      actions.push({ type: 'fit-terminal', terminalId: activeTerminalId });
-    }, 200);
     
     return {
       success: true,
-      message: assessment.isDisconnected ? 'Reconnecting...' : 'Terminal refreshed',
-      actions
+      message: assessment.isDisconnected ? 'Session disconnected - reconnecting...' : 'Terminal refreshed',
+      events
     };
   }
   
   /**
-   * Determine reconnection actions for a specific session
+   * Analyze reconnection requirements for a specific session
+   * Returns domain events about the reconnection attempt
    */
-  getReconnectActions(
+  getReconnectEvents(
     dbSessionId: string,
     terminals: Array<TerminalSession & { normalizedId: string }>,
     sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>
-  ): RefreshAction[] {
+  ): RefreshEvent[] {
     const terminal = terminals.find(t => t.dbSessionId === dbSessionId);
-    if (!terminal) return [];
-    
-    const status = sessionStatuses.get(terminal.normalizedId);
-    const actions: RefreshAction[] = [];
-    
-    if (status === 'disconnected' || status === 'error') {
-      // Disconnected sessions need a full reload
-      actions.push({ type: 'reload-task' });
-      actions.push({ 
-        type: 'show-notification', 
-        message: `Reconnecting terminal "${terminal.tabName}"...`, 
-        level: 'warning' 
-      });
-    } else {
-      // Connected sessions just need refresh
-      actions.push({ type: 'refresh-terminal', terminalId: terminal.normalizedId });
+    if (!terminal) {
+      return [{
+        type: 'reconnection-failed',
+        terminalId: dbSessionId,
+        reason: 'Terminal not found'
+      }];
     }
     
-    return actions;
+    const status = sessionStatuses.get(terminal.normalizedId);
+    const events: RefreshEvent[] = [];
+    
+    if (status === 'disconnected' || status === 'error') {
+      // Report disconnection
+      events.push({
+        type: 'session-disconnected',
+        terminalId: terminal.normalizedId,
+        sessionName: terminal.tabName || 'Unknown'
+      });
+      
+      // Disconnected sessions need full reload
+      events.push({
+        type: 'task-reload-required',
+        reason: `Terminal "${terminal.tabName}" requires reconnection`
+      });
+    } else {
+      // Session is connected, just refresh
+      events.push({
+        type: 'refresh-completed',
+        terminalId: terminal.normalizedId
+      });
+    }
+    
+    return events;
   }
   
   /**
    * Check if any sessions are disconnected
+   * Pure domain logic - no UI concerns
    */
   hasDisconnectedSessions(sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>): boolean {
     for (const status of sessionStatuses.values()) {

@@ -6,7 +6,7 @@ import { DirectTerminal, type DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs, type Tab } from './TerminalTabs';
 import { SessionLauncher, type SessionOptions } from './SessionLauncher';
 import { useService } from '../../services';
-import { terminalRefreshService } from '../../services/terminal-refresh.service';
+import { terminalOrchestrator } from '../../services/terminal-orchestrator.service';
 import { useTaskStatus } from '../../hooks/useTaskStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
@@ -110,29 +110,15 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Activate terminal keyboard context only when visible (priority 10 for feature-level)
   useShortcutContext('terminal', { enabled: isVisible, priority: 10 });
   
-  // Single consolidated mount/unmount effect for initialization
+  // Set current task for split view on mount
   useEffect(() => {
-    // Initialize split view task context
     if (task.project_id) {
       setCurrentTask(task.id, task.project_id);
     }
-    
-    // Initialize terminal store from task data
-    if (task.terminals && task.terminals.length > 0) {
-      const currentState = terminalStore.getTaskState(task.id);
-      
-      // Only initialize if store is empty - happens once on mount
-      if (currentState.terminals.length === 0) {
-        terminalStore.initializeTask(task.id, task.terminals);
-      }
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      // Optionally dispose task on unmount if needed
-      // terminalStore.disposeTask(task.id);
-    };
-  }, [task.id, task.project_id, task.terminals, setCurrentTask, terminalStore]);
+  }, [task.id, task.project_id, setCurrentTask]);
+  
+  // Note: Terminal store initialization happens at task load level (TaskWorkspace/StandaloneTerminal)
+  // This component only reads from the store, maintaining clear data flow
   
   // Now we can use tab manager after terminals are defined
   const {
@@ -183,65 +169,35 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
       activeRef?.focus();
     },
     switchToTab: (dbSessionId: string) => {
-      // Check if the tab exists
-      const tab = findTerminalById(terminals, dbSessionId, 'dbSessionId');
-      if (tab) {
-        selectTab(dbSessionId);
-      }
+      const actions = terminalOrchestrator.switchToTab(
+        {
+          taskId: task.id,
+          terminals,
+          sessionStatuses,
+          terminalRefs: terminalRefs.current
+        },
+        dbSessionId
+      );
+      processOrchestratorActions(actions);
     }
   }), [activeTabId, terminals, selectTab]);
   
   const handleRefreshSession = async () => {
-    dispatch({ type: 'START_RESET' });
-    try {
-      const result = await terminalRefreshService.refreshSession({
+    const result = await terminalOrchestrator.refreshActiveTerminal(
+      {
         taskId: task.id,
-        activeTerminalId: activeTabId,
         terminals,
-        sessionStatuses
-      });
-      
-      // Process the actions returned by the service
-      for (const action of result.actions) {
-        switch (action.type) {
-          case 'refresh-terminal': {
-            const terminalRef = terminalRefs.current.get(action.terminalId);
-            if (terminalRef?.refresh) {
-              terminalRef.refresh();
-            }
-            break;
-          }
-          case 'reload-task': {
-            // Reload the task to get fresh terminal data
-            if (task.onReload) {
-              await task.onReload();
-            }
-            break;
-          }
-          case 'fit-terminal': {
-            const terminalRef = terminalRefs.current.get(action.terminalId);
-            if (terminalRef?.fit) {
-              terminalRef.fit();
-            }
-            break;
-          }
-          case 'show-notification': {
-            showNotification(action.level, action.message);
-            break;
-          }
-        }
-      }
-      
-      if (result.success) {
-        showNotification('success', result.message);
-      } else {
-        showNotification('warning', result.message);
-      }
-    } catch (error) {
-      console.error('[TerminalPanel] Failed to refresh session:', error);
+        sessionStatuses,
+        terminalRefs: terminalRefs.current
+      },
+      activeTabId
+    );
+    
+    // Process orchestrator actions
+    await processOrchestratorActions(result.actions);
+    
+    if (!result.success) {
       showNotification('error', 'Failed to refresh terminal session');
-    } finally {
-      setTimeout(() => dispatch({ type: 'FINISH_RESET' }), 1000);
     }
   };
 
@@ -252,46 +208,75 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     // For now, ignore the type parameter as the toast library doesn't support variants
     showToast(message, 5000);
   };
+  
+  // Process actions from orchestrator service
+  const processOrchestratorActions = async (actions: any[]) => {
+    for (const action of actions) {
+      switch (action.type) {
+        case 'refresh-terminal': {
+          const terminalRef = terminalRefs.current.get(action.terminalId);
+          if (terminalRef?.refresh) {
+            terminalRef.refresh();
+          }
+          break;
+        }
+        case 'reload-task': {
+          if (task.onReload) {
+            await task.onReload();
+          }
+          break;
+        }
+        case 'fit-terminal': {
+          const terminalRef = terminalRefs.current.get(action.terminalId);
+          if (terminalRef?.fit) {
+            terminalRef.fit();
+          }
+          break;
+        }
+        case 'focus-terminal': {
+          const terminalRef = terminalRefs.current.get(action.terminalId);
+          if (terminalRef?.focus) {
+            terminalRef.focus();
+          }
+          break;
+        }
+        case 'show-notification': {
+          showNotification(action.level, action.message);
+          break;
+        }
+        case 'start-refresh-ui': {
+          dispatch({ type: 'START_RESET' });
+          break;
+        }
+        case 'end-refresh-ui': {
+          dispatch({ type: 'FINISH_RESET' });
+          break;
+        }
+        case 'switch-tab': {
+          selectTab(action.tabId);
+          break;
+        }
+      }
+    }
+  };
 
   // Handle session reconnection
   const handleReconnectSession = async (dbSessionId: string) => {
-    try {
-      const actions = terminalRefreshService.getReconnectActions(
-        dbSessionId,
+    const result = await terminalOrchestrator.reconnectSession(
+      {
+        taskId: task.id,
         terminals,
-        sessionStatuses
-      );
-      
-      // Process reconnection actions
-      for (const action of actions) {
-        switch (action.type) {
-          case 'refresh-terminal': {
-            const terminalRef = terminalRefs.current.get(action.terminalId);
-            if (terminalRef?.refresh) {
-              terminalRef.refresh();
-            }
-            break;
-          }
-          case 'reload-task': {
-            if (task.onReload) {
-              await task.onReload();
-            }
-            break;
-          }
-          case 'show-notification': {
-            showNotification(action.level, action.message);
-            break;
-          }
-        }
-      }
-      
-      if (actions.length === 0) {
-        const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
-        showNotification('error', `Failed to reconnect terminal "${terminal?.tabName || 'unknown'}"`);
-      }
-    } catch (error) {
-      console.error(`[TerminalPanel] Failed to reconnect session:`, error);
-      showNotification('error', 'Failed to reconnect terminal');
+        sessionStatuses,
+        terminalRefs: terminalRefs.current
+      },
+      dbSessionId
+    );
+    
+    await processOrchestratorActions(result.actions);
+    
+    if (!result.success) {
+      const terminal = findTerminalById(terminals, dbSessionId, 'dbSessionId');
+      showNotification('error', `Failed to reconnect terminal "${terminal?.tabName || 'unknown'}"`);
     }
   };
 
