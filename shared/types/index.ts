@@ -270,15 +270,3 @@ export function isTaskState(value: any): value is TaskState {
 export function isAIAgent(value: any): value is AIAgent {
   return Object.values(AIAgent).includes(value);
 }
-
-// ========== LEGACY COMPATIBILITY ==========
-
-/**
- * @deprecated Use TerminalSession.id instead
- */
-export type SessionId = string;
-
-/**
- * @deprecated Use TerminalSession.shelltenderId instead
- */
-export type ShelltenderSessionId = string;

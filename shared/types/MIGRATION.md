@@ -176,14 +176,14 @@ All API responses should now use the standard wrapper:
 4. **Cleaner Code**: No more type duplication
 5. **Better IntelliSense**: Full autocomplete in both TS and JS
 
-## Gradual Migration
+## Clean Break Migration
 
-You don't need to migrate everything at once:
+This is a clean break - no backward compatibility:
 
-1. Start with new code using shared types
-2. Update existing code when you touch it
-3. Use backward compatibility exports during transition
-4. Remove deprecated types once migration is complete
+1. All code must use the new shared types immediately
+2. Update all imports to point to `/shared/types`
+3. Fix all property names to use camelCase
+4. Replace all session ID references with the single `id` field
 
 ## Quick Reference
 
