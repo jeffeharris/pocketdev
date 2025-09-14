@@ -34,7 +34,7 @@ export class ProjectService extends BaseService implements IProjectService {
     }
     
     const response = await this.get<any[]>('/projects');
-    return DataAdapter.transformProjects(response);
+    return DataAdapter.transformList<Project>('project', response);
   }
 
   async getProject(projectId: string, options?: { minimal?: boolean }): Promise<Project> {
@@ -51,7 +51,7 @@ export class ProjectService extends BaseService implements IProjectService {
       : `/projects/${projectId}`;
     
     const response = await this.get<any>(endpoint);
-    return DataAdapter.transformProject(response);
+    return DataAdapter.transform<Project>('project', response);
   }
 
   async createProject(data: CreateProjectData): Promise<Project> {
@@ -72,16 +72,8 @@ export class ProjectService extends BaseService implements IProjectService {
     const response = await this.post<any>('/projects', data);
     
     // Backend returns { success: true, project: {...} } or just the project
-    const project = response.project || response;
-    
-    return {
-      id: project.id,
-      name: project.name,
-      repository: project.repo_url,
-      baseBranch: project.base_branch,
-      created: project.created_at,
-      tasksCount: 0
-    };
+    const projectData = response.project || response;
+    return DataAdapter.transform<Project>('project', projectData);
   }
 
   async getProjectDashboard(projectId: string, options?: { cached?: boolean }): Promise<ProjectDashboard> {
@@ -160,27 +152,8 @@ export class ProjectService extends BaseService implements IProjectService {
       return [...mockBranches];
     }
     
-    const response = await this.get<Array<{ name: string; isRemote: boolean; fullName: string }>>(`/projects/${projectId}/branches`);
-    
-    // Get unique branch names, preferring local over remote
-    const branchMap = new Map<string, boolean>();
-    
-    // First add local branches
-    response
-      .filter(b => !b.isRemote)
-      .forEach(b => branchMap.set(b.name, true));
-    
-    // Then add remote branches that don't have local counterparts
-    response
-      .filter(b => b.isRemote)
-      .forEach(b => {
-        const localName = b.name.replace(/^origin\//, '');
-        if (!branchMap.has(localName)) {
-          branchMap.set(localName, true);
-        }
-      });
-    
-    return Array.from(branchMap.keys()).sort();
+    const response = await this.get<any[]>(`/projects/${projectId}/branches`);
+    return DataAdapter.transform<string[]>('branch', response);
   }
 
   async baseBranchOperation(projectId: string, operation: 'pull' | 'push' | 'refresh'): Promise<GitOperationResult> {

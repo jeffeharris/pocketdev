@@ -57,7 +57,7 @@ export class TaskService extends BaseService implements ITaskService {
       : `/projects/${projectId}/tasks`;
       
     const response = await this.get<unknown[]>(endpoint);
-    return DataAdapter.transformTasks(response);
+    return DataAdapter.transformList<Task>('task', response);
   }
 
   async getTask(projectId: string, taskId: string): Promise<Task> {
@@ -70,7 +70,10 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.get<unknown>(`/projects/${projectId}/tasks/${taskId}`);
-    return DataAdapter.transformTask(response);
+    const task = DataAdapter.transform<Task>('task', response);
+    // Register terminals after transformation (side effect moved here)
+    task.terminals?.forEach(terminal => sessionAdapter.registerSession(terminal));
+    return task;
   }
 
   async createTask(projectId: string, taskData: CreateTaskDTO): Promise<Task> {
@@ -99,7 +102,10 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.post<unknown>(`/projects/${projectId}/tasks`, taskData);
-    return DataAdapter.transformTask(response);
+    const task = DataAdapter.transform<Task>('task', response);
+    // Register terminals after transformation
+    task.terminals?.forEach(terminal => sessionAdapter.registerSession(terminal));
+    return task;
   }
 
   async updateTask(projectId: string, taskId: string, updates: TaskUpdateData): Promise<Task> {
@@ -116,7 +122,10 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.patch<unknown>(`/projects/${projectId}/tasks/${taskId}`, updates);
-    return DataAdapter.transformTask(response);
+    const task = DataAdapter.transform<Task>('task', response);
+    // Register terminals after transformation
+    task.terminals?.forEach(terminal => sessionAdapter.registerSession(terminal));
+    return task;
   }
 
   async archiveTask(projectId: string, taskId: string): Promise<void> {
@@ -138,7 +147,7 @@ export class TaskService extends BaseService implements ITaskService {
     }
     
     const response = await this.get<unknown[]>(`/projects/${projectId}/tasks/${taskId}/commits`);
-    return DataAdapter.transformCommits(response);
+    return DataAdapter.transformList<CommitHistory>('commit', response);
   }
 
   async updateBranch(projectId: string, taskId: string): Promise<GitOperationResult> {

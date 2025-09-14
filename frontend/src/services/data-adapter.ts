@@ -1,9 +1,8 @@
 /**
  * DataAdapter - Centralized data transformation layer
  * 
- * Handles all backend-to-frontend data transformations in one place.
- * This follows the principle of information hiding - services shouldn't
- * need to know about backend data formats.
+ * Deep module design: Simple 2-method interface hiding complex transformations.
+ * Services don't need to know about backend data formats or field mappings.
  * 
  * Transforms:
  * - snake_case to camelCase
@@ -14,14 +13,61 @@
 import type { Project } from '../types/project';
 import type { Task, TaskState } from '../types/task';
 import type { CommitHistory } from './interfaces/task.service.interface';
-import { sessionAdapter } from './session-adapter';
+
+type TransformType = 'project' | 'task' | 'commit' | 'branch';
 
 export class DataAdapter {
   /**
-   * Transform backend project response to frontend Project type
+   * Transform any backend response to the appropriate frontend type
+   * @param type - The type of data to transform
+   * @param data - The backend response data
+   * @returns The transformed frontend type
    */
-  static transformProject(backendProject: any): Project {
-    if (!backendProject || typeof backendProject !== 'object') {
+  static transform<T>(type: TransformType, data: any): T {
+    if (!data) {
+      throw new Error(`Invalid ${type} response: null or undefined`);
+    }
+
+    switch (type) {
+      case 'project':
+        return this.transformProject(data) as T;
+      case 'task':
+        return this.transformTask(data) as T;
+      case 'commit':
+        return this.transformCommit(data) as T;
+      case 'branch':
+        // Branch is special - expects array input, returns string array
+        return this.transformBranches(data) as T;
+      default:
+        throw new Error(`Unknown transform type: ${type}`);
+    }
+  }
+
+  /**
+   * Transform an array of backend responses
+   * @param type - The type of data to transform
+   * @param data - Array of backend response data
+   * @returns Array of transformed frontend types
+   */
+  static transformList<T>(type: TransformType, data: any[]): T[] {
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    
+    // Branch transformation already handles arrays internally
+    if (type === 'branch') {
+      return [this.transform<T>(type, data)];
+    }
+    
+    return data.map(item => this.transform<T>(type, item));
+  }
+
+  // ============================================================================
+  // Private implementation - Complex transformations hidden behind simple interface
+  // ============================================================================
+
+  private static transformProject(backendProject: any): Project {
+    if (typeof backendProject !== 'object') {
       throw new Error('Invalid project response format');
     }
 
@@ -35,31 +81,13 @@ export class DataAdapter {
     };
   }
 
-  /**
-   * Transform array of backend projects
-   */
-  static transformProjects(backendProjects: any[]): Project[] {
-    if (!Array.isArray(backendProjects)) {
-      return [];
-    }
-    return backendProjects.map(p => this.transformProject(p));
-  }
-
-  /**
-   * Transform backend task response to frontend Task type
-   */
-  static transformTask(backendTask: any): Task {
-    if (!backendTask || typeof backendTask !== 'object') {
+  private static transformTask(backendTask: any): Task {
+    if (typeof backendTask !== 'object') {
       throw new Error('Invalid task response format');
     }
 
-    // Process and register terminals
+    // Extract terminals without side effects (no registration here)
     const terminals = Array.isArray(backendTask.terminals) ? backendTask.terminals : [];
-    
-    // Register each terminal with the session adapter
-    terminals.forEach((terminal: any) => {
-      sessionAdapter.registerSession(terminal);
-    });
 
     return {
       id: String(backendTask.id || ''),
@@ -86,21 +114,8 @@ export class DataAdapter {
     } as Task;
   }
 
-  /**
-   * Transform array of backend tasks
-   */
-  static transformTasks(backendTasks: any[]): Task[] {
-    if (!Array.isArray(backendTasks)) {
-      return [];
-    }
-    return backendTasks.map(t => this.transformTask(t));
-  }
-
-  /**
-   * Transform backend commit response to frontend CommitHistory type
-   */
-  static transformCommit(backendCommit: any): CommitHistory {
-    if (!backendCommit || typeof backendCommit !== 'object') {
+  private static transformCommit(backendCommit: any): CommitHistory {
+    if (typeof backendCommit !== 'object') {
       throw new Error('Invalid commit response format');
     }
 
@@ -113,21 +128,7 @@ export class DataAdapter {
     };
   }
 
-  /**
-   * Transform array of backend commits
-   */
-  static transformCommits(backendCommits: any[]): CommitHistory[] {
-    if (!Array.isArray(backendCommits)) {
-      return [];
-    }
-    return backendCommits.map(c => this.transformCommit(c));
-  }
-
-  /**
-   * Transform backend branch response
-   * Branches come in various formats from the backend
-   */
-  static transformBranches(backendBranches: any[]): string[] {
+  private static transformBranches(backendBranches: any): string[] {
     if (!Array.isArray(backendBranches)) {
       return [];
     }
@@ -152,47 +153,5 @@ export class DataAdapter {
     });
 
     return Array.from(branchMap.keys());
-  }
-
-  /**
-   * Generic snake_case to camelCase converter for simple objects
-   */
-  static snakeToCamel(obj: any): any {
-    if (obj === null || obj === undefined) return obj;
-    if (typeof obj !== 'object') return obj;
-    if (obj instanceof Date) return obj;
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.snakeToCamel(item));
-    }
-
-    const converted: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-        converted[camelKey] = this.snakeToCamel(obj[key]);
-      }
-    }
-    return converted;
-  }
-
-  /**
-   * Generic camelCase to snake_case converter for API requests
-   */
-  static camelToSnake(obj: any): any {
-    if (obj === null || obj === undefined) return obj;
-    if (typeof obj !== 'object') return obj;
-    if (obj instanceof Date) return obj.toISOString();
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.camelToSnake(item));
-    }
-
-    const converted: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        converted[snakeKey] = this.camelToSnake(obj[key]);
-      }
-    }
-    return converted;
   }
 }
