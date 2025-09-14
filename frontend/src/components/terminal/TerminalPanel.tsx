@@ -65,7 +65,6 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     isResetting, 
     showSessionLauncher, 
     sessionStatuses, 
-    launchingAgents, 
     confirmClose,
     canShowQuad,
     canShowHorizontal,
@@ -399,110 +398,27 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
         task.onReload();
       }
       
-      // Only auto-launch Claude if no options provided (quick launch)
-      if (!options) {
-      // Wait for terminal to be ready and prompt to appear, then launch Claude
-      setTimeout(async () => {
-        try {
-          
-          // First send a newline to ensure prompt is visible
-          // COMMENTED OUT - DirectTerminal already sends a newline
-          // await api.executeCommand(newSession.shelltenderSessionId, '');
-          
-          // Small delay then send claude command
-          setTimeout(async () => {
+      // Auto-launch AI agent if specified
+      if (aiAgent && aiAgent !== 'none') {
+        // Wait for terminal connection to be established
+        setTimeout(async () => {
+          try {
             const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-            console.log('[TerminalPanel] About to execute claude with normalizedId:', normalizedId);
-            await terminalService.executeCommand(normalizedId, 'claude');
-          }, 500);
-        } catch (error) {
-          console.error('[TerminalPanel] Failed to auto-launch Claude:', error);
-        }
-      }, 500); // Quick delay to ensure terminal connection is established
-      } else if (aiAgent !== 'none') {
-        // Advanced launch with options
-        
-        // Mark as launching if we have a prompt or need to change directory
-        if (options.workingDirectory || options.initialPrompt) {
-          const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-          dispatch({ type: 'START_AGENT_LAUNCH', terminalId: normalizedId });
-          
-          setTimeout(async () => {
-            try {
-              let commands: string[] = [];
-              
-              // Change directory if specified
-              if (options.workingDirectory) {
-                // Make path relative to task path
-                const fullPath = options.workingDirectory.startsWith('/') 
-                  ? options.workingDirectory 
-                  : `${task.worktree_path}/${options.workingDirectory}`;
-                commands.push(`cd ${fullPath}`);
-              }
-              
-              // Launch AI with or without prompt
-              const aiCommand = getAiCommand(aiAgent);
-              if (options.initialPrompt) {
-                // Properly escape the prompt for shell
-                const escapedPrompt = options.initialPrompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-                
-                // Different syntax for different agents
-                switch (aiAgent) {
-                  case 'aider':
-                    commands.push(`${aiCommand} --message "${escapedPrompt}"`);
-                    break;
-                  case 'claude':
-                  case 'codex':
-                    commands.push(`${aiCommand} "${escapedPrompt}"`);
-                    break;
-                  case 'gemini':
-                    // Use -p flag for prompt
-                    commands.push(`${aiCommand} -p "${escapedPrompt}"`);
-                    break;
-                  default:
-                    commands.push(`${aiCommand} "${escapedPrompt}"`);
-                }
-              } else {
-                commands.push(aiCommand);
-              }
-              
-              // Execute commands in sequence
-              for (const command of commands) {
-                const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-                await terminalService.executeCommand(normalizedId, command);
-                // Minimal delay between commands
-                await new Promise(resolve => setTimeout(resolve, 100));
-              }
-              
-              // Remove launching state
-              setTimeout(() => {
-                const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-                dispatch({ type: 'FINISH_AGENT_LAUNCH', terminalId: normalizedId });
-              }, 1000);
-            } catch (error) {
-              console.error('[TerminalPanel] Failed to execute advanced launch:', error);
-              const normalizedId = newSession.normalizedId || terminalService.getNormalizedId(newTerminal);
-              dispatch({ type: 'FINISH_AGENT_LAUNCH', terminalId: normalizedId });
-            }
-          }, 500); // Quick delay to ensure terminal connection is established
-        }
+            await terminalService.launchAgent(normalizedId, aiAgent, {
+              workingDirectory: options?.workingDirectory,
+              initialPrompt: options?.initialPrompt,
+              worktreePath: task.worktree_path
+            });
+          } catch (error) {
+            console.error('[TerminalPanel] Failed to launch agent:', error);
+          }
+        }, 500);
       }
     } catch (error) {
       console.error('[TerminalPanel] Failed to create new terminal:', error);
     }
   };
 
-  // Helper function to get AI command from agent name
-  const getAiCommand = (agent: string): string => {
-    const commands: Record<string, string> = {
-      claude: 'claude',
-      aider: 'aider',
-      codex: 'codex',
-      gemini: 'gemini',
-      none: ''  // No command for plain terminal
-    };
-    return commands[agent] || 'claude';
-  };
 
   // Get next available "Tab #" name that doesn't already exist
   const getNextAvailableTabName = (existingTabs: TerminalSession[]): string => {

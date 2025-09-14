@@ -212,6 +212,75 @@ export class TerminalService extends BaseService implements ITerminalService {
   }
 
 
+  // AI Agent launching
+
+  /**
+   * Launch an AI agent in a terminal session
+   * Handles agent-specific command syntax and directory changes
+   */
+  async launchAgent(
+    normalizedId: NormalizedSessionId,
+    agent: 'claude' | 'aider' | 'codex' | 'gemini' | 'none',
+    options?: {
+      workingDirectory?: string;
+      initialPrompt?: string;
+      worktreePath?: string;
+    }
+  ): Promise<void> {
+    if (agent === 'none') return;
+    
+    const commands: string[] = [];
+    
+    // Change directory if specified
+    if (options?.workingDirectory) {
+      // Make path relative to task path if needed
+      const fullPath = options.workingDirectory.startsWith('/') 
+        ? options.workingDirectory 
+        : `${options.worktreePath}/${options.workingDirectory}`;
+      commands.push(`cd ${fullPath}`);
+    }
+    
+    // Build agent-specific command
+    const agentCommand = this.buildAgentCommand(agent, options?.initialPrompt);
+    if (agentCommand) {
+      commands.push(agentCommand);
+    }
+    
+    // Execute commands in sequence
+    for (const command of commands) {
+      await this.executeCommand(normalizedId, command);
+      // Small delay between commands
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  /**
+   * Build agent-specific command with proper syntax
+   */
+  private buildAgentCommand(agent: string, prompt?: string): string {
+    if (!prompt) {
+      // Simple case - just launch the agent
+      return agent;
+    }
+    
+    // Properly escape the prompt for shell
+    const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+    
+    // Different syntax for different agents
+    switch (agent) {
+      case 'aider':
+        return `aider --message "${escapedPrompt}"`;
+      case 'claude':
+      case 'codex':
+        return `${agent} "${escapedPrompt}"`;
+      case 'gemini':
+        // Use -p flag for prompt
+        return `gemini -p "${escapedPrompt}"`;
+      default:
+        return `${agent} "${escapedPrompt}"`;
+    }
+  }
+
   // Utility methods for session management
 
   /**

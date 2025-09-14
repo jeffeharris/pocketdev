@@ -17,7 +17,6 @@ export interface TerminalPanelState {
   
   // Session tracking
   sessionStatuses: Map<string, 'connected' | 'disconnected' | 'error'>;
-  launchingAgents: Set<string>; // Terminal IDs that are launching AI agents
   
   // Viewport constraints
   canShowQuad: boolean;
@@ -35,8 +34,6 @@ export type TerminalPanelAction =
   | { type: 'REQUEST_CLOSE_CONFIRMATION'; dbSessionId: string; tabName: string }
   | { type: 'CANCEL_CLOSE_CONFIRMATION' }
   | { type: 'UPDATE_SESSION_STATUS'; dbSessionId: string; status: 'connected' | 'disconnected' | 'error' }
-  | { type: 'START_AGENT_LAUNCH'; terminalId: string }
-  | { type: 'FINISH_AGENT_LAUNCH'; terminalId: string }
   | { type: 'UPDATE_VIEWPORT_CONSTRAINTS'; constraints: { quad: boolean; horizontal: boolean; vertical: boolean } }
   | { type: 'RESET_STATE' };
 
@@ -54,7 +51,6 @@ export function createInitialState(taskId: string): TerminalPanelState {
     showSessionLauncher: false,
     confirmClose: null,
     sessionStatuses: new Map(),
-    launchingAgents: new Set(),
     canShowQuad: false,
     canShowHorizontal: false,
     canShowVertical: false,
@@ -121,24 +117,6 @@ export function terminalPanelReducer(
       };
     }
     
-    case 'START_AGENT_LAUNCH': {
-      const newLaunching = new Set(state.launchingAgents);
-      newLaunching.add(action.terminalId);
-      return {
-        ...state,
-        launchingAgents: newLaunching,
-      };
-    }
-    
-    case 'FINISH_AGENT_LAUNCH': {
-      const newLaunching = new Set(state.launchingAgents);
-      newLaunching.delete(action.terminalId);
-      return {
-        ...state,
-        launchingAgents: newLaunching,
-      };
-    }
-    
     case 'UPDATE_VIEWPORT_CONSTRAINTS':
       return {
         ...state,
@@ -157,10 +135,6 @@ export function terminalPanelReducer(
 
 // Helper selectors (optional but useful)
 export const selectors = {
-  isAgentLaunching: (state: TerminalPanelState, terminalId: string): boolean => {
-    return state.launchingAgents.has(terminalId);
-  },
-  
   getSessionStatus: (state: TerminalPanelState, sessionId: string): 'connected' | 'disconnected' | 'error' | undefined => {
     return state.sessionStatuses.get(sessionId);
   },
