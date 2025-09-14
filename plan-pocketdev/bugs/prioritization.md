@@ -23,24 +23,24 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-001 | AI state monitoring stuck state | Functional | N/A | **High** | Poor UX, unreliable state | Open | 2025-08-10 |
 | BUG-002 | AI state timeout implementation | Functional | N/A | **High** | System resources, UX | Open | 2025-08-12 |
 | BUG-014 | Replace app.locals with Dependency Injection | Architecture | N/A | **High** | Global state anti-pattern | **RESOLVED** | 2025-09-11 |
-| BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087 | **High** | Complex god component | Open | 2025-08-16 |
+| BUG-015 | Extract TerminalPanel into Deep Modules | Technical Debt | 1,087→344 | **High** | Complex god component | **Resolved** | 2025-08-16 |
 | BUG-010 | task.controller.js needs modularization | Technical Debt | 907 | **High** | 13 methods mixing concerns | Open | 2025-08-03 |
 | BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **RESOLVED** | 2025-08-18 |
 | BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-22 |
 | BUG-017 | Consolidate Session Identity Abstraction | Technical Debt | N/A | **High** | Leaky abstraction in 21+ files | **RESOLVED** | 2025-08-03 |
 | BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | Open | 2025-08-26 |
 | BUG-019 | WebSocket Event System Needs Deep Module | Technical Debt | N/A | **High** | 10 methods for 1 operation | **RESOLVED** | 2025-08-03 |
-| BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | Open | 2025-08-30 |
+| BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | **Resolved** | 2025-08-30 |
 | BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-09-01 |
 | BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
 | BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | **RESOLVED** | 2025-09-12 |
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
 | BUG-023 | API Response Format Inconsistency | API Design | N/A | **Medium** | Inconsistent response formats | **RESOLVED** | 2025-09-12 |
 | BUG-024 | Create Pull Request Fails on Unpushed Branches | Functional | N/A | **Medium** | Common workflow broken | Open | 2025-09-10 |
-| BUG-025 | Terminal Store Shallow Module | Technical Debt | N/A | **High** | 34+ methods, leaky abstraction | Open | 2025-08-04 |
-| BUG-026 | Split View Store Shallow Module | Technical Debt | N/A | **High** | 17 methods, mixed concerns | Open | 2025-08-04 |
-| BUG-027 | Frontend Services Mock Data Pollution | Code Quality | 1000+ | **High** | 30-50% mock code in services | Open | 2025-08-04 |
-| BUG-016 | Remove Mock Code from Production | Code Quality | N/A | **Medium** | Mixed concerns in api.ts | Open | 2025-09-11 |
+| BUG-025 | Terminal Store Shallow Module | Technical Debt | N/A | **High** | 34+ methods, leaky abstraction | **Resolved** | 2025-08-04 |
+| BUG-026 | Split View Store Shallow Module | Technical Debt | N/A | **High** | 17 methods, mixed concerns | **Resolved** | 2025-08-04 |
+| BUG-027 | Frontend Services Mock Data Pollution | Code Quality | 1000+ | **High** | 30-50% mock code in services | **Resolved** | 2025-08-04 |
+| BUG-016 | Remove Mock Code from Production | Code Quality | N/A | **Medium** | Mixed concerns in api.ts | **Resolved** | 2025-09-11 |
 | BUG-004 | project.controller.js needs modularization | Technical Debt | 654→257 | **Low** | 19 methods, needs service extraction | **Resolved** | 2025-08-03 |
 | BUG-008 | Refactor MergeWorkflowPrototype | Technical Debt | 1,173 | **Low** | Prototype cleanup | Open | 2025-09-10 |
 
@@ -48,7 +48,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**12 bugs resolved** (11 via service extraction/refactoring + 1 functional fix):
+**18 bugs resolved** (17 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -111,6 +111,34 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Moved all cross-table aggregation to service layer
    - Eliminated JOINs from model layer completely
    - Services now handle data aggregation properly
+
+11. **BUG-016** (Medium): Remove Mock Code from Production - **RESOLVED** (2025-09-14)
+   - Mock code properly isolated in `/mocks/` subdirectory
+   - Services use runtime flag (`isMockEnabled`) for conditional mock usage
+   - Clean separation allows demo mode and offline development
+   - Appropriate solution for internal/hobby project tooling
+
+12. **BUG-027** (High): Frontend Services Mock Data Pollution - **RESOLVED** (2025-09-14)
+   - Mock data extracted to dedicated `/services/mocks/` directory
+   - Production services now conditionally import mocks based on config
+   - No longer "pollution" - organized as intentional development feature
+   - Mock mode useful for demos, testing, and offline development
+
+13. **BUG-015** (High): Extract TerminalPanel into Deep Modules - **RESOLVED** (2025-09-14)
+   - Reduced from 1,087 lines to 344 lines (68% reduction)
+   - Terminal logic extracted to feature modules (`terminal-tabs.ts`, `split-view.ts`)
+   - Component now focuses solely on presentation concerns
+
+14. **BUG-020** & **BUG-025** (High): Terminal Store Deep Module Refactoring - **RESOLVED** (2025-09-14)
+   - Consolidated two related bugs about terminal store complexity
+   - Reduced from 34+ methods to 8 methods (deep module pattern)
+   - Created `/stores/terminal/terminalStore.deep.ts` with clean interface
+   - Original store now re-exports the deep module implementation
+
+15. **BUG-026** (High): Split View Store Shallow Module - **RESOLVED** (2025-09-14)
+   - Split view logic consolidated into `/features/split-view.ts` feature module
+   - Feature module exposes only 3 public exports
+   - Store complexity hidden behind simple feature interface
 
 ### Metrics Achieved
 - **Backend**: Controllers reduced by 90%+ in size
