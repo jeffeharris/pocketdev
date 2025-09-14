@@ -385,6 +385,21 @@ export const useTaskTerminalState = (taskId: string) => {
   return useTerminalStore(state => state.getTaskState(taskId));
 };
 
+// Selector hooks for terminal IDs
+export const useActiveTerminalId = (taskId: string) => {
+  return useTerminalStore(state => {
+    const taskState = state.getTaskState(taskId);
+    return taskState.activeTerminal?.dbSessionId || taskState.activeTerminal?.sessionId || '';
+  });
+};
+
+export const useFocusedTerminalId = (taskId: string) => {
+  return useTerminalStore(state => {
+    const taskState = state.getTaskState(taskId);
+    return taskState.focusedTerminal?.dbSessionId || taskState.focusedTerminal?.sessionId || '';
+  });
+};
+
 // WebSocket integration with deep module
 export const handleTerminalWebSocketEvent = (event: string, data: any) => {
   const store = terminalStore();
