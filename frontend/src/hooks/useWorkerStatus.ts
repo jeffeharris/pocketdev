@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import { WorkerStatus, SessionState, IndividualSessionState } from '../types/task';
+import { WorkerStatus, SessionState, TerminalSession } from '../types/task';
 
 interface WorkerStatusData {
   sessionState: SessionState;
-  sessionStates?: IndividualSessionState[];
+  sessionStates?: TerminalSession[];
 }
 
 /**

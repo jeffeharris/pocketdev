@@ -1,11 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
 import { WorkerStatus, TaskState } from '../types/task';
-import type { SessionState, IndividualSessionState } from '../types/task';
+import type { SessionState, TerminalSession } from '../types/task';
 
 interface TaskStatusData {
   sessionState: SessionState;
-  sessionStates?: IndividualSessionState[];
+  sessionStates?: TerminalSession[];
   taskState: TaskState;
   gitStatus?: {
     ahead: number;

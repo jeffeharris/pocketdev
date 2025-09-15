@@ -25,9 +25,9 @@
     
     /* Path mapping for shared types */
     "paths": {
-      "@shared/types": ["../shared/types/index"],
-      "@shared/types/*": ["../shared/types/*"]
+      "@shared/types": ["/shared/types/index"],
+      "@shared/types/*": ["/shared/types/*"]
     }
   },
-  "include": ["src", "../shared/types"]
+  "include": ["src", "/shared/types"]
 }

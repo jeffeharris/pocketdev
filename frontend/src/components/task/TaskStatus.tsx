@@ -27,7 +27,7 @@ import { getHighestPrioritySessionId as getHighestPriorityId } from '../../utils
  * - inline: For task lists - minimal, scannable
  * - detailed: For expanded views - shows everything
  */
-import type { IndividualSessionState } from '../../types/task';
+import type { TerminalSession } from '../../types/task';
 
 interface TaskStatusProps {
   workerStatus: string;
@@ -40,7 +40,7 @@ interface TaskStatusProps {
   };
   isMerged?: boolean;
   variant?: 'compact' | 'detailed' | 'inline';
-  sessionStates?: IndividualSessionState[];
+  sessionStates?: TerminalSession[];
   onStatusClick?: (prioritySessionId?: string) => void;
 }
 

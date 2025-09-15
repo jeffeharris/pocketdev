@@ -168,7 +168,7 @@ export const useTerminalStore = create<TerminalStoreImpl>()(
         
         updateTerminal: (taskId, terminalId, action) => {
           set(state => {
-            const taskTerminals = state._terminals.get(taskId);
+            let taskTerminals = state._terminals.get(taskId);
             if (!taskTerminals) {
               if (action.type === 'create') {
                 // Initialize task if needed for create action
