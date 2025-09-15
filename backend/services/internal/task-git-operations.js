@@ -1,4 +1,5 @@
 import { GitService } from '../git.service.js';
+import fs from 'fs';
 
 /**
  * TaskGitOperations - Handles all git operations for tasks
@@ -14,7 +15,7 @@ export class TaskGitOperations {
    * Get git status for a task
    */
   async getTaskGitStatus(task, githubToken) {
-    if (!task.worktree_path || !require('fs').existsSync(task.worktree_path)) {
+    if (!task.worktree_path || !fs.existsSync(task.worktree_path)) {
       return null;
     }
     
@@ -23,13 +24,11 @@ export class TaskGitOperations {
     
     // Get branch info
     const currentBranch = await gitService.getCurrentBranch(task.worktree_path);
-    const aheadBehind = await gitService.getAheadBehind(task.worktree_path, task.branch);
     
+    // Status already includes ahead/behind
     return {
       branch: currentBranch,
-      ...status,
-      ahead: aheadBehind.ahead,
-      behind: aheadBehind.behind
+      ...status
     };
   }
 

@@ -90,9 +90,14 @@ export class TaskController {
    * Get single task
    */
   getTask = this.wrap('get task', async (req, res) => {
-    const { taskId } = req.params;
+    const { projectId, taskId } = req.params;
     
-    const task = await req.services.TaskService.get(taskId);
+    // Include terminals and sessions for the frontend
+    const task = await req.services.TaskService.get(
+      taskId, 
+      ['terminals', 'sessions', 'gitStatus'],
+      { githubToken: req.githubToken, projectId }
+    );
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }

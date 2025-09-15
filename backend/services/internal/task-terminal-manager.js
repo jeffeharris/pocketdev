@@ -79,38 +79,9 @@ export class TaskTerminalManager {
    * Get terminal sessions for a task
    */
   async getTaskTerminals(taskId, limit = 6) {
-    const terminals = await this.models.terminals.findByTaskId(taskId, limit);
-    
-    // Enhance terminals with session status
-    const enhancedTerminals = await Promise.all(
-      terminals.map(async (terminal) => {
-        let sessionStatus = null;
-        
-        try {
-          const sessionInfo = await getSessionInfo(terminal.session_id);
-          if (sessionInfo) {
-            sessionStatus = {
-              active: sessionInfo.active,
-              aiState: sessionInfo.aiState,
-              lastActivity: sessionInfo.lastActivity
-            };
-          }
-        } catch (error) {
-          // Session not found or error getting info
-          sessionStatus = {
-            active: false,
-            error: error.message
-          };
-        }
-        
-        return {
-          ...terminal,
-          sessionStatus
-        };
-      })
-    );
-    
-    return enhancedTerminals;
+    // Just return the sessions directly - avoid circular dependency issues
+    const terminals = await this.models.sessions.findByTaskId(taskId);
+    return terminals || [];
   }
 
   /**
