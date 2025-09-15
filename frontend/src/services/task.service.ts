@@ -71,8 +71,13 @@ export class TaskService extends BaseService implements ITaskService {
     
     const response = await this.get<unknown>(`/projects/${projectId}/tasks/${taskId}`);
     const task = DataAdapter.transform<Task>('task', response);
-    // Register terminals after transformation (side effect moved here)
-    task.terminals?.forEach(terminal => sessionAdapter.registerSession(terminal));
+    // Register terminals and add normalizedId to each terminal
+    if (task.terminals) {
+      task.terminals = task.terminals.map(terminal => ({
+        ...terminal,
+        normalizedId: sessionAdapter.registerSession(terminal)
+      }));
+    }
     return task;
   }
 
