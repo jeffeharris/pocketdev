@@ -11,7 +11,7 @@
  */
 
 import type { Project } from '../types/project';
-import type { Task, TaskState } from '../types/task';
+import type { Task, TaskState, TerminalSession } from '../types/task';
 import type { CommitHistory } from './interfaces/task.service.interface';
 
 type TransformType = 'project' | 'task' | 'commit' | 'branch';
@@ -86,8 +86,10 @@ export class DataAdapter {
       throw new Error('Invalid task response format');
     }
 
-    // Extract terminals without side effects (no registration here)
-    const terminals = Array.isArray(backendTask.terminals) ? backendTask.terminals : [];
+    // Transform terminals from snake_case to camelCase
+    const terminals = Array.isArray(backendTask.terminals) 
+      ? backendTask.terminals.map(t => this.transformTerminal(t))
+      : [];
 
     return {
       id: String(backendTask.id || ''),
@@ -112,6 +114,42 @@ export class DataAdapter {
       has_uncommitted_changes: backendTask.has_uncommitted_changes,
       terminals: terminals
     } as Task;
+  }
+
+  private static transformTerminal(backendTerminal: any): any {
+    if (typeof backendTerminal !== 'object') {
+      throw new Error('Invalid terminal response format');
+    }
+
+    // Return with both the standard interface fields and legacy fields for SessionAdapter
+    return {
+      // Standard TerminalSession interface
+      id: String(backendTerminal.id || ''),
+      taskId: String(backendTerminal.task_id || ''),
+      shelltenderId: String(backendTerminal.shelltender_session_id || ''),
+      tabName: String(backendTerminal.tab_name || 'Main'),
+      tabOrder: Number(backendTerminal.tab_order || 0),
+      aiState: backendTerminal.ai_state || 'not-started',
+      aiAgent: backendTerminal.ai_agent || 'claude',
+      createdAt: String(backendTerminal.created_at || new Date().toISOString()),
+      updatedAt: String(backendTerminal.last_activity || new Date().toISOString()),
+      lastActivityAt: String(backendTerminal.last_activity || new Date().toISOString()),
+      
+      // Legacy fields needed by SessionAdapter
+      dbSessionId: String(backendTerminal.id || ''),
+      sessionId: String(backendTerminal.session_id || ''),
+      shelltenderSessionId: String(backendTerminal.shelltender_session_id || ''),
+      
+      // Extra fields not in the interface but potentially used
+      isActive: Boolean(backendTerminal.is_active),
+      messageCount: Number(backendTerminal.message_count || 0),
+      sizeBytes: Number(backendTerminal.size_bytes || 0),
+      tokenUsage: backendTerminal.token_usage || {},
+      toolUsage: backendTerminal.tool_usage || {},
+      model: backendTerminal.model,
+      errorCount: Number(backendTerminal.error_count || 0),
+      metadata: backendTerminal.metadata || {}
+    };
   }
 
   private static transformCommit(backendCommit: any): CommitHistory {
