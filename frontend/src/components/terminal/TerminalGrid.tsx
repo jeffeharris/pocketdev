@@ -115,6 +115,17 @@ const TerminalGridInternal = forwardRef<HTMLDivElement, TerminalGridProps>(({
           const terminalClassName = getTerminalClassName(terminal, layout);
           const normalizedId = terminal.normalizedId || terminal.dbSessionId; // Fallback to dbSessionId if no normalized ID
           
+          // Debug log
+          console.log('Rendering terminal:', {
+            dbSessionId: terminal.dbSessionId,
+            shelltenderSessionId: terminal.shelltenderSessionId,
+            normalizedId,
+            isVisible: isVisibleTerminal,
+            activeTabId,
+            layoutMode: layout.mode,
+            terminal
+          });
+          
           return (
             <div
               key={terminal.dbSessionId}

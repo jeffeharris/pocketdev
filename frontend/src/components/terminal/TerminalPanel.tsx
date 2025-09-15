@@ -59,7 +59,10 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Get terminals data first (needed for split view)
   const terminals = useTaskTerminals(task.id);
-  const activeTabId = useTerminalStore(state => state.getActiveTerminal(task.id)?.id);
+  const activeTabId = useTerminalStore(state => {
+    const activeTerminal = state.getActiveTerminal(task.id);
+    return activeTerminal?.normalizedId || activeTerminal?.dbSessionId;
+  });
   
   // Use split view feature for layout management
   const splitView = useSplitView({

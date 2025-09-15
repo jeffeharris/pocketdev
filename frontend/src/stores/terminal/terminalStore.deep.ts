@@ -23,6 +23,7 @@ enableMapSet();
 
 // Domain types
 export interface Terminal {
+  normalizedId: string;  // Primary identifier used throughout the app
   sessionId: string;
   dbSessionId: string;
   tabName: string;
@@ -45,6 +46,7 @@ export type TerminalAction =
   | { type: 'set-focus'; focus: boolean };
 
 export interface TerminalConfig {
+  normalizedId: string;
   sessionId: string;
   dbSessionId: string;
   tabName: string;
@@ -130,13 +132,17 @@ export const useTerminalStore = create<TerminalStoreImpl>()(
             // Set up new terminals
             const taskTerminals = new Map<string, Terminal>();
             terminals.forEach(terminal => {
-              taskTerminals.set(terminal.dbSessionId, terminal);
+              // Use normalizedId as the key if available, fallback to dbSessionId
+              const key = terminal.normalizedId || terminal.dbSessionId;
+              taskTerminals.set(key, terminal);
             });
             state._terminals.set(taskId, taskTerminals);
             
             // Set first terminal as active if none selected
             if (terminals.length > 0 && !state._activeTerminals.has(taskId)) {
-              state._activeTerminals.set(taskId, terminals[0].dbSessionId);
+              const firstTerminal = terminals[0];
+              const activeId = firstTerminal.normalizedId || firstTerminal.dbSessionId;
+              state._activeTerminals.set(taskId, activeId);
             }
             
             // Clear loading state
