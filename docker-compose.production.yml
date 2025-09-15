@@ -48,8 +48,8 @@ services:
   # Frontend (production build)
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.production
+      context: .
+      dockerfile: frontend/Dockerfile.production
       args:
         - VITE_API_URL=/api
     container_name: frontend
