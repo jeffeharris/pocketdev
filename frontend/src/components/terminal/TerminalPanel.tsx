@@ -150,7 +150,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     if (!activeTabId) return;
     
     // Update store focus state
-    terminalStore.updateTerminal(task.id, activeTabId, {
+    useTerminalStore.getState().updateTerminal(task.id, activeTabId, {
       type: 'set-focus',
       focus: true
     });
@@ -162,7 +162,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     }, 100);
     
     return () => clearTimeout(focusTimer);
-  }, [activeTabId, task.id, terminalStore]);
+  }, [activeTabId, task.id]);
 
   // Expose methods to parent components
   useImperativeHandle(ref, () => ({
