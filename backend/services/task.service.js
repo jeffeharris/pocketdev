@@ -286,6 +286,21 @@ export class TaskService {
   }
 
   /**
+   * Get task split layout configuration
+   */
+  async getLayout(taskId) {
+    const task = await this.repository.findById(taskId);
+    if (!task) {
+      const error = new Error('Task not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Return the layout or default
+    return task.split_layout || { mode: 'tab' };
+  }
+
+  /**
    * Set task split layout configuration
    */
   async setLayout(taskId, projectId, layout) {

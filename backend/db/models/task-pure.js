@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 class TaskModel extends BaseModel {
   constructor(db) {
     super(db, 'tasks');
-    this.jsonFields = ['metadata'];
+    this.jsonFields = ['metadata', 'split_layout'];
   }
 
   /**
