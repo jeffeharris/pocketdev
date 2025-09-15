@@ -1,5 +1,5 @@
-import { GIT_EVENTS } from './services/events.js';
-import { GitService } from './services/git.service.js';
+import { GIT_EVENTS } from '../events.js';
+import { GitService } from '../git.service.js';
 import fsSync from 'fs';
 
 /**
