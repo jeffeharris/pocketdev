@@ -57,6 +57,9 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   // Get real-time session states from WebSocket
   const { sessionStates: realtimeSessionStates } = useWorkerStatus(task.id);
   
+  // Get terminals data first (needed for split view)
+  const terminals = useTaskTerminals(task.id);
+  const activeTabId = useTerminalStore(state => state.getActiveTerminal(task.id)?.id);
   
   // Use split view feature for layout management
   const splitView = useSplitView({
@@ -76,8 +79,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   
   // Layout constraints hook handles auto-downgrade logic internally
   
-  // Get terminals from the store (single source of truth)
-  const terminals = useTaskTerminals(task.id);
+  // Terminals already retrieved above for split view
   const focusedTerminalId = useFocusedTerminalId(task.id);
   const terminalStore = useTerminalStore();
   
@@ -132,8 +134,8 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     }
   });
   
-  // Destructure for easier access
-  const { tabs, activeTabId, confirmClose } = terminalTabs.state;
+  // Destructure for easier access (activeTabId already defined above)
+  const { tabs, confirmClose } = terminalTabs.state;
   const { selectTab, addTab, closeTab, updateTab, reorderTabs, cancelCloseConfirmation, refreshActiveTab, reconnectTab, switchToTab } = terminalTabs;
   
   // Handle active tab changes - focus terminal and update store

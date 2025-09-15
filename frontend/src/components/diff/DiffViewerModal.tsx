@@ -176,14 +176,7 @@ export const DiffViewerModal: React.FC<DiffViewerModalProps> = ({
   }, [files, selectedFile, handleFileSelect]);
   
   // Keyboard shortcuts
-  const { pushContext, popContext } = useShortcutContext();
-  
-  useEffect(() => {
-    if (isOpen) {
-      pushContext('diff-viewer');
-      return () => popContext();
-    }
-  }, [isOpen, pushContext, popContext]);
+  useShortcutContext(isOpen ? 'diff-viewer' : null);
   
   useKeyboardShortcut('j', () => navigateFiles('next'), 'diff-viewer');
   useKeyboardShortcut('k', () => navigateFiles('prev'), 'diff-viewer');
