@@ -31,7 +31,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | **Resolved** | 2025-08-26 |
 | BUG-019 | WebSocket Event System Needs Deep Module | Technical Debt | N/A | **High** | 10 methods for 1 operation | **RESOLVED** | 2025-08-03 |
 | BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | **Resolved** | 2025-08-30 |
-| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-09-01 |
+| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | **Partial** | 2025-09-01 |
 | BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
 | BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | **RESOLVED** | 2025-09-12 |
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
