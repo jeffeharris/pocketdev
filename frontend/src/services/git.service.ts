@@ -129,6 +129,12 @@ export class GitService extends BaseService implements IGitService {
     return this.performOperation(projectId, taskId, 'commit', { message });
   }
 
+  async getComprehensiveDiff(projectId: string, taskId: string): Promise<AllChangesResponse> {
+    // For now, this is a stub that delegates to getAllChanges
+    // TODO: Implement comprehensive diff logic if needed
+    return this.getAllChanges(projectId, taskId);
+  }
+
   async performOperation(projectId: string, taskId: string, operation: string, options?: GitOperationOptions): Promise<GitOperationResult> {
     if (this.isMockEnabled) {
       // Simulate various git operations

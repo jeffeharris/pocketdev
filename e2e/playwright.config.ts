@@ -4,20 +4,20 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 1, // Allow 1 retry locally
+  retries: process.env.CI ? 2 : 1,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
-  timeout: 60000, // Increase timeout to 60 seconds
+  timeout: 10000, // 10 seconds - hobby project, fast tests only
   expect: {
-    timeout: 10000, // Increase expect timeout to 10 seconds
+    timeout: 5000, // 5 seconds for expects
   },
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    actionTimeout: 15000, // Increase action timeout
-    navigationTimeout: 30000, // Increase navigation timeout
+    screenshot: 'only-on-failure', 
+    video: 'retry-with-failure', // Only record video on retry failures
+    actionTimeout: 8000, // Shorter action timeout
+    navigationTimeout: 10000, // Shorter navigation timeout
   },
 
   projects: [
@@ -25,20 +25,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
+    // Cross-browser testing is overkill for hobby project
+    // Uncomment if needed:
+    // {
+    //   name: 'firefox',
+    //   use: { ...devices['Desktop Firefox'] },
+    // },
   ],
 
   webServer: {
     command: 'cd .. && make dev',
     url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // Always reuse for hobby project
     timeout: 120000,
   },
 });
