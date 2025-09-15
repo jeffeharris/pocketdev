@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle, AlertCircle, Clock, Activity, User, GitMerge } from 'lucide-react';
 import { clsx } from 'clsx';
+import { getHighestPrioritySessionId as getHighestPriorityId } from '../../utils/terminal-utils';
 
 /**
  * TaskStatus Component
@@ -83,31 +84,7 @@ export const TaskStatus: React.FC<TaskStatusProps> = ({
   // Find the highest priority session to navigate to
   const getHighestPrioritySessionId = (): string | undefined => {
     if (!sessionStates || sessionStates.length === 0) return undefined;
-    
-    // Define priority order (higher number = higher priority)
-    const statePriority: Record<string, number> = {
-      'waiting': 4,
-      'working': 3,
-      'idle': 2,
-      'not-started': 1
-    };
-    
-    // Sort by priority, then by most recent update
-    const sortedSessions = [...sessionStates].sort((a, b) => {
-      const priorityA = statePriority[a.aiState] || 0;
-      const priorityB = statePriority[b.aiState] || 0;
-      
-      if (priorityA !== priorityB) {
-        return priorityB - priorityA;
-      }
-      
-      // If same priority, use most recent update
-      const timeA = a.lastStateChange ? new Date(a.lastStateChange).getTime() : 0;
-      const timeB = b.lastStateChange ? new Date(b.lastStateChange).getTime() : 0;
-      return timeB - timeA;
-    });
-    
-    return sortedSessions[0]?.id;
+    return getHighestPriorityId(sessionStates);
   };
 
   // Handle click on status badge
