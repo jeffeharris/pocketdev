@@ -127,6 +127,144 @@ export class GitHubService {
   }
 
   /**
+   * Validate GitHub token and get user information
+   * @param {string} workingDirectory - Optional directory to run command in (defaults to process.cwd())
+   * @returns {Promise<Object>} Validation result with user info
+   */
+  async validateToken(workingDirectory = process.cwd()) {
+    try {
+      // Use gh auth status to validate the token
+      const command = 'gh auth status --show-token';
+      const result = await this._executeCommand(command, workingDirectory);
+
+      if (result.success) {
+        // Get full user information using gh api
+        const userCommand = 'gh api user';
+        const userResult = await this._executeCommand(userCommand, workingDirectory);
+
+        if (userResult.success) {
+          const userInfo = JSON.parse(userResult.output);
+
+          // Try to get primary email if not available in user info
+          let email = userInfo.email;
+          if (!email) {
+            const emailCommand = 'gh api user/emails';
+            const emailResult = await this._executeCommand(emailCommand, workingDirectory);
+
+            if (emailResult.success) {
+              try {
+                const emails = JSON.parse(emailResult.output);
+                const primaryEmail = emails.find(e => e.primary && e.verified);
+                email = primaryEmail ? primaryEmail.email : '';
+              } catch (e) {
+                console.warn('Failed to parse user emails:', e.message);
+              }
+            }
+          }
+
+          return {
+            valid: true,
+            username: userInfo.login,
+            user: {
+              login: userInfo.login,
+              name: userInfo.name || userInfo.login,
+              email: email || '',
+              avatarUrl: userInfo.avatar_url || ''
+            }
+          };
+        }
+      }
+
+      return {
+        valid: false,
+        error: result.error || 'Authentication failed'
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error.message || 'Failed to validate token'
+      };
+    }
+  }
+
+  /**
+   * Get repositories for the authenticated user
+   * @returns {Promise<Array>} List of repositories
+   */
+  async getRepositories() {
+    try {
+      const command = 'gh repo list --limit 100 --json name,nameWithOwner,url,isPrivate,defaultBranchRef,updatedAt';
+      const result = await this._executeCommand(command, process.cwd());
+
+      if (result.success && result.output) {
+        const repos = JSON.parse(result.output);
+        return repos.map(repo => ({
+          name: repo.name,
+          fullName: repo.nameWithOwner,
+          url: repo.url,
+          defaultBranch: repo.defaultBranchRef?.name || 'main',
+          private: repo.isPrivate,
+          updatedAt: repo.updatedAt
+        }));
+      }
+
+      throw new Error(result.error || 'Failed to fetch repositories');
+    } catch (error) {
+      throw new Error(`Failed to fetch repositories: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get branches for a specific repository
+   * @param {string} owner - Repository owner
+   * @param {string} repo - Repository name
+   * @returns {Promise<Array>} List of branches
+   */
+  async getBranches(owner, repo) {
+    try {
+      const command = `gh api repos/${owner}/${repo}/branches --paginate --jq '.[] | {name: .name, protected: .protected}'`;
+      const result = await this._executeCommand(command, process.cwd());
+
+      if (result.success && result.output) {
+        // Parse NDJSON output (newline-delimited JSON)
+        const branches = result.output.trim().split('\n')
+          .filter(line => line)
+          .map(line => JSON.parse(line));
+
+        return branches;
+      }
+
+      throw new Error(result.error || 'Failed to fetch branches');
+    } catch (error) {
+      throw new Error(`Failed to fetch branches: ${error.message}`);
+    }
+  }
+
+  /**
+   * Make a generic GitHub API request
+   * @param {string} path - API path (e.g., '/user', '/repos/owner/repo')
+   * @returns {Promise<any>} API response
+   */
+  async request(path) {
+    try {
+      const command = `gh api ${path}`;
+      const result = await this._executeCommand(command, process.cwd());
+
+      if (result.success && result.output) {
+        try {
+          return JSON.parse(result.output);
+        } catch {
+          return result.output; // Return raw output if not JSON
+        }
+      }
+
+      throw new Error(result.error || 'API request failed');
+    } catch (error) {
+      throw new Error(`GitHub API error: ${error.message}`);
+    }
+  }
+
+  /**
    * List pull requests
    * @param {string} workingDirectory - Directory to run the command in
    * @param {Object} options - List options (state, limit, etc.)

@@ -22,13 +22,12 @@ router.get('/status', async (req, res) => {
     }
     
     const validation = await github.validateToken();
-    
+
     if (validation.valid) {
-      const userInfo = await github.request('/user');
       return res.json({
         enabled: true,
         valid: true,
-        username: userInfo.login
+        username: validation.username
       });
     }
     
@@ -60,23 +59,11 @@ router.get('/repos', async (req, res) => {
       });
     }
     
-    // Get all repos (including private)
-    const repos = await github.request('/user/repos', {
-      sort: 'updated',
-      direction: 'desc',
-      per_page: 100,
-      affiliation: 'owner,collaborator,organization_member'
-    });
-    
-    // Format for frontend
-    const formattedRepos = repos.map(repo => ({
-      fullName: repo.full_name,
-      name: repo.name,
-      url: repo.clone_url,
-      private: repo.private,
-      defaultBranch: repo.default_branch,
-      updatedAt: repo.updated_at
-    }));
+    // Get all repos using GitHubService
+    const repos = await github.getRepositories();
+
+    // GitHubService already formats the response correctly
+    const formattedRepos = repos;
     
     res.json(formattedRepos);
   } catch (error) {
@@ -102,15 +89,11 @@ router.get('/repos/:owner/:repo/branches', async (req, res) => {
       });
     }
     
-    const branches = await github.request(`/repos/${owner}/${repo}/branches`, {
-      per_page: 100
-    });
-    
-    // Format for frontend
-    const formattedBranches = branches.map(branch => ({
-      name: branch.name,
-      protected: branch.protected
-    }));
+    // Get branches using GitHubService
+    const branches = await github.getBranches(owner, repo);
+
+    // GitHubService already formats the response correctly
+    const formattedBranches = branches;
     
     res.json(formattedBranches);
   } catch (error) {

@@ -1,16 +1,16 @@
-import { promises as fs } from 'fs';
-import config from '../config/index.js';
-import { encrypt, decrypt } from '../utils/crypto.js';
-import GitHubAPI from '../github.js';
+import { promises as fs } from "fs";
+import config from "../config/index.js";
+import { encrypt, decrypt } from "../utils/crypto.js";
+import GitHubService from "./github.service.js";
 
 /**
  * SettingsService - Handles all settings-related operations
- * 
+ *
  * This service provides a clean interface for settings management,
  * hiding the complexity of encryption, validation, credential storage,
  * and GitHub integration.
- * 
- * Following deep module principles: simple interface (6 methods), 
+ *
+ * Following deep module principles: simple interface (6 methods),
  * complex implementation handling encryption, validation, and persistence.
  */
 export class SettingsService {
@@ -25,41 +25,41 @@ export class SettingsService {
    */
   async getSettings() {
     const settings = {};
-    
+
     try {
       // Get GitHub token status (without exposing the actual token)
       const githubTokenSetting = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['github_token']
+        "SELECT value FROM settings WHERE key = ?",
+        ["github_token"],
       );
-      
+
       if (githubTokenSetting) {
         // SECURITY: Only indicate presence, never expose actual token
         settings.hasGithubToken = true;
         // Provide empty token for form compatibility (frontend doesn't use this value)
-        settings.githubToken = '';
+        settings.githubToken = "";
       } else {
         settings.hasGithubToken = false;
-        settings.githubToken = '';
+        settings.githubToken = "";
       }
-      
+
       // Get Git user settings
       const gitUserName = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['git_user_name']
+        "SELECT value FROM settings WHERE key = ?",
+        ["git_user_name"],
       );
-      
+
       const gitUserEmail = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['git_user_email']
+        "SELECT value FROM settings WHERE key = ?",
+        ["git_user_email"],
       );
-      
-      settings.gitUserName = gitUserName?.value || '';
-      settings.gitUserEmail = gitUserEmail?.value || '';
-      
+
+      settings.gitUserName = gitUserName?.value || "";
+      settings.gitUserEmail = gitUserEmail?.value || "";
+
       // Check file-based settings for backward compatibility
       try {
-        const fileSettings = await fs.readFile(config.settingsPath, 'utf8');
+        const fileSettings = await fs.readFile(config.settingsPath, "utf8");
         const parsed = JSON.parse(fileSettings);
         settings.fileExists = true;
         settings.fileHasToken = !!parsed.githubToken;
@@ -67,7 +67,7 @@ export class SettingsService {
         settings.fileExists = false;
         settings.fileHasToken = false;
       }
-      
+
       return settings;
     } catch (error) {
       throw new Error(`Failed to retrieve settings: ${error.message}`);
@@ -81,9 +81,9 @@ export class SettingsService {
    */
   async updateSettings(settingsData) {
     const { githubToken, gitUserName, gitUserEmail } = settingsData;
-    
+
     if (!githubToken) {
-      throw new Error('GitHub token is required');
+      throw new Error("GitHub token is required");
     }
 
     try {
@@ -96,59 +96,62 @@ export class SettingsService {
       // Encrypt and save GitHub token to database
       const encryptedToken = encrypt(githubToken);
       await this.models.db.run(
-        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-        ['github_token', encryptedToken]
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        ["github_token", encryptedToken],
       );
-      
+
       // Save Git user settings if provided
       if (gitUserName !== undefined) {
         await this.models.db.run(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-          ['git_user_name', gitUserName || '']
+          "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+          ["git_user_name", gitUserName || ""],
         );
       }
-      
+
       if (gitUserEmail !== undefined) {
         await this.models.db.run(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-          ['git_user_email', gitUserEmail || '']
+          "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+          ["git_user_email", gitUserEmail || ""],
         );
       }
-      
+
       // Save to file for backward compatibility
       const fileSettings = { githubToken };
-      await fs.writeFile(config.settingsPath, JSON.stringify(fileSettings, null, 2));
-      
+      await fs.writeFile(
+        config.settingsPath,
+        JSON.stringify(fileSettings, null, 2),
+      );
+
       // Emit events for settings changes
       if (this.eventEmitterService) {
-        this.eventEmitterService.emit('settings.updated', {
+        this.eventEmitterService.emit("settings.updated", {
           hasGithubToken: true,
-          gitUserName: gitUserName || '',
-          gitUserEmail: gitUserEmail || '',
-          timestamp: new Date().toISOString()
+          gitUserName: gitUserName || "",
+          gitUserEmail: gitUserEmail || "",
+          timestamp: new Date().toISOString(),
         });
-        
-        this.eventEmitterService.emit('settings.github-token-changed', {
+
+        this.eventEmitterService.emit("settings.github-token-changed", {
           valid: true,
           user: validation.user,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        
+
         if (gitUserName !== undefined || gitUserEmail !== undefined) {
-          this.eventEmitterService.emit('settings.git-config-changed', {
-            gitUserName: gitUserName || '',
-            gitUserEmail: gitUserEmail || '',
-            timestamp: new Date().toISOString()
+          this.eventEmitterService.emit("settings.git-config-changed", {
+            gitUserName: gitUserName || "",
+            gitUserEmail: gitUserEmail || "",
+            timestamp: new Date().toISOString(),
           });
         }
       }
-      
+
       return {
-        message: 'Settings updated successfully',
+        message: "Settings updated successfully",
         hasGithubToken: true,
-        gitUserName: gitUserName || '',
-        gitUserEmail: gitUserEmail || '',
-        user: validation.user
+        gitUserName: gitUserName || "",
+        gitUserEmail: gitUserEmail || "",
+        user: validation.user,
       };
     } catch (error) {
       throw new Error(`Failed to update settings: ${error.message}`);
@@ -162,37 +165,18 @@ export class SettingsService {
    */
   async validateGitHubToken(token) {
     if (!token) {
-      return { valid: false, error: 'No token provided' };
+      return { valid: false, error: "No token provided" };
     }
 
     try {
-      const github = new GitHubAPI(token);
+      const github = new GitHubService(token);
       const result = await github.validateToken();
-      
+
       if (result.valid) {
-        // Get detailed user info
-        const userInfo = await github.request('/user');
-        
-        // Get primary email if not available
-        let email = userInfo.email;
-        if (!email) {
-          try {
-            const emails = await github.request('/user/emails');
-            const primaryEmail = emails.find(e => e.primary && e.verified);
-            email = primaryEmail ? primaryEmail.email : '';
-          } catch (e) {
-            console.warn('Failed to fetch user emails:', e.message);
-          }
-        }
-        
+        // GitHubService.validateToken() now returns full user info
         return {
           valid: true,
-          user: {
-            login: userInfo.login,
-            name: userInfo.name || userInfo.login,
-            email: email || '',
-            avatarUrl: userInfo.avatar_url || ''
-          }
+          user: result.user,
         };
       } else {
         return { valid: false, error: result.error };
@@ -209,18 +193,18 @@ export class SettingsService {
   async getGitConfig() {
     try {
       const gitUserName = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['git_user_name']
+        "SELECT value FROM settings WHERE key = ?",
+        ["git_user_name"],
       );
-      
+
       const gitUserEmail = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['git_user_email']
+        "SELECT value FROM settings WHERE key = ?",
+        ["git_user_email"],
       );
-      
+
       return {
-        name: gitUserName?.value || '',
-        email: gitUserEmail?.value || ''
+        name: gitUserName?.value || "",
+        email: gitUserEmail?.value || "",
       };
     } catch (error) {
       throw new Error(`Failed to get git configuration: ${error.message}`);
@@ -234,34 +218,34 @@ export class SettingsService {
    */
   async updateGitConfig(gitConfig) {
     const { name, email } = gitConfig;
-    
+
     try {
       if (name !== undefined) {
         await this.models.db.run(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-          ['git_user_name', name || '']
+          "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+          ["git_user_name", name || ""],
         );
       }
-      
+
       if (email !== undefined) {
         await this.models.db.run(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-          ['git_user_email', email || '']
+          "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+          ["git_user_email", email || ""],
         );
       }
-      
+
       // Emit event for git config changes
       if (this.eventEmitterService) {
-        this.eventEmitterService.emit('settings.git-config-changed', {
-          gitUserName: name || '',
-          gitUserEmail: email || '',
-          timestamp: new Date().toISOString()
+        this.eventEmitterService.emit("settings.git-config-changed", {
+          gitUserName: name || "",
+          gitUserEmail: email || "",
+          timestamp: new Date().toISOString(),
         });
       }
-      
+
       return {
-        name: name || '',
-        email: email || ''
+        name: name || "",
+        email: email || "",
       };
     } catch (error) {
       throw new Error(`Failed to update git configuration: ${error.message}`);
@@ -276,34 +260,34 @@ export class SettingsService {
     try {
       // Get current token from database
       const githubTokenSetting = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['github_token']
+        "SELECT value FROM settings WHERE key = ?",
+        ["github_token"],
       );
-      
+
       if (!githubTokenSetting?.value) {
-        return { 
-          valid: false, 
-          error: 'No GitHub token configured' 
+        return {
+          valid: false,
+          error: "No GitHub token configured",
         };
       }
-      
+
       // Decrypt token
       const decryptedToken = decrypt(githubTokenSetting.value);
       const token = decryptedToken || githubTokenSetting.value; // Fallback for unencrypted tokens
-      
+
       // Validate token
       return await this.validateGitHubToken(token);
     } catch (error) {
-      return { 
-        valid: false, 
-        error: `Connection test failed: ${error.message}` 
+      return {
+        valid: false,
+        error: `Connection test failed: ${error.message}`,
       };
     }
   }
 
   /**
-   * Create a GitHub API instance with the current token
-   * @returns {Promise<GitHubAPI|null>} GitHub API instance or null if no token
+   * Create a GitHub Service instance with the current token
+   * @returns {Promise<GitHubService|null>} GitHub Service instance or null if no token
    */
   async createGitHubAPIInstance() {
     try {
@@ -311,9 +295,9 @@ export class SettingsService {
       if (!token) {
         return null;
       }
-      return new GitHubAPI(token);
+      return new GitHubService(token);
     } catch (error) {
-      console.error('Failed to create GitHub API instance:', error.message);
+      console.error("Failed to create GitHub Service instance:", error.message);
       return null;
     }
   }
@@ -326,18 +310,18 @@ export class SettingsService {
   async _getDecryptedGitHubToken() {
     try {
       const githubTokenSetting = await this.models.db.get(
-        'SELECT value FROM settings WHERE key = ?',
-        ['github_token']
+        "SELECT value FROM settings WHERE key = ?",
+        ["github_token"],
       );
-      
+
       if (!githubTokenSetting?.value) {
         return null;
       }
-      
+
       const decryptedToken = decrypt(githubTokenSetting.value);
       return decryptedToken || githubTokenSetting.value; // Fallback for unencrypted tokens
     } catch (error) {
-      console.error('Failed to decrypt GitHub token:', error.message);
+      console.error("Failed to decrypt GitHub token:", error.message);
       return null;
     }
   }
