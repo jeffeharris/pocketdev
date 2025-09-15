@@ -41,3 +41,13 @@ node_modules/
 e2e/test-results/
 playwright-report/
 test-results/
+
+# Test files
+test-deploy/
+test-production-local.sh
+docker-compose.test-production.yml
+nginx.test.conf
+.env.test-production
+*.png
+test_*.js
+console_check.js
