@@ -7,7 +7,7 @@ import { TerminalTabs } from './TerminalTabs';
 import { SessionLauncher } from './SessionLauncher';
 import { useService } from '../../services';
 import { useTerminalTabs } from '../../features/terminal-tabs';
-import { useTaskStatus } from '../../hooks/useTaskStatus';
+import { useWorkerStatus } from '../../hooks/useWorkerStatus';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../../stores/splitViewStore';
 import { useTerminalStore, useTaskTerminals, useFocusedTerminalId } from '../../stores/terminal/terminalStore.deep';
@@ -55,7 +55,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const { showToast } = useToast();
   
   // Get real-time session states from WebSocket
-  const { sessionStates: realtimeSessionStates } = useTaskStatus(task.id);
+  const { sessionStates: realtimeSessionStates } = useWorkerStatus(task.id);
   
   
   // Use split view feature for layout management

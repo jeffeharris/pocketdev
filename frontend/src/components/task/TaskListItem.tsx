@@ -2,7 +2,9 @@ import React from 'react';
 import type { Task } from '../../types/task';
 import { TaskStatus as TaskStatusComponent } from './TaskStatus';
 import { WorkerStatus, TaskState } from '../../types/task';
-import { useTaskStatus } from '../../hooks/useTaskStatus';
+import { useTaskState } from '../../hooks/useTaskState';
+import { useWorkerStatus } from '../../hooks/useWorkerStatus';
+import { useGitStatus } from '../../hooks/useGitStatus';
 import { clsx } from 'clsx';
 import { getAggregatedState, getHighestPrioritySessionId } from '../../utils/terminal-utils';
 
@@ -17,8 +19,10 @@ export const TaskListItem: React.FC<TaskListItemProps> = ({
   isActive, 
   onSelect
 }) => {
-  // Get real-time status updates via WebSocket
-  const { sessionState, sessionStates, taskState, gitStatus } = useTaskStatus(task.id);
+  // Get real-time status updates via WebSocket - now split into focused hooks
+  const taskState = useTaskState(task.id);
+  const { sessionState, sessionStates } = useWorkerStatus(task.id);
+  const gitStatus = useGitStatus(task.id);
   
   // Convert task.terminals to sessionStates format if needed
   const taskSessionStates = task.terminals?.map(terminal => ({
