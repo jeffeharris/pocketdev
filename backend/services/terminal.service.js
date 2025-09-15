@@ -44,22 +44,28 @@ export class TerminalService {
     }
     
     // Check terminal limit (6 per task)
-    const currentTerminals = await this.models.sessions.findAllActiveByTaskId(taskId);
+    const currentTerminals = await this.models.sessions.findActiveByTaskId(taskId);
     if (currentTerminals.length >= 6) {
       throw new Error(`Maximum number of terminals (6) reached for this task`);
     }
     
     // Generate session IDs (hide the complexity of multiple ID types)
-    const dbSessionId = this.models.sessions.generateId();
+    const crypto = await import('crypto');
+    const dbSessionId = crypto.randomBytes(4).toString('hex');
     const shelltenderSessionId = `task-${taskId}-${dbSessionId}`;
     
+    // Get the next tab order for this task
+    const nextTabOrder = currentTerminals.length;
+    
     // Create database record
-    const dbSession = await this.models.sessions.create(taskId, {
+    const dbSession = await this.models.sessions.create({
       id: dbSessionId,
-      sessionId: shelltenderSessionId,
-      shelltenderSessionId: shelltenderSessionId,
-      tabName: tabName || 'Main',
-      aiAgent: aiAgent || 'claude',
+      task_id: taskId,
+      session_id: shelltenderSessionId,
+      shelltender_session_id: shelltenderSessionId,
+      tab_name: tabName || 'Main',
+      tab_order: nextTabOrder,
+      ai_agent: aiAgent || 'claude',
       metadata: {
         initialPrompt,
         workingDirectory
@@ -272,10 +278,11 @@ export class TerminalService {
     }
     
     // Update tab in database
-    const updatedSession = await this.models.sessions.updateTab(sessionDetails.dbSessionId, {
-      tabName,
-      tabOrder
-    });
+    const updates = {};
+    if (tabName !== undefined) updates.tab_name = tabName;
+    if (tabOrder !== undefined) updates.tab_order = tabOrder;
+    
+    const updatedSession = await this.models.sessions.update(sessionDetails.dbSessionId, updates);
     
     if (!updatedSession) {
       throw new Error('Failed to update session tab');
@@ -381,7 +388,7 @@ export class TerminalService {
    * @returns {Promise<Array>} Array of session states
    */
   async getTaskSessions(taskId, monitors = {}) {
-    const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+    const sessions = await this.models.sessions.findActiveByTaskId(taskId);
     
     // Enrich with live state and Shelltender status
     const enrichedSessions = await Promise.all(
@@ -503,7 +510,7 @@ export class TerminalService {
       const parts = sessionId.split('-');
       if (parts.length >= 3) {
         const taskId = parts[1];
-        const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+        const sessions = await this.models.sessions.findActiveByTaskId(taskId);
         dbSession = sessions.find(s => 
           s.session_id === sessionId || 
           s.shelltender_session_id === sessionId
@@ -648,7 +655,7 @@ export class TerminalService {
    */
   async cleanupTaskSessions(taskId) {
     try {
-      const sessions = await this.models.sessions.findAllActiveByTaskId(taskId);
+      const sessions = await this.models.sessions.findActiveByTaskId(taskId);
       
       if (sessions.length === 0) {
         return;

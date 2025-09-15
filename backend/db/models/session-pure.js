@@ -24,6 +24,10 @@ class SessionModel extends BaseModel {
       task_id: sessionData.task_id,
       session_id: sessionData.session_id,
       shelltender_session_id: sessionData.shelltender_session_id || null,
+      tab_name: sessionData.tab_name || 'Main',
+      tab_order: sessionData.tab_order || 0,
+      ai_agent: sessionData.ai_agent || 'claude',
+      ai_session_id: sessionData.ai_session_id || null,
       ai_state: sessionData.ai_state || 'not-started',
       ai_state_updated_at: sessionData.ai_state_updated_at || null,
       is_active: sessionData.is_active !== undefined ? sessionData.is_active : 1,
@@ -65,6 +69,7 @@ class SessionModel extends BaseModel {
     const results = await this.db.all(query, [taskId]);
     return this.parseJsonFieldsMany(results);
   }
+
 
   /**
    * Find session by Shelltender session ID
