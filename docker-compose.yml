@@ -67,15 +67,13 @@ services:
     
   # React Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: builder
+    image: node:18-alpine
     container_name: frontend
     working_dir: /app
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - ./shared:/shared:ro
     ports:
       - "5173:5173"
     environment:

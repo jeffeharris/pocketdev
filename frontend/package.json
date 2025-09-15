@@ -12,7 +12,8 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "prepare": "cd .. && (husky install frontend/.husky || true)"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

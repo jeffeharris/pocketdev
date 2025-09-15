@@ -9,9 +9,10 @@
  * Following deep module principles: simple interface (6 methods), 
  * complex GitHub API interactions hidden inside.
  */
-import { GitRepository } from './git-repository.service.js';
-import { GitWorkingTree } from './git-workingtree.service.js';
-import { GitAnalyzer } from './git-analyzer.service.js';
+// TODO: These services need to be implemented or removed
+// import { GitRepository } from './git-repository.service.js';
+// import { GitWorkingTree } from './git-workingtree.service.js';
+// import { GitAnalyzer } from './git-analyzer.service.js';
 export class PullRequestService {
   constructor(models, githubTokenService, eventEmitterService = null) {
     this.models = models;

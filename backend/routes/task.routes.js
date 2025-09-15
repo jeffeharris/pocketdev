@@ -21,8 +21,8 @@ export default function createTaskRoutes(models, projectsDir) {
 
   // ===== Core CRUD Operations =====
   router.post('/', (req, res) => taskController.createTask(req, res));
-  router.get('/minimal', (req, res) => taskController.listTasksMinimal(req, res));
-  router.get('/', (req, res) => taskController.listTasks(req, res));
+  router.get('/minimal', (req, res) => taskController.getTasks(req, res));
+  router.get('/', (req, res) => taskController.getTasks(req, res));
   router.get('/:taskId', (req, res) => taskController.getTask(req, res));
   router.patch('/:taskId', (req, res) => taskController.updateTaskMetadata(req, res));
   router.get('/:taskId/status', (req, res) => taskController.getTaskStatus(req, res));

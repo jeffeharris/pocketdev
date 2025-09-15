@@ -118,7 +118,7 @@ export const ProjectDashboard: React.FC = () => {
     try {
       // Load cached dashboard data first (no git fetch)
       const cachedDashboard = await projectService.getProjectDashboard(projectId!, { cached: true });
-      setNeedsAttention(cachedDashboard.needsAttention);
+      setNeedsAttention(cachedDashboard.needsAttention || []);
       setLastUpdated(cachedDashboard.lastUpdated);
       
       // Load other data in parallel, but handle failures individually
@@ -189,7 +189,7 @@ export const ProjectDashboard: React.FC = () => {
       ]);
       
       setProject(dashboardData.project);
-      setNeedsAttention(dashboardData.needsAttention);
+      setNeedsAttention(dashboardData.needsAttention || []);
       setTasks(tasksData);
       setBranches(branchesData);
       setPlanning(planningData);

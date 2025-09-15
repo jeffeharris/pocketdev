@@ -60,7 +60,7 @@ export class TaskController {
     const { projectId } = req.params;
     const { name, branch, useExistingBranch = false, createSession = false } = req.body;
     
-    const result = await req.services.taskService.create(projectId, {
+    const result = await req.services.TaskService.create(projectId, {
       name,
       branch,
       useExistingBranch,
@@ -79,7 +79,7 @@ export class TaskController {
     const { projectId } = req.params;
     const { minimal } = req.query;
     
-    const tasks = await req.services.taskService.list(projectId, {
+    const tasks = await req.services.TaskService.list(projectId, {
       minimal: minimal === 'true'
     });
     
@@ -92,7 +92,7 @@ export class TaskController {
   getTask = this.wrap('get task', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await req.services.taskService.get(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -107,7 +107,7 @@ export class TaskController {
     const { taskId } = req.params;
     const updates = req.body;
     
-    const result = await req.services.taskService.update(taskId, updates);
+    const result = await req.services.TaskService.update(taskId, updates);
     res.json(result);
   });
 
@@ -118,7 +118,7 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     const { restoreLayout = false } = req.query;
     
-    const result = await req.services.taskService.open(taskId, {
+    const result = await req.services.TaskService.open(taskId, {
       projectId,
       githubToken: req.githubToken,
       hostname: req.get('host'),
@@ -134,7 +134,7 @@ export class TaskController {
   closeTask = this.wrap('close task', async (req, res) => {
     const { taskId } = req.params;
     
-    const result = await req.services.taskService.close(taskId);
+    const result = await req.services.TaskService.close(taskId);
     res.json(result);
   });
 
@@ -144,7 +144,7 @@ export class TaskController {
   syncTask = this.wrap('sync task', async (req, res) => {
     const { projectId, taskId } = req.params;
     
-    const result = await req.services.taskService.sync(taskId, {
+    const result = await req.services.TaskService.sync(taskId, {
       projectId,
       githubToken: req.githubToken
     });
@@ -158,7 +158,7 @@ export class TaskController {
   checkDelete = this.wrap('check delete safety', async (req, res) => {
     const { taskId } = req.params;
     
-    const safetyCheck = await req.services.taskService.delete(taskId, {
+    const safetyCheck = await req.services.TaskService.delete(taskId, {
       checkSafety: true,
       githubToken: req.githubToken
     });
@@ -173,7 +173,7 @@ export class TaskController {
     const { taskId } = req.params;
     const { force = false, softDelete = true } = req.query;
     
-    const result = await req.services.taskService.delete(taskId, {
+    const result = await req.services.TaskService.delete(taskId, {
       force: force === 'true',
       softDelete: softDelete !== 'false'
     });
@@ -383,7 +383,7 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     const { title, body, draft = false } = req.body;
     
-    const result = await req.services.taskService.createPullRequest(taskId, {
+    const result = await req.services.TaskService.createPullRequest(taskId, {
       projectId,
       title,
       body,
@@ -499,7 +499,7 @@ export class TaskController {
     const { taskId } = req.params;
     const layout = req.body;
     
-    await req.services.taskService.saveLayout(taskId, layout);
+    await req.services.TaskService.saveLayout(taskId, layout);
     res.json({ success: true });
   });
 
@@ -509,7 +509,7 @@ export class TaskController {
   getTerminalLayout = this.wrap('get terminal layout', async (req, res) => {
     const { taskId } = req.params;
     
-    const layout = await req.services.taskService.getLayout(taskId);
+    const layout = await req.services.TaskService.getLayout(taskId);
     res.json(layout || { terminals: [] });
   });
 
@@ -519,7 +519,7 @@ export class TaskController {
   getSplitLayout = this.wrap('get split layout', async (req, res) => {
     const { taskId } = req.params;
     
-    const layout = await req.services.taskService.getLayout(taskId);
+    const layout = await req.services.TaskService.getLayout(taskId);
     res.json(layout || { mode: 'single' });
   });
 
@@ -530,7 +530,7 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     const layout = req.body;
     
-    await req.services.taskService.setLayout(taskId, projectId, layout);
+    await req.services.TaskService.setLayout(taskId, projectId, layout);
     res.json({ success: true });
   });
 }
