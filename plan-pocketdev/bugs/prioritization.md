@@ -28,7 +28,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-007 | git.service.js needs modularization | Technical Debt | 985 | **High** | 32+ methods, shallow interface | **RESOLVED** | 2025-08-18 |
 | BUG-009 | Sidebar component needs decomposition | Technical Debt | 903 | **High** | Primary UI, performance | Open | 2025-08-22 |
 | BUG-017 | Consolidate Session Identity Abstraction | Technical Debt | N/A | **High** | Leaky abstraction in 21+ files | **RESOLVED** | 2025-08-03 |
-| BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | Open | 2025-08-26 |
+| BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | **Resolved** | 2025-08-26 |
 | BUG-019 | WebSocket Event System Needs Deep Module | Technical Debt | N/A | **High** | 10 methods for 1 operation | **RESOLVED** | 2025-08-03 |
 | BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | **Resolved** | 2025-08-30 |
 | BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | Open | 2025-09-01 |
@@ -48,7 +48,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**19 bugs resolved** (18 via service extraction/refactoring + 1 functional fix):
+**20 bugs resolved** (19 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -145,6 +145,13 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Created async wrapper to eliminate 30 try-catch blocks (~450 lines of boilerplate)
    - Maintains consolidated controller structure per architecture philosophy
    - All 31 methods now use consistent error handling pattern
+
+17. **BUG-018** (High): Deduplicate Terminal State Aggregation - **RESOLVED** (2025-09-14)
+   - Consolidated duplicate state priority logic into terminal-utils.ts
+   - Created single source of truth for STATE_PRIORITY constant
+   - Added reusable functions: getAggregatedState, getHighestPrioritySessionId
+   - Reduced TaskListItem.tsx by 49 lines, eliminated ~80 lines of duplication total
+   - Components now focus on display while utilities handle state calculation
 
 ### Metrics Achieved
 - **Backend**: Controllers reduced by 90%+ in size
