@@ -31,7 +31,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 | BUG-018 | Deduplicate Terminal State Aggregation | Technical Debt | N/A | **High** | Code duplication, state complexity | **Resolved** | 2025-08-26 |
 | BUG-019 | WebSocket Event System Needs Deep Module | Technical Debt | N/A | **High** | 10 methods for 1 operation | **RESOLVED** | 2025-08-03 |
 | BUG-020 | Terminal Store Exposes Internal Structure | Technical Debt | N/A | **High** | 30+ methods, leaky Maps | **Resolved** | 2025-08-30 |
-| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207 | **Medium** | Complex but isolated | **Partial** | 2025-09-01 |
+| BUG-005 | DiffViewerModal needs decomposition | Technical Debt | 1,207→456 | **Medium** | Complex but isolated | **Resolved** | 2025-09-01 |
 | BUG-006 | Simplify PrototypeMergeConflict | Technical Debt | 1,041 | **Medium** | Blocks production integration | Open | 2025-09-03 |
 | BUG-021 | Database Models Cross-Table Contamination | Technical Debt | N/A | **Medium** | Tight coupling between models | **RESOLVED** | 2025-09-12 |
 | BUG-022 | useTaskStatus Violates Single Responsibility | Technical Debt | 200+ | **Medium** | WebSocket + state + formatting | Open | 2025-09-07 |
@@ -48,7 +48,7 @@ This document tracks the prioritization and status of all filed bugs in the Pock
 
 ### Bugs Resolved 
 
-**20 bugs resolved** (19 via service extraction/refactoring + 1 functional fix):
+**21 bugs resolved** (20 via service extraction/refactoring + 1 functional fix):
 
 1. **BUG-013** (Critical): Service Layer Architecture - **RESOLVED**
    - Created 10 backend services with dependency injection
@@ -152,6 +152,15 @@ This document tracks the prioritization and status of all filed bugs in the Pock
    - Added reusable functions: getAggregatedState, getHighestPrioritySessionId
    - Reduced TaskListItem.tsx by 49 lines, eliminated ~80 lines of duplication total
    - Components now focus on display while utilities handle state calculation
+
+18. **BUG-005** (Medium): DiffViewerModal needs decomposition - **RESOLVED** (2025-09-14)
+   - Reduced from 1,207 lines to 456 lines (62% reduction)
+   - Created reusable hooks: useDiffLoader, useGitOperations
+   - Created reusable components: FileListSection, DiffEditorWrapper
+   - Created utilities: monaco-config.ts, diff-parser.ts
+   - Reduced from 37 React hooks to ~10 hooks in main component
+   - Eliminated duplicate file list rendering (was repeated 3 times)
+   - Clear separation of concerns - each piece testable independently
 
 ### Metrics Achieved
 - **Backend**: Controllers reduced by 90%+ in size
