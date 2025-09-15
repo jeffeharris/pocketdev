@@ -294,7 +294,6 @@ export function useTerminalTabs(config: TerminalTabConfig): TerminalTabsFeature 
       const aiAgent = options?.aiAgent || 'claude';
       
       const newSession = await terminalService.createTerminalSession(
-        task.project_id,
         task.id,
         {
           tabName,
