@@ -194,7 +194,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const status = await gitService.getStatus(task.worktree_path);
     
     res.json(status);
@@ -212,7 +212,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const changes = await gitService.getFileChanges(task.worktree_path, {
       staged: staged === 'true'
     });
@@ -232,7 +232,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     await gitService.stageFiles(task.worktree_path, files);
     
     res.json({ success: true });
@@ -250,7 +250,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     await gitService.unstageFiles(task.worktree_path, files);
     
     res.json({ success: true });
@@ -268,7 +268,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const commitId = await gitService.commit(task.worktree_path, message);
     
     res.json({ commitId });
@@ -286,7 +286,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     await gitService.push(task.worktree_path, task.branch, {
       force,
       githubToken: req.githubToken
@@ -306,7 +306,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const result = await gitService.pull(task.worktree_path, {
       githubToken: req.githubToken
     });
@@ -326,7 +326,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const conflicts = await gitService.checkMergeConflicts(
       task.worktree_path,
       task.branch,
@@ -348,7 +348,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     const history = await gitService.getCommitHistory(task.worktree_path, {
       limit: parseInt(limit)
     });
@@ -368,7 +368,7 @@ export class TaskController {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    const gitService = req.services.gitService;
+    const gitService = req.services.GitService;
     await gitService.reset(task.worktree_path, mode);
     
     res.json({ success: true });
@@ -532,5 +532,275 @@ export class TaskController {
     
     await req.services.TaskService.setLayout(taskId, projectId, layout);
     res.json({ success: true });
+  });
+
+  /**
+   * Get all changes for a task (working, staged, committed)
+   */
+  getAllChanges = this.wrap('get all changes', async (req, res) => {
+    const { taskId } = req.params;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    const status = await gitService.getStatus(task.worktree_path);
+    
+    // Get commits (unpushed)
+    const commits = await gitService.getCommits(task.worktree_path, { limit: 10 });
+    
+    // Build file list from status
+    const files = [];
+    
+    // Add staged files
+    if (status.staged && status.staged.length > 0) {
+      files.push(...status.staged.map(f => ({ 
+        path: f,
+        staged: true,
+        type: 'modified'
+      })));
+    }
+    
+    // Add modified files
+    if (status.modified && status.modified.length > 0) {
+      files.push(...status.modified.map(f => ({ 
+        path: f,
+        unstaged: true,
+        type: 'modified'
+      })));
+    }
+    
+    // Add untracked files
+    if (status.untracked && status.untracked.length > 0) {
+      files.push(...status.untracked.map(f => ({ 
+        path: f,
+        untracked: true,
+        type: 'added'
+      })));
+    }
+    
+    res.json({
+      files,
+      summary: {
+        staged: status.staged?.length || 0,
+        unstaged: status.modified?.length || 0,
+        untracked: status.untracked?.length || 0,
+        committed: commits.length,
+        total: files.length,
+        unpushedCommits: commits.length
+      },
+      unpushedCommits: commits,
+      hasWorkingChanges: files.length > 0
+    });
+  });
+
+  /**
+   * Get diff for task viewing
+   */
+  getTaskDiff = this.wrap('get task diff', async (req, res) => {
+    const { taskId } = req.params;
+    const { compareWith = 'working' } = req.query;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    const status = await gitService.getStatus(task.worktree_path);
+    
+    // Build file list from status
+    const files = [];
+    
+    if (compareWith === 'base') {
+      // Get diff against base branch
+      const baseBranch = task.base_branch || 'main';
+      const diff = await gitService.getDiff(task.worktree_path, `origin/${baseBranch}`, 'HEAD');
+      
+      // Parse diff to get file list
+      const fileSet = new Set();
+      const lines = diff.output.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('diff --git')) {
+          const match = line.match(/b\/(.+)$/);
+          if (match) {
+            fileSet.add(match[1]);
+          }
+        }
+      }
+      
+      files.push(...Array.from(fileSet).map(f => ({
+        path: f,
+        type: 'modified',
+        committed: true
+      })));
+    } else {
+      // Working changes
+      if (status.staged && status.staged.length > 0) {
+        files.push(...status.staged.map(f => ({ 
+          path: f,
+          staged: true,
+          type: 'modified'
+        })));
+      }
+      
+      if (status.modified && status.modified.length > 0) {
+        files.push(...status.modified.map(f => ({ 
+          path: f,
+          unstaged: true,
+          type: 'modified'
+        })));
+      }
+      
+      if (status.untracked && status.untracked.length > 0) {
+        files.push(...status.untracked.map(f => ({ 
+          path: f,
+          untracked: true,
+          type: 'added'
+        })));
+      }
+    }
+    
+    res.json({
+      files,
+      compareWith,
+      hasWorkingChanges: files.length > 0
+    });
+  });
+
+  /**
+   * Get diff for a specific file
+   */
+  getFileDiff = this.wrap('get file diff', async (req, res) => {
+    const { taskId, file } = req.params;
+    const { compareWith = 'working' } = req.query;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    const filePath = decodeURIComponent(file);
+    
+    let diff;
+    if (compareWith === 'base') {
+      // Diff against base branch
+      const baseBranch = task.base_branch || 'main';
+      const result = await gitService.getDiff(task.worktree_path, `origin/${baseBranch}`, 'HEAD', {
+        files: [filePath]
+      });
+      diff = result.output;
+    } else if (compareWith === 'staged') {
+      // Diff for staged files
+      const result = await gitService.getDiff(task.worktree_path, 'HEAD', null, {
+        files: [filePath],
+        staged: true
+      });
+      diff = result.output;
+    } else {
+      // Working tree diff
+      const result = await gitService.getDiff(task.worktree_path, 'HEAD', null, {
+        files: [filePath]
+      });
+      diff = result.output;
+    }
+    
+    res.json({
+      path: filePath,
+      diff: diff || '',
+      hasDiff: !!diff
+    });
+  });
+
+  /**
+   * Check for merge conflicts
+   */
+  checkConflicts = this.wrap('check conflicts', async (req, res) => {
+    const { taskId } = req.params;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    const baseBranch = task.base_branch || 'main';
+    const conflicts = await gitService.checkConflicts(task.worktree_path, baseBranch);
+    
+    res.json({ hasConflicts: conflicts.hasConflicts, conflicts });
+  });
+
+  /**
+   * Legacy git operation handler
+   */
+  gitOperation = this.wrap('git operation', async (req, res) => {
+    const { taskId } = req.params;
+    const { operation, ...options } = req.body;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    let result;
+    
+    // Handle different operations
+    switch (operation) {
+      case 'add':
+        // Stage files using git add
+        const addCmd = options.files ? `git add ${options.files}` : 'git add .';
+        result = await gitService.execute(addCmd, task.worktree_path);
+        break;
+      case 'commit':
+        result = await gitService.commit(task.worktree_path, options.message, options.files);
+        break;
+      case 'push':
+        result = await gitService.push(task.worktree_path, task.branch);
+        break;
+      case 'pull':
+        result = await gitService.sync(task.worktree_path, { branch: task.branch });
+        break;
+      case 'unstage':
+        // Unstage files using git reset
+        const resetCmd = options.files ? `git reset HEAD ${options.files}` : 'git reset HEAD';
+        result = await gitService.execute(resetCmd, task.worktree_path);
+        break;
+      default:
+        return res.status(400).json({ error: `Unknown operation: ${operation}` });
+    }
+    
+    if (!result.success) {
+      return res.status(400).json({ error: result.error, operation });
+    }
+    
+    res.json({ success: true, operation, output: result.output });
+  });
+
+  /**
+   * Get changed files (for backward compatibility)
+   */
+  getChangedFiles = this.wrap('get changed files', async (req, res) => {
+    const { taskId } = req.params;
+    
+    const task = await this.models.tasks.findById(taskId);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const gitService = req.services.GitService;
+    const status = await gitService.getStatus(task.worktree_path);
+    
+    // Build changed files list from status
+    const files = [];
+    
+    if (status.staged) files.push(...status.staged.map(f => ({ path: f, staged: true })));
+    if (status.modified) files.push(...status.modified.map(f => ({ path: f, modified: true })));
+    if (status.untracked) files.push(...status.untracked.map(f => ({ path: f, untracked: true })));
+    
+    res.json({ files });
   });
 }

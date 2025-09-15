@@ -81,16 +81,19 @@ export function useDiffLoader({
       
       switch (compareWith) {
         case 'working':
-          response = await gitService.getWorkingChanges(projectId, taskId);
+          // Get working tree changes
+          response = await gitService.getTaskDiff(projectId, taskId, { compareWith: 'working' });
           break;
         case 'all':
-          response = await gitService.getAllChanges(projectId, taskId, baseBranch);
+          // Get all changes (including committed)
+          response = await gitService.getAllChanges(projectId, taskId);
           break;
         case 'base':
-          response = await gitService.getBaseComparison(projectId, taskId, baseBranch);
+          // Get changes against base branch
+          response = await gitService.getTaskDiff(projectId, taskId, { compareWith: 'base' });
           break;
         default:
-          response = await gitService.getWorkingChanges(projectId, taskId);
+          response = await gitService.getTaskDiff(projectId, taskId, { compareWith: 'working' });
       }
       
       if (response.files) {
@@ -145,14 +148,15 @@ export function useDiffLoader({
       
       // Handle different file types
       if (file.type === 'deleted') {
-        // For deleted files, show the entire original content
-        const response = await gitService.getFileAtRevision(
+        // For deleted files, we'll get the diff from the service
+        // The backend should handle showing the deleted content
+        const response = await gitService.getFileDiff(
           projectId,
           taskId,
           file.path,
-          'HEAD'
+          { compareWith }
         );
-        diff = `--- a/${file.path}\n+++ /dev/null\n@@ -1,${response.split('\n').length} +0,0 @@\n${response.split('\n').map(line => `-${line}`).join('\n')}`;
+        diff = response.diff || response;
       } else if (file.type === 'added' || file.untracked) {
         // For new files, show the entire content as additions
         const response = await gitService.getFileDiff(
