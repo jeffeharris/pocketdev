@@ -93,6 +93,13 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
     }
   }, [task.id, task.project_id, setCurrentTask]);
   
+  // Show notification using Shelltender's toast system (defined early for use in terminalTabs)
+  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
+    // showToast expects (message: string, duration?: number)
+    // For now, ignore the type parameter as the toast library doesn't support variants
+    showToast(message, 5000);
+  };
+  
   // Note: Terminal store initialization happens at task load level (TaskWorkspace/StandaloneTerminal)
   // This component only reads from the store, maintaining clear data flow
   
@@ -171,12 +178,7 @@ function TerminalPanelComponent(props: TerminalPanelProps, ref: React.ForwardedR
   const handleRefreshSession = refreshActiveTab;
 
 
-  // Show notification using Shelltender's toast system
-  const showNotification = (type: 'success' | 'error' | 'warning', message: string) => {
-    // showToast expects (message: string, duration?: number)
-    // For now, ignore the type parameter as the toast library doesn't support variants
-    showToast(message, 5000);
-  };
+  // Notification function already defined above for terminalTabs
   
 
   // Handle session reconnection
