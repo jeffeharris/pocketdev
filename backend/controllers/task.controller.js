@@ -194,7 +194,7 @@ export class TaskController {
   getGitStatus = this.wrap('get git status', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -205,25 +205,6 @@ export class TaskController {
     res.json(status);
   });
 
-  /**
-   * Get file changes (diff)
-   */
-  getFileChanges = this.wrap('get file changes', async (req, res) => {
-    const { taskId } = req.params;
-    const { staged = false } = req.query;
-    
-    const task = await this.models.tasks.findById(taskId);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    const gitService = req.services.GitService;
-    const changes = await gitService.getFileChanges(task.worktree_path, {
-      staged: staged === 'true'
-    });
-    
-    res.json(changes);
-  });
 
   /**
    * Stage files for commit
@@ -232,13 +213,14 @@ export class TaskController {
     const { taskId } = req.params;
     const { files } = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    await gitService.stageFiles(task.worktree_path, files);
+    const addCmd = `git add ${files.join(' ')}`;
+    await gitService.execute(addCmd, task.worktree_path);
     
     res.json({ success: true });
   });
@@ -250,13 +232,14 @@ export class TaskController {
     const { taskId } = req.params;
     const { files } = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    await gitService.unstageFiles(task.worktree_path, files);
+    const resetCmd = `git reset HEAD ${files.join(' ')}`;
+    await gitService.execute(resetCmd, task.worktree_path);
     
     res.json({ success: true });
   });
@@ -268,15 +251,15 @@ export class TaskController {
     const { taskId } = req.params;
     const { message } = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    const commitId = await gitService.commit(task.worktree_path, message);
+    const result = await gitService.commit(task.worktree_path, message);
     
-    res.json({ commitId });
+    res.json({ commitId: result.commitId });
   });
 
   /**
@@ -286,7 +269,7 @@ export class TaskController {
     const { taskId } = req.params;
     const { force = false } = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -306,14 +289,14 @@ export class TaskController {
   pullChanges = this.wrap('pull changes', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    const result = await gitService.pull(task.worktree_path, {
-      githubToken: req.githubToken
+    const result = await gitService.sync(task.worktree_path, {
+      branch: task.branch
     });
     
     res.json(result);
@@ -326,15 +309,14 @@ export class TaskController {
     const { taskId } = req.params;
     const { targetBranch = 'main' } = req.query;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    const conflicts = await gitService.checkMergeConflicts(
+    const conflicts = await gitService.checkConflicts(
       task.worktree_path,
-      task.branch,
       targetBranch
     );
     
@@ -348,13 +330,13 @@ export class TaskController {
     const { taskId } = req.params;
     const { limit = 50 } = req.query;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    const history = await gitService.getCommitHistory(task.worktree_path, {
+    const history = await gitService.getCommits(task.worktree_path, {
       limit: parseInt(limit)
     });
     
@@ -368,13 +350,14 @@ export class TaskController {
     const { taskId } = req.params;
     const { mode = 'mixed' } = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
     const gitService = req.services.GitService;
-    await gitService.reset(task.worktree_path, mode);
+    const resetCmd = `git reset --${mode} HEAD`;
+    await gitService.execute(resetCmd, task.worktree_path);
     
     res.json({ success: true });
   });
@@ -405,12 +388,12 @@ export class TaskController {
   getPullRequest = this.wrap('get pull request', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task || !task.pr_number) {
       return res.status(404).json({ error: 'No pull request found for this task' });
     }
     
-    const project = await this.models.projects.findById(task.project_id);
+    const project = await req.services.ProjectService.get(task.project_id);
     const prService = req.services.pullRequestService;
     
     const pr = await prService.get(project.github_url, task.pr_number, {
@@ -427,12 +410,12 @@ export class TaskController {
     const { taskId } = req.params;
     const updates = req.body;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task || !task.pr_number) {
       return res.status(404).json({ error: 'No pull request found for this task' });
     }
     
-    const project = await this.models.projects.findById(task.project_id);
+    const project = await req.services.ProjectService.get(task.project_id);
     const prService = req.services.pullRequestService;
     
     const result = await prService.update(
@@ -445,78 +428,7 @@ export class TaskController {
     res.json(result);
   });
 
-  // ========== CONTAINER OPERATIONS ==========
-
-  /**
-   * Stop container and cleanup
-   */
-  stopContainer = this.wrap('stop container', async (req, res) => {
-    const { taskId } = req.params;
-    const { cleanup = false } = req.query;
-    
-    const result = await req.services.containerService.stop(taskId, {
-      cleanup: cleanup === 'true'
-    });
-    
-    res.json(result);
-  });
-
-  /**
-   * Restart container
-   */
-  restartContainer = this.wrap('restart container', async (req, res) => {
-    const { taskId } = req.params;
-    
-    const result = await req.services.containerService.restart(taskId);
-    res.json(result);
-  });
-
-  /**
-   * Get container logs
-   */
-  getContainerLogs = this.wrap('get container logs', async (req, res) => {
-    const { taskId } = req.params;
-    const { tail = 100 } = req.query;
-    
-    const logs = await req.services.containerService.getLogs(taskId, {
-      tail: parseInt(tail)
-    });
-    
-    res.json({ logs });
-  });
-
-  /**
-   * Get container stats
-   */
-  getContainerStats = this.wrap('get container stats', async (req, res) => {
-    const { taskId } = req.params;
-    
-    const stats = await req.services.containerService.getStats(taskId);
-    res.json(stats);
-  });
-
   // ========== LAYOUT/UI STATE OPERATIONS ==========
-
-  /**
-   * Save terminal layout
-   */
-  saveTerminalLayout = this.wrap('save terminal layout', async (req, res) => {
-    const { taskId } = req.params;
-    const layout = req.body;
-    
-    await req.services.TaskService.saveLayout(taskId, layout);
-    res.json({ success: true });
-  });
-
-  /**
-   * Get terminal layout
-   */
-  getTerminalLayout = this.wrap('get terminal layout', async (req, res) => {
-    const { taskId } = req.params;
-    
-    const layout = await req.services.TaskService.getLayout(taskId);
-    res.json(layout || { terminals: [] });
-  });
 
   /**
    * Get split layout configuration
@@ -545,7 +457,7 @@ export class TaskController {
   getAllChanges = this.wrap('get all changes', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -608,7 +520,7 @@ export class TaskController {
     const { taskId } = req.params;
     const { compareWith = 'working' } = req.query;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -682,7 +594,7 @@ export class TaskController {
     const { taskId, file } = req.params;
     const { compareWith = 'working' } = req.query;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -726,7 +638,7 @@ export class TaskController {
   checkConflicts = this.wrap('check conflicts', async (req, res) => {
     const { taskId } = req.params;
     
-    const task = await this.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
@@ -736,76 +648,5 @@ export class TaskController {
     const conflicts = await gitService.checkConflicts(task.worktree_path, baseBranch);
     
     res.json({ hasConflicts: conflicts.hasConflicts, conflicts });
-  });
-
-  /**
-   * Legacy git operation handler
-   */
-  gitOperation = this.wrap('git operation', async (req, res) => {
-    const { taskId } = req.params;
-    const { operation, ...options } = req.body;
-    
-    const task = await this.models.tasks.findById(taskId);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    const gitService = req.services.GitService;
-    let result;
-    
-    // Handle different operations
-    switch (operation) {
-      case 'add':
-        // Stage files using git add
-        const addCmd = options.files ? `git add ${options.files}` : 'git add .';
-        result = await gitService.execute(addCmd, task.worktree_path);
-        break;
-      case 'commit':
-        result = await gitService.commit(task.worktree_path, options.message, options.files);
-        break;
-      case 'push':
-        result = await gitService.push(task.worktree_path, task.branch);
-        break;
-      case 'pull':
-        result = await gitService.sync(task.worktree_path, { branch: task.branch });
-        break;
-      case 'unstage':
-        // Unstage files using git reset
-        const resetCmd = options.files ? `git reset HEAD ${options.files}` : 'git reset HEAD';
-        result = await gitService.execute(resetCmd, task.worktree_path);
-        break;
-      default:
-        return res.status(400).json({ error: `Unknown operation: ${operation}` });
-    }
-    
-    if (!result.success) {
-      return res.status(400).json({ error: result.error, operation });
-    }
-    
-    res.json({ success: true, operation, output: result.output });
-  });
-
-  /**
-   * Get changed files (for backward compatibility)
-   */
-  getChangedFiles = this.wrap('get changed files', async (req, res) => {
-    const { taskId } = req.params;
-    
-    const task = await this.models.tasks.findById(taskId);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    const gitService = req.services.GitService;
-    const status = await gitService.getStatus(task.worktree_path);
-    
-    // Build changed files list from status
-    const files = [];
-    
-    if (status.staged) files.push(...status.staged.map(f => ({ path: f, staged: true })));
-    if (status.modified) files.push(...status.modified.map(f => ({ path: f, modified: true })));
-    if (status.untracked) files.push(...status.untracked.map(f => ({ path: f, untracked: true })));
-    
-    res.json({ files });
   });
 }

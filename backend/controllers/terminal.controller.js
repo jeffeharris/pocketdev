@@ -93,7 +93,7 @@ export async function createTerminalSession(req, res, next) {
     const { tabName, aiAgent, initialPrompt, workingDirectory, copyHistoryFrom } = req.body;
     
     // Verify task exists and belongs to project
-    const task = await req.services.models.tasks.findById(taskId);
+    const task = await req.services.TaskService.get(taskId);
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }

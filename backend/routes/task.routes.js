@@ -35,9 +35,7 @@ export default function createTaskRoutes(models, projectsDir) {
   router.put('/:taskId/split-layout', (req, res) => taskController.updateSplitLayout(req, res));
 
   // ===== Git Operations =====
-  router.post('/:taskId/git', (req, res) => taskController.gitOperation(req, res)); // Legacy
   router.get('/:taskId/git/status', (req, res) => taskController.getGitStatus(req, res));
-  router.get('/:taskId/files/changed', (req, res) => taskController.getChangedFiles(req, res));
   router.get('/:taskId/git/all-changes', (req, res) => taskController.getAllChanges(req, res));
   router.get('/:taskId/git/diff', (req, res) => taskController.getTaskDiff(req, res));
   router.get('/:taskId/git/diff/:file(*)', (req, res) => taskController.getFileDiff(req, res));
@@ -50,13 +48,6 @@ export default function createTaskRoutes(models, projectsDir) {
   router.post('/:taskId/pr/create', (req, res) => taskController.createPullRequest(req, res));
   router.post('/:taskId/pr/merge', (req, res) => taskController.mergePullRequest(req, res));
   router.get('/:taskId/pr/status', (req, res) => taskController.getPullRequestStatus(req, res));
-
-  // ===== Container Operations (Future Implementation) =====
-  router.post('/:taskId/deploy', (req, res) => taskController.deployContainers(req, res));
-  router.delete('/:taskId/containers', (req, res) => taskController.stopContainers(req, res));
-  router.get('/:taskId/services', (req, res) => taskController.getServices(req, res));
-  router.get('/:taskId/preview-url', (req, res) => taskController.getPreviewUrl(req, res));
-  router.get('/:taskId/container-logs', (req, res) => taskController.getContainerLogs(req, res));
 
   return router;
 }
