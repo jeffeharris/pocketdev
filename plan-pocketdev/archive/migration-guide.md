@@ -197,7 +197,7 @@ If you need to rollback:
 
 ## Need Help?
 
-1. Check the [Server Architecture](./server-architecture.md) document
+1. Check the [Server Architecture](../../docs/server-architecture.md) document
 2. Compare old and new code side-by-side
 3. Search for the function name in the new structure
 4. Check git history for the refactoring commits

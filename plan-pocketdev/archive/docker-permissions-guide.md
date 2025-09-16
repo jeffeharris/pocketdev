@@ -143,14 +143,14 @@ volumes:
 
 ## Real-World Example
 
-For a detailed case study of these issues and their resolution, see [Session Summary - July 5, 2025](./session-summary-2025-07-05.md), which documents:
+For a detailed case study of these issues and their resolution, see [Session Summary - July 5, 2025](session-summary-2025-07-05.md), which documents:
 - Actual permission issues encountered during PocketDev development
 - Step-by-step troubleshooting process
 - Database recovery from git worktrees
 - Performance optimizations achieved
 
 ## References
-- [Session Summary - July 5, 2025](./session-summary-2025-07-05.md) - Real-world troubleshooting session
+- [Session Summary - July 5, 2025](session-summary-2025-07-05.md) - Real-world troubleshooting session
 - [Docker Volume Documentation](https://docs.docker.com/storage/volumes/)
 - [Docker User Namespace](https://docs.docker.com/engine/security/userns-remap/)
 - [Best Practices for Writing Dockerfiles](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)

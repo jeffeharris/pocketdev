@@ -65,6 +65,6 @@ volumes:
    - Document UID requirements for different platforms
 
 ## References
-- [Docker Permissions Guide](./docker-permissions-guide.md)
-- [Docker compose file](../docker-compose.yml)
+- [Docker Permissions Guide](docker-permissions-guide.md)
+- [Docker compose file](../../docker-compose.yml)
 - [Optimized Dockerfiles](../Dockerfile.backend, ../Dockerfile.shelltender)

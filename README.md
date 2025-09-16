@@ -284,4 +284,4 @@ PocketDev includes terminal debugging tools for troubleshooting WebSocket and bu
 - **Raw WebSocket Test** (`/test/terminal-raw`) - Low-level WebSocket testing bypassing the client library
 - **Debug Terminal Component** - Swap DirectTerminal with DirectTerminalDebug for verbose logging
 
-See [docs/terminal-debugging.md](docs/terminal-debugging.md) for detailed usage instructions.
+See [docs/terminal-debugging.md](plan-pocketdev/archive/terminal-debugging.md) for detailed usage instructions.

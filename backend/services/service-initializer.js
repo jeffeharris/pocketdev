@@ -17,7 +17,6 @@ import { TerminalService } from './terminal.service.js';
 import { PullRequestService } from './pull-request.service.js';
 import { getEventEmitterService } from './event-emitter.service.js';
 import { SettingsService } from './settings.service.js';
-import { ContainerService } from './container.service.js';
 import { UploadService } from './upload.service.js';
 import { MonitoringService } from './monitoring.service.js';
 import { SessionCleanupService } from './session-cleanup.service.js';
@@ -65,7 +64,6 @@ export class ServiceInitializer {
       
       // Support Services
       SettingsService: new SettingsService(this.models, eventEmitterService),
-      ContainerService: new ContainerService(this.models, eventEmitterService),
       UploadService: new UploadService(this.models, eventEmitterService),
       MonitoringService: new MonitoringService(this.models, eventEmitterService)
     };

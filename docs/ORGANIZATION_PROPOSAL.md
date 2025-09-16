@@ -1,5 +1,11 @@
 # Documentation Organization Proposal
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-15
+Status: active
+-->
+
 ## Current Scattered Files to Move
 
 ### Root Directory Files
