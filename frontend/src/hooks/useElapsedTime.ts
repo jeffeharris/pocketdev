@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatElapsedTime, getUpdateInterval } from '../utils/time-formatters';
-import { WorkerStatus } from '../types/task';
+import { WorkerStatus } from '@shared/types';
 
 /**
  * Hook for displaying elapsed time with automatic updates

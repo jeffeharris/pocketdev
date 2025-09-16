@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { TerminalPanel } from './TerminalPanel';
-import type { Task } from '../../types/task';
+import type { Task } from '@shared/types';
 import { useService } from '../../services';
 import { useTerminalStore } from '../../stores/terminalStore';
 

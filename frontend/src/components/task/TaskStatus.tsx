@@ -27,7 +27,7 @@ import { getHighestPrioritySessionId as getHighestPriorityId } from '../../utils
  * - inline: For task lists - minimal, scannable
  * - detailed: For expanded views - shows everything
  */
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 
 interface TaskStatusProps {
   workerStatus: string;

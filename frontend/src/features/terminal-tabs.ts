@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTerminalStore } from '../stores/terminal/terminalStore.deep';
 import { TerminalService } from '../services/terminal.service';
 import { getFirstByOrder, findTerminalById } from '../utils/terminal-utils';
-import type { Task, TerminalSession } from '../types/task';
+import type { Task, TerminalSession } from '@shared/types';
 import type { Tab } from '../components/terminal/TerminalTabs';
 import type { DirectTerminalHandle } from '../components/terminal/DirectTerminal';
 

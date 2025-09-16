@@ -17,7 +17,7 @@ import type {
   CommitHistory, 
   GitOperationResult 
 } from './interfaces/task.service.interface';
-import type { Task, CreateTaskDTO, TaskState } from '../types/task';
+import type { Task, CreateTaskDTO, TaskState } from '@shared/types';
 import { sessionAdapter } from './session-adapter';
 import { mockTasks, mockCommitHistory } from './mocks/task.mock';
 import { DataAdapter } from './data-adapter';

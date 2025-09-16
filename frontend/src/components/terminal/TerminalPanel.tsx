@@ -1,7 +1,7 @@
 import { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { useToast } from '@shelltender/client';
 import { findTerminalById } from '../../utils/terminal-utils';
-import type { Task } from '../../types/task';
+import type { Task } from '@shared/types';
 import type { DirectTerminalHandle } from './DirectTerminal';
 import { TerminalTabs } from './TerminalTabs';
 import { SessionLauncher } from './SessionLauncher';

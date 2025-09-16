@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Task } from '../../types/task';
+import type { Task } from '@shared/types';
 
 interface TaskSidebarProps {
   currentTask: Task;

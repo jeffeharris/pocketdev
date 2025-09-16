@@ -15,7 +15,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useSplitViewStore, useSplitLayout, saveLayout } from '../stores/splitViewStore';
 import { useTerminalStore } from '../stores/terminal/terminalStore.deep';
-import type { TerminalSession } from '../types/task';
+import type { TerminalSession } from '@shared/types';
 import type { SplitLayoutConfig } from '../stores/splitViewStore';
 import type { DirectTerminalHandle } from '../components/terminal/DirectTerminal';
 

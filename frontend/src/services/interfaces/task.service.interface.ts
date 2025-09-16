@@ -1,4 +1,4 @@
-import type { Task, CreateTaskDTO } from '../../types/task';
+import type { Task, CreateTaskDTO } from '@shared/types';
 
 /**
  * TaskService Interface - Task management

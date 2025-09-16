@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import { TaskState } from '../types/task';
+import { TaskState } from '@shared/types';
 
 /**
  * Hook for tracking task lifecycle state via WebSocket

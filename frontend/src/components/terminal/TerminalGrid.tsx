@@ -14,7 +14,7 @@
 import React, { forwardRef } from 'react';
 import { DirectTerminal } from './DirectTerminal';
 import { EmptyTerminalPanel } from './EmptyTerminalPanel';
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 import { useTerminalGridContext } from './TerminalGridContext';
 

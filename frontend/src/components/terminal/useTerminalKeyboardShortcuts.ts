@@ -9,7 +9,7 @@
  */
 
 import { useEffect } from 'react';
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 import type { SplitLayoutConfig } from '../../stores/splitViewStore';
 
 interface UseTerminalKeyboardShortcutsProps {

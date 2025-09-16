@@ -15,7 +15,7 @@
  * - Clear abstraction: Components only work with normalized IDs
  */
 
-import type { TerminalSession } from '../types/task';
+import type { TerminalSession } from '@shared/types';
 
 export type NormalizedSessionId = string;
 

@@ -1,4 +1,4 @@
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 
 /**
  * TerminalService Interface - Terminal session management

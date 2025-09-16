@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import { WorkerStatus, TaskState } from '../types/task';
-import type { SessionState, TerminalSession } from '../types/task';
+import { WorkerStatus, TaskState } from '@shared/types';
+import type { SessionState, TerminalSession } from '@shared/types';
 
 interface TaskStatusData {
   sessionState: SessionState;

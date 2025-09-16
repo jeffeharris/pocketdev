@@ -52,7 +52,6 @@ interface SortableTabProps {
   editValue: string;
   onSingleClick: () => void;
   onDoubleClick: () => void;
-  onRename: (value: string) => void;
   onClose?: () => void;
   onEditChange: (value: string) => void;
   onEditKeyDown: (e: React.KeyboardEvent) => void;
@@ -68,7 +67,6 @@ const SortableTab: React.FC<SortableTabProps> = ({
   editValue,
   onSingleClick,
   onDoubleClick,
-  onRename,
   onClose,
   onEditChange,
   onEditKeyDown,
@@ -306,7 +304,6 @@ export const TerminalTabs: React.FC<TerminalTabsProps> = ({
                   editValue={editValue}
                   onSingleClick={() => handleSingleClick(tab)}
                   onDoubleClick={() => handleDoubleClick(tab)}
-                  onRename={handleRenameSubmit}
                   onClose={onTabClose ? () => onTabClose(tab.dbSessionId) : undefined}
                   onEditChange={setEditValue}
                   onEditKeyDown={handleKeyDown}

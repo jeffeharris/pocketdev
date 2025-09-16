@@ -5,9 +5,9 @@
  * Eliminates duplication across terminal components.
  */
 
-import type { TerminalSession } from '../types/task';
+import type { TerminalSession } from '@shared/types';
 import type { Tab } from '../components/terminal/TerminalTabs';
-import { WorkerStatus } from '../types/task';
+import { WorkerStatus } from '@shared/types';
 
 /**
  * Sort terminals or tabs by their tabOrder property

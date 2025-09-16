@@ -6,7 +6,7 @@
  */
 
 import { createContext, useContext, type ReactNode } from 'react';
-import type { Task, TerminalSession } from '../../types/task';
+import type { Task, TerminalSession } from '@shared/types';
 import type { DirectTerminalHandle } from './DirectTerminal';
 
 interface TerminalGridContextValue {

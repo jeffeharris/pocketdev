@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Paperclip } from 'lucide-react';
-import type { Task } from '../../types/task';
-import { TaskState } from '../../types/task';
+import type { Task } from '@shared/types';
+import { TaskState } from '@shared/types';
 import { TaskListItem } from '../task/TaskListItem';
 import { TaskStatus } from '../task/TaskStatus';
 import { DiffViewerModal } from '../diff/DiffViewerModal';

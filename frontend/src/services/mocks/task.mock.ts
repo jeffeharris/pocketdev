@@ -3,7 +3,7 @@
  * Separated from production code for cleaner services
  */
 
-import type { Task, TaskState } from '../../types/task';
+import type { Task, TaskState } from '@shared/types';
 import type { CommitHistory } from '../interfaces/task.service.interface';
 
 export const mockTasks: Task[] = [

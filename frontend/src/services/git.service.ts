@@ -11,7 +11,7 @@
 import { BaseService } from './base.service';
 import type { IGitService, GitOperationOptions, GitOperationResult } from './interfaces/git.service.interface';
 import type { GitStatus } from '../types/git';
-import type { AllChangesResponse, DiffViewerResponse, FileDiffResponse, DiffFile, FileCategory } from '../types/diff';
+import type { AllChangesResponse, DiffViewerResponse, FileDiffResponse } from '../types/diff';
 import { 
   mockGitStatus, 
   mockFiles, 

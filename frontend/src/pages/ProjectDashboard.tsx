@@ -18,7 +18,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Project } from '../types/project';
-import type { Task, CreateTaskDTO } from '../types/task';
+import type { Task, CreateTaskDTO } from '@shared/types';
 import { TaskListItem } from '../components/task/TaskListItem';
 import { CreateTaskModal } from '../components/task/CreateTaskModal';
 import { PlanningEditor } from '../components/planning/PlanningEditor';

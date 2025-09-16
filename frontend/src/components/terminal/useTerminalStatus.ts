@@ -12,7 +12,7 @@
  */
 
 import { useCallback } from 'react';
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 
 interface UseTerminalStatusProps {
   terminals: TerminalSession[];

@@ -3,7 +3,7 @@
  * Separated from production code for cleaner services
  */
 
-import type { TerminalSession } from '../../types/task';
+import type { TerminalSession } from '@shared/types';
 import type { CreateTerminalResult } from '../interfaces/terminal.service.interface';
 
 export const mockTerminalSessions: TerminalSession[] = [

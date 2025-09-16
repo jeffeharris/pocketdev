@@ -19,7 +19,7 @@ import type {
   CreateTerminalResult,
   TerminalTabUpdate
 } from './interfaces/terminal.service.interface';
-import type { TerminalSession } from '../types/task';
+import type { TerminalSession } from '@shared/types';
 import {
   initialMockSessions,
   mockTerminalSessions,

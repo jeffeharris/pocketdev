@@ -1,7 +1,7 @@
 import React from 'react';
-import type { Task } from '../../types/task';
+import type { Task } from '@shared/types';
 import { TaskStatus as TaskStatusComponent } from './TaskStatus';
-import { WorkerStatus, TaskState } from '../../types/task';
+import { WorkerStatus, TaskState } from '@shared/types';
 import { useTaskState } from '../../hooks/useTaskState';
 import { useWorkerStatus } from '../../hooks/useWorkerStatus';
 import { useGitStatus } from '../../hooks/useGitStatus';

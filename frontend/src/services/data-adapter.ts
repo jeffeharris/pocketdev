@@ -11,7 +11,7 @@
  */
 
 import type { Project } from '../types/project';
-import type { Task, TaskState, TerminalSession } from '../types/task';
+import type { Task, TaskState, TerminalSession } from '@shared/types';
 import type { CommitHistory } from './interfaces/task.service.interface';
 
 type TransformType = 'project' | 'task' | 'commit' | 'branch';

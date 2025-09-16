@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Bell, Settings, AlertCircle, GitBranch, Command } from 'lucide-react';
-import type { Task } from '../../types/task';
-import { WorkerStatus } from '../../types/task';
+import type { Task } from '@shared/types';
+import { WorkerStatus } from '@shared/types';
 import type { Project } from '../../types/project';
 import { TaskListItem } from '../task/TaskListItem';
 import { SettingsModal } from '../settings/SettingsModal';

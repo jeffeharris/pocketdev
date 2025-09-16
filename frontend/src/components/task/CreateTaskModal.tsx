@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import type { CreateTaskDTO } from '../../types/task';
+import type { CreateTaskDTO } from '@shared/types';
 import { BranchSelector } from '../common/BranchSelector';
 
 /**

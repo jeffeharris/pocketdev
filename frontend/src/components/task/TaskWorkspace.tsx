@@ -5,7 +5,7 @@ import { Sidebar } from '../layout/Sidebar';
 import { TerminalPanel, type TerminalPanelHandle } from '../terminal/TerminalPanel';
 import { LensSlider } from '../common/LensSlider';
 import { CreateTaskModal } from './CreateTaskModal';
-import type { Task, CreateTaskDTO } from '../../types/task';
+import type { Task, CreateTaskDTO } from '@shared/types';
 import type { Project } from '../../types/project';
 import { useService } from '../../services';
 import { useWebSocketContext } from '../../contexts/WebSocketContext';

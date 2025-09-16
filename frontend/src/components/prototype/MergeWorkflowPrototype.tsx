@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GitBranch, CheckCircle, AlertCircle, Clock, Activity, User, FileCheck, ArrowRight, GitMerge, GitPullRequest, FileText, RefreshCw, MessageSquare, FileEdit, Edit3, Sparkles, FolderSync, RotateCcw, AlertTriangle, Copy, Archive, ChevronDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { TaskStatus } from '../task/TaskStatus';
-import { WorkerStatus } from '../../types/task';
+import { WorkerStatus } from '@shared/types';
 import { useShortcutContext, useKeyboardShortcut } from '../../hooks/keyboard';
 
 // Mock data for different task states
