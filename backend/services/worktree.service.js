@@ -257,6 +257,15 @@ export class WorktreeService {
     this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
   }
 
+  async exists(worktreePath) {
+    try {
+      await fs.access(worktreePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async create(mainRepoPath, branch, worktreePath, baseBranch, useExistingBranch = false, projectId = null, taskId = null) {
     // Validate with domain object first
     if (projectId && taskId) {
@@ -313,6 +322,47 @@ export class WorktreeService {
       throw new Error(result.error);
     }
     return result;
+  }
+
+  async removeIfExists(mainRepoPath, worktreePath) {
+    const exists = await this.exists(worktreePath);
+    if (!exists) {
+      return { success: false, skipped: true };
+    }
+
+    try {
+      return await this.remove(mainRepoPath, worktreePath);
+    } catch (error) {
+      // Fallback to filesystem removal if git worktree removal fails
+      await fs.rm(worktreePath, { recursive: true, force: true });
+      return { success: true, fallback: true, error: error.message };
+    }
+  }
+
+  async archive(mainRepoPath, worktreePath, archivePath) {
+    const exists = await this.exists(worktreePath);
+    if (!exists) {
+      return { success: false, skipped: true };
+    }
+
+    await fs.mkdir(path.dirname(archivePath), { recursive: true });
+
+    try {
+      await fs.rename(worktreePath, archivePath);
+    } catch (error) {
+      // Node's rename can fail across devices; fall back to copy/remove
+      await execAsync(`cp -R "${worktreePath}" "${archivePath}"`);
+      await fs.rm(worktreePath, { recursive: true, force: true });
+    }
+
+    // Ensure git no longer tracks the path as a worktree
+    try {
+      await executeGitCommand(`git worktree prune`, mainRepoPath);
+    } catch (error) {
+      console.warn('Failed to prune worktrees after archive:', error.message);
+    }
+
+    return { success: true };
   }
 
   async move(oldPath, newPath) {

@@ -1,13 +1,12 @@
 import path from 'path';
-import fs from 'fs/promises';
-import fsSync from 'fs';
 import { TASK_EVENTS, SPLIT_EVENTS } from './events.js';
 import { WorktreeService } from './worktree.service.js';
 import { GitService } from './git.service.js';
 import { TaskRepository } from './internal/task-repository.js';
+import { ProjectRepository } from './internal/project-repository.js';
 import { TaskGitOperations } from './internal/task-git-operations.js';
 import { TaskTerminalManager } from './internal/task-terminal-manager.js';
-import { Task as TaskDomain, ValidationError } from '../../shared/domain/index.js';
+import { Task as TaskDomain } from '../../shared/domain/index.js';
 import { TaskRepository as DomainTaskRepository } from '../repositories/task.repository.js';
 import { Logger } from '../utils/logger.js';
 
@@ -19,6 +18,7 @@ export class TaskService {
   constructor(models, githubTokenService, eventEmitterService = null, gitService = null, projectsDir = '/projects') {
     // Internal services that handle specific aspects
     this.repository = new TaskRepository(models);
+    this.projectRepository = new ProjectRepository(models);
     this.gitOps = new TaskGitOperations(models, githubTokenService);
     this.terminalManager = new TaskTerminalManager(models, eventEmitterService);
     
@@ -26,7 +26,6 @@ export class TaskService {
     this.domainRepository = new DomainTaskRepository(models);
     
     // Core dependencies
-    this.models = models;
     this.githubTokenService = githubTokenService;
     this.eventEmitterService = eventEmitterService;
     this.gitService = gitService;
@@ -43,7 +42,7 @@ export class TaskService {
     
     return await this.logger.timeOperation('task.create', async () => {
       // Get project
-      const project = await this.models.projects.findById(projectId);
+      const project = await this.projectRepository.findById(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
@@ -110,9 +109,7 @@ export class TaskService {
       } catch (error) {
         // Cleanup on failure
         try {
-          if (fsSync.existsSync(worktreePath)) {
-            await this.worktreeService.remove(project.local_path, worktreePath);
-          }
+          await this.worktreeService.removeIfExists(project.local_path, worktreePath);
         } catch (cleanupError) {
           console.error('Failed to cleanup after task creation failure:', cleanupError);
         }
@@ -174,7 +171,7 @@ export class TaskService {
     const enrichedTasks = await Promise.all(tasks.map(async (task) => {
       let gitStatus = null;
       
-      if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+      if (task.worktree_path && await this.worktreeService.exists(task.worktree_path)) {
         try {
           gitStatus = await this.gitOps.getTaskGitStatus(task, githubToken);
         } catch (error) {
@@ -236,11 +233,7 @@ export class TaskService {
         '.archived', 
         `${project.id}-task-${task.id}-${Date.now()}`
       );
-      await fs.mkdir(path.dirname(archivePath), { recursive: true });
-      
-      if (fsSync.existsSync(task.worktree_path)) {
-        await fs.rename(task.worktree_path, archivePath);
-      }
+      await this.worktreeService.archive(project.local_path, task.worktree_path, archivePath);
       
       // Emit event
       if (this.eventEmitterService) {
@@ -253,9 +246,7 @@ export class TaskService {
       await this.repository.delete(taskId);
       
       // Remove worktree
-      if (fsSync.existsSync(task.worktree_path)) {
-        await this.worktreeService.remove(project.local_path, task.worktree_path);
-      }
+      await this.worktreeService.removeIfExists(project.local_path, task.worktree_path);
       
       // Emit event
       if (this.eventEmitterService) {
@@ -442,7 +433,7 @@ export class TaskService {
     for (const task of tasks) {
       if (task.state === 'merged' && task.canArchive()) {
         // Check age if needed
-        const dbTask = await this.models.tasks.findById(task.id);
+        const dbTask = await this.repository.findById(task.id);
         const mergedDate = new Date(dbTask.merged_at);
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - daysOld);
@@ -481,7 +472,7 @@ export class TaskService {
     let hasUncommittedChanges = false;
     let uncommittedFiles = [];
     
-    if (task.worktree_path && fsSync.existsSync(task.worktree_path)) {
+    if (task.worktree_path && await this.worktreeService.exists(task.worktree_path)) {
       const gitStatus = await this.gitOps.getTaskGitStatus(task, githubToken);
       hasUncommittedChanges = gitStatus?.hasChanges || false;
       uncommittedFiles = gitStatus?.files || [];

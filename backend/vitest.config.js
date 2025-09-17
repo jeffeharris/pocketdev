@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  cacheDir: './.vite-cache',
   test: {
     // Use the native Node.js test environment
     environment: 'node',

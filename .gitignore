@@ -29,6 +29,8 @@ node_modules/
 # Vite cache
 .vite/
 */.vite/
+.vite-cache/
+*/.vite-cache/
 
 *.db
 *.sqlite
