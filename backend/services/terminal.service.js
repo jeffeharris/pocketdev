@@ -656,11 +656,11 @@ export class TerminalService {
   async cleanupTaskSessions(taskId) {
     try {
       const sessions = await this.models.sessions.findActiveByTaskId(taskId);
-      
+
       if (sessions.length === 0) {
         return;
       }
-      
+
       // Terminate each Shelltender session
       for (const session of sessions) {
         if (session.shelltender_session_id) {
@@ -668,7 +668,7 @@ export class TerminalService {
             const response = await fetch(`${this.shelltenderUrl}/api/sessions/${session.shelltender_session_id}`, {
               method: 'DELETE'
             });
-            
+
             if (!response.ok) {
               console.error(`Failed to terminate session ${session.shelltender_session_id}:`, response.statusText);
             }
@@ -677,10 +677,82 @@ export class TerminalService {
           }
         }
       }
-      
+
       console.log(`Cleaned up ${sessions.length} sessions for task ${taskId}`);
     } catch (error) {
       console.error(`Error cleaning up sessions for task ${taskId}:`, error);
     }
+  }
+
+  /**
+   * Get all active sessions from database
+   * @returns {Promise<Array>} Active sessions
+   */
+  async getActiveSessions() {
+    return await this.models.sessions.findAll({ is_active: 1 });
+  }
+
+  /**
+   * Mark a session as inactive
+   * @param {string} sessionId - Database session ID
+   * @returns {Promise<void>}
+   */
+  async markSessionInactive(sessionId) {
+    await this.models.sessions.markInactive(sessionId);
+  }
+
+  /**
+   * Get all sessions from Shelltender
+   * @returns {Promise<Array>} Shelltender sessions
+   */
+  async getShelltenderSessions() {
+    try {
+      const response = await fetch(`${this.shelltenderUrl}/api/sessions`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Shelltender sessions: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('[TerminalService] Error fetching Shelltender sessions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Terminate a Shelltender session
+   * @param {string} shelltenderSessionId - Shelltender session ID
+   * @returns {Promise<void>}
+   */
+  async terminateShelltenderSession(shelltenderSessionId) {
+    try {
+      const response = await fetch(`${this.shelltenderUrl}/api/sessions/${shelltenderSessionId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        console.error(`[TerminalService] Failed to terminate session ${shelltenderSessionId}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error(`[TerminalService] Error terminating session ${shelltenderSessionId}:`, error);
+    }
+  }
+
+  /**
+   * Check if a task exists
+   * @param {string} taskId - Task ID
+   * @returns {Promise<boolean>} Whether task exists
+   */
+  async taskExists(taskId) {
+    const task = await this.models.tasks.findById(taskId);
+    return !!task;
+  }
+
+  /**
+   * Delete a session record from database
+   * @param {string} sessionId - Database session ID
+   * @returns {Promise<void>}
+   */
+  async deleteSessionRecord(sessionId) {
+    await this.models.sessions.delete(sessionId);
   }
 }

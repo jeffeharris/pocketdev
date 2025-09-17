@@ -94,11 +94,11 @@ export class ServiceInitializer {
     // Run initial cleanup
     await cleanupOrphanedWorktrees(this.models);
     console.log('Orphaned worktrees cleanup completed');
-    
-    // Initialize and start session cleanup service
-    const sessionCleanupService = new SessionCleanupService(this.db, this.models);
+
+    // Initialize and start session cleanup service (now using TerminalService)
+    const sessionCleanupService = new SessionCleanupService(this.services.TerminalService);
     sessionCleanupService.start();
-    
+
     // Add to services
     this.services.SessionCleanupService = sessionCleanupService;
     

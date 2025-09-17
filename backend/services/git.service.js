@@ -418,6 +418,16 @@ export class GitService {
     return await this._checkMergeConflicts(repoPath, targetBranch);
   }
 
+  /**
+   * Get ahead/behind counts for a branch
+   * @param {string} repoPath - Repository path
+   * @param {string} branch - Branch name
+   * @returns {Promise<Object>} Object with ahead and behind counts
+   */
+  async getAheadBehindCounts(repoPath, branch) {
+    return await this._getAheadBehind(repoPath, branch);
+  }
+
 
 
   /**
