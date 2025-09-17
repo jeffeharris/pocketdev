@@ -1,5 +1,12 @@
 # Architecture Philosophy: A Balanced Approach
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Core Insight
 
 Ousterhout's "Philosophy of Software Design" principles are powerful tools, but they should be applied **where they make sense**, not universally. Different architectural patterns serve different purposes.
@@ -9,19 +16,19 @@ Ousterhout's "Philosophy of Software Design" principles are powerful tools, but 
 ### Use Deep Modules When You Have:
 
 **Complex Implementation Details**
-- Git operations (merge algorithms, conflict detection)
-- Database queries (SQL construction, connection pooling)
-- External API integration (retry logic, error handling)
-- System operations (process management, file system operations)
+- Git operations (merge algorithms, conflict detection) — e.g. the orchestration in `backend/services/task.service.js:279`
+- Database queries (SQL construction, connection pooling) — see the persistence helpers in `backend/services/internal/task-repository.js:7`
+- External API integration (retry logic, error handling) — Shelltender calls live in `backend/services/terminal.service.js:149`
+- System operations (process management, file system operations) — worktree cleanup is handled by `backend/services/worktree.service.js`
 
-**Example**: GitService
+**Example**: `backend/services/git.service.js`
 ```javascript
 // Simple interface
 async merge(sourceBranch, targetBranch)
 
 // Hides complex implementation:
 // - Worktree management
-// - Three-way merge algorithms  
+// - Three-way merge algorithms
 // - Conflict detection
 // - Command construction
 // - Error recovery
@@ -30,12 +37,11 @@ async merge(sourceBranch, targetBranch)
 ### Use Feature Modules When You Have:
 
 **Coordination & Workflow Logic**
-- UI state management (which tab is active?)
-- Layout calculations (can we show 4 terminals?)
-- Business rules (when can a task be merged?)
+- UI state management (which tab is active?) — `frontend/src/features/terminal-tabs.ts`
+- Layout calculations (can we show 4 terminals?) — `frontend/src/features/split-view.ts`
 - Event orchestration (user clicked X, update Y and Z)
 
-**Example**: split-view.ts
+**Example**: `frontend/src/features/split-view.ts`
 ```typescript
 // Wide interface is OK - it's mostly coordination
 export interface SplitViewFeature {
@@ -62,16 +68,14 @@ When designing a module, ask: **"Am I hiding complexity or just moving it?"**
 ## Examples in PocketDev
 
 ### Deep Modules (Genuine Complexity)
-- `GitService` - Complex git operations
-- `DatabaseService` - SQL and transactions
-- `TerminalService` - WebSocket management, session state
-- `AuthService` - Token management, encryption
+- `backend/services/git.service.js` - Complex git operations
+- `backend/services/internal/project-repository.js` - SQL and transactions
+- `backend/services/terminal.service.js` - WebSocket management, session state
+- `backend/services/github-token.service.js` - Token management, encryption
 
 ### Feature Modules (Coordination/Workflow)
-- `terminal-tabs.ts` - Tab management workflow
-- `split-view.ts` - Layout coordination
-- `task-creation.ts` - Multi-step creation flow
-- `session-management.ts` - Session lifecycle
+- `frontend/src/features/terminal-tabs.ts` - Tab management workflow
+- `frontend/src/features/split-view.ts` - Layout coordination
 
 ### React Components (UI Patterns)
 - `TerminalPanel.tsx` - Orchestration component

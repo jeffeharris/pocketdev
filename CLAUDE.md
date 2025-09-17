@@ -52,6 +52,7 @@ Use **React patterns** - compound components, hooks:
 - **Design Guidance**: `/plan-pocketdev/steering/developer-guidance.md` - Architectural principles and patterns
 - **Code Examples**: `/plan-pocketdev/steering/module-design-examples.md` - Before/after refactoring examples
 - **Tech Choices**: `/plan-pocketdev/steering/tech-choices.md` - Technology decisions and rationale
+- **Balance Deep vs. Feature Modules**: `/plan-pocketdev/steering/architecture-philosophy-balance.md` - When to hide complexity vs. keep workflow visible
 
 ## Architecture
 

@@ -1,5 +1,12 @@
 # PocketDev E2E Tests - Simplified
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 This is the **minimal, hobby-project-friendly** E2E test suite for PocketDev.
 
 ## Philosophy: "Would a user complain?"

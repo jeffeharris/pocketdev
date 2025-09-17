@@ -1,5 +1,12 @@
 # DiffViewerModal Refactoring Example
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 This document demonstrates how to use the new extracted components and hooks to refactor DiffViewerModal from 1,217 lines to ~300 lines.
 
 ## New Structure Created

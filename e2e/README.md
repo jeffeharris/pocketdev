@@ -1,5 +1,12 @@
 # PocketDev E2E Tests
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 Automated end-to-end tests for PocketDev using Playwright.
 
 ## Setup

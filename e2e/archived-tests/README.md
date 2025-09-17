@@ -1,5 +1,12 @@
 # Archived E2E Tests
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 These tests were moved here as part of the hobby project simplification.
 
 **Why archived?**

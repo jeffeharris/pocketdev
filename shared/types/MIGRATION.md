@@ -1,5 +1,12 @@
 # Type System Migration Guide
 
+<!-- Document Metadata
+Created: 2025-09-14
+Modified: 2025-09-14
+Status: active
+-->
+
+
 ## Overview
 We've unified the type system across frontend and backend to improve AI assistance and reduce confusion. All shared types are now in `/shared/types/`.
 
