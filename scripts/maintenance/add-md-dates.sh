@@ -114,7 +114,7 @@ processed=0
 skipped=0
 errors=0
 
-find . -name "$PATTERN" -type f | grep -v node_modules | grep -v ".git" | while read -r file; do
+while read -r file; do
     # Skip if already has metadata
     if has_metadata "$file"; then
         echo -e "${BLUE}⊘${NC} Skipping (has metadata): $file"
@@ -131,7 +131,7 @@ find . -name "$PATTERN" -type f | grep -v node_modules | grep -v ".git" | while 
     # Add metadata
     add_metadata "$file" "$created" "$modified" "$status"
     ((processed++)) || true
-done
+done < <(find . -name "$PATTERN" -type f | grep -v node_modules | grep -v ".git")
 
 echo ""
 echo -e "${GREEN}=== Summary ===${NC}"
