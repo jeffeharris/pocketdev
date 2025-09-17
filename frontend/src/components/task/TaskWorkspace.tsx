@@ -72,7 +72,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   useEffect(() => {
     // Handler for git status updates
     const handleGitStatusUpdate = (data: any) => {
-      if (data.type === 'git_status_update' && data.data) {
+      if (data.type === 'git-status-changed' && data.data) {
         const { taskId: updatedTaskId, gitStatus } = data.data;
         
         // Update the task's git status

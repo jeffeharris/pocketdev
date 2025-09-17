@@ -16,7 +16,7 @@ export function useTaskState(taskId: string | undefined): TaskState {
   const { subscribe, unsubscribe } = useWebSocketContext();
 
   const handleMessage = useCallback((message: any) => {
-    if (message.type === 'task_state_change') {
+    if (message.type === 'task-state-changed') {
       setTaskState(message.data.taskState);
     }
   }, []);

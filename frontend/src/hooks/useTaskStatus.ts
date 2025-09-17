@@ -37,12 +37,12 @@ export function useTaskStatus(taskId: string | undefined) {
 
   // Handle WebSocket messages for this task
   // Message types:
-  // - ai_state_update: AI worker state changed (from backend AI monitor)
-  // - task_state_change: Task lifecycle state changed (active->merged, etc)
-  // - git_status_update: Git branch status changed
+  // - ai-state-changed: AI worker state changed (from backend AI monitor)
+  // - task-state-changed: Task lifecycle state changed (active->merged, etc)
+  // - git-status-changed: Git branch status changed
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
-      case 'ai_state_update':
+      case 'ai-state-changed':
         console.log('[useTaskStatus] Received AI state update:', message.data);
         // Update AI worker state - this comes from terminal pattern matching
         setTaskStatus(prev => ({
@@ -56,7 +56,7 @@ export function useTaskStatus(taskId: string | undefined) {
         lastUpdateRef.current = Date.now();
         break;
         
-      case 'task_state_change':
+      case 'task-state-changed':
         setTaskStatus(prev => ({
           ...prev!,
           taskState: message.data.taskState
@@ -149,9 +149,9 @@ export function useTaskStatus(taskId: string | undefined) {
 
   return {
     sessionState: taskStatus?.sessionState || { status: WorkerStatus.NotStarted, lastStateChange: null },
-    sessionStates: taskStatus?.sessionStates,
-    taskState: taskStatus?.taskState || TaskState.Active,
-    gitStatus: taskStatus?.gitStatus,
-    idleTime
+   sessionStates: taskStatus?.sessionStates,
+   taskState: taskStatus?.taskState || TaskState.Active,
+   gitStatus: taskStatus?.gitStatus,
+   idleTime
   };
 }

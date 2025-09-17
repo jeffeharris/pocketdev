@@ -10,14 +10,25 @@ export const TASK_EVENTS = {
   CREATED: 'task.created',
   UPDATED: 'task.updated',
   DELETED: 'task.deleted',
+  ARCHIVED: 'task.archived',
   STATE_CHANGED: 'task.state-changed'
 };
 
 // Terminal Events
 export const TERMINAL_EVENTS = {
   CREATED: 'terminal.created',
+  UPDATED: 'terminal.updated',
   STATE_CHANGED: 'terminal.state-changed',
-  CLOSED: 'terminal.closed'
+  CLOSED: 'terminal.closed',
+  RENAMED: 'terminal.renamed',
+  REORDERED: 'terminals.reordered'
+};
+
+// Settings Events
+export const SETTINGS_EVENTS = {
+  UPDATED: 'settings.updated',
+  GITHUB_TOKEN_CHANGED: 'settings.github-token-changed',
+  GIT_CONFIG_CHANGED: 'settings.git-config-changed'
 };
 
 // AI Events
@@ -69,6 +80,7 @@ export const MONITORING_EVENTS = {
 export const ALL_EVENTS = {
   ...TASK_EVENTS,
   ...TERMINAL_EVENTS,
+  ...SETTINGS_EVENTS,
   ...AI_EVENTS,
   ...GIT_EVENTS,
   ...PROJECT_EVENTS,

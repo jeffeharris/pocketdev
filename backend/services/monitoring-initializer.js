@@ -94,6 +94,7 @@ export class MonitoringInitializer {
     const sessionMonitor = await createSessionMonitor({
       wsUrl: this.config.shelltenderWsUrl,
       apiUrl: this.config.shelltenderApiUrl,
+      eventEmitterService: this.eventEmitterService,
     });
     console.log("Shelltender session monitor initialized");
     return sessionMonitor;

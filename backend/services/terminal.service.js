@@ -283,11 +283,38 @@ export class TerminalService {
     if (tabOrder !== undefined) updates.tab_order = tabOrder;
     
     const updatedSession = await this.models.sessions.update(sessionDetails.dbSessionId, updates);
-    
+
     if (!updatedSession) {
       throw new Error('Failed to update session tab');
     }
-    
+
+    if (this.eventEmitterService) {
+      const emitBase = {
+        taskId: sessionDetails.taskId,
+        sessionId: sessionDetails.shelltenderSessionId,
+        dbSessionId: sessionDetails.dbSessionId
+      };
+
+      if (tabName !== undefined) {
+        this.eventEmitterService.emit(TERMINAL_EVENTS.RENAMED, {
+          ...emitBase,
+          newName: tabName
+        });
+      }
+
+      if (tabOrder !== undefined) {
+        this.eventEmitterService.emit(TERMINAL_EVENTS.REORDERED, {
+          taskId: sessionDetails.taskId,
+          terminals: [
+            {
+              dbSessionId: sessionDetails.dbSessionId,
+              tabOrder
+            }
+          ]
+        });
+      }
+    }
+
     return updatedSession;
   }
 

@@ -201,7 +201,11 @@ export class TaskService {
     
     // Emit task updated event
     if (this.eventEmitterService) {
-      this.eventEmitterService.emit(TASK_EVENTS.UPDATED, { taskId, changes: updates });
+      this.eventEmitterService.emit(TASK_EVENTS.UPDATED, {
+        taskId,
+        projectId: updatedTask?.project_id,
+        changes: updates
+      });
     }
     
     return updatedTask;
@@ -237,7 +241,10 @@ export class TaskService {
       
       // Emit event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emit(TASK_EVENTS.ARCHIVED, { taskId });
+        this.eventEmitterService.emit(TASK_EVENTS.ARCHIVED, {
+          taskId,
+          projectId: task.project_id
+        });
       }
       
       return { success: true, message: 'Task archived', archived: true };
@@ -250,7 +257,10 @@ export class TaskService {
       
       // Emit event
       if (this.eventEmitterService) {
-        this.eventEmitterService.emit(TASK_EVENTS.DELETED, { taskId });
+        this.eventEmitterService.emit(TASK_EVENTS.DELETED, {
+          taskId,
+          projectId: task.project_id
+        });
       }
       
       return { success: true, message: 'Task deleted', deleted: true };
@@ -445,7 +455,10 @@ export class TaskService {
           
           // Emit event
           if (this.eventEmitterService) {
-            this.eventEmitterService.emit(TASK_EVENTS.ARCHIVED, { taskId: task.id });
+            this.eventEmitterService.emit(TASK_EVENTS.ARCHIVED, {
+              taskId: task.id,
+              projectId: task.projectId || projectId
+            });
           }
         }
       }

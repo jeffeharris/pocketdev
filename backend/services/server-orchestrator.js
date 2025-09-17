@@ -64,7 +64,7 @@ export class ServerOrchestrator {
       this._configureExpressApp(services, models);
       
       this.server = this._createHttpServer();
-      const { wss, webSocketService } = this._createWebSocketServer(eventEmitterService);
+      const { wss, webSocketService } = this._createWebSocketServer(eventEmitterService, services);
       services.wss = wss;
       services.webSocketService = webSocketService;
       
@@ -182,13 +182,17 @@ export class ServerOrchestrator {
     return createServer(this.app);
   }
 
-  _createWebSocketServer(eventEmitterService) {
+  _createWebSocketServer(eventEmitterService, services) {
     const wss = new WebSocketServer({ 
       server: this.server, 
       path: '/ws' 
     });
     
-    const webSocketService = new WebSocketService(wss, eventEmitterService);
+    const webSocketService = new WebSocketService(
+      wss,
+      eventEmitterService,
+      services?.TaskService
+    );
     
     return { wss, webSocketService };
   }

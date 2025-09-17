@@ -87,16 +87,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             handleTerminalWebSocketEvent(data.type, data);
           }
           
-          // Handle AI state change events by transforming them to the expected format
-          if (data.type === 'ai-state-changed' && data.taskId) {
-            console.log('[WebSocket] Received AI state change:', data);
-            const handlers = handlersRef.current.get(`task:${data.taskId}`);
-            handlers?.forEach(handler => handler({
-              type: 'ai_state_update',
-              data: data.data
-            }));
-          }
-          
           // Route message to appropriate handlers
           if (data.taskId) {
             const handlers = handlersRef.current.get(`task:${data.taskId}`);

@@ -29,7 +29,7 @@ export function useWorkerStatus(taskId: string | undefined): WorkerStatusData {
   const { subscribe, unsubscribe } = useWebSocketContext();
 
   const handleMessage = useCallback((message: any) => {
-    if (message.type === 'ai_state_update') {
+    if (message.type === 'ai-state-changed') {
       console.log('[useWorkerStatus] Received AI state update:', message.data);
       setWorkerStatus({
         sessionState: {

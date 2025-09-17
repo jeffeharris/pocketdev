@@ -9,12 +9,13 @@ import WebSocket from 'ws';
 import EventEmitter from 'events';
 
 export class ShelltenderSessionMonitor extends EventEmitter {
-  constructor(wsUrl) {
+  constructor(wsUrl, eventEmitterService = null) {
     super();
     this.wsUrl = wsUrl || process.env.SHELLTENDER_WS_URL || 'ws://localhost:8080/ws';
     this.sessions = new Map(); // sessionId -> WebSocket connection
     this.dataCallbacks = [];
     this.reconnectInterval = 5000;
+    this.eventEmitterService = eventEmitterService;
   }
 
   /**
@@ -34,9 +35,9 @@ export class ShelltenderSessionMonitor extends EventEmitter {
         ws.on('open', () => {
           console.log(`WebSocket opened for session ${sessionId}`);
           
-          // First try to attach to existing session
+          // Establish connection using Shelltender protocol
           ws.send(JSON.stringify({
-            type: 'attach',
+            type: 'connect',
             sessionId: sessionId
           }));
           
@@ -53,9 +54,9 @@ export class ShelltenderSessionMonitor extends EventEmitter {
             if (message.type === 'output' && message.sessionId === sessionId) {
               this.handleSessionOutput(sessionId, message.data, message.metadata);
             } else if (message.type === 'error') {
-              // If attach fails, try creating the session
-              if (message.data && message.data.includes('attach')) {
-                console.log(`Attach failed for ${sessionId}, trying to create...`);
+              // If connect fails, try creating the session
+              if (message.data && (message.data.includes('connect') || message.data.includes('attach'))) {
+                console.log(`Connect failed for ${sessionId}, trying to create...`);
                 ws.send(JSON.stringify({
                   type: 'create',
                   sessionId: sessionId
@@ -77,6 +78,8 @@ export class ShelltenderSessionMonitor extends EventEmitter {
         ws.on('close', () => {
           console.log(`WebSocket closed for session ${sessionId}`);
           this.sessions.delete(sessionId);
+
+          this.emitSessionClosed(sessionId);
           
           // Attempt to reconnect
           setTimeout(() => {
@@ -160,13 +163,24 @@ export class ShelltenderSessionMonitor extends EventEmitter {
     });
     this.sessions.clear();
   }
+
+  emitSessionClosed(sessionId) {
+    if (this.eventEmitterService) {
+      this.eventEmitterService.emit('shelltender.session-closed', {
+        sessionId,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    this.emit('session-closed', sessionId);
+  }
 }
 
 /**
  * Create and initialize a session monitor
  */
 export async function createSessionMonitor(options = {}) {
-  const monitor = new ShelltenderSessionMonitor(options.wsUrl);
+  const monitor = new ShelltenderSessionMonitor(options.wsUrl, options.eventEmitterService);
   
   // Get existing task sessions from the API
   if (options.apiUrl) {
