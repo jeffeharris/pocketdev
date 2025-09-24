@@ -725,7 +725,7 @@ export class TerminalService {
    * @returns {Promise<void>}
    */
   async markSessionInactive(sessionId) {
-    await this.models.sessions.markInactive(sessionId);
+    await this.models.sessions.deactivate(sessionId);
   }
 
   /**

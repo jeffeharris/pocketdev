@@ -437,7 +437,7 @@ export class TaskController {
     const { taskId } = req.params;
     
     const layout = await req.services.TaskService.getLayout(taskId);
-    res.json(layout || { mode: 'single' });
+    res.json(layout || { mode: 'tab' });
   });
 
   /**
@@ -447,8 +447,8 @@ export class TaskController {
     const { projectId, taskId } = req.params;
     const layout = req.body;
     
-    await req.services.TaskService.setLayout(taskId, projectId, layout);
-    res.json({ success: true });
+    const updatedLayout = await req.services.TaskService.setLayout(taskId, projectId, layout);
+    res.json(updatedLayout);
   });
 
   /**
