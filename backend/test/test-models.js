@@ -74,15 +74,6 @@ async function testModels() {
       FOREIGN KEY (task_id) REFERENCES tasks(id)
     );
 
-    CREATE TABLE worktree_registry (
-      path TEXT PRIMARY KEY,
-      task_id TEXT,
-      project_id TEXT,
-      is_orphaned BOOLEAN DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
       value TEXT,
@@ -131,17 +122,6 @@ async function testModels() {
 
   const taskSessions = await models.sessions.findByTaskId(task.id);
   console.log('✓ Found sessions for task:', taskSessions.length);
-
-  console.log('\n=== Testing WorktreeRegistryModel ===');
-  const worktree = await models.worktreeRegistry.create({
-    path: '/tmp/worktree/test',
-    task_id: task.id,
-    project_id: project.id
-  });
-  console.log('✓ Created worktree registration:', worktree.path);
-
-  const foundWorktree = await models.worktreeRegistry.findByPath('/tmp/worktree/test');
-  console.log('✓ Found worktree by path:', foundWorktree.path);
 
   console.log('\n=== Testing SettingsModel ===');
   await models.settings.set('test.feature', 'enabled');

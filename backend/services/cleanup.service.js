@@ -7,27 +7,6 @@ import { promises as fs } from 'fs';
 
 const execAsync = promisify(exec);
 
-/**
- * Clean up orphaned worktrees on startup
- * @param {Object} models - Database models instance
- */
-export async function cleanupOrphanedWorktrees(models) {
-  try {
-    console.log('Checking for orphaned worktrees...');
-    const orphans = await models.worktreeRegistry.findOrphaned();
-    
-    if (orphans.length > 0) {
-      console.log(`Found ${orphans.length} orphaned worktrees`);
-      for (const orphan of orphans) {
-        if (fsSync.existsSync(orphan.path)) {
-          console.log(`  - ${orphan.path} (orphaned)`);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error during cleanup check:', error);
-  }
-}
 
 /**
  * Archive an orphaned worktree

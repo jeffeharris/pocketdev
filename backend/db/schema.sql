@@ -69,18 +69,6 @@ CREATE TABLE IF NOT EXISTS git_credentials (
     is_default BOOLEAN DEFAULT 0
 );
 
--- Worktree registry
-CREATE TABLE IF NOT EXISTS worktree_registry (
-    path TEXT PRIMARY KEY,
-    task_id TEXT,
-    project_id TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_orphaned BOOLEAN DEFAULT 0,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
-);
-
 -- System settings
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -95,7 +83,6 @@ CREATE INDEX IF NOT EXISTS idx_terminal_sessions_task_id ON terminal_sessions(ta
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_active ON terminal_sessions(is_active);
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_ai_state ON terminal_sessions(ai_state);
 CREATE INDEX IF NOT EXISTS idx_terminal_sessions_shelltender_id ON terminal_sessions(shelltender_session_id);
-CREATE INDEX IF NOT EXISTS idx_worktree_orphaned ON worktree_registry(is_orphaned);
 CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(is_archived);
 
 -- Triggers to update timestamps

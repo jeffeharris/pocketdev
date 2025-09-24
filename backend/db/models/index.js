@@ -2,7 +2,6 @@
 import ProjectModel from './project-pure.js';
 import TaskModel from './task-pure.js';
 import SessionModel from './session-pure.js';
-import WorktreeRegistryModel from './worktree-registry-pure.js';
 import SettingsModel from './settings-pure.js';
 
 /**
@@ -20,7 +19,6 @@ class Models {
     this.projects = new ProjectModel(db);
     this.tasks = new TaskModel(db);
     this.sessions = new SessionModel(db);
-    this.worktreeRegistry = new WorktreeRegistryModel(db);
     this.settings = new SettingsModel(db);
     
     // Keep db reference for any remaining needs
@@ -36,29 +34,19 @@ class Models {
     return this.settings.set(key, value);
   }
 
-  // Worktree convenience methods (delegating to WorktreeRegistryModel)
-  async markWorktreeOrphaned(path) {
-    return this.worktreeRegistry.markOrphaned(path);
-  }
-
-  async removeWorktreeRegistration(path) {
-    return this.worktreeRegistry.deleteByPath(path);
-  }
 
   // Stats method needs to use individual model counts
   async getStats() {
-    const [activeProjects, activeTasks, totalSessions, orphanedWorktrees] = await Promise.all([
+    const [activeProjects, activeTasks, totalSessions] = await Promise.all([
       this.projects.countActive(),
       this.tasks.count({ is_archived: 0 }),
-      this.sessions.count({}),
-      this.worktreeRegistry.countOrphaned()
+      this.sessions.count({})
     ]);
 
     return {
       active_projects: activeProjects,
       active_tasks: activeTasks,
-      total_sessions: totalSessions,
-      orphaned_worktrees: orphanedWorktrees
+      total_sessions: totalSessions
     };
   }
 

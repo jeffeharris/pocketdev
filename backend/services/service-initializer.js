@@ -20,7 +20,6 @@ import { SettingsService } from './settings.service.js';
 import { UploadService } from './upload.service.js';
 import { MonitoringService } from './monitoring.service.js';
 import { SessionCleanupService } from './session-cleanup.service.js';
-import { cleanupOrphanedWorktrees } from './cleanup.service.js';
 
 export class ServiceInitializer {
   constructor(models, db, config) {
@@ -91,10 +90,6 @@ export class ServiceInitializer {
   // Private methods (hidden complexity)
   
   async _initializeCleanupServices() {
-    // Run initial cleanup
-    await cleanupOrphanedWorktrees(this.models);
-    console.log('Orphaned worktrees cleanup completed');
-
     // Initialize and start session cleanup service (now using TerminalService)
     const sessionCleanupService = new SessionCleanupService(this.services.TerminalService);
     sessionCleanupService.start();

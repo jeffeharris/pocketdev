@@ -76,7 +76,6 @@ LEFT JOIN terminal_sessions ts ON t.id = ts.task_id
 ```
 
 ### 2. Models Class Doing Too Much
-- Contains raw SQL for worktree_registry
 - Manages settings (different concern)
 - Performs complex aggregations
 
