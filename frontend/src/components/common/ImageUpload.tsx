@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { DragEvent } from 'react';
 import { Upload, X, Copy, Trash2, Check, FileText, Archive, File, FileCode, FileType } from 'lucide-react';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 
 interface UploadedImage {
   filename: string;
@@ -38,6 +38,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
   onReferencesCopied,
   className = ''
 }) => {
+  const uploadService = useService('upload');
   // Use external state if provided, otherwise use internal state
   const [internalImages, setInternalImages] = useState<UploadedImage[]>([]);
   const [internalIsUploading, setInternalIsUploading] = useState(false);
@@ -113,8 +114,8 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     if (externalImages) return; // Don't load if using external images
     
     try {
-      const response = await api.getTaskImages(projectId, taskId);
-      setInternalImages(response.images || []);
+      const images = await uploadService.getTaskImages(projectId, taskId);
+      setInternalImages(images || []);
     } catch (error) {
       console.error('Failed to load images:', error);
     }
@@ -145,7 +146,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     setInternalUploadProgress(0);
 
     const formData = new FormData();
-    formData.append('image', file, filename || file.name);
+    formData.append('file', file, filename || file.name);
 
     try {
       // Simulate progress (real progress would come from XMLHttpRequest or similar)
@@ -153,7 +154,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
         setInternalUploadProgress(prev => Math.min(prev + 10, 90));
       }, 100);
 
-      const response = await api.uploadTaskImage(projectId, taskId, formData);
+      const response = await uploadService.uploadTaskImage(projectId, taskId, formData);
       
       clearInterval(progressInterval);
       setInternalUploadProgress(100);
@@ -184,7 +185,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
     }
 
     try {
-      await api.deleteTaskImage(projectId, taskId, filename);
+      await uploadService.deleteTaskImage(projectId, taskId, filename);
       await loadImages();
     } catch (error) {
       console.error('Failed to delete image:', error);

@@ -38,7 +38,7 @@ services:
     depends_on:
       - shelltender
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # - /var/run/docker.sock:/var/run/docker.sock  # DinD feature - not active
       - ${POCKETDEV_HOME:-~/.pocketdev}/projects:/projects
       - ~/.ssh:/home/pocketdev/.ssh:ro
       - pocketdev-settings:/home/pocketdev/.pocketdev
@@ -54,6 +54,8 @@ services:
       - SHELLTENDER_WS_URL=ws://shelltender:8080/ws
       - SHELLTENDER_MONITOR_AUTH_KEY=pocketdev-monitor-key-2024
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_REQUESTS=${LOG_REQUESTS:-true}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3005/api/health"]
@@ -65,15 +67,13 @@ services:
     
   # React Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: builder
+    image: node:18-alpine
     container_name: frontend
     working_dir: /app
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - ./shared:/shared:ro
     ports:
       - "5173:5173"
     environment:

@@ -14,7 +14,7 @@ export default {
   dataDir: path.join(__dirname, '../../data'),
   
   // Database
-  dbPath: path.join(__dirname, '../../data/pocketdev.db'),
+  dbPath: path.join(__dirname, '../../pocketdev.db'),
   
   // GitHub
   githubToken: process.env.GITHUB_TOKEN || '',

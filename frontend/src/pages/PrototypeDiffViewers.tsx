@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useService } from '../services';
 
 // Diff2Html imports
 import { parse, html } from 'diff2html';
@@ -21,6 +21,9 @@ interface DiffFile {
 }
 
 const PrototypeDiffViewers: React.FC = () => {
+  const projectService = useService('project');
+  const taskService = useService('task');
+  const gitService = useService('git');
   const [mockDiff, setMockDiff] = useState<string>('');
   const [selectedViewer, setSelectedViewer] = useState<'diff2html' | 'react-diff-view' | 'monaco'>('diff2html');
   const [viewMode, setViewMode] = useState<'split' | 'unified'>('split');
@@ -188,15 +191,15 @@ index 1234567..abcdefg 100644
     const loadRealDiff = async () => {
       try {
         // Get the first project and task with changes
-        const projects = await api.getProjects();
+        const projects = await projectService.getProjects();
         if (projects.length > 0) {
-          const tasks = await api.getTasks(projects[0].id);
+          const tasks = await taskService.getTasks(projects[0].id);
           
           // Find a task with a feature branch
           const taskWithBranch = tasks.find(t => t.branch && t.branch !== 'main');
           
           if (taskWithBranch) {
-            const diffData = await api.getTaskDiff(projects[0].id, taskWithBranch.id);
+            const diffData = await gitService.getTaskDiff(projects[0].id, taskWithBranch.id);
             if (diffData.files && diffData.files.length > 0) {
               // Find a file with substantial changes
               const fileWithChanges = diffData.files.find(f => 

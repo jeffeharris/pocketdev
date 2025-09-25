@@ -1,0 +1,14 @@
+{
+  "name": "@pocketdev/domain",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared domain model for PocketDev",
+  "main": "domain/index.js",
+  "exports": {
+    ".": "./domain/index.js",
+    "./errors": "./domain/errors.js",
+    "./project": "./domain/project.js",
+    "./task": "./domain/task.js",
+    "./terminal-session": "./domain/terminal-session.js"
+  }
+}

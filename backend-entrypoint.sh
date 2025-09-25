@@ -1,15 +1,13 @@
 #!/bin/sh
-# Backend entrypoint script - handles permissions dynamically
+# Backend container entrypoint script
 
-# If running as root, fix permissions
-if [ "$(id -u)" = "0" ]; then
-    echo "Running as root, fixing permissions..."
-    # Ensure directories exist
-    mkdir -p /projects /app/data
-    # Fix ownership to match mounted volumes
-    chown -R $(stat -c "%u:%g" /projects) /projects 2>/dev/null || true
-    chown -R $(stat -c "%u:%g" /app/data) /app/data 2>/dev/null || true
+# Set up git configuration if GitHub token is available
+if [ ! -z "$GITHUB_TOKEN" ]; then
+    git config --global credential.helper '!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f'
 fi
+
+# Set safe directory for git operations
+git config --global --add safe.directory '*'
 
 # Execute the main command
 exec "$@"

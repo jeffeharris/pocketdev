@@ -1,5 +1,12 @@
 # Decoupled Shelltender Architecture
 
+<!-- Document Metadata
+Created: 2025-07-11
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 ## Overview
 
 The Shelltender terminal service is now decoupled from the Project Manager server, allowing terminal sessions to persist independently of frontend server restarts.

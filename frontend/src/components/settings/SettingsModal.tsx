@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Github, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { settingsApi } from '../../services/api';
+import { useService } from '../../services';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,6 +31,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose
 }) => {
+  const settingsService = useService('settings');
   const [githubToken, setGithubToken] = useState('');
   const [gitUserName, setGitUserName] = useState('');
   const [gitUserEmail, setGitUserEmail] = useState('');
@@ -54,7 +55,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      const settings = await settingsApi.getSettings();
+      const settings = await settingsService.getSettings();
       setHasToken(settings.hasGithubToken);
       setGitUserName(settings.gitUserName || '');
       setGitUserEmail(settings.gitUserEmail || '');
@@ -72,7 +73,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const validateGithubToken = async () => {
     try {
-      const result = await settingsApi.testGithubToken();
+      const result = await settingsService.testGithubToken();
       setGithubStatus(result);
       
       // Auto-populate git config from GitHub user info if not already set
@@ -102,7 +103,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setSaveMessage('');
     
     try {
-      await settingsApi.updateSettings({
+      await settingsService.updateSettings({
         githubToken: githubToken || undefined,
         gitUserName,
         gitUserEmail
@@ -130,7 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">

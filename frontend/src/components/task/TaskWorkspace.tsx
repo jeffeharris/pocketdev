@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MainHeader } from '../layout/MainHeader';
 import { Sidebar } from '../layout/Sidebar';
 import { TerminalPanel, type TerminalPanelHandle } from '../terminal/TerminalPanel';
 import { LensSlider } from '../common/LensSlider';
 import { CreateTaskModal } from './CreateTaskModal';
-import type { Task, CreateTaskDTO } from '../../types/task';
+import type { Task, CreateTaskDTO } from '@shared/types';
 import type { Project } from '../../types/project';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 import { useWebSocketContext } from '../../contexts/WebSocketContext';
+import { useTerminalStore } from '../../stores/terminalStore';
 
 interface TaskWorkspaceProps {
   projectId: string;
@@ -15,12 +17,17 @@ interface TaskWorkspaceProps {
 }
 
 export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId }) => {
-  const [activeTaskId, setActiveTaskId] = useState(taskId);
+  const navigate = useNavigate();
+  const projectService = useService('project');
+  const taskService = useService('task');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState(false);
   const [validationMode, setValidationMode] = useState(false);
   const [activePhase, setActivePhase] = useState<'validate' | 'merge'>('validate');
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(60); // percentage for terminal when validation mode is on
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
   
   // Real data from API
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -35,7 +42,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
   // WebSocket for real-time updates
   const { subscribe, unsubscribe } = useWebSocketContext();
   
-  const activeTask = tasks.find(t => t.id === activeTaskId) || tasks[0];
+  const activeTask = tasks.find(t => t.id === taskId) || tasks[0];
   
   // Load project and tasks on mount
   useEffect(() => {
@@ -43,8 +50,8 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       try {
         setLoading(true);
         const [projectData, tasksData] = await Promise.all([
-          api.getProject(projectId),
-          api.getTasks(projectId)
+          projectService.getProject(projectId),
+          taskService.getTasks(projectId)
         ]);
         setProject(projectData);
         setTasks(tasksData);
@@ -92,35 +99,64 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     };
   }, [tasks, subscribe, unsubscribe]);
   
-  // Update active task when taskId prop changes
+  // Update active task when taskId prop changes and load task details
   useEffect(() => {
-    // taskId prop changed
-    setActiveTaskId(taskId);
+    // Validate taskId before proceeding
+    if (!taskId || taskId === 'undefined') {
+      console.error('Invalid taskId:', taskId);
+      return;
+    }
+    
     // Mark this terminal as initialized
     setInitializedTerminals(prev => new Set(prev).add(taskId));
+    
+    // Load detailed task data to get terminals
+    const loadTaskDetails = async () => {
+      try {
+        const taskDetails = await taskService.getTask(projectId, taskId);
+        // Update the task in our state with the detailed version that includes terminals
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? { ...task, terminals: taskDetails.terminals } : task
+          )
+        );
+        
+        // Also update the terminal store
+        if (taskDetails.terminals) {
+          useTerminalStore.getState().initializeTask(taskId, taskDetails.terminals);
+        }
+      } catch (error: any) {
+        console.error('Failed to load task details:', error);
+        // If task not found, show error state
+        if (error.status === 404) {
+          setTasks([]);
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadTaskDetails();
     
     // Focus the terminal using ref
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', taskId);
         terminalRef.focus();
       } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', taskId);
       }
     }, 100);
-  }, [taskId]);
+  }, [taskId, projectId]);
   
   // Focus terminal when page becomes visible (tab switch, modal close, etc)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && activeTaskId) {
+      if (!document.hidden && taskId) {
         focusActiveTerminal('visibility change');
       }
     };
     
     const handleFocus = () => {
-      if (activeTaskId) {
+      if (taskId) {
         focusActiveTerminal('window focus');
       }
     };
@@ -130,7 +166,7 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     window.addEventListener('focus', handleFocus);
     
     // Focus on mount
-    if (activeTaskId) {
+    if (taskId) {
       focusActiveTerminal('component mount');
     }
     
@@ -138,52 +174,43 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [activeTaskId]);
+  }, [taskId]);
 
   // Helper function to focus the active terminal
   const focusActiveTerminal = (reason: string) => {
-    const taskId = activeTaskId;
     if (!taskId) return;
     
     setTimeout(() => {
       const terminalRef = terminalRefs.current.get(taskId);
       if (terminalRef) {
-        console.log(`[TaskWorkspace] Focusing terminal for task: ${taskId} (reason: ${reason})`);
         terminalRef.focus();
       } else {
-        console.log(`[TaskWorkspace] Terminal ref not found for task: ${taskId} (reason: ${reason})`);
       }
     }, 200); // Slightly longer delay for modal close animations
   };
 
-  const handleTaskSelect = (newTaskId: string) => {
-    console.log('[TaskWorkspace] handleTaskSelect called with:', newTaskId);
-    setActiveTaskId(newTaskId);
-    // Reset validation mode when switching tasks
-    setValidationMode(false);
+  const handleTaskSelect = (newTaskId: string, focusTabId?: string) => {
+    // Don't do anything if we're already on this task
+    if (newTaskId === taskId) {
+      return;
+    }
     
-    // Mark this terminal as initialized
-    setInitializedTerminals(prev => new Set(prev).add(newTaskId));
+    // Store the tab to focus for when TerminalPanel mounts
+    if (focusTabId) {
+      sessionStorage.setItem(`focus-tab-${newTaskId}`, focusTabId);
+    }
     
-    // Focus the terminal using ref
-    setTimeout(() => {
-      const terminalRef = terminalRefs.current.get(newTaskId);
-      if (terminalRef) {
-        console.log('[TaskWorkspace] Focusing terminal for task:', newTaskId);
-        terminalRef.focus();
-      } else {
-        console.log('[TaskWorkspace] Terminal ref not found for task:', newTaskId);
-      }
-    }, 100);
+    // Navigate to the new task URL - this will trigger a re-render with new taskId prop
+    navigate(`/projects/${projectId}/tasks/${newTaskId}`);
   };
 
-  const handleTaskChange = (task: Task) => {
-    handleTaskSelect(task.id);
+  const handleTaskChange = (task: Task, focusTabId?: string) => {
+    handleTaskSelect(task.id, focusTabId);
   };
 
   const handleCreateTask = async (taskData: Omit<CreateTaskDTO, 'projectId'>) => {
     try {
-      const newTask = await api.createTask(projectId, {
+      const newTask = await taskService.createTask(projectId, {
         ...taskData,
         projectId
       });
@@ -191,11 +218,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
       // Add the new task to our list
       setTasks(prevTasks => [...prevTasks, newTask]);
       
-      // Switch to the new task
-      setActiveTaskId(newTask.id);
-      
       // Close the modal
       setShowCreateModal(false);
+      
+      // Navigate to the new task
+      navigate(`/projects/${projectId}/tasks/${newTask.id}`);
     } catch (error: any) {
       console.error('Failed to create task:', error);
       
@@ -238,34 +265,55 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
     );
   }
 
+  if (tasks.length === 0 || !activeTask) {
+    return (
+      <div className="h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Task Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested task could not be found or has been deleted.</p>
+          <button
+            onClick={() => window.location.href = `/projects/${projectId}`}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Back to Project
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
-      <MainHeader 
-        project={project} 
-        tasks={tasks} 
-        activeTaskId={activeTaskId}
-        onTaskSelect={handleTaskSelect}
-      />
+      {!fullscreenMode && (
+        <MainHeader 
+          project={project} 
+          tasks={tasks} 
+          activeTaskId={taskId}
+          onTaskSelect={handleTaskSelect}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <Sidebar
-          projectId={projectId}
-          currentTask={activeTask}
-          allTasks={tasks}
-          onTaskSelect={handleTaskChange}
-          collapsed={sidebarCollapsed}
-          onCreateTask={() => setShowCreateModal(true)}
-          onTaskUpdate={handleTaskUpdate}
-          baseBranch={project?.baseBranch}
-        />
+        {!fullscreenMode && (
+          <Sidebar
+            projectId={projectId}
+            currentTask={activeTask}
+            allTasks={tasks}
+            onTaskSelect={handleTaskChange}
+            collapsed={sidebarCollapsed}
+            onCreateTask={() => setShowCreateModal(true)}
+            onTaskUpdate={handleTaskUpdate}
+            baseBranch={project?.baseBranch}
+          />
+        )}
 
         {/* Main Terminal Area - Split Layout */}
-        <div className="flex-1 flex flex-col bg-gray-900">
+        <div className="flex-1 flex flex-col bg-gray-900 h-full overflow-hidden">
           {/* Render all initialized terminals but only show the active one */}
           {tasks.map(task => {
-            const isActive = task.id === activeTaskId;
+            const isActive = task.id === taskId;
             const isInitialized = initializedTerminals.has(task.id);
             
             // Only render if this is the active task or it has been initialized before
@@ -276,8 +324,11 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
             return (
               <div
                 key={task.id}
-                style={{ display: isActive ? 'flex' : 'none' }}
-                className="flex-1 flex flex-col"
+                style={{ 
+                  display: isActive ? 'flex' : 'none',
+                  height: validationMode ? `${terminalHeight}%` : undefined
+                }}
+                className={`${validationMode ? 'flex-shrink-0' : 'flex-1'} flex flex-col`}
               >
                 <TerminalPanel
                   ref={(ref) => {
@@ -287,30 +338,45 @@ export const TaskWorkspace: React.FC<TaskWorkspaceProps> = ({ projectId, taskId 
                       terminalRefs.current.delete(task.id);
                     }
                   }}
-                  task={task}
+                  task={{
+                    ...task,
+                    onReload: () => {
+                      // Reload task details to get updated terminals
+                      taskService.getTask(projectId, task.id).then(taskDetails => {
+                        setTasks(prevTasks => 
+                          prevTasks.map(t => 
+                            t.id === task.id ? { ...t, terminals: taskDetails.terminals } : t
+                          )
+                        );
+                        
+                        // Also update the terminal store
+                        if (taskDetails.terminals) {
+                          useTerminalStore.getState().initializeTask(task.id, taskDetails.terminals);
+                        }
+                      });
+                    }
+                  }}
                   validationMode={validationMode}
                   onToggleValidation={() => setValidationMode(!validationMode)}
-                  onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  onToggleSidebar={() => setFullscreenMode(!fullscreenMode)}
                   isVisible={isActive}
+                  isFullscreen={fullscreenMode}
                 />
               </div>
             );
           })}
 
-          {/* Resize Handle */}
-          {validationMode && (
-            <div className="h-1 bg-gray-600 cursor-row-resize hover:bg-blue-500 transition-colors flex items-center justify-center">
-              <div className="w-8 h-0.5 bg-gray-400 rounded"></div>
-            </div>
-          )}
-
-          {/* Validation/Merge Panel with Lens Slider */}
+          {/* Validation/Merge Panel with Lens Slider - includes resize handle */}
           <LensSlider
-            taskId={activeTaskId}
+            taskId={taskId}
             validationMode={validationMode}
             activePhase={activePhase}
             onPhaseChange={setActivePhase}
             onClose={() => setValidationMode(false)}
+            panelHeight={100 - terminalHeight}
+            onHeightChange={(newHeight) => setTerminalHeight(100 - newHeight)}
+            isDragging={isDraggingDivider}
+            onDraggingChange={setIsDraggingDivider}
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { createTaskSession, executeCommand, getSessionInfo, listSessions } from '../../shared/shelltender-client.js';
+import { listSessions, getSessionInfo } from '../../shared/shelltender-client.js';
 
 /**
  * Get all terminal sessions
@@ -17,7 +17,7 @@ export async function getAllSessions(req, res, next) {
  */
 export async function getAttentionSessions(req, res, next) {
   try {
-    const aiMonitor = req.app.locals.aiMonitor;
+    const aiMonitor = req.services.aiMonitor;
     
     if (!aiMonitor || !aiMonitor.getSessionsNeedingAttention) {
       return res.json({ sessions: [] });
@@ -35,7 +35,7 @@ export async function getAttentionSessions(req, res, next) {
  */
 export async function getAIStates(req, res, next) {
   try {
-    const aiMonitor = req.app.locals.aiMonitor;
+    const aiMonitor = req.services.aiMonitor;
     
     if (!aiMonitor || !aiMonitor.getAllSessionStatuses) {
       return res.json([]);
@@ -67,56 +67,59 @@ export async function getSession(req, res, next) {
 }
 
 /**
+ * Helper function to check if a Shelltender session exists and is active
+ */
+async function checkShelltenderSession(sessionId) {
+  try {
+    const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8080';
+    const response = await fetch(`${shelltenderUrl}/api/sessions/${sessionId}`);
+    if (response.ok) {
+      const session = await response.json();
+      return session.status === 'active' ? session : null;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error checking Shelltender session:', error);
+    return null;
+  }
+}
+
+/**
  * Create terminal session for task
  */
 export async function createTerminalSession(req, res, next) {
   try {
     const { projectId, taskId } = req.params;
-    const models = req.app.locals.models;
+    const { tabName, aiAgent, initialPrompt, workingDirectory, copyHistoryFrom } = req.body;
     
-    // Verify task exists
-    const task = await models.tasks.findById(taskId);
-    if (!task || task.project_id !== projectId) {
+    // Verify task exists and belongs to project
+    const task = await req.services.TaskService.get(taskId);
+    if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    // Get git config from settings
-    const gitUserName = await models.db.get(
-      'SELECT value FROM settings WHERE key = ?',
-      ['git_user_name']
-    );
-    
-    const gitUserEmail = await models.db.get(
-      'SELECT value FROM settings WHERE key = ?',
-      ['git_user_email']
-    );
-    
-    const gitConfig = {
-      name: gitUserName?.value || 'Pocketdev User',
-      email: gitUserEmail?.value || 'user@pocketdev.local'
-    };
-    
-    // Create or get existing session with git config
-    const result = await createTaskSession(taskId, task.worktree_path, {}, gitConfig);
-    
-    // Configure git in the session if we have user info
-    if (gitConfig.name && gitConfig.email) {
-      const sessionId = result.id;
-      try {
-        // Set git config in the session
-        await executeCommand(sessionId, `git config user.name "${gitConfig.name}"`);
-        await executeCommand(sessionId, `git config user.email "${gitConfig.email}"`);
-      } catch (error) {
-        console.error('Failed to configure git in session:', error);
-        // Don't fail the whole request if git config fails
-      }
+    if (projectId && task.project_id !== projectId) {
+      return res.status(404).json({ error: 'Task not found in project' });
     }
     
-    res.json({
-      sessionId: result.id,
-      ...result
-    });
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Create terminal session using service
+    const sessionInfo = await terminalService.createSession(
+      taskId,
+      { tabName, aiAgent, initialPrompt, workingDirectory },
+      {
+        wsAdapter: req.services.wsAdapter,
+        aiMonitor: req.services.aiMonitor
+      }
+    );
+    
+    res.json(sessionInfo);
   } catch (error) {
+    if (error.message.includes('Maximum number of terminals')) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 }
@@ -129,16 +132,21 @@ export async function executeInSession(req, res, next) {
     const { sessionId } = req.params;
     const { command } = req.body;
     
-    if (!command) {
+    if (command === undefined) {
       return res.status(400).json({ error: 'Command is required' });
     }
     
-    const result = await executeCommand(sessionId, command);
-    res.json({
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Execute command using service
+    const result = await terminalService.executeCommand(
       sessionId,
       command,
-      ...result
-    });
+      req.services.wsAdapter
+    );
+    
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -150,18 +158,21 @@ export async function executeInSession(req, res, next) {
 export async function acknowledgeSession(req, res, next) {
   try {
     const { sessionId } = req.params;
-    const aiMonitor = req.app.locals.aiMonitor;
     
-    if (!aiMonitor || !aiMonitor.acknowledgeSession) {
-      return res.status(503).json({ error: 'AI monitoring not available' });
-    }
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
-    aiMonitor.acknowledgeSession(sessionId);
-    res.json({ 
-      message: 'Session acknowledged',
-      sessionId 
-    });
+    // Acknowledge session using service
+    const result = await terminalService.acknowledgeSession(
+      sessionId,
+      req.services.aiMonitor
+    );
+    
+    res.json(result);
   } catch (error) {
+    if (error.message === 'AI monitoring not available') {
+      return res.status(503).json({ error: error.message });
+    }
     next(error);
   }
 }
@@ -178,14 +189,17 @@ export async function respondToPrompt(req, res, next) {
       return res.status(400).json({ error: 'Response is required' });
     }
     
-    // Execute the response as a command
-    const result = await executeCommand(sessionId, response);
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
-    res.json({
+    // Execute the response as a command
+    const result = await terminalService.executeCommand(
       sessionId,
       response,
-      ...result
-    });
+      req.services.wsAdapter
+    );
+    
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -214,82 +228,110 @@ export async function getShelltenderSession(req, res, next) {
 
 /**
  * Reset terminal session to original state
- * For now: cd to task directory and clear screen
- * Future: could restore environment, clear command history, etc.
  */
 export async function resetSession(req, res, next) {
   try {
     const { sessionId } = req.params;
     
-    // Extract the task ID from session ID (format: task-{taskId})
-    const taskId = sessionId.replace('task-', '');
-    const models = req.app.locals.models;
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
     
-    // Get task to find worktree path and session parameters
-    const task = await models.tasks.findById(taskId);
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
+    // Reset session using service
+    const result = await terminalService.resetSession(sessionId);
     
-    const shelltenderUrl = process.env.SHELLTENDER_API_URL || 'http://shelltender:8081';
-    const authKey = process.env.SHELLTENDER_MONITOR_AUTH_KEY || 'pocketdev-monitor-key-2024';
-    
-    // Step 1: Kill the existing session
-    try {
-      await fetch(`${shelltenderUrl}/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Auth-Key': authKey
-        }
-      });
-    } catch (error) {
-      // Session might already be gone, continue anyway
-      console.log('Could not delete session, continuing...', error.message);
-    }
-    
-    // Small delay to ensure cleanup
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Step 2: Create a new session with the same parameters
-    const createResponse = await fetch(`${shelltenderUrl}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Auth-Key': authKey
-      },
-      body: JSON.stringify({
-        id: sessionId,
-        name: `Task ${taskId}`,
-        cwd: task.worktree_path,
-        // Re-apply directory restrictions
-        restrictToPath: task.worktree_path,
-        allowUpwardNavigation: false,
-        blockedCommands: ['sudo', 'su', 'chmod', 'chown'],
-        readOnlyMode: false,
-        env: {
-          TASK_ID: taskId,
-          WORKTREE_PATH: task.worktree_path
-        },
-        metadata: {
-          taskId,
-          worktreePath: task.worktree_path
-        }
-      })
-    });
-    
-    if (!createResponse.ok) {
-      throw new Error('Failed to create new session');
-    }
-    
-    const newSession = await createResponse.json();
-    
-    res.json({
-      sessionId,
-      message: 'Session reset successfully',
-      workingDirectory: task.worktree_path,
-      newSession
-    });
+    res.json(result);
   } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Update terminal tab properties
+ */
+export async function updateTerminalTab(req, res, next) {
+  try {
+    const { sessionId } = req.params;
+    const { tabName, tabOrder } = req.body;
+    
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Update tab using service
+    const updatedSession = await terminalService.updateSessionTab(sessionId, {
+      tabName,
+      tabOrder
+    });
+    
+    res.json(updatedSession);
+  } catch (error) {
+    if (error.message === 'Session not found') {
+      return res.status(404).json({ error: error.message });
+    }
+    next(error);
+  }
+}
+
+/**
+ * Delete a terminal session
+ */
+export async function deleteTerminalSession(req, res, next) {
+  try {
+    const { sessionId } = req.params;
+    console.log('[TerminalController] DELETE /terminals/:sessionId called with:', sessionId);
+    
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Delete session using service
+    const result = await terminalService.deleteSession(sessionId);
+    console.log('[TerminalController] Delete successful:', result);
+    
+    res.json(result);
+  } catch (error) {
+    console.log('[TerminalController] Delete failed:', error.message);
+    if (error.message === 'Session not found') {
+      return res.status(404).json({ error: error.message });
+    }
+    next(error);
+  }
+}
+
+/**
+ * Get AI agent configurations
+ */
+export async function getAIAgents(req, res, next) {
+  try {
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Get available agents using service
+    const agents = terminalService.getAvailableAgents();
+    
+    res.json(agents);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get launch command for a specific AI agent
+ */
+export async function getAgentLaunchCommandHandler(req, res, next) {
+  try {
+    const { agentId } = req.params;
+    const { prompt } = req.body;
+    
+    // Get TerminalService from services
+    const terminalService = req.services.TerminalService;
+    
+    // Get agent launch command using service
+    const result = terminalService.getAgentLaunchCommand(agentId, prompt);
+    
+    res.json(result);
+  } catch (error) {
+    if (error.message === 'Agent not found') {
+      return res.status(404).json({ error: error.message });
+    }
     next(error);
   }
 }

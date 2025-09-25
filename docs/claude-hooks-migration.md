@@ -1,5 +1,12 @@
 # Claude Hooks Migration Guide: From Shell Monitoring to Deterministic Hooks
 
+<!-- Document Metadata
+Created: 2025-07-01
+Modified: 2025-07-11
+Status: ????
+-->
+
+
 > **Note**: This document describes a future implementation plan for migrating PocketDev's AI monitoring system from shell-based text detection to Claude's new hooks feature. This is not yet implemented but serves as a technical reference for when Claude hooks become available in our environment.
 
 ## Implementation Status

@@ -1,5 +1,12 @@
 # /create-guide
 
+<!-- Document Metadata
+Created: 2025-07-08
+Modified: 2025-07-08
+Status: ????
+-->
+
+
 Generate comprehensive documentation, implementation guides, and instructions optimized for clarity and actionability. Creates guides that can be effectively used by both human developers and Claude instances.
 
 ## Usage

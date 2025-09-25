@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketContext';
-import { WorkerStatus, TaskState } from '../types/task';
-import type { SessionState } from '../types/task';
+import { WorkerStatus, TaskState } from '@shared/types';
+import type { SessionState, TerminalSession } from '@shared/types';
 
 interface TaskStatusData {
   sessionState: SessionState;
+  sessionStates?: TerminalSession[];
   taskState: TaskState;
   gitStatus?: {
     ahead: number;
@@ -42,13 +43,15 @@ export function useTaskStatus(taskId: string | undefined) {
   const handleMessage = useCallback((message: any) => {
     switch (message.type) {
       case 'ai_state_update':
+        console.log('[useTaskStatus] Received AI state update:', message.data);
         // Update AI worker state - this comes from terminal pattern matching
         setTaskStatus(prev => ({
           ...prev!,
           sessionState: {
             status: message.data.sessionState.status,
             lastStateChange: message.data.sessionState.lastStateChange
-          }
+          },
+          sessionStates: message.data.sessionState.sessionStates
         }));
         lastUpdateRef.current = Date.now();
         break;
@@ -60,7 +63,7 @@ export function useTaskStatus(taskId: string | undefined) {
         }));
         break;
         
-      case 'git_status_update':
+      case 'git-status-changed':
         setTaskStatus(prev => ({
           ...prev!,
           gitStatus: message.data.gitStatus
@@ -146,6 +149,7 @@ export function useTaskStatus(taskId: string | undefined) {
 
   return {
     sessionState: taskStatus?.sessionState || { status: WorkerStatus.NotStarted, lastStateChange: null },
+    sessionStates: taskStatus?.sessionStates,
     taskState: taskStatus?.taskState || TaskState.Active,
     gitStatus: taskStatus?.gitStatus,
     idleTime

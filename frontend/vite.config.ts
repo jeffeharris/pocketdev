@@ -8,6 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    alias: {
+      '@shared/types': '/shared/types/index.ts',
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

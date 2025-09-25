@@ -4,9 +4,12 @@ import { uploadSingle, handleUploadError } from '../middleware/upload.middleware
 
 const router = Router();
 
+// Get upload configuration
+router.get('/upload-config', uploadController.getUploadConfig);
+
 // Upload routes - nested under projects/:projectId/tasks/:taskId
 router.post('/projects/:projectId/tasks/:taskId/upload', 
-  uploadSingle('image'),
+  uploadSingle('file'),  // Changed from 'image' to 'file' to accept any file type
   uploadController.uploadImage,
   handleUploadError
 );

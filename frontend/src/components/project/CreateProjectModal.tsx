@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, GitBranch, Lock, Globe, ChevronDown, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 
 interface GitHubRepo {
   fullName: string;
@@ -33,6 +33,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
   onProjectCreated
 }) => {
   const navigate = useNavigate();
+  const projectService = useService('project');
   const [activeTab, setActiveTab] = useState<'github' | 'manual'>('github');
   
   // GitHub flow state
@@ -209,7 +210,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
         };
       }
 
-      const project = await api.createProject(projectData);
+      const project = await projectService.createProject(projectData);
       setSuccess('Project created successfully! Redirecting...');
       
       // Auto-navigate after a short delay

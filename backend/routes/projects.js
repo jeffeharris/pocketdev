@@ -4,19 +4,22 @@ import { promisify } from 'util';
 import path from 'path';
 import fsSync from 'fs';
 import config from '../config/index.js';
-import { gitCommand, configureGitCredentials } from '../utils/git.js';
+// Removed direct git command import - using GitService instead
+import { GitService } from '../services/git.service.js';
 import { githubTokenMiddleware } from '../middleware/github-auth.middleware.js';
+// Git services middleware removed - modules are instantiated directly
 
 const exec = promisify(execCallback);
 const router = Router();
 
 // Apply GitHub token middleware to all routes
 router.use(githubTokenMiddleware);
+// Middleware removed - git modules instantiated as needed
 
 // Create new project from repo
 router.post('/', async (req, res) => {
   const { repoUrl, branch = 'main', projectName } = req.body;
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     // Check if project already exists
@@ -50,7 +53,7 @@ router.post('/', async (req, res) => {
     }
     
     await exec(`git checkout ${branch}`, { cwd: projectPath });
-    await configureGitCredentials(projectPath, req.githubToken);
+    await GitService.configureCredentials(projectPath, req.githubToken);
     
     // Create project in database
     const project = await models.projects.create({
@@ -75,7 +78,7 @@ router.post('/', async (req, res) => {
 
 // List all projects
 router.get('/', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const projects = await models.projects.findAll();
@@ -87,7 +90,7 @@ router.get('/', async (req, res) => {
 
 // Get project details
 router.get('/:id', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -98,10 +101,11 @@ router.get('/:id', async (req, res) => {
     // Get current git status if local path exists
     let gitStatus = null;
     if (project.local_path && fsSync.existsSync(project.local_path)) {
-      const status = await gitCommand(project.local_path, 'git status --porcelain');
+      const gitService = new GitService(req.githubToken);
+      const statusResult = await gitService.getStatus(project.local_path);
       gitStatus = {
-        status: status.output,
-        hasChanges: status.output.trim().length > 0
+        status: statusResult.raw.porcelain,
+        hasChanges: statusResult.raw.porcelain.trim().length > 0
       };
     }
     
@@ -116,7 +120,7 @@ router.get('/:id', async (req, res) => {
 
 // Get base branch sync status
 router.get('/:id/base-branch-status', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -129,18 +133,14 @@ router.get('/:id/base-branch-status', async (req, res) => {
     }
     
     try {
+      const gitService = new GitService(req.githubToken);
+
       // Fetch latest from remote to get accurate status
-      await gitCommand(project.local_path, 'git fetch origin');
-      
-      // Check if base branch is behind its remote
-      const behindResult = await gitCommand(project.local_path, 
-        `git rev-list --count ${project.base_branch}..origin/${project.base_branch}`);
-      const behind = parseInt(behindResult.output.trim()) || 0;
-      
-      // Check if base branch has unpushed commits
-      const aheadResult = await gitCommand(project.local_path, 
-        `git rev-list --count origin/${project.base_branch}..${project.base_branch}`);
-      const ahead = parseInt(aheadResult.output.trim()) || 0;
+      await gitService.sync(project.local_path, { fetchOnly: true });
+
+      // Get ahead/behind counts for base branch
+      const counts = await gitService.getAheadBehindCounts(project.local_path, project.base_branch);
+      const { ahead, behind } = counts;
       
       res.json({ behind, ahead, branch: project.base_branch });
     } catch (error) {
@@ -154,7 +154,7 @@ router.get('/:id/base-branch-status', async (req, res) => {
 
 // Pull base branch updates
 router.post('/:id/pull-base-branch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -163,11 +163,13 @@ router.post('/:id/pull-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
+    const gitService = new GitService(req.githubToken);
+
     // Check for uncommitted changes in base branch
-    const statusResult = await gitCommand(project.local_path, 'git status --porcelain');
-    if (statusResult.output && statusResult.output.trim()) {
+    const statusResult = await gitService.getStatus(project.local_path);
+    if (statusResult.raw.porcelain && statusResult.raw.porcelain.trim()) {
       return res.status(400).json({ 
         error: 'Cannot pull: Base branch has uncommitted changes',
         hasUncommitted: true 
@@ -175,8 +177,10 @@ router.post('/:id/pull-base-branch', async (req, res) => {
     }
     
     // Pull updates for base branch
-    const result = await gitCommand(project.local_path, 
-      `git pull origin ${project.base_branch}`);
+    const result = await gitService.sync(project.local_path, {
+      branch: project.base_branch,
+      remote: 'origin'
+    });
     
     if (!result.success) {
       return res.status(500).json({ 
@@ -200,7 +204,7 @@ router.post('/:id/pull-base-branch', async (req, res) => {
 
 // Push base branch changes
 router.post('/:id/push-base-branch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -209,11 +213,12 @@ router.post('/:id/push-base-branch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
+    const gitService = new GitService(req.githubToken);
+
     // Push base branch
-    const result = await gitCommand(project.local_path, 
-      `git push origin ${project.base_branch}`);
+    const result = await gitService.push(project.local_path, project.base_branch);
     
     if (!result.success) {
       return res.status(500).json({ 
@@ -237,7 +242,7 @@ router.post('/:id/push-base-branch', async (req, res) => {
 
 // Fetch remote updates for project
 router.post('/:id/fetch', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -246,14 +251,21 @@ router.post('/:id/fetch', async (req, res) => {
     }
     
     // Ensure git credentials are configured
-    await configureGitCredentials(project.local_path, req.githubToken);
+    await GitService.configureCredentials(project.local_path, req.githubToken);
     
+    const gitService = new GitService(req.githubToken);
+
     // Fetch with git (will use gh credential helper if configured)
-    const result = await gitCommand(project.local_path, 'git fetch --all --prune --tags');
-    
+    const result = await gitService.sync(project.local_path, {
+      fetchOnly: true
+    });
+
     // Get updated branch info
-    const branchResult = await gitCommand(project.local_path, 'git branch -r');
-    const branches = branchResult.output
+    const branchResult = await gitService.listBranches(project.local_path, {
+      remote: true
+    });
+    const branches = branchResult.branches
+      .map(b => b.name)
       .split('\n')
       .filter(b => b.trim())
       .map(b => b.trim().replace('origin/', ''));
@@ -273,7 +285,7 @@ router.post('/:id/fetch', async (req, res) => {
 
 // Check update status for all tasks
 router.get('/:id/update-status', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);
@@ -283,44 +295,55 @@ router.get('/:id/update-status', async (req, res) => {
     
     const tasks = await models.tasks.findByProjectId(project.id);
     const updateStatus = [];
-    
+    const gitService = new GitService(req.githubToken);
+
     for (const task of tasks) {
       if (!fsSync.existsSync(task.worktree_path)) continue;
-      
+
       try {
+        // Get current branch for the task
+        const currentBranch = await gitService.getCurrentBranch(task.worktree_path);
+
         // Check if branch is behind origin/base_branch
-        const behindResult = await gitCommand(task.worktree_path, 
-          `git rev-list --count HEAD..origin/${project.base_branch}`);
+        const behindResult = await gitService.execute(
+          `git rev-list --count HEAD..origin/${project.base_branch}`,
+          task.worktree_path
+        );
         const behind = parseInt(behindResult.output.trim()) || 0;
-        
+
         // Check if branch has unpushed commits to its own remote
         let ahead = 0;
         try {
           // First check if remote tracking branch exists
-          const remoteCheckResult = await gitCommand(task.worktree_path, 
-            `git rev-parse --verify origin/${task.branch} 2>/dev/null`);
-          
+          const remoteCheckResult = await gitService.execute(
+            `git rev-parse --verify origin/${task.branch} 2>/dev/null`,
+            task.worktree_path
+          );
+
           if (remoteCheckResult.success) {
             // Remote branch exists, count unpushed commits
-            const aheadResult = await gitCommand(task.worktree_path, 
-              `git rev-list --count origin/${task.branch}..HEAD`);
-            ahead = parseInt(aheadResult.output.trim()) || 0;
+            const counts = await gitService.getAheadBehindCounts(task.worktree_path, task.branch);
+            ahead = counts.ahead;
           } else {
             // No remote branch, count all commits ahead of base branch
-            const aheadResult = await gitCommand(task.worktree_path, 
-              `git rev-list --count origin/${project.base_branch}..HEAD`);
+            const aheadResult = await gitService.execute(
+              `git rev-list --count origin/${project.base_branch}..HEAD`,
+              task.worktree_path
+            );
             ahead = parseInt(aheadResult.output.trim()) || 0;
           }
         } catch (e) {
           // Fallback to comparing with base branch
-          const aheadResult = await gitCommand(task.worktree_path, 
-            `git rev-list --count origin/${project.base_branch}..HEAD`);
+          const aheadResult = await gitService.execute(
+            `git rev-list --count origin/${project.base_branch}..HEAD`,
+            task.worktree_path
+          );
           ahead = parseInt(aheadResult.output.trim()) || 0;
         }
-        
+
         // Check for uncommitted changes
-        const statusResult = await gitCommand(task.worktree_path, 'git status --porcelain');
-        const hasUncommitted = statusResult.output.trim().length > 0;
+        const statusResult = await gitService.getStatus(task.worktree_path);
+        const hasUncommitted = statusResult.raw.porcelain.trim().length > 0;
         
         updateStatus.push({
           taskId: task.id,
@@ -354,7 +377,7 @@ router.get('/:id/update-status', async (req, res) => {
 
 // Delete project
 router.delete('/:id', async (req, res) => {
-  const { models } = req.app.locals;
+  const { models } = req.services;
   
   try {
     const project = await models.projects.findById(req.params.id);

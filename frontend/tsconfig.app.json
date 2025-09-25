@@ -21,7 +21,13 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    
+    /* Path mapping for shared types */
+    "paths": {
+      "@shared/types": ["/shared/types/index"],
+      "@shared/types/*": ["/shared/types/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "/shared/types"]
 }

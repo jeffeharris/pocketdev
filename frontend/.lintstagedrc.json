@@ -1,0 +1,12 @@
+{
+  "*.{ts,tsx}": [
+    "eslint --fix",
+    "bash -c 'tsc --noEmit -p tsconfig.app.json'"
+  ],
+  "*.{js,jsx}": [
+    "eslint --fix"
+  ],
+  "*.{json,css,md}": [
+    "prettier --write"
+  ]
+}

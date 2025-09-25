@@ -15,6 +15,7 @@ class GitHubTokenService {
    * @returns {Promise<string>} GitHub token or empty string
    */
   async getToken() {
+    
     // Check cache first (5 minute cache)
     if (this._cachedToken && this._cacheExpiry && Date.now() < this._cacheExpiry) {
       return this._cachedToken;

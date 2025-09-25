@@ -3,9 +3,26 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { executeGitCommand, configureGitCredentials } from './git.service.js';
+import { GitService } from './git.service.js';
+import { Worktree } from '../../shared/domain/index.js';
 
 const execAsync = promisify(exec);
+
+/**
+ * Execute git command helper function
+ */
+async function executeGitCommand(command, workingDirectory) {
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: workingDirectory,
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+    });
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(`Git command failed: ${error.message}`);
+  }
+}
+
 
 /**
  * Initialize a new worktree for a task
@@ -18,17 +35,39 @@ const execAsync = promisify(exec);
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function initializeWorktree(options) {
-  const { mainRepoPath, worktreePath, branch, baseBranch, githubToken } = options;
+  const { mainRepoPath, worktreePath, branch, baseBranch, githubToken, useExistingBranch } = options;
   
   try {
     // Create worktree
-    await execAsync(`git worktree add -b ${branch} ${worktreePath} ${baseBranch}`, { 
+    let worktreeCommand;
+    if (useExistingBranch) {
+      // Check if branch exists locally
+      try {
+        await execAsync(`git rev-parse --verify ${branch}`, { cwd: mainRepoPath });
+        // Branch exists locally
+        worktreeCommand = `git worktree add ${worktreePath} ${branch}`;
+      } catch (error) {
+        // Branch doesn't exist locally, check remote
+        try {
+          await execAsync(`git rev-parse --verify origin/${branch}`, { cwd: mainRepoPath });
+          // Branch exists on remote, create local tracking branch
+          worktreeCommand = `git worktree add --track -b ${branch} ${worktreePath} origin/${branch}`;
+        } catch (remoteError) {
+          throw new Error(`Branch '${branch}' not found locally or on remote`);
+        }
+      }
+    } else {
+      // For new branches, create from base branch
+      worktreeCommand = `git worktree add -b ${branch} ${worktreePath} ${baseBranch}`;
+    }
+    
+    await execAsync(worktreeCommand, { 
       cwd: mainRepoPath 
     });
     
     // Configure git credentials if token provided
     if (githubToken) {
-      await configureGitCredentials(worktreePath, githubToken);
+      await GitService.configureCredentials(worktreePath, githubToken);
     }
     
     return { success: true };
@@ -46,14 +85,14 @@ export async function initializeWorktree(options) {
 export async function resetWorktree(worktreePath, branch) {
   try {
     // Clean up any uncommitted changes
-    await executeGitCommand(worktreePath, 'git reset --hard');
-    await executeGitCommand(worktreePath, 'git clean -fd');
+    await executeGitCommand('git reset --hard', worktreePath);
+    await executeGitCommand('git clean -fd', worktreePath);
     
     // Checkout the branch
-    await executeGitCommand(worktreePath, `git checkout ${branch}`);
+    await executeGitCommand(`git checkout ${branch}`, worktreePath);
     
     // Pull latest changes
-    await executeGitCommand(worktreePath, `git pull origin ${branch}`);
+    await executeGitCommand(`git pull origin ${branch}`, worktreePath);
     
     return { success: true };
   } catch (error) {
@@ -64,20 +103,25 @@ export async function resetWorktree(worktreePath, branch) {
 /**
  * Check worktree status
  * @param {string} worktreePath - Path to the worktree
+ * @param {string} githubToken - GitHub token (optional)
  * @returns {Promise<Object>} Worktree status information
  */
-export async function getWorktreeStatus(worktreePath) {
+export async function getWorktreeStatus(worktreePath, githubToken = null) {
   try {
+    const workingTree = new GitWorkingTree(githubToken);
+    const analyzer = new GitAnalyzer(githubToken);
+    const repository = new GitRepository(githubToken);
+    
     // Get git status
-    const statusResult = await executeGitCommand(worktreePath, 'git status --porcelain');
+    const statusResult = await workingTree.getStatus(worktreePath);
     const hasChanges = statusResult.output.trim().length > 0;
     
     // Get current branch
-    const branchResult = await executeGitCommand(worktreePath, 'git branch --show-current');
+    const branchResult = await repository.execute('git branch --show-current', worktreePath);
     const currentBranch = branchResult.output.trim();
     
     // Get diff summary
-    const diffResult = await executeGitCommand(worktreePath, 'git diff --stat');
+    const diffResult = await analyzer.getDiff(worktreePath, '--stat');
     
     return {
       exists: true,
@@ -101,7 +145,7 @@ export async function getWorktreeStatus(worktreePath) {
  */
 export async function listWorktrees(mainRepoPath) {
   try {
-    const result = await executeGitCommand(mainRepoPath, 'git worktree list --porcelain');
+    const result = await executeGitCommand('git worktree list --porcelain', mainRepoPath);
     const worktrees = [];
     let currentWorktree = {};
     
@@ -138,7 +182,7 @@ export async function listWorktrees(mainRepoPath) {
  */
 export async function pruneWorktrees(mainRepoPath) {
   try {
-    const result = await executeGitCommand(mainRepoPath, 'git worktree prune -v');
+    const result = await executeGitCommand('git worktree prune -v', mainRepoPath);
     
     // Count pruned worktrees from output
     const prunedCount = (result.output.match(/Pruning/g) || []).length;
@@ -146,6 +190,22 @@ export async function pruneWorktrees(mainRepoPath) {
     return { success: true, pruned: prunedCount };
   } catch (error) {
     return { success: false, pruned: 0, error: error.message };
+  }
+}
+
+/**
+ * Remove a worktree
+ * @param {string} mainRepoPath - Path to the main repository
+ * @param {string} worktreePath - Path to the worktree to remove
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function removeWorktree(mainRepoPath, worktreePath) {
+  try {
+    // Remove the worktree
+    await executeGitCommand(`git worktree remove ${worktreePath} --force`, mainRepoPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 }
 
@@ -159,7 +219,7 @@ export async function pruneWorktrees(mainRepoPath) {
 export async function moveWorktree(mainRepoPath, oldPath, newPath) {
   try {
     // Git 2.17+ supports git worktree move
-    await executeGitCommand(mainRepoPath, `git worktree move ${oldPath} ${newPath}`);
+    await executeGitCommand(`git worktree move ${oldPath} ${newPath}`, mainRepoPath);
     return { success: true };
   } catch (error) {
     // Fallback for older git versions
@@ -168,8 +228,8 @@ export async function moveWorktree(mainRepoPath, oldPath, newPath) {
       await execAsync(`mv "${oldPath}" "${newPath}"`);
       
       // Update git worktree
-      await executeGitCommand(mainRepoPath, 'git worktree prune');
-      await executeGitCommand(mainRepoPath, `git worktree add ${newPath}`);
+      await executeGitCommand('git worktree prune', mainRepoPath);
+      await executeGitCommand(`git worktree add ${newPath}`, mainRepoPath);
       
       return { success: true };
     } catch (fallbackError) {
@@ -197,17 +257,60 @@ export class WorktreeService {
     this.githubToken = githubToken || process.env.GITHUB_TOKEN || '';
   }
 
-  async create(mainRepoPath, branch, worktreePath, baseBranch) {
+  async exists(worktreePath) {
+    try {
+      await fs.access(worktreePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async create(mainRepoPath, branch, worktreePath, baseBranch, useExistingBranch = false, projectId = null, taskId = null) {
+    // Validate with domain object first
+    if (projectId && taskId) {
+      const worktree = new Worktree(
+        `wt-${taskId}`,
+        projectId,
+        taskId,
+        worktreePath,
+        branch,
+        baseBranch,
+        false,
+        false
+      );
+      
+      // Check if we can create
+      if (!worktree.canModify()) {
+        throw new Error('Cannot create worktree - it is locked');
+      }
+    }
+    
     const result = await initializeWorktree({
       mainRepoPath,
       worktreePath,
       branch,
       baseBranch,
-      githubToken: this.githubToken
+      githubToken: this.githubToken,
+      useExistingBranch
     });
     
     if (!result.success) {
       throw new Error(result.error);
+    }
+    
+    // Return with domain object if IDs provided
+    if (projectId && taskId) {
+      result.worktree = new Worktree(
+        `wt-${taskId}`,
+        projectId,
+        taskId,
+        worktreePath,
+        branch,
+        baseBranch,
+        false,
+        false
+      );
     }
     
     return result;
@@ -219,6 +322,47 @@ export class WorktreeService {
       throw new Error(result.error);
     }
     return result;
+  }
+
+  async removeIfExists(mainRepoPath, worktreePath) {
+    const exists = await this.exists(worktreePath);
+    if (!exists) {
+      return { success: false, skipped: true };
+    }
+
+    try {
+      return await this.remove(mainRepoPath, worktreePath);
+    } catch (error) {
+      // Fallback to filesystem removal if git worktree removal fails
+      await fs.rm(worktreePath, { recursive: true, force: true });
+      return { success: true, fallback: true, error: error.message };
+    }
+  }
+
+  async archive(mainRepoPath, worktreePath, archivePath) {
+    const exists = await this.exists(worktreePath);
+    if (!exists) {
+      return { success: false, skipped: true };
+    }
+
+    await fs.mkdir(path.dirname(archivePath), { recursive: true });
+
+    try {
+      await fs.rename(worktreePath, archivePath);
+    } catch (error) {
+      // Node's rename can fail across devices; fall back to copy/remove
+      await execAsync(`cp -R "${worktreePath}" "${archivePath}"`);
+      await fs.rm(worktreePath, { recursive: true, force: true });
+    }
+
+    // Ensure git no longer tracks the path as a worktree
+    try {
+      await executeGitCommand(`git worktree prune`, mainRepoPath);
+    } catch (error) {
+      console.warn('Failed to prune worktrees after archive:', error.message);
+    }
+
+    return { success: true };
   }
 
   async move(oldPath, newPath) {
@@ -236,5 +380,65 @@ export class WorktreeService {
 
   async prune(mainRepoPath) {
     return pruneWorktrees(mainRepoPath);
+  }
+  
+  /**
+   * Check worktree health and repair if needed
+   * Uses Worktree domain object for business rules
+   */
+  async checkHealth(worktreePath, projectId, taskId, branch) {
+    // Create domain object to check state
+    const worktree = new Worktree(
+      `wt-${taskId}`,
+      projectId,
+      taskId,
+      worktreePath,
+      branch,
+      'main',
+      false,
+      false
+    );
+    
+    // Check if path exists
+    try {
+      await fs.access(worktreePath);
+    } catch {
+      // Path doesn't exist - mark as orphaned
+      worktree.markOrphaned();
+      return {
+        healthy: false,
+        needsRepair: worktree.needsRepair(),
+        canCheckout: worktree.canCheckout(),
+        reason: 'Worktree path does not exist'
+      };
+    }
+    
+    // Check git status
+    try {
+      await execAsync('git status', { cwd: worktreePath });
+    } catch (error) {
+      // Git command failed - worktree is broken
+      worktree.markOrphaned();
+      return {
+        healthy: false,
+        needsRepair: worktree.needsRepair(),
+        canCheckout: worktree.canCheckout(),
+        reason: 'Git status failed - worktree may be corrupt'
+      };
+    }
+    
+    return {
+      healthy: true,
+      needsRepair: worktree.needsRepair(),
+      canCheckout: worktree.canCheckout(),
+      canModify: worktree.canModify()
+    };
+  }
+  
+  /**
+   * Generate standard worktree path
+   */
+  static generatePath(projectsDir, projectId, taskId) {
+    return Worktree.generatePath(projectsDir, projectId, taskId);
   }
 }

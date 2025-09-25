@@ -1,10 +1,325 @@
 # Changelog
 
+<!-- Document Metadata
+Created: 2025-06-05
+Modified: 2025-08-18
+Status: active
+-->
+
+
 All notable changes to the PocketDev Simple Server will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING**: Complete refactoring of git services architecture (Grade: C+ → B+ → A-)
+  - Eliminated monolithic `GitService` (26+ methods) in favor of three focused deep modules:
+    - `GitRepository` (6 methods): clone, fetch, push, pull, merge, rebase
+    - `GitWorkingTree` (6 methods): stage, commit, reset, getStatus, checkout, merge
+    - `GitAnalyzer` (5 methods): getDiff, checkMergeConflicts, getUnpushedCommits, getCommitHistory, getFileChanges
+  - Removed all facades and compatibility layers (`git-core.service.js` deleted)
+  - Created `GitExecutor` base class for shared implementation (DRY principle, internal only)
+  - Controllers now pass `githubToken` instead of `gitService` parameter
+  - `configureCredentials` moved to `GitRepository` as static method
+  - All imports updated to use direct module imports
+
 ### Fixed
+- **Critical**: Fixed parameter order bug in `WorktreeService` - 11 calls had reversed parameters
+- Fixed quad view terminal selection dropdowns positioning - all dropdowns now appear in the upper left corner of their respective panels for consistency
+- Fixed critical bug in `GitAnalyzer` where `this._execute()` was called instead of `this.execute()`
+- Removed obsolete `git-services.middleware.js` that was creating non-existent GitService class
+- Fixed `GitStatusService` to use real module methods instead of non-existent phantom methods
+- Fixed `PullRequestService` to use git modules directly instead of expecting gitService
+- Fixed `TaskController` to instantiate git modules directly
+- Fixed archive task 404 error - frontend now uses existing DELETE endpoint with `softDelete=true` instead of non-existent `/archive` endpoint
+
+### Documented
+- Added BUG-024 documenting unbounded archive storage growth issue
+- Added UX-008 to prioritization for archive system transparency
+- Created comprehensive spec for task archive system improvements in `/plan-pocketdev/specs/task-archive-system/`
+
+## [2.0.0] - 2025-08-03
+
+### 🎉 Major Architectural Transformation
+
+This release represents a complete architectural overhaul of PocketDev, implementing John Ousterhout's deep module principles throughout the entire codebase.
+
+### Added
+- **Complete Backend Service Layer** (10 services + infrastructure)
+  - `GitStatusService` (4 methods) - Git status operations
+  - `GitOperationService` (6 methods) - Git commands and operations
+  - `TaskService` (8 methods) - Task lifecycle management
+  - `ProjectService` (12 methods) - Project operations
+  - `TerminalService` (8 methods) - Terminal session management
+  - `PullRequestService` (5 methods) - GitHub PR operations
+  - `SettingsService` (6 methods) - Configuration management
+  - `MonitoringService` (4 methods) - System monitoring
+  - `ContainerService` (6 methods) - Docker operations
+  - `UploadService` (5 methods) - File attachments
+  - `EventEmitterService` - Centralized event hub
+  - `WebSocketService` - Event-based broadcasting
+
+- **Complete Frontend Service Layer** (8 services + infrastructure)
+  - `BaseService` - Abstract class for all services
+  - `ServiceProvider` - React Context for dependency injection
+  - `SessionAdapter` - Session ID normalization
+  - Full TypeScript interfaces for all services
+  - Mock support for development mode
+  - Same 8 domain services as backend (Settings, Upload, Git, Terminal, Container, PR, Project, Task)
+
+- **Dependency Injection System**
+  - ServiceRegistry replacing global `app.locals`
+  - Clean initialization in server.js
+  - Request-scoped service access
+
+### Changed
+- **BREAKING**: Complete architectural transformation
+  - Controllers reduced by 90%+ (1000+ lines → <50 lines each)
+  - Frontend api.ts split from 44 methods into 8 focused services
+  - All services follow deep module pattern (4-12 methods max)
+  - WebSocket now fully event-driven
+  - Session management completely rewritten
+
+### Fixed
+- **Critical Bugs Resolved**:
+  - BUG-003: Terminal sessions not loading on task open
+  - BUG-013: Service layer architecture implemented
+  - BUG-011: api.ts domain splitting completed
+  - BUG-014: app.locals replaced with dependency injection
+  - BUG-010: task.controller.js modularized
+  - BUG-007: git.service.js split into two focused services
+  - BUG-017: Session ID chaos resolved
+  - BUG-019: WebSocket event system implemented
+  - BUG-004: project.controller.js modularized
+  - **Security**: GitHub tokens no longer exposed in API responses
+
+### Technical Debt Eliminated
+- Shallow modules → Deep modules with simple interfaces
+- Mixed concerns → Clear separation of concerns  
+- Global state → Dependency injection
+- Session ID proliferation → Unified handling
+- WebSocket spaghetti → Event-driven architecture
+- God objects → Single-responsibility services
+
+### Metrics
+- **Code Reduction**: ~70% in controllers/components
+- **Interface Simplicity**: No service >12 methods (avg 6)
+- **Architecture**: 100% service coverage
+- **Bugs Fixed**: 9 major issues resolved
+
+---
+
+## [1.1.0] - Previous Updates
+
+### Added
+- **Comprehensive Design Analysis Documentation**
+  - Added Ousterhout architectural analysis identifying 22 bugs following deep module principles
+  - Created Steve Krug UX analysis for 7 major UI components 
+  - Established unified complexity hiding principles bridging architecture and UX
+  - Developed August 2025 implementation roadmap with weekly milestones
+  - Created prioritized bug and UX issue tracking system
+
+### Added
+- **Resizable Validation/Merge Panel**
+  - Horizontal divider between terminal and validation/merge panels can now be dragged to resize
+  - Visual feedback during drag with percentage indicator
+  - Minimum height constraint of 20% and maximum of 80% for each panel
+  - Smooth animations and hover states for better discoverability
+
+- **Split View Constraints with Validation Mode**
+  - Intelligent viewport constraints when validation panel is active
+  - Vertical split mode works with any terminal height (as little as 20% screen space)
+  - Horizontal and quad splits require minimum 600px terminal height
+  - Auto-downgrade from unavailable modes when terminal space is too small
+  - Alt+D cycling skips unavailable modes based on current terminal height
+
+- **Diff Viewer Keyboard Shortcuts**
+  - Changed sidebar toggle from S to Alt+F for consistency
+  - Changed split/unified view toggle from V to Alt+D to match split view conventions
+
+### Fixed
+- **Horizontal Split View Animation**
+  - Fixed divider starting at bottom and animating up when switching to horizontal split
+  - Changed from percentage-based to fr units for grid-template-rows to avoid browser layout timing issues
+  - Horizontal split now appears instantly at correct position, matching vertical split behavior
+  - Maintains smooth resize dragging and double-click reset to 50/50 functionality
+
+- **Terminal Tab Closing**
+  - Fixed tab close button not working due to incorrect reference to task.terminals
+  - Changed to use terminals from zustand store instead of non-existent task prop
+  - Tab closing now properly handles active tab switching and cleanup
+  - Confirmation dialog still appears when AI session is active
+
+- **Terminal PS1 Configuration**
+  - Fixed PS1 prompt configuration not being applied to terminal sessions
+  - Changed backend to use PS1_ENV environment variable instead of PS1
+  - Updated bash.bashrc to check for PS1_ENV and apply it correctly
+  - PS1 isn't inherited as a normal environment variable by bash, so using PS1_ENV works around this limitation
+
+- **Split View Terminal Focus**
+  - Fixed issue where clicking in upper portion of terminals didn't update focus highlight
+  - Added capture phase event listeners to intercept clicks before terminal component
+  - Ensures both visual focus state (blue border) and keyboard focus are synchronized
+  - Works consistently across all click areas in both 2-way split and quad view modes
+
+- **Split View Terminal Assignment**
+  - Fixed issue where terminals weren't being assigned to panes when switching to split view modes
+  - Cleared stale terminal IDs from persisted layouts that no longer exist in current session
+  - Auto-assignment now properly detects and fills empty panes with available terminals
+  - Works correctly when switching between tab, vertical split, horizontal split, and quad view modes
+
+- **Quad View Terminal Dropdown**
+  - Fixed terminal selection dropdowns not working in quad view mode
+  - Added proper state management for all four dropdown menus in quad view
+  - Terminal dropdowns now correctly show which terminals are "in use" by reading from zustand store
+  - Consistent dropdown behavior across all split view modes (2-way and quad)
+
+### Added
+- **Quad View Mode (Split Views Phase 2)**
+  - View 4 terminal sessions in a 2x2 grid layout
+  - Keyboard shortcut: Alt+D to cycle through tab → split → quad view modes
+  - Visual mode indicator showing current layout
+  - Automatic terminal assignment when switching to quad view
+  - All 4 terminals refresh together with Ctrl+Shift+R
+  - Focus management across all 4 panes
+  - Layout persistence includes quad view configuration
+  - Database schema already supports tertiary/quaternary terminal IDs
+
+- **Terminal Refresh Feature**
+  - Refresh button now properly works in all view modes (tab, split, quad)
+  - Tab mode: Refreshes only the active terminal
+  - Split view: Refreshes both visible terminals
+  - Quad view: Refreshes all four visible terminals
+  - Keyboard shortcut: Ctrl+Shift+R to refresh terminals
+  - Reconnects WebSocket if disconnected
+  - Restores terminal buffer and cursor position
+  - Visual feedback with spinning animation during refresh
+
+- **Keyboard Shortcuts System**
+  - Comprehensive keyboard shortcut architecture with context-aware activation
+  - Quick Access Panel (Ctrl+K / Ctrl+Space) showing available commands based on context
+  - Terminal tab navigation shortcuts (Alt+1-6, Alt+T for new, Alt+W to close, Alt+[/] for next/prev)
+  - Terminal refresh shortcut (Ctrl+Shift+R)
+  - Modal-aware context system preventing shortcut conflicts
+  - Dynamic shortcut registration with priority-based filtering
+  - TypeScript types for keyboard management
+  - Icons and categories for better shortcut discovery
+  - Context priorities: Global (0), Terminal (10), Component (20), Modal (30+)
+
+- **UI Improvements**
+  - Standardized modal backdrops to use consistent semi-transparent black (bg-black/50)
+  - Reduced header padding for more compact layout
+  - Icon-only buttons in header for cleaner appearance
+  - Quick Access button with keyboard indicator
+
+- **Split Views Feature (Complete)**
+  - View 2 or 4 terminal sessions simultaneously within a single task
+  - Three view modes: Tab, Split (2-way), and Quad (4-way)
+  - Horizontal and vertical split orientations for 2-way splits
+  - Draggable resizer to adjust pane sizes (10%-90% range)
+  - Double-click divider to reset split to 50/50 (REQ-SV-009)
+  - Terminal selector dropdowns to choose which terminals to display
+  - Swap terminals button for quick pane switching
+  - Layout persistence - split configurations save to database and restore across browser sessions (REQ-SV-019a)
+  - Real-time sync - layout changes broadcast via WebSocket
+  - Mobile responsive - automatically disables on screens <768px
+  - Visual focus indicators with blue ring for active terminal (REQ-SV-014)
+  - Terminal disposal system prevents memory leaks (REQ-SV-026)
+  - Keyboard shortcuts: Alt+D to cycle view modes
+  - Feature flag support via `VITE_FEATURE_SPLIT_VIEW` environment variable
+  - Backend API endpoints for split layout CRUD operations with comprehensive tests
+  - Zustand state management with centralized terminalStore
+  - Components: SplitViewContainer, SplitViewControls, splitViewStore
+  - **Phase 1 Implementation** (2-way splits)
+    - Split view toggle moved to terminal header for better accessibility
+    - Tab-style terminal selectors replace regular tabs in split mode
+    - Unified UI where split controls occupy same space as tabs
+    - Color-coded terminals (blue for primary, green for secondary)
+  - **Phase 2 Implementation** (quad view)
+    - 2x2 grid layout for 4 terminals
+    - Mode cycling through tab → split → quad
+    - Automatic terminal assignment
+    - All requirements met including layout persistence
+
+### Changed
+- **Code Cleanup**
+  - Removed debug console.log statements from production components
+  - Cleaned up TerminalPanel, TaskWorkspace, and API service debug logging
+  - Removed WebSocket connection/disconnection logging from hooks and contexts
+  - Maintained test pages and prototype components for development use
+- **Terminal State Management**
+  - Refactored to use centralized terminalStore instead of prop drilling
+  - All terminal state now managed through Zustand stores
+  - Improved performance with Map-based lookups
+  - Added focus state tracking and disposal callbacks
+
+### Added (continued)
+- **Comprehensive Testing Infrastructure**
+  - Set up Vitest for both frontend and backend (ESM compatible)
+  - 104 frontend tests for stores and components
+  - Backend API endpoint tests with edge cases
+  - Test utilities and documentation
+  - Coverage reporting and interactive UI
+- **Focus Management and Terminal Disposal**
+  - Visual focus indicators for active terminals (blue ring for focused, gray for unfocused)
+  - Click-to-focus behavior for terminal selection
+  - Focus state management in terminalStore
+  - Terminal disposal system to prevent memory leaks
+  - Disposal callbacks execute when terminals are removed
+  - Smart disposal - terminals not disposed on view switches
+- **Split View Enhancements**
+  - Double-click divider to reset split to 50/50 (REQ-SV-009)
+  - Tooltip shows "Drag to resize, double-click to reset to 50/50"
+  - Works in both horizontal and vertical orientations
+
+### Fixed
+- **Terminal Focus Indicator**
+  - Fixed focus indicator not showing despite clicks being detected
+  - Issue was caused by terminalStore using sessionId as Map key but dbSessionId for lookups
+  - Updated store to use dbSessionId consistently throughout
+  - Focus indicators now work correctly with immediate visual feedback
+- **Advanced Session Launcher Prompt Handling**
+  - Fixed missing `launchingClaude` state variable in TerminalPanel causing React errors
+  - Restored proper command syntax for Claude CLI with initial prompts: `claude "prompt here"`
+  - AI agents now correctly launch with initial prompts when using the advanced session launcher
+  - Prompts are properly escaped for shell execution to handle quotes and special characters
+
+### Added
+- **Shelltender v0.6.2 Upgrade**
+  - Updated @shelltender/client from v0.6.1 to v0.6.2
+  - Updated @shelltender/server from v0.6.1 to v0.6.2
+  - Admin UI HTML file now properly included in the package
+  - Improved terminal buffer restoration with incremental updates
+- **Multi-Terminal Tabs Feature**
+  - Phase 1 (Backend): Added terminal session persistence and management
+    - New `terminal_sessions` table tracking individual tabs per task
+    - Session state persistence across server restarts
+    - Support for up to 6 concurrent terminals per task
+  - Phase 2 (Frontend): Implemented tab UI and switching
+    - New TerminalTabs component with visual state indicators
+    - Tab management with add/remove functionality
+    - Real-time AI state visualization (idle/working/waiting)
+    - Refactored TerminalPanel to support multiple DirectTerminal instances
+  - Phase 3 (Auto-Launch): WebSocket-based command execution
+    - Fixed Shelltender v0.6.1 command execution via WebSocket
+    - Auto-launch Claude in new tabs with configurable delays
+    - Created execute-command.js utility for proper WebSocket communication
+    - Tab persistence now working - renamed tabs persist across page reloads
+
+### Fixed
+- **Terminal Buffer Restoration Issue**
+  - Fixed terminal scrollback not displaying after page refresh
+  - Added `useIncrementalUpdates={true}` prop to Terminal component (required for Shelltender v0.6.2)
+  - Terminal history and command output now properly persists across page reloads
+  - Added debug tools for troubleshooting WebSocket communication:
+    - `/test/terminal-buffer` - Terminal buffer test page with debug logging
+    - `/test/terminal-raw` - Raw WebSocket test bypassing Shelltender client
+- **Terminal Buffer Clearing on Tab Close**
+  - Fixed issue where terminals would go blank when closing a tab
+  - Changed from rendering all terminals with CSS visibility to only rendering the active terminal
+  - This eliminates WebSocket message conflicts and xterm.js visibility issues
+  - Removed success toast notification on tab close to prevent terminal re-render
+  - Tab switching now properly triggers terminal refresh after closing a tab
 - **AI Session Monitoring after Shelltender v0.6.1 Upgrade**
   - Fixed TaskStatus not updating based on console activity detection
   - Replaced removed `ShelltenderMonitorAdapter` with new `ShelltenderSessionMonitor`

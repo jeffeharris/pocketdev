@@ -18,12 +18,12 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Project } from '../types/project';
-import type { Task, CreateTaskDTO } from '../types/task';
+import type { Task, CreateTaskDTO } from '@shared/types';
 import { TaskListItem } from '../components/task/TaskListItem';
 import { CreateTaskModal } from '../components/task/CreateTaskModal';
 import { PlanningEditor } from '../components/planning/PlanningEditor';
 import { SettingsModal } from '../components/settings/SettingsModal';
-import { api } from '../services/api';
+import { useService } from '../services';
 
 interface AttentionItem {
   type: string;
@@ -36,6 +36,8 @@ interface AttentionItem {
 export const ProjectDashboard: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const projectService = useService('project');
+  const taskService = useService('task');
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
@@ -100,8 +102,8 @@ export const ProjectDashboard: React.FC = () => {
   // Phase 1: Load critical data for instant UI
   const loadCriticalData = async () => {
     const [projectData, tasksData] = await Promise.all([
-      api.getProjectMinimal(projectId!),
-      api.getTasksMinimal(projectId!)
+      projectService.getProject(projectId!, { minimal: true }),
+      taskService.getTasks(projectId!, { minimal: true })
     ]);
     
     setProject(projectData);
@@ -115,15 +117,15 @@ export const ProjectDashboard: React.FC = () => {
     
     try {
       // Load cached dashboard data first (no git fetch)
-      const cachedDashboard = await api.getProjectDashboardCached(projectId!);
-      setNeedsAttention(cachedDashboard.needsAttention);
+      const cachedDashboard = await projectService.getProjectDashboard(projectId!, { cached: true });
+      setNeedsAttention(cachedDashboard.needsAttention || []);
       setLastUpdated(cachedDashboard.lastUpdated);
       
       // Load other data in parallel, but handle failures individually
       const results = await Promise.allSettled([
-        api.getProjectBranches(projectId!),
-        api.getProjectPlanning(projectId!),
-        api.getTasks(projectId!) // Full task data with git status
+        projectService.getProjectBranches(projectId!),
+        projectService.getProjectPlanning(projectId!),
+        taskService.getTasks(projectId!) // Full task data with git status
       ]);
       
       // Handle branches
@@ -150,7 +152,7 @@ export const ProjectDashboard: React.FC = () => {
       }
       
       // Trigger background refresh for next time
-      api.refreshProjectStatus(projectId!).catch(console.error);
+      projectService.baseBranchOperation(projectId!, 'refresh').catch(console.error);
     } catch (error) {
       console.error('Failed to load background data:', error);
     } finally {
@@ -180,14 +182,14 @@ export const ProjectDashboard: React.FC = () => {
     try {
       setLoading(true);
       const [dashboardData, tasksData, branchesData, planningData] = await Promise.all([
-        api.getProjectDashboard(projectId!),
-        api.getTasks(projectId!),
-        api.getProjectBranches(projectId!),
-        api.getProjectPlanning(projectId!)
+        projectService.getProjectDashboard(projectId!),
+        taskService.getTasks(projectId!),
+        projectService.getProjectBranches(projectId!),
+        projectService.getProjectPlanning(projectId!)
       ]);
       
       setProject(dashboardData.project);
-      setNeedsAttention(dashboardData.needsAttention);
+      setNeedsAttention(dashboardData.needsAttention || []);
       setTasks(tasksData);
       setBranches(branchesData);
       setPlanning(planningData);
@@ -205,22 +207,26 @@ export const ProjectDashboard: React.FC = () => {
     try {
       switch (action) {
         case 'pull':
-          await api.pullBaseBranch(projectId!);
+          await projectService.baseBranchOperation(projectId!, 'pull');
           await loadDashboard(true); // Force full refresh after git operation
           break;
         
         case 'push':
-          await api.pushBaseBranch(projectId!);
+          await projectService.baseBranchOperation(projectId!, 'push');
           await loadDashboard(true); // Force full refresh after git operation
           break;
         
         case 'open-task':
+          if (!item.details?.taskId) {
+            console.error('Cannot open task: taskId is missing in item details', item);
+            break;
+          }
           navigate(`/projects/${projectId}/tasks/${item.details.taskId}`);
           break;
         
         case 'archive':
           if (confirm(`Archive task "${item.details.taskName}"?`)) {
-            await api.archiveTask(projectId!, item.details.taskId);
+            await taskService.archiveTask(projectId!, item.details.taskId);
             await loadDashboard(true); // Force full refresh after task change
           }
           break;
@@ -267,7 +273,7 @@ export const ProjectDashboard: React.FC = () => {
     if (!projectId) return;
     
     try {
-      const newTask = await api.createTask(projectId, {
+      const newTask = await taskService.createTask(projectId, {
         ...taskData,
         projectId
       });
@@ -283,10 +289,10 @@ export const ProjectDashboard: React.FC = () => {
   const handleSavePlanning = async (content: string) => {
     if (!projectId) return;
     
-    const result = await api.updateProjectPlanning(projectId, content);
+    const result = await projectService.updateProjectPlanning(projectId, content);
     if (result.success) {
       // Reload planning content
-      const planningData = await api.getProjectPlanning(projectId);
+      const planningData = await projectService.getProjectPlanning(projectId);
       setPlanning(planningData);
       
       // If changes were committed, show in needs attention
@@ -475,7 +481,11 @@ export const ProjectDashboard: React.FC = () => {
                     <div className="flex-1">
                       <p className="text-gray-900">{item.message}</p>
                       <div className="mt-2 flex items-center gap-2">
-                        {item.actions.map(action => getActionButton(action, item))}
+                        {item.actions.map((action, index) => (
+                          <span key={`${action}-${index}`}>
+                            {getActionButton(action, item)}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -586,17 +596,14 @@ export const ProjectDashboard: React.FC = () => {
             </div>
             <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
               {tasks.filter(t => t.taskState === 'active').slice(0, 5).map(task => (
-                <div 
-                  key={task.id} 
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
-                >
-                  <TaskListItem
-                    task={task}
-                    isActive={false}
-                    onSelect={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
-                  />
-                </div>
+                <TaskListItem
+                  key={task.id}
+                  task={task}
+                  isActive={false}
+                  onSelect={(task, focusTabId) => navigate(`/projects/${projectId}/tasks/${task.id}`, { 
+                    state: { focusTabId } 
+                  })}
+                />
               ))}
               {tasks.filter(t => t.taskState === 'active').length === 0 && (
                 <div className="p-4 text-center text-gray-500">

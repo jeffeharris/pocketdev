@@ -1,5 +1,5 @@
 # PocketDev Makefile
-.PHONY: help dev prod up down restart logs shell clean migrate build build-ai-base build-all status test secure
+.PHONY: help dev prod up down restart logs shell clean migrate build build-ai-base build-all status test
 
 # Default target
 help:
@@ -19,7 +19,6 @@ help:
 	@echo "  make build-all    - Build all images in correct order"
 	@echo "  make status     - Show container status"
 	@echo "  make test       - Run tests"
-	@echo "  make secure     - Start in secure mode with UID/GID mapping"
 
 # Development mode with BOTH frontends
 dev:
@@ -149,22 +148,3 @@ commit:
 push:
 	@git push origin $(shell git branch --show-current)
 
-# Secure mode with UID/GID mapping
-secure:
-	@echo "Starting PocketDev in secure mode..."
-	@./scripts/start-secure.sh
-
-secure-build:
-	@echo "Building secure images..."
-	@./scripts/start-secure.sh --build
-
-secure-down:
-	@echo "Stopping secure containers..."
-	@docker-compose -f docker-compose-secure.yml down
-
-secure-logs:
-	@docker-compose -f docker-compose-secure.yml logs -f
-
-secure-status:
-	@echo "Secure Container Status:"
-	@docker-compose -f docker-compose-secure.yml ps

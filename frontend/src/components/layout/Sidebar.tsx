@@ -1,20 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GitBranch, CheckCircle, FileText, Plus, AlertCircle, RefreshCw, ChevronDown, MessageSquare, FileEdit, Sparkles, Edit3, GitMerge, GitPullRequest, FolderSync, MoreVertical, Edit2, Archive, Trash2, RotateCw, Upload, Paperclip } from 'lucide-react';
-import type { Task } from '../../types/task';
-import { TaskState } from '../../types/task';
+import type { Task } from '@shared/types';
+import { TaskState } from '@shared/types';
 import { TaskListItem } from '../task/TaskListItem';
 import { TaskStatus } from '../task/TaskStatus';
 import { DiffViewerModal } from '../diff/DiffViewerModal';
 import { CommitModal } from '../git/CommitModal';
 import { ImageUpload } from '../common/ImageUpload';
 import { useImageUpload } from '../../hooks/useImageUpload';
-import { api } from '../../services/api';
+import { useService } from '../../services';
 
 interface SidebarProps {
   projectId: string;
   currentTask: Task;
   allTasks: Task[];
-  onTaskSelect: (task: Task) => void;
+  onTaskSelect: (task: Task, focusTabId?: string) => void;
   collapsed?: boolean;
   onCreateTask?: () => void;
   onTaskUpdate?: (taskId: string, updates: Partial<Task>) => void;
@@ -31,6 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTaskUpdate,
   baseBranch
 }) => {
+  const taskService = useService('task');
+  const gitService = useService('git');
   const [showCommitOptions, setShowCommitOptions] = useState(false);
   const [showUpdateOptions, setShowUpdateOptions] = useState(false);
   const [showDiffModal, setShowDiffModal] = useState(false);
@@ -91,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const loadCommitHistory = async () => {
     try {
-      const history = await api.getCommitHistory(projectId, currentTask.id);
+      const history = await taskService.getCommitHistory(projectId, currentTask.id);
 
       // Find the last merge commit
       const lastMergeIndex = history.findIndex((commit: any) => commit.isMerge);
@@ -121,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
     
     try {
-      const result = await api.updateBranch(projectId, currentTask.id);
+      const result = await taskService.updateBranch(projectId, currentTask.id);
       if (!result.success) {
         alert(`Update failed: ${result.error || 'Unknown error'}`);
       }
@@ -136,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
     
     try {
-      const result = await api.gitOperation(projectId, currentTask.id, 'pr', {
+      const result = await gitService.performOperation(projectId, currentTask.id, 'pr', {
         message: `${currentTask.name} - ${currentTask.description}`
       });
       if (result.success) {
@@ -161,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
-      const result = await api.gitOperation(projectId, currentTask.id, 'push');
+      const result = await gitService.performOperation(projectId, currentTask.id, 'push');
       
       if (!result.success) {
         alert(`Failed to push: ${result.error || 'Unknown error'}`);
@@ -200,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsProcessing(true);
 
     try {
-      const result = await api.mergeToBase(projectId, currentTask.id);
+      const result = await taskService.mergeToBase(projectId, currentTask.id);
       
       if (result.success) {
         alert('Branch merged successfully!');
@@ -209,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // Manually refresh the task status after a short delay if WebSocket doesn't update
         setTimeout(async () => {
           try {
-            const updatedTask = await api.getTask(projectId, currentTask.id);
+            const updatedTask = await taskService.getTask(projectId, currentTask.id);
             if (onTaskUpdate && updatedTask.taskState === TaskState.Merged) {
               onTaskUpdate(currentTask.id, updatedTask);
             }
@@ -236,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     setIsProcessing(true);
     try {
-      const result = await api.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
+      const result = await taskService.updateTask(projectId, currentTask.id, { name: newTaskName.trim() });
       if (result) {
         // Update the task in the parent component
         if (onTaskUpdate) {
@@ -285,7 +287,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowTaskActions(false);
                       if (confirm(`Are you sure you want to archive "${currentTask.name}"?`)) {
                         try {
-                          await api.archiveTask(projectId, currentTask.id);
+                          await taskService.archiveTask(projectId, currentTask.id);
                           if (onTaskUpdate) {
                             onTaskUpdate(currentTask.id, { taskState: TaskState.Archived });
                           }
@@ -305,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setShowTaskActions(false);
                       if (confirm('Are you sure you want to reset all uncommitted changes? This cannot be undone.')) {
                         try {
-                          await api.gitOperation(projectId, currentTask.id, 'reset-uncommitted');
+                          await gitService.performOperation(projectId, currentTask.id, 'reset-uncommitted');
                           // Git status will update via WebSocket
                         } catch (error: any) {
                           alert(`Failed to reset changes: ${error.message}`);
@@ -347,6 +349,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               workerStatus={currentTask.sessionState.status}
               gitStatus={currentTask.gitStatus}
               isMerged={currentTask.taskState === TaskState.Merged}
+              sessionStates={currentTask.terminals?.map(terminal => ({
+                id: terminal.dbSessionId,
+                tabName: terminal.tabName,
+                aiState: terminal.aiState || 'not-started',
+                lastStateChange: terminal.lastStateChange || null
+              })) || currentTask.sessionStates}
+              onStatusClick={(prioritySessionId) => {
+                onTaskSelect(currentTask, prioritySessionId);
+              }}
             />
           </div>
         </div>
@@ -408,19 +419,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-700">Changes</span>
               <div className="text-xs">
-                {(currentTask.gitStatus && (currentTask.gitStatus.staged || currentTask.gitStatus.unstaged)) ? (
-                  <>
-                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && (
-                      <span className="text-green-600">{currentTask.gitStatus.staged} staged</span>
-                    )}
-                    {currentTask.gitStatus.staged && currentTask.gitStatus.staged > 0 && currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && ' • '}
-                    {currentTask.gitStatus.unstaged && currentTask.gitStatus.unstaged > 0 && (
-                      <span className="text-amber-600">{currentTask.gitStatus.unstaged} unstaged</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-gray-500">No changes</span>
-                )}
+                {(() => {
+                  const staged = currentTask.gitStatus?.staged || 0;
+                  const unstaged = currentTask.gitStatus?.unstaged || 0;
+                  const untracked = currentTask.gitStatus?.untracked || 0;
+                  const uncommittedTotal = unstaged + untracked;
+                  
+                  if (staged === 0 && uncommittedTotal === 0) {
+                    return <span className="text-gray-500">No changes</span>;
+                  }
+                  
+                  return (
+                    <>
+                      {staged > 0 && (
+                        <span className="text-green-600">{staged} staged</span>
+                      )}
+                      {staged > 0 && uncommittedTotal > 0 && <span className="text-gray-400"> • </span>}
+                      {uncommittedTotal > 0 && (
+                        <span className="text-amber-600">{uncommittedTotal} uncommitted</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -471,7 +491,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setIsProcessing(true);
                       try {
                         // First, get the actual conflict data
-                        const conflictData = await api.getTaskDiff(projectId, currentTask.id, 'base');
+                        const conflictData = await gitService.getTaskDiff(projectId, currentTask.id, { compareWith: 'base' });
                         
                         // Store in sessionStorage for the prototype page to access
                         sessionStorage.setItem('mergeConflictData', JSON.stringify({
@@ -860,7 +880,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (confirm(`Are you sure you want to reset to "${commit.message}"? This will remove all commits after this point.`)) {
                     setIsProcessing(true);
                     try {
-                      await api.gitOperation(projectId, currentTask.id, 'reset-to-commit', {
+                      await gitService.performOperation(projectId, currentTask.id, 'reset-to-commit', {
                         args: selectedCommit
                       });
                       setShowResetModal(false);

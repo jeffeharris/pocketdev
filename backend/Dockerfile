@@ -7,6 +7,13 @@ RUN apk add --no-cache git openssh-client curl && \
     chmod +x /usr/local/bin/gh
 
 FROM base AS backend
+
+# The node:22-alpine image has a 'node' user with UID 1000
+# We'll rename it to pocketdev to match our naming convention
+RUN deluser node && \
+    addgroup -g 1000 pocketdev && \
+    adduser -D -u 1000 -G pocketdev -s /bin/sh pocketdev
+
 WORKDIR /app
 
 # Copy package files
@@ -18,9 +25,13 @@ COPY backend/ ./
 COPY shared/ ./shared/
 COPY backend-entrypoint.sh /entrypoint.sh
 
-# Create necessary directories
-RUN mkdir -p /projects /app/data && \
-    chmod +x /entrypoint.sh
+# Create necessary directories and set ownership
+RUN mkdir -p /projects /app/data /home/pocketdev/.pocketdev && \
+    chmod +x /entrypoint.sh && \
+    chown -R pocketdev:pocketdev /app /projects /app/data /home/pocketdev
+
+# Switch to pocketdev user
+USER pocketdev
 
 EXPOSE 3005
 
